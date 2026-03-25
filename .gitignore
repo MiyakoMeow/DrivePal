@@ -1,10 +1,39 @@
 # Python-generated files
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.pyc
+*.pyo
 build/
 dist/
 wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
+
+# Data files (generated at runtime)
+data/
+!data/.gitkeep
+
+# Cache directories
+.ruff_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Experiment scripts
+run_*.py
+quick_test.py
+debug_*.py
+test_*.py
+
+# Dataset directories
+datasets/
+raw_data/
+data/raw/
+
+# Experiment results
+experiment_results/
+logs/
