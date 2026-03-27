@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
-
     """多Agent协作工作流."""
 
     def __init__(
@@ -63,6 +62,20 @@ class AgentWorkflow:
 
         return workflow.compile()
 
+    def _call_llm_json(self, user_prompt: str) -> dict:
+        """构建 prompt、调 LLM 并解析 JSON 返回 dict."""
+        if not self.memory_module.chat_model:
+            raise RuntimeError("ChatModel not available")
+        result = self.memory_module.chat_model.generate(user_prompt)
+        try:
+            parsed = json.loads(result)
+            if not isinstance(parsed, dict):
+                parsed = {"raw": result}
+        except json.JSONDecodeError:
+            parsed = {"raw": result}
+        parsed["raw"] = result
+        return parsed
+
     def _context_node(self, state: AgentState) -> dict:
         """Context Agent节点."""
         messages = state.get("messages", [])
@@ -99,17 +112,7 @@ class AgentWorkflow:
 
 请输出JSON格式的上下文对象. """
 
-        if not self.memory_module.chat_model:
-            raise RuntimeError("ChatModel not available for context generation")
-        result = self.memory_module.chat_model.generate(prompt)
-        try:
-            context = json.loads(result)
-            if not isinstance(context, dict):
-                context = {"raw": result}
-        except json.JSONDecodeError:
-            context = {"raw": result}
-
-        context["raw"] = result
+        context = self._call_llm_json(prompt)
         context["related_events"] = related_events
         context["relevant_memories"] = relevant_memories
 
@@ -132,17 +135,7 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象. """
 
-        if not self.memory_module.chat_model:
-            raise RuntimeError("ChatModel not available for task generation")
-        result = self.memory_module.chat_model.generate(prompt)
-        try:
-            task = json.loads(result)
-            if not isinstance(task, dict):
-                task = {"raw": result}
-        except json.JSONDecodeError:
-            task = {"raw": result}
-
-        task["raw"] = result
+        task = self._call_llm_json(prompt)
         return {
             "task": task,
             "messages": state["messages"]
@@ -164,17 +157,7 @@ class AgentWorkflow:
 
 请输出JSON格式的决策结果. """
 
-        if not self.memory_module.chat_model:
-            raise RuntimeError("ChatModel not available for strategy generation")
-        result = self.memory_module.chat_model.generate(prompt)
-        try:
-            decision = json.loads(result)
-            if not isinstance(decision, dict):
-                decision = {"raw": result}
-        except json.JSONDecodeError:
-            decision = {"raw": result}
-
-        decision["raw"] = result
+        decision = self._call_llm_json(prompt)
         return {
             "decision": decision,
             "messages": state["messages"]
