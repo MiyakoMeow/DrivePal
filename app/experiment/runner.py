@@ -213,9 +213,9 @@ class ExperimentRunner:
             if "input" not in tc:
                 raise ValueError("test_case missing required field 'input'")
 
-        valid_methods = {"keyword", "llm_only", "embeddings"}
+        valid_methods = {"keyword", "llm_only", "embeddings", "memorybank"}
         if methods is None:
-            methods = ["keyword", "llm_only", "embeddings"]
+            methods = ["keyword", "llm_only", "embeddings", "memorybank"]
         else:
             invalid = set(methods) - valid_methods
             if invalid:
