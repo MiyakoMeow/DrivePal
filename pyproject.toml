@@ -19,8 +19,6 @@ dependencies = [
     "langchain-huggingface>=1.2.1",
 ]
 
-[tool.ty.rules]
-
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
