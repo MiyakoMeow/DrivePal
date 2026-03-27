@@ -1,5 +1,6 @@
 """Agent工作流编排模块."""
 
+import hashlib
 import json
 import logging
 from typing import Any, Optional, cast
@@ -15,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
-
     """多Agent协作工作流."""
 
     def __init__(
@@ -198,7 +198,7 @@ class AgentWorkflow:
             event_id = self.memory.write(event_data)
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
-            event_id = f"unknown_{hash(str(decision))}"
+            event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
 
         result = f"提醒已发送: {content}"
         return {
