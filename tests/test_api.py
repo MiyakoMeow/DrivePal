@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 with patch("app.agents.workflow.ChatModel") as mock_chat:
     mock_instance = Mock()
-    mock_instance.generate.return_value = '{"result": "测试回复"}'
+    mock_instance.generate.return_value = '{"context": {}, "task": {}, "decision": {"content": "测试提醒"}, "result": "提醒已发送: 测试提醒"}'
     mock_chat.return_value = mock_instance
 
     from app.api.main import app
