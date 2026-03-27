@@ -250,10 +250,38 @@ class MemoryBankBackend:
         return interaction_id
 
     def _should_append_to_event(self, interaction: dict) -> Optional[str]:
+        events = self.events_store.read()
+        if not events:
+            return None
+        today = date.today().isoformat()
+        recent = events[-1]
+        if recent.get("date_group") != today:
+            return None
+        if self.embedding_model:
+            query_vec = self.embedding_model.encode(interaction["query"])
+            event_vec = self.embedding_model.encode(recent.get("content", ""))
+            similarity = self._cosine_similarity(query_vec, event_vec)
+            if similarity >= AGGREGATION_SIMILARITY_THRESHOLD:
+                return recent["id"]
+            return None
+        content_lower = recent.get("content", "").lower()
+        query_lower = interaction["query"].lower()
+        query_chars = list(set(query_lower))
+        if not query_chars:
+            return None
+        overlap = sum(1 for c in query_chars if c in content_lower)
+        if overlap / len(query_chars) >= 0.5:
+            return recent["id"]
         return None
 
     def _append_interaction_to_event(self, event_id: str, interaction_id: str) -> None:
-        pass
+        all_events = self.events_store.read()
+        for event in all_events:
+            if event.get("id") == event_id:
+                event.setdefault("interaction_ids", []).append(interaction_id)
+                event["updated_at"] = datetime.now().isoformat()
+                break
+        self.events_store.write(all_events)
 
     def _update_event_summary(self, event_id: str) -> None:
         pass

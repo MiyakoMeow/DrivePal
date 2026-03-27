@@ -196,3 +196,26 @@ class TestWriteInteraction:
         interaction_id = backend.write_interaction("测试", "回复")
         assert isinstance(interaction_id, str)
         assert len(interaction_id) > 0
+
+
+class TestEventAggregation:
+    def test_first_interaction_creates_new_event(self, backend):
+        iid = backend.write_interaction("提醒我明天上午开会", "好的")
+        interactions = backend.interactions_store.read()
+        assert interactions[0]["event_id"] != ""
+        events = backend.events_store.read()
+        assert len(events) == 1
+        assert iid in events[0]["interaction_ids"]
+
+    def test_similar_interaction_appends_to_event(self, backend):
+        backend.write_interaction("提醒我明天上午开会", "好的")
+        backend.write_interaction("明天下午也有会议", "已更新")
+        events = backend.events_store.read()
+        assert len(events) == 1
+        assert len(events[0]["interaction_ids"]) == 2
+
+    def test_different_interaction_creates_new_event(self, backend):
+        backend.write_interaction("提醒我明天开会", "好的")
+        backend.write_interaction("今天天气怎么样", "晴天")
+        events = backend.events_store.read()
+        assert len(events) == 2
