@@ -77,8 +77,7 @@ thesis-cockpit-memo/
 ├── webui/                        # Web界面
 │   └── index.html              # 单页应用
 ├── main.py                       # Web服务入口
-├── run_exp.py                    # 实验运行脚本
-├── test_run.py                   # 快速测试脚本
+├── run_exp.py                    # 实验运行脚本（CLI）
 └── pyproject.toml               # 项目配置
 ```
 
@@ -162,13 +161,31 @@ Summary (层级摘要)
 
 ### 3. 实验对比框架
 
+#### 运行实验
+
+```bash
+# 默认：全部4种方法，20个测试用例，随机种子42
+uv run python run_exp.py
+
+# 指定方法和用例数
+uv run python run_exp.py --methods keyword llm_only --count 50 --seed 123
+
+# 可选参数：--methods, --count, --seed
+```
+
+每次实验为每种方法创建独立临时数据目录，运行后自动清理，不污染主数据。
+
+#### 数据隔离机制
+
+四种方法各自使用隔离的临时数据目录（`data/exp_tmp/{method}/`），所有方法运行**相同的测试用例**（由 seed 保证可复现），确保公平对比。
+
 #### 评估指标
 
 | 指标 | 说明 | 计算方式 |
 |------|------|----------|
 | `avg_latency_ms` | 平均响应延迟 | 毫秒 |
 | `task_completion_rate` | 任务完成率 | 成功数/总数 |
-| `semantic_accuracy` | 语义理解准确率 | 意图匹配40% + 否定处理20% + 关键词重叠40% |
+| `semantic_accuracy` | 语义理解准确率 | 意图匹配40% + 否定处理20% + 关键词重叠40%（bigram分词） |
 | `context_relatedness` | 上下文相关度 | 任务相关概念命中数/总概念数 |
 
 #### 数据集加载器
@@ -295,7 +312,11 @@ python main.py
 ### 5. 运行对比实验
 
 ```bash
-python run_exp.py
+# 默认：全部4种方法，20个测试用例
+uv run python run_exp.py
+
+# 自定义参数
+uv run python run_exp.py --methods keyword embeddings --count 50 --seed 123
 ```
 
 ---
@@ -399,6 +420,7 @@ uv run pytest tests/ -v
 | `test_api.py` | API端点集成测试 | API→Workflow→Memory→Chat |
 | `test_chat.py` | Chat驱动LLM记忆搜索、Workflow上下文注入 | Chat→Memory→Workflow |
 | `test_embedding.py` | Embedding语义检索、MemoryBank检索与聚合 | Embedding→MemoryModule→MemoryBankBackend |
+| `test_experiment_runner.py` | 实验框架：seed可复现、raw输出保留、评估指标、数据隔离 | ExperimentRunner, TestDataGenerator, AgentWorkflow |
 | `test_memory_bank.py` | 遗忘曲线检索、层级摘要、交互写入与聚合 | MemoryBankBackend→JSONStore, MemoryModule |
 | `test_storage.py` | 跨实例持久化、反馈策略更新 | MemoryModule→init_storage→JSONStore |
 
