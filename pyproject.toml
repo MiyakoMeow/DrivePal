@@ -18,9 +18,6 @@ dependencies = [
 ]
 
 [tool.ty.rules]
-invalid-argument-type = "ignore"
-unknown-argument = "ignore"
-invalid-parameter-default = "ignore"
 
 [project.optional-dependencies]
 dev = [

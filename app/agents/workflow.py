@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
@@ -45,7 +45,7 @@ class AgentWorkflow:
 
     def _build_graph(self) -> Any:
         """构建LangGraph工作流"""
-        workflow = StateGraph(AgentState)
+        workflow = StateGraph(cast(Any, AgentState))
 
         workflow.add_node("context_agent", self._context_node)
         workflow.add_node("task_agent", self._task_node)

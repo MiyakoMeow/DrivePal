@@ -16,7 +16,7 @@ class JSONStore:
         self,
         data_dir: str,
         filename: str,
-        default_factory: Callable[[], T] = dict,
+        default_factory: Callable[[], T] = lambda: dict(),
     ) -> None:
         self.filepath = Path(data_dir) / filename
         self.default_factory: Callable[[], T] = default_factory

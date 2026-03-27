@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.utils.utils import SecretStr
 
 
 class ChatModel:
@@ -25,11 +26,12 @@ class ChatModel:
     @property
     def client(self) -> ChatOpenAI:
         if self._client is None:
+            api_key_str = self.api_key or ""
             self._client = ChatOpenAI(
-                model=self.model_name,
-                api_key=self.api_key,
-                base_url=self.base_url,
+                model_name=self.model_name,
                 temperature=self.temperature,
+                openai_api_key=SecretStr(api_key_str) if api_key_str else None,
+                openai_api_base=self.base_url,
             )
         return self._client
 
