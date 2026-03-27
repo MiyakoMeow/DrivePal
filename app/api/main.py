@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 import os
 import logging
 
@@ -37,15 +37,13 @@ def get_memory_module() -> MemoryModule:
 
 
 class QueryRequest(BaseModel):
-
     """用户查询请求."""
 
     query: str
-    memory_mode: Optional[str] = "keyword"
+    memory_mode: Literal["keyword", "llm_only", "embeddings", "memorybank"] = "keyword"
 
 
 class FeedbackRequest(BaseModel):
-
     """用户反馈请求."""
 
     event_id: str
