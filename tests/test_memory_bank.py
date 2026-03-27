@@ -237,3 +237,26 @@ class TestUpdateEventSummary:
         backend.write_interaction("明天下午也有会议", "已更新")
         events = backend.events_store.read()
         assert events[0]["content"] == "提醒我明天上午开会"
+
+
+class TestSearchWithInteractions:
+    def test_search_expands_interactions(self, backend):
+        backend.write_interaction("提醒我开会", "好的")
+        backend.write_interaction("明天下午也有会议", "已更新")
+        results = backend.search("开会")
+        assert len(results) > 0
+        top = results[0]
+        assert "interactions" in top
+        assert len(top["interactions"]) >= 1
+
+    def test_search_strengthen_interactions_on_hit(self, backend):
+        backend.write_interaction("重要会议", "已记录")
+        backend.search("会议")
+        interactions = backend.interactions_store.read()
+        assert interactions[0]["memory_strength"] == 2
+
+    def test_legacy_event_no_interactions_key(self, backend):
+        backend.write_with_memory({"content": "旧事件"})
+        results = backend.search("旧事件")
+        assert len(results) > 0
+        assert results[0].get("interactions", []) == []

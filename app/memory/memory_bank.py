@@ -65,7 +65,8 @@ class MemoryBankBackend:
         summary_results = self._search_summaries(query, daily_summaries, top_k=1)
         all_results = event_results + summary_results
         all_results.sort(key=lambda x: x.get("_score", 0.0), reverse=True)
-        return all_results[:top_k]
+        top_results = all_results[:top_k]
+        return self._expand_event_interactions(top_results)
 
     def _search_by_keyword(
         self, query: str, events: list[dict], top_k: int
@@ -120,6 +121,34 @@ class MemoryBankBackend:
         self._strengthen_events(top_results)
         return top_results
 
+    def _expand_event_interactions(self, results: list[dict]) -> list[dict]:
+        interactions = self.interactions_store.read()
+        interaction_by_event: dict[str, list[dict]] = {}
+        for i in interactions:
+            eid = i.get("event_id", "")
+            if eid:
+                interaction_by_event.setdefault(eid, []).append(i)
+        for result in results:
+            eid = result.get("id", "")
+            result["interactions"] = interaction_by_event.get(eid, [])
+        return results
+
+    def _strengthen_interactions(self, event_ids: set[str]) -> None:
+        if not event_ids:
+            return
+        all_interactions = self.interactions_store.read()
+        today = date.today().isoformat()
+        updated = False
+        for interaction in all_interactions:
+            if interaction.get("event_id") in event_ids:
+                interaction["memory_strength"] = (
+                    interaction.get("memory_strength", 1) + 1
+                )
+                interaction["last_recall_date"] = today
+                updated = True
+        if updated:
+            self.interactions_store.write(all_interactions)
+
     def _strengthen_events(self, matched_events: list[dict]) -> None:
         if not matched_events:
             return
@@ -140,6 +169,7 @@ class MemoryBankBackend:
             if "id" in event:
                 event["memory_strength"] = event.get("memory_strength", 1) + 1
                 event["last_recall_date"] = today
+        self._strengthen_interactions(matched_ids)
 
     def _search_summaries(
         self, query: str, daily_summaries: dict, top_k: int = 1
