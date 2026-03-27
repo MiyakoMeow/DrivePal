@@ -219,3 +219,72 @@ class TestChatModelFallback:
         with patch.object(chat, "_invoke_provider", side_effect=RuntimeError("fail")):
             with pytest.raises(RuntimeError, match="All LLM providers failed"):
                 chat.generate("hello")
+
+
+class TestEmbeddingModelFallback:
+    def test_local_provider_creates_huggingface(self):
+        from app.models.embedding import EmbeddingModel
+        from app.models.settings import EmbeddingProviderConfig
+
+        providers = [EmbeddingProviderConfig(model="fake-model", device="cpu")]
+        emb = EmbeddingModel(providers=providers)
+        with patch("app.models.embedding.HuggingFaceEmbeddings") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            _ = emb.client
+        mock_cls.assert_called_once_with(
+            model_name="fake-model",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True},
+        )
+
+    def test_remote_provider_creates_openai(self):
+        from app.models.embedding import EmbeddingModel
+        from app.models.settings import EmbeddingProviderConfig
+
+        providers = [
+            EmbeddingProviderConfig(
+                model="text-embedding-3-small",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+            )
+        ]
+        emb = EmbeddingModel(providers=providers)
+        with patch("app.models.embedding.OpenAIEmbeddings") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            _ = emb.client
+        mock_cls.assert_called_once()
+
+    def test_fallback_to_next_provider(self):
+        from app.models.embedding import EmbeddingModel
+        from app.models.settings import EmbeddingProviderConfig
+
+        providers = [
+            EmbeddingProviderConfig(model="bad-model", device="cpu"),
+            EmbeddingProviderConfig(model="good-model", device="cpu"),
+        ]
+        emb = EmbeddingModel(providers=providers)
+
+        call_count = 0
+
+        def mock_hf(model_name, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("load failed")
+            return MagicMock()
+
+        with patch("app.models.embedding.HuggingFaceEmbeddings", side_effect=mock_hf):
+            _ = emb.client
+        assert call_count == 2
+
+    def test_encode_uses_client(self):
+        from app.models.embedding import EmbeddingModel
+        from app.models.settings import EmbeddingProviderConfig
+
+        providers = [EmbeddingProviderConfig(model="fake-model", device="cpu")]
+        emb = EmbeddingModel(providers=providers)
+        mock_client = MagicMock()
+        mock_client.embed_query.return_value = [0.1, 0.2, 0.3]
+        emb._client = mock_client
+        result = emb.encode("test")
+        assert result == [0.1, 0.2, 0.3]
