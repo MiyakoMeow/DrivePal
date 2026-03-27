@@ -108,6 +108,7 @@ class AgentWorkflow:
         except json.JSONDecodeError:
             context = {"raw": result}
 
+        context["raw"] = result
         context["related_events"] = related_events
         context["relevant_memories"] = relevant_memories
 
@@ -140,6 +141,7 @@ class AgentWorkflow:
         except json.JSONDecodeError:
             task = {"raw": result}
 
+        task["raw"] = result
         return {
             "task": task,
             "messages": state["messages"]
@@ -171,6 +173,7 @@ class AgentWorkflow:
         except json.JSONDecodeError:
             decision = {"raw": result}
 
+        decision["raw"] = result
         return {
             "decision": decision,
             "messages": state["messages"]
