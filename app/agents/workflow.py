@@ -5,6 +5,7 @@ from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
+from app.memory.memory_bank import MemoryBankBackend
 from app.storage.json_store import JSONStore
 from langchain_core.messages import HumanMessage
 
@@ -27,10 +28,11 @@ class AgentWorkflow:
             from app.models.chat import ChatModel
 
             chat_model = ChatModel()
-            if memory_mode == "embeddings":
+            if memory_mode == "embeddings" or memory_mode == "memorybank":
                 from app.models.embedding import EmbeddingModel
 
                 embedding_model = EmbeddingModel()
+                self._embedding_model = embedding_model
                 self.memory_module = MemoryModule(
                     data_dir, embedding_model=embedding_model, chat_model=chat_model
                 )
@@ -180,9 +182,11 @@ class AgentWorkflow:
         decision = state.get("decision", {})
 
         content = decision.get("content", "无提醒内容")
-        event_id = self.memory.write(
-            {"content": content, "type": "reminder", "decision": decision}
-        )
+        event_data = {"content": content, "type": "reminder", "decision": decision}
+        if self.memory_mode == "memorybank":
+            event_id = self._get_memorybank_backend().write_with_memory(event_data)
+        else:
+            event_id = self.memory.write(event_data)
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
             event_id = f"unknown_{hash(str(decision))}"
@@ -193,6 +197,15 @@ class AgentWorkflow:
             "event_id": event_id,
             "messages": state["messages"] + [HumanMessage(content=result)],
         }
+
+    def _get_memorybank_backend(self) -> MemoryBankBackend:
+        if not hasattr(self, "_memorybank_backend") or self._memorybank_backend is None:
+            self._memorybank_backend = MemoryBankBackend(
+                self.data_dir,
+                embedding_model=getattr(self, "_embedding_model", None),
+                chat_model=self.memory.chat_model,
+            )
+        return self._memorybank_backend
 
     def run(self, user_input: str) -> tuple[str, Optional[str]]:
         """运行完整工作流，返回(result, event_id)"""

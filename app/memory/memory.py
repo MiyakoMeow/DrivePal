@@ -3,6 +3,7 @@ import re
 import uuid
 from datetime import datetime
 from typing import Optional
+from app.memory.memory_bank import MemoryBankBackend
 from app.storage.json_store import JSONStore
 from app.models.embedding import EmbeddingModel
 from app.models.chat import ChatModel
@@ -32,6 +33,7 @@ class MemoryModule:
         self.chat_model = chat_model
         self.events_store = JSONStore(data_dir, "events.json", list)
         self.strategies_store = JSONStore(data_dir, "strategies.json", dict)
+        self._memorybank_backend: Optional[MemoryBankBackend] = None
 
     def write(self, event: dict) -> str:
         """写入事件，返回event_id"""
@@ -49,6 +51,8 @@ class MemoryModule:
             return self._search_by_llm(query)
         elif mode == "embeddings":
             return self._search_by_embeddings(query)
+        elif mode == "memorybank":
+            return self._search_by_memorybank(query)
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -105,6 +109,19 @@ class MemoryModule:
                 results.append(event)
 
         return results
+
+    def _get_memorybank_backend(self) -> MemoryBankBackend:
+        if self._memorybank_backend is None:
+            self._memorybank_backend = MemoryBankBackend(
+                self.data_dir,
+                embedding_model=self.embedding_model,
+                chat_model=self.chat_model,
+            )
+        return self._memorybank_backend
+
+    def _search_by_memorybank(self, query: str) -> list:
+        backend = self._get_memorybank_backend()
+        return backend.search(query)
 
     def _cosine_similarity(self, a, b) -> float:
         import numpy as np

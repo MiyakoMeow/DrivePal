@@ -61,6 +61,13 @@ def test_get_history_negative_limit(temp_data_dir):
         memory.get_history(limit=-1)
 
 
+def test_search_memorybank_mode(temp_data_dir):
+    memory = MemoryModule(temp_data_dir)
+    memory.write({"content": "下午3点会议", "type": "meeting"})
+    results = memory.search("会议", mode="memorybank")
+    assert len(results) > 0
+
+
 def test_cosine_similarity_numpy(temp_data_dir):
     """Test that cosine similarity handles numpy arrays."""
     import numpy as np

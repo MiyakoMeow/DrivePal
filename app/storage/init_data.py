@@ -28,6 +28,7 @@ def init_storage(data_dir: Optional[str] = None):
             "cooldown_periods": {},
         },
         "experiment_results.json": [],
+        "memorybank_summaries.json": {"daily_summaries": {}, "overall_summary": ""},
     }
 
     for filename, default_data in files.items():
