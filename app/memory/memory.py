@@ -46,6 +46,7 @@ class MemoryModule:
 
     def write(self, event: dict) -> str:
         """写入事件，返回event_id."""
+        event = dict(event)
         event_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         event["id"] = event_id
         event["created_at"] = datetime.now().isoformat()
@@ -110,10 +111,14 @@ class MemoryModule:
 
         query_vector = self.embedding_model.encode(query)
         events = self.events_store.read()
+        if not events:
+            return []
+
+        event_texts = [event.get("content", "") for event in events]
+        all_embeddings = self.embedding_model.batch_encode(event_texts)
 
         results = []
-        for event in events:
-            event_vector = self.embedding_model.encode(event.get("content", ""))
+        for event, event_vector in zip(events, all_embeddings):
             similarity = cosine_similarity(query_vector, event_vector)
             if similarity > 0.7:
                 results.append(event)
