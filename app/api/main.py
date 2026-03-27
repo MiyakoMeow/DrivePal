@@ -9,6 +9,7 @@ from app.models.chat import ChatModel
 import logging
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="知行车秘 - 车载AI智能体")
 
@@ -45,7 +46,8 @@ async def query(request: QueryRequest):
         )
         result, event_id = workflow.run(request.query)
         return {"result": result, "event_id": event_id}
-    except Exception:
+    except Exception as e:
+        logger.error(f"Query failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -58,7 +60,8 @@ async def feedback(request: FeedbackRequest):
             {"action": request.action, "modified_content": request.modified_content},
         )
         return {"status": "success"}
-    except Exception:
+    except Exception as e:
+        logger.error(f"Feedback failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -74,4 +77,9 @@ async def experiment_report():
 @app.get("/api/history")
 async def history(limit: int = 10):
     """获取历史记录"""
-    return {"history": _memory_module.get_history(limit)}
+    try:
+        history = _memory_module.get_history(limit=limit)
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"History retrieval failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")

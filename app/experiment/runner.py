@@ -204,8 +204,22 @@ class ExperimentRunner:
         self, test_cases: List[Dict[str, str]], methods: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """运行对比实验"""
+        if not test_cases:
+            raise ValueError("test_cases cannot be empty")
+
+        for tc in test_cases:
+            if not isinstance(tc, dict):
+                raise ValueError(f"test_case must be dict, got {type(tc)}")
+            if "input" not in tc:
+                raise ValueError("test_case missing required field 'input'")
+
+        valid_methods = {"keyword", "llm_only", "embeddings"}
         if methods is None:
             methods = ["keyword", "llm_only", "embeddings"]
+        else:
+            invalid = set(methods) - valid_methods
+            if invalid:
+                raise ValueError(f"Invalid methods: {invalid}")
 
         results = {
             "timestamp": datetime.now().isoformat(),

@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any, Callable, TypeVar
 
 if sys.platform == "win32":
-    import msvcrt
+    pass
 else:
-    import fcntl
+    pass
 
 T = TypeVar("T")
 
@@ -42,37 +42,19 @@ class JSONStore:
         self._write(data)
 
     def append(self, item: Any) -> None:
-        with open(self.filepath, "a+", encoding="utf-8") as f:
-            if sys.platform == "win32":
-                try:
-                    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
-                except IOError:
-                    pass
-            else:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            try:
-                f.seek(0)
-                content = f.read()
-                if content:
-                    data = json.loads(content)
-                else:
-                    data = []
-                if not isinstance(data, list):
-                    raise TypeError("Can only append to list-type stores")
-                data.append(item)
-                f.seek(0)
-                f.truncate()
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            finally:
-                if sys.platform == "win32":
-                    try:
-                        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
-                    except IOError:
-                        pass
-                else:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        data = self.read()
+        if not isinstance(data, list):
+            raise TypeError(
+                f"append() requires list factory, got {type(data).__name__}"
+            )
+        data.append(item)
+        self._write(data)
 
     def update(self, key: str, value: Any) -> None:
         data = self.read()
+        if not isinstance(data, dict):
+            raise TypeError(
+                f"update() requires dict factory, got {type(data).__name__}"
+            )
         data[key] = value
         self._write(data)

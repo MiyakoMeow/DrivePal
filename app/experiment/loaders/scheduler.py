@@ -14,6 +14,16 @@ class SchedulerLoader:
     def load(cls) -> Dataset:
         if cls._cache is None:
             cls._cache = load_dataset("shawnha/scheduler_dataset", split="train")
+
+        if len(cls._cache) > 0:
+            sample = cls._cache[0]
+            required_cols = ["text"]
+            missing = [c for c in required_cols if c not in sample]
+            if missing:
+                import logging
+
+                logging.warning(f"Scheduler dataset missing columns: {missing}")
+
         return cls._cache
 
     @classmethod

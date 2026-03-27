@@ -24,8 +24,12 @@ class EmbeddingModel:
 
     def encode(self, text: str) -> list[float]:
         """编码文本为向量"""
-        return self.client.embed_query(text)
+        embeddings = self.client.embed_query(text)
+        if isinstance(embeddings, list):
+            return embeddings  # type: ignore[return-value]
+        return list(embeddings)
 
     def batch_encode(self, texts: list[str]) -> list[list[float]]:
         """批量编码"""
-        return self.client.embed_documents(texts)
+        embeddings = self.client.embed_documents(texts)
+        return [list(emb) if not isinstance(emb, list) else emb for emb in embeddings]

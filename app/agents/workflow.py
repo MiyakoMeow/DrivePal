@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, Optional
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
@@ -6,6 +7,8 @@ from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
 from app.storage.json_store import JSONStore
 from langchain_core.messages import HumanMessage
+
+logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
@@ -65,13 +68,26 @@ class AgentWorkflow:
         else:
             user_input = str(messages[-1].content)
 
-        related_events = (
-            self.memory.search(user_input, mode=self.memory_mode) if user_input else []
-        )
+        try:
+            related_events = (
+                self.memory.search(user_input, mode=self.memory_mode)
+                if user_input
+                else []
+            )
+        except Exception as e:
+            logger.warning(f"Memory search failed: {e}")
+            related_events = []
 
-        relevant_memories = (
-            related_events if related_events else self.memory.get_history()
-        )
+        try:
+            relevant_memories = (
+                related_events if related_events else self.memory.get_history()
+            )
+        except ValueError as e:
+            logger.warning(f"Memory get_history failed: {e}")
+            relevant_memories = related_events if related_events else []
+        except Exception as e:
+            logger.warning(f"Memory get_history failed: {e}")
+            relevant_memories = related_events if related_events else []
 
         prompt = f"""{SYSTEM_PROMPTS["context"]}
 
@@ -167,6 +183,9 @@ class AgentWorkflow:
         event_id = self.memory.write(
             {"content": content, "type": "reminder", "decision": decision}
         )
+        if not event_id:
+            logger.warning("Memory write returned empty event_id, using fallback")
+            event_id = f"unknown_{hash(str(decision))}"
 
         result = f"提醒已发送: {content}"
         return {

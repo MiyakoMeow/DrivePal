@@ -39,3 +39,36 @@ def test_search_by_llm_returns_list():
     memory = MemoryModule(data_dir="data/test", embedding_model=None)
     result = memory._search_by_llm("明天有什么日程")
     assert isinstance(result, list)
+
+
+def test_search_keyword_includes_description(temp_data_dir):
+    """Test that keyword search includes description field."""
+    memory = MemoryModule(temp_data_dir, chat_model=None)
+    memory.write(
+        {"content": "regular meeting", "description": "afternoon sync", "event_id": "1"}
+    )
+
+    results = memory.search("afternoon", mode="keyword")
+    assert len(results) > 0, "keyword search should find 'afternoon' in description"
+
+
+def test_get_history_negative_limit(temp_data_dir):
+    """Test that negative limit raises ValueError."""
+    memory = MemoryModule(temp_data_dir)
+    memory.write({"content": "test1"})
+
+    with pytest.raises(ValueError, match="limit must be non-negative"):
+        memory.get_history(limit=-1)
+
+
+def test_cosine_similarity_numpy(temp_data_dir):
+    """Test that cosine similarity handles numpy arrays."""
+    import numpy as np
+
+    memory = MemoryModule(temp_data_dir)
+
+    vec1 = np.array([0.1, 0.2, 0.3])
+    vec2 = np.array([0.1, 0.2, 0.3])
+
+    result = memory._cosine_similarity(vec1, vec2)
+    assert abs(result - 1.0) < 0.001, "identical vectors should have similarity ~1"
