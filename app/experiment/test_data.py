@@ -39,8 +39,12 @@ class TestDataGenerator:
                 self._driver_states = []
         return self._driver_states
 
-    def generate_test_cases(self, count: int = 20) -> List[Dict]:
+    def generate_test_cases(
+        self, count: int = 20, seed: int | None = None
+    ) -> List[Dict]:
         """生成测试用例"""
+        if seed is not None:
+            random.seed(seed)
         test_cases = []
         for _ in range(count):
             if not self.SCENARIOS:
