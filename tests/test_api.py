@@ -1,26 +1,31 @@
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
+import pytest
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-with patch("app.agents.workflow.ChatModel") as mock_chat:
-    mock_instance = Mock()
-    mock_instance.generate.return_value = '{"result": "测试回复"}'
-    mock_chat.return_value = mock_instance
 
-    from app.api.main import app
+@pytest.fixture
+def client_with_mock():
+    with patch("app.agents.workflow.AgentWorkflow") as mock_cls:
+        mock_instance = Mock()
+        mock_instance.run.return_value = ("提醒已发送: 测试提醒", "test_event_id_123")
+        mock_cls.return_value = mock_instance
+        from app.api.main import app
 
-client = TestClient(app)
+        yield TestClient(app), mock_instance
 
 
-def test_query_endpoint():
+def test_query_endpoint(client_with_mock):
+    client, mock_instance = client_with_mock
     response = client.post(
         "/api/query", json={"query": "测试查询", "memory_mode": "keyword"}
     )
     assert response.status_code == 200
     assert "result" in response.json()
+    mock_instance.run.assert_called_once()
 
 
 def test_feedback_endpoint():
@@ -28,6 +33,9 @@ def test_feedback_endpoint():
         mock_instance = Mock()
         mock_memory.return_value = mock_instance
 
+        from app.api.main import app
+
+        client = TestClient(app)
         response = client.post(
             "/api/feedback", json={"event_id": "test123", "action": "accept"}
         )
@@ -40,6 +48,9 @@ def test_history_endpoint():
         mock_instance.get_history.return_value = []
         mock_memory.return_value = mock_instance
 
+        from app.api.main import app
+
+        client = TestClient(app)
         response = client.get("/api/history?limit=5")
         assert response.status_code == 200
         assert "history" in response.json()
