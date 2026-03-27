@@ -8,6 +8,7 @@ from typing import Optional
 from app.models.chat import ChatModel
 from app.models.embedding import EmbeddingModel
 from app.storage.json_store import JSONStore
+from app.memory.utils import cosine_similarity
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
 DAILY_SUMMARY_THRESHOLD = 5
@@ -24,7 +25,6 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
 
 
 class MemoryBankBackend:
-
     """记忆库后端，支持遗忘曲线、记忆强化与自动摘要."""
 
     def __init__(
@@ -111,7 +111,7 @@ class MemoryBankBackend:
         results = []
         for event in events:
             event_vector = self.embedding_model.encode(event.get("content", ""))
-            similarity = self._cosine_similarity(query_vector, event_vector)
+            similarity = cosine_similarity(query_vector, event_vector)
             strength = event.get("memory_strength", 1)
             last_recall = event.get("last_recall_date", today.isoformat())
             try:
@@ -300,7 +300,7 @@ class MemoryBankBackend:
         if self.embedding_model:
             query_vec = self.embedding_model.encode(interaction["query"])
             event_vec = self.embedding_model.encode(recent.get("content", ""))
-            similarity = self._cosine_similarity(query_vec, event_vec)
+            similarity = cosine_similarity(query_vec, event_vec)
             if similarity >= AGGREGATION_SIMILARITY_THRESHOLD:
                 return recent["id"]
             return None
@@ -406,12 +406,3 @@ class MemoryBankBackend:
         summaries = self.summaries_store.read()
         summaries["overall_summary"] = overall
         self.summaries_store.write(summaries)
-
-    @staticmethod
-    def _cosine_similarity(a: list[float], b: list[float]) -> float:
-        dot = sum(x * y for x, y in zip(a, b))
-        norm_a = sum(x * x for x in a) ** 0.5
-        norm_b = sum(x * x for x in b) ** 0.5
-        if norm_a * norm_b == 0:
-            return 0.0
-        return dot / (norm_a * norm_b)

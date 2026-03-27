@@ -9,6 +9,7 @@ from app.memory.memory_bank import (
     AGGREGATION_SIMILARITY_THRESHOLD,
     MemoryBankBackend,
 )
+from app.memory.utils import cosine_similarity
 from app.models.embedding import EmbeddingModel
 
 
@@ -27,7 +28,6 @@ def embedding():
 
 
 class TestEmbeddingForMemorySearch:
-
     """Tests for embedding-based memory search."""
 
     def test_semantic_match_retrieves(self, embedding, tmp_path):
@@ -46,7 +46,6 @@ class TestEmbeddingForMemorySearch:
 
 
 class TestEmbeddingForMemoryBankRetrieval:
-
     """Tests for embedding-based memory bank retrieval with forgetting."""
 
     def test_forgetting_weighted_ranking(self, embedding, tmp_path):
@@ -67,7 +66,6 @@ class TestEmbeddingForMemoryBankRetrieval:
 
 
 class TestEmbeddingForEventAggregation:
-
     """Tests for embedding-based event aggregation."""
 
     def test_similar_query_appends_to_event(self, embedding, tmp_path):
@@ -93,7 +91,7 @@ class TestEmbeddingForEventAggregation:
         assert m.embedding_model is not None
         similar = m.embedding_model.encode("提醒明天上午九点开会")
         unrelated = m.embedding_model.encode("今天天气怎么样")
-        s_similar = MemoryBankBackend._cosine_similarity(similar, similar)
-        s_unrelated = MemoryBankBackend._cosine_similarity(similar, unrelated)
+        s_similar = cosine_similarity(similar, similar)
+        s_unrelated = cosine_similarity(similar, unrelated)
         assert s_similar >= AGGREGATION_SIMILARITY_THRESHOLD
         assert s_unrelated < AGGREGATION_SIMILARITY_THRESHOLD
