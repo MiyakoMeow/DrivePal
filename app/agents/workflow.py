@@ -180,12 +180,14 @@ class AgentWorkflow:
     def _execution_node(self, state: AgentState) -> dict:
         """Execution Agent节点"""
         decision = state.get("decision", {})
+        messages = state.get("messages", [])
+        user_input = str(messages[0].content) if messages else ""
 
         content = decision.get("content", "无提醒内容")
-        event_data = {"content": content, "type": "reminder", "decision": decision}
         if self.memory_mode == "memorybank":
-            event_id = self._get_memorybank_backend().write_with_memory(event_data)
+            event_id = self.memory.write_interaction(user_input, content)
         else:
+            event_data = {"content": content, "type": "reminder", "decision": decision}
             event_id = self.memory.write(event_data)
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
