@@ -10,14 +10,13 @@ from app.memory.stores.memory_bank_store import (
     MemoryBankStore,
 )
 
-MemoryBankBackend = MemoryBankStore
 from app.memory.memory import MemoryModule
 
 
 @pytest.fixture
 def backend(tmp_path):
-    """Provide a MemoryBankBackend instance backed by a temporary directory."""
-    return MemoryBankBackend(str(tmp_path))
+    """Provide a MemoryBankStore instance backed by a temporary directory."""
+    return MemoryBankStore(str(tmp_path))
 
 
 @pytest.fixture
@@ -33,7 +32,7 @@ class TestSearchWithForgetting:
 
     def test_search_no_embedding_returns_keyword(self, backend):
         """Verify that search falls back to keyword matching without embeddings."""
-        backend.write_with_memory({"content": "今天天气很好"})
+        backend.write({"content": "今天天气很好"})
         results = backend.search("天气")
         assert len(results) > 0
         assert "天气" in results[0]["content"]
@@ -45,7 +44,7 @@ class TestSearchWithForgetting:
     def test_search_returns_top_k(self, backend):
         """Verify that search results are limited to top-k results."""
         for i in range(10):
-            backend.write_with_memory({"content": f"事件{i}关于天气"})
+            backend.write({"content": f"事件{i}关于天气"})
         results = backend.search("天气")
         assert len(results) <= 3
 
@@ -55,15 +54,15 @@ class TestRecallStrengthening:
 
     def test_search_increases_memory_strength(self, backend):
         """Verify that searching an event increases its memory strength."""
-        backend.write_with_memory({"content": "重要的会议"})
+        backend.write({"content": "重要的会议"})
         backend.search("会议")
         events = backend.events_store.read()
         assert events[0]["memory_strength"] == 2
 
     def test_search_updates_only_matched_events(self, backend):
         """Verify that only matched events have their memory strength updated."""
-        backend.write_with_memory({"content": "关于天气的事件"})
-        backend.write_with_memory({"content": "关于会议的事件"})
+        backend.write({"content": "关于天气的事件"})
+        backend.write({"content": "关于会议的事件"})
         backend.search("天气")
         events = backend.events_store.read()
         weather = [e for e in events if "天气" in e["content"]][0]
@@ -77,9 +76,9 @@ class TestHierarchicalSummarization:
 
     def test_summarize_trigger_threshold(self, tmp_path, mock_chat_model):
         """Verify that daily summary is triggered when event count reaches the threshold."""
-        backend = MemoryBankBackend(tmp_path, chat_model=mock_chat_model)
+        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         for i in range(DAILY_SUMMARY_THRESHOLD):
-            backend.write_with_memory({"content": f"事件{i}"})
+            backend.write({"content": f"事件{i}"})
         summaries = backend.summaries_store.read()
         today = backend.events_store.read()[0]["date_group"]
         assert today in summaries["daily_summaries"]
@@ -87,16 +86,16 @@ class TestHierarchicalSummarization:
 
     def test_no_summary_below_threshold(self, tmp_path, mock_chat_model):
         """Verify that no daily summary is created below the event threshold."""
-        backend = MemoryBankBackend(tmp_path, chat_model=mock_chat_model)
+        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         for i in range(DAILY_SUMMARY_THRESHOLD - 1):
-            backend.write_with_memory({"content": f"事件{i}"})
+            backend.write({"content": f"事件{i}"})
         summaries = backend.summaries_store.read()
         assert len(summaries["daily_summaries"]) == 0
 
     def test_overall_summary_trigger(self, tmp_path, mock_chat_model):
         """Verify that overall summary is triggered when daily summaries reach the threshold."""
         mock_chat_model.generate.return_value = "总体摘要"
-        backend = MemoryBankBackend(tmp_path, chat_model=mock_chat_model)
+        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         summaries = backend.summaries_store.read()
         for i in range(OVERALL_SUMMARY_THRESHOLD):
             date_group = f"2026-03-{20 + i:02d}"
@@ -113,9 +112,9 @@ class TestHierarchicalSummarization:
     def test_summaries_included_in_search(self, tmp_path, mock_chat_model):
         """Verify that daily summaries are included in search results."""
         mock_chat_model.generate.return_value = "今天讨论了项目进度"
-        backend = MemoryBankBackend(tmp_path, chat_model=mock_chat_model)
+        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         for i in range(DAILY_SUMMARY_THRESHOLD):
-            backend.write_with_memory({"content": f"事件{i}关于项目"})
+            backend.write({"content": f"事件{i}关于项目"})
         results = backend.search("讨论了")
         sources = [r.get("_source") for r in results]
         assert "daily_summary" in sources
@@ -166,7 +165,7 @@ class TestUpdateEventSummary:
     def test_llm_updates_event_content(self, tmp_path, mock_chat_model):
         """Verify that the LLM generates an updated event summary on aggregation."""
         mock_chat_model.generate.return_value = "用户修改了会议时间"
-        backend = MemoryBankBackend(tmp_path, chat_model=mock_chat_model)
+        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         backend.write_interaction("提醒我明天上午开会", "好的", event_type="meeting")
         backend.write_interaction("明天下午也有会议", "已更新")
         events = backend.events_store.read()
@@ -200,7 +199,7 @@ class TestSearchWithInteractions:
 
     def test_legacy_event_returns_empty_interactions(self, backend):
         """Verify that legacy events without interactions return an empty list."""
-        backend.write_with_memory({"content": "旧事件"})
+        backend.write({"content": "旧事件"})
         results = backend.search("旧事件")
         assert results[0].get("interactions", []) == []
 
