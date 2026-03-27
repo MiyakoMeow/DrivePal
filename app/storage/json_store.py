@@ -1,14 +1,8 @@
 """JSON文件存储后端，支持列表和字典类型的读写操作."""
 
 import json
-import sys
 from pathlib import Path
 from typing import Any, Callable, TypeVar
-
-if sys.platform == "win32":
-    pass
-else:
-    pass
 
 T = TypeVar("T")
 
@@ -41,10 +35,6 @@ class JSONStore:
         """读取JSON文件中的全部数据."""
         with open(self.filepath, "r", encoding="utf-8") as f:
             return json.load(f)
-
-    def save(self, data: T) -> None:
-        """保存数据到JSON文件."""
-        self._write(data)
 
     def write(self, data: T) -> None:
         """写入数据到JSON文件."""
