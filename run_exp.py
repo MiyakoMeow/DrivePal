@@ -45,6 +45,7 @@ def main():
 
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
+        temp_dir.mkdir(parents=True, exist_ok=True)
         init_storage(str(temp_dir))
 
         (temp_dir / "experiment_results.json").unlink(missing_ok=True)
