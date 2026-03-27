@@ -16,6 +16,7 @@ def init_storage(data_dir: Optional[str] = None):
 
     files = {
         "events.json": [],
+        "interactions.json": [],
         "contexts.json": {},
         "preferences.json": {"language": "zh-CN"},
         "feedback.json": [],
