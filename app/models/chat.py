@@ -1,7 +1,10 @@
 from typing import Optional
+import os
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.utils.utils import SecretStr
+
+_DEFAULT_VLLM_BASE_URL = "http://localhost:8000/v1"
 
 
 class ChatModel:
@@ -10,7 +13,7 @@ class ChatModel:
         model: str = "Qwen/Qwen3.5-2B",
         temperature: float = 0.7,
         api_key: Optional[str] = None,
-        base_url: str = "http://localhost:8000/v1",
+        base_url: str = os.getenv("VLLM_BASE_URL", _DEFAULT_VLLM_BASE_URL),
     ):
         self.model_name = model
         self.temperature = temperature
