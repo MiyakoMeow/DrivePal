@@ -352,33 +352,6 @@ class ExperimentRunner:
         """
         return _evaluate_semantic_accuracy(input_text, expected_type, output)
 
-    def _extract_task_indicators(self, output: str) -> Dict[str, int]:
-        """从输出文本中动态提取各任务类型的指示词计数."""
-        indicators = {}
-
-        # 任务类型关键词（可配置，从外部获取）
-        type_patterns = self._get_type_patterns()
-
-        for task_type, patterns in type_patterns.items():
-            count = sum(1 for p in patterns if p in output)
-            if count > 0:
-                indicators[task_type] = count
-
-        return indicators
-
-    def _get_type_patterns(self) -> Dict[str, List[str]]:
-        """获取任务类型关键词模式配置."""
-        config = self._load_evaluation_config()
-        return config.get(
-            "type_patterns",
-            {
-                "meeting": ["会议", "meeting", "评审", "沟通会"],
-                "travel": ["出差", "travel", "行程"],
-                "shopping": ["购物", "shopping", "采购"],
-                "contact": ["联系", "contact", "电话"],
-            },
-        )
-
     def _evaluate_context_relatedness(
         self, input_text: str, expected_type: str, output: str
     ) -> float:
