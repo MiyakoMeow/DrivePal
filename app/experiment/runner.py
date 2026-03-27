@@ -169,17 +169,19 @@ def _evaluate_semantic_accuracy(
 
     # 3. 关键词重叠 (40%)
     def split_words(text: str) -> set:
-        chinese_chars = re.findall(r"[\u4e00-\u9fff]+", text.lower())
-        english_words = re.findall(r"[a-zA-Z]+", text.lower())
-        chinese_set = set("".join(chinese_chars))
-        english_set = set(english_words)
-        return chinese_set | english_set
+        chinese_chars = re.findall(r"[\u4e00-\u9fff]", text)
+        english_words = set(re.findall(r"[a-zA-Z]+", text.lower()))
+        chinese_bigrams = {
+            chinese_chars[i] + chinese_chars[i + 1]
+            for i in range(len(chinese_chars) - 1)
+        }
+        return chinese_bigrams | english_words
 
     input_words = split_words(input_text)
     output_words = split_words(output)
     overlap = len(input_words & output_words)
     if overlap > 0:
-        score += min(0.4, overlap * 0.1)
+        score += min(0.4, overlap * 0.05)
 
     return min(1.0, score)
 

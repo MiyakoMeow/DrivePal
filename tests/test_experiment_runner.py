@@ -78,3 +78,38 @@ def test_raw_preserved_in_strategy_node():
         }
         result = workflow._strategy_node(state)
         assert result["decision"].get("raw") is not None
+
+
+def test_split_words_uses_bigrams():
+    from app.experiment.runner import _evaluate_semantic_accuracy
+
+    score = _evaluate_semantic_accuracy(
+        "提醒我明天开会",
+        "schedule_check",
+        "明天有个会议安排",
+    )
+    assert score > 0
+
+
+def test_semantic_accuracy_with_raw_output():
+    from app.experiment.runner import _evaluate_semantic_accuracy
+
+    raw = '{"reasoning": "用户查询涉及日程安排和会议时间", "should_remind": false}'
+    score = _evaluate_semantic_accuracy(
+        "明天有什么安排",
+        "schedule_check",
+        raw,
+    )
+    assert score > 0
+
+
+def test_context_relatedness_schedule_check():
+    from app.experiment.runner import ExperimentRunner
+
+    runner = ExperimentRunner(config_dir="config")
+    score = runner._evaluate_context_relatedness(
+        "明天有什么安排",
+        "schedule_check",
+        "你的日程安排如下：明天下午三点有个会议提醒",
+    )
+    assert score > 0
