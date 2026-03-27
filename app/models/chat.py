@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -8,18 +7,14 @@ from langchain_core.utils.utils import SecretStr
 class ChatModel:
     def __init__(
         self,
-        model: str = "deepseek-chat",
+        model: str = "Qwen/Qwen3.5-2B",
         temperature: float = 0.7,
         api_key: Optional[str] = None,
-        base_url: str = "https://api.deepseek.com/v1",
+        base_url: str = "http://localhost:8000/v1",
     ):
         self.model_name = model
         self.temperature = temperature
-        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "API key not provided and DEEPSEEK_API_KEY environment variable not set"
-            )
+        self.api_key = api_key
         self.base_url = base_url
         self._client = None
 
