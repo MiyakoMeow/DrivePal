@@ -1,6 +1,7 @@
 """记忆模块，实现关键词、LLM、向量和记忆库四种检索模式."""
 
 import json
+import logging
 import re
 import uuid
 from datetime import datetime
@@ -9,6 +10,8 @@ from app.memory.memory_bank import MemoryBankBackend
 from app.storage.json_store import JSONStore
 from app.models.embedding import EmbeddingModel
 from app.models.chat import ChatModel
+
+logger = logging.getLogger(__name__)
 
 LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 
@@ -94,7 +97,8 @@ class MemoryModule:
                     data = json.loads(json_match.group())
                     if data.get("relevant"):
                         results.append(event)
-            except Exception:
+            except Exception as e:
+                logger.warning("LLM relevance check failed: %s", e, exc_info=True)
                 continue
 
         return results
