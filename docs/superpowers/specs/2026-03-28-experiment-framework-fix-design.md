@@ -1,6 +1,6 @@
 # Experiment Framework Fix Design
 
-Date: 2026-03-28
+Date: 2026-03-28 (v2 — post-review revision)
 
 ## Problem Statement
 
@@ -15,7 +15,7 @@ The experiment framework for comparing 4 memory retrieval strategies (keyword, l
 
 ## Solution: Minimal Fix (Plan A)
 
-Do NOT modify Agent logic. Only fix the experiment framework and evaluation layer.
+Fix the experiment framework, evaluation layer, and one minimal workflow change. Do NOT modify Agent prompts, Agent logic, or memory method implementations.
 
 ## Section 1: Entry Script & Data Isolation
 
@@ -31,18 +31,27 @@ CLI entry point with arguments:
 For each method run:
 1. Create temp directory: `data/exp_tmp/{method}/`
 2. Initialize with blank data files: `events.json`, `interactions.json`, `memorybank_summaries.json`, `strategies.json`, `preferences.json`, `feedback.json`, `contexts.json`
-3. Copy `config/evaluation_config.json` to temp dir (preserving eval config access)
-4. Create `AgentWorkflow` with this temp `data_dir`
-5. Run all test cases
-6. Clean up temp directory after run
+3. Create `AgentWorkflow` with this temp `data_dir`
+4. Run all test cases
+5. Clean up temp directory after run
+
+Note: `evaluation_config.json` is read from `config_dir` (not `data_dir`) by the runner, so it does NOT need to be copied to the temp dir.
 
 ### Runner modification
 
-`ExperimentRunner._run_method()` accepts an explicit `data_dir` parameter instead of always using `self.data_dir`.
+`ExperimentRunner._run_method()` accepts an explicit `data_dir` parameter instead of always using `self.data_dir`. This `data_dir` is also passed to `_get_latest_output()` so it reads events from the correct isolated directory.
 
-## Section 2: Evaluation Metrics Fix
+## Section 2: Workflow Minimal Change — Preserve Raw LLM Output
 
-### 2a. Type matching (fix P3)
+### 2a. Always store raw LLM output in decision
+
+In `workflow.py` `_strategy_node()`, after `json.loads(result)` succeeds, add `decision["raw"] = result` before the node returns. Currently `raw` is only set when JSON parsing fails. This one-line change ensures the full Strategy Agent output (including reasoning) is available for evaluation.
+
+Also apply the same pattern in `_context_node()` and `_task_node()` for consistency, storing raw LLM output as `context["raw"]` and `task["raw"]`.
+
+## Section 3: Evaluation Metrics Fix
+
+### 3a. Type matching (fix P3)
 
 Update `config/evaluation_config.json` to add `task_concepts` for all scenario types:
 
@@ -61,35 +70,47 @@ Update `config/evaluation_config.json` to add `task_concepts` for all scenario t
 }
 ```
 
-### 2b. Rich output extraction (fix P4)
+Note: `general` type will always have 0% relatedness (no task concepts to match). This is expected behavior — general queries like "你好" have no task-relevant concepts.
 
-Change the source of `actual_output` in `runner.py:256`:
+### 3b. Rich output extraction (fix P4)
+
+Change the source of `actual_output` for evaluation scoring in `runner.py`:
+
+After `workflow.run()`, instead of reading from `_get_latest_output()` (which returns `decision.content` → "无提醒内容"), extract the full text for scoring:
 
 Priority order:
-1. `decision.raw` — the full JSON string from Strategy Agent (contains reasoning, remind_content, etc.)
-2. `decision.reasoning` + `decision.content` — if JSON parse succeeds
-3. `result` — fallback (current behavior: `"提醒已发送: {content}"`)
+1. `decision["raw"]` — full LLM response string (now always preserved per Section 2)
+2. `decision.get("reasoning", "") + " " + decision.get("content", "")` — if raw unavailable
+3. `result` — fallback
 
-Implementation: In `_run_method`, after `workflow.run()`, read the latest event's `decision.raw` field. This captures the Strategy Agent's full analysis even when `should_remind=false`.
+This captures the Strategy Agent's reasoning text which contains task-type analysis, event references, and domain concepts even when `should_remind=false`.
 
-### 2c. Keyword overlap optimization (fix P5)
+### 3c. Keyword overlap optimization (fix P5)
 
 Change `split_words()` in `_evaluate_semantic_accuracy()`:
 
-- Before: single Chinese characters via `[\u4e00-\u9fff]+` then joining into set of individual chars
-- After: Chinese bigrams+ via `[\u4e00-\u9fff]{2,}` plus English words. This captures meaningful word units like "会议", "提醒", "安排" rather than individual chars.
+Use a **sliding-window bigram** approach for Chinese text. Instead of extracting consecutive runs (which returns whole sentences), generate all 2-character windows:
+
+```python
+def split_words(text: str) -> set:
+    chinese_chars = re.findall(r"[\u4e00-\u9fff]", text.lower())
+    english_words = set(re.findall(r"[a-zA-Z]+", text.lower()))
+    chinese_bigrams = {text[i:i+2] for i in range(len(chinese_chars) - 1)}
+    return chinese_bigrams | english_words
+```
+
+This produces granular units like {"用户", "户正", "正在", "在开", "开车"} — noisy but gives fine-grained overlap scoring.
 
 Adjust scoring formula:
-- Each matched word contributes `0.05` (up to `0.4` cap)
-- This gives better discrimination: 1 word = 0.05, 8 words = 0.4
+- Each matched word contributes `0.05` (up to `0.4` cap at 8 matches)
 
-## Section 3: Reproducibility & Reporting
+## Section 4: Reproducibility & Reporting
 
-### 3a. Random seed
+### 4a. Random seed
 
 `TestDataGenerator.generate_test_cases()` accepts optional `seed: int` parameter. When provided, calls `random.seed(seed)` before generation.
 
-### 3b. Enhanced experiment results
+### 4b. Enhanced experiment results
 
 `run_comparison()` output adds:
 - `seed`: the seed used
@@ -97,7 +118,7 @@ Adjust scoring formula:
 
 All methods run on the **same** test cases for fair comparison.
 
-### 3c. Enhanced report
+### 4c. Enhanced report
 
 `generate_report()` outputs Markdown with:
 - Summary table comparing all 4 methods across 4 metrics
@@ -108,13 +129,14 @@ All methods run on the **same** test cases for fair comparison.
 | File | Change |
 |------|--------|
 | `run_exp.py` (new) | CLI entry point |
-| `app/experiment/runner.py` | data_dir param, output extraction, split_words fix, per_case results |
+| `app/agents/workflow.py` | Preserve raw LLM output in strategy/context/task nodes |
+| `app/experiment/runner.py` | data_dir param, output extraction from raw, split_words bigram fix, per_case results |
 | `app/experiment/test_data.py` | seed parameter |
 | `config/evaluation_config.json` | add scenario type task_concepts |
 
 ## Out of Scope
 
 - Strategy Agent prompt changes
-- Agent workflow logic changes
 - Memory method implementation changes
 - LLM-as-Judge evaluation
+- Dead code cleanup (`_extract_task_indicators`, incomplete `type_patterns`)
