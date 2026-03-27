@@ -17,7 +17,6 @@ CONFIG_PATH = "config/llm.json"
 
 @dataclass
 class LLMProviderConfig:
-
     """单个 LLM 服务提供商配置."""
 
     model: str
@@ -38,7 +37,6 @@ class LLMProviderConfig:
 
 @dataclass
 class EmbeddingProviderConfig:
-
     """单个 Embedding 服务提供商配置."""
 
     model: str
@@ -59,7 +57,6 @@ class EmbeddingProviderConfig:
 
 @dataclass
 class LLMSettings:
-
     """模型配置集合，包含 LLM 和 Embedding 提供商列表."""
 
     llm_providers: list[LLMProviderConfig] = field(default_factory=list)
@@ -78,13 +75,10 @@ class LLMSettings:
         for item in config_data.get("llm", []):
             llm_providers.append(LLMProviderConfig.from_dict(item))
 
-        openai_env = _build_openai_env_provider()
-        if openai_env is not None:
-            llm_providers.append(openai_env)
-
-        deepseek_env = _build_deepseek_env_provider()
-        if deepseek_env is not None:
-            llm_providers.append(deepseek_env)
+        for prefix in ("OPENAI", "DEEPSEEK"):
+            env_provider = _build_env_provider(prefix)
+            if env_provider is not None:
+                llm_providers.append(env_provider)
 
         if not llm_providers:
             raise RuntimeError(
@@ -107,25 +101,15 @@ class LLMSettings:
         return cls(llm_providers=deduped, embedding_providers=embedding_providers)
 
 
-def _build_openai_env_provider() -> LLMProviderConfig | None:
-    model = os.getenv("OPENAI_MODEL")
+def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
+    """从环境变量构建 provider 配置."""
+    model = os.getenv(f"{prefix}_MODEL")
     if not model:
         return None
     return LLMProviderConfig(
         model=model,
-        base_url=os.getenv("OPENAI_BASE_URL"),
-        api_key=os.getenv("OPENAI_API_KEY"),
-    )
-
-
-def _build_deepseek_env_provider() -> LLMProviderConfig | None:
-    model = os.getenv("DEEPSEEK_MODEL")
-    if not model:
-        return None
-    return LLMProviderConfig(
-        model=model,
-        base_url=os.getenv("DEEPSEEK_BASE_URL"),
-        api_key=os.getenv("DEEPSEEK_API_KEY"),
+        base_url=os.getenv(f"{prefix}_BASE_URL"),
+        api_key=os.getenv(f"{prefix}_API_KEY"),
     )
 
 
