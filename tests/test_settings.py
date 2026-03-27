@@ -3,6 +3,7 @@
 import json
 import os
 import pytest
+from unittest.mock import patch, MagicMock
 
 from app.models.settings import LLMSettings, LLMProviderConfig, EmbeddingProviderConfig
 
@@ -157,3 +158,64 @@ class TestLLMSettingsLoad:
         settings = LLMSettings.load()
         llm_models = [(p.model, p.base_url) for p in settings.llm_providers]
         assert len(llm_models) == len(set(llm_models))
+
+
+class TestChatModelFallback:
+    def test_generate_with_single_provider(self):
+        from app.models.chat import ChatModel
+        from app.models.settings import LLMProviderConfig
+
+        providers = [
+            LLMProviderConfig(
+                model="test-model", base_url="http://fake:8000/v1", api_key="sk-test"
+            )
+        ]
+        chat = ChatModel(providers=providers)
+        with patch.object(chat, "_invoke_provider", return_value="response"):
+            result = chat.generate("hello")
+        assert result == "response"
+
+    def test_generate_falls_back_on_error(self):
+        from app.models.chat import ChatModel
+        from app.models.settings import LLMProviderConfig
+
+        providers = [
+            LLMProviderConfig(
+                model="bad-model", base_url="http://fake1:8000/v1", api_key="sk-bad"
+            ),
+            LLMProviderConfig(
+                model="good-model", base_url="http://fake2:8000/v1", api_key="sk-good"
+            ),
+        ]
+        chat = ChatModel(providers=providers)
+        call_count = 0
+
+        def mock_invoke(provider, messages, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("API error")
+            return "fallback response"
+
+        with patch.object(chat, "_invoke_provider", side_effect=mock_invoke):
+            result = chat.generate("hello")
+        assert result == "fallback response"
+        assert call_count == 2
+
+    def test_generate_all_providers_fail_raises(self):
+        from app.models.chat import ChatModel
+        from app.models.settings import LLMProviderConfig
+
+        providers = [
+            LLMProviderConfig(
+                model="bad1", base_url="http://fake1:8000/v1", api_key="sk-1"
+            ),
+            LLMProviderConfig(
+                model="bad2", base_url="http://fake2:8000/v1", api_key="sk-2"
+            ),
+        ]
+        chat = ChatModel(providers=providers)
+
+        with patch.object(chat, "_invoke_provider", side_effect=RuntimeError("fail")):
+            with pytest.raises(RuntimeError, match="All LLM providers failed"):
+                chat.generate("hello")
