@@ -9,6 +9,7 @@ from app.models.settings import LLMProviderConfig, LLMSettings
 
 
 class ChatModel:
+
     """LLM对话模型封装，支持多provider自动fallback."""
 
     def __init__(
@@ -16,6 +17,7 @@ class ChatModel:
         providers: list[LLMProviderConfig] | None = None,
         temperature: float | None = None,
     ):
+        """初始化对话模型."""
         if providers is None:
             settings = LLMSettings.load()
             providers = settings.llm_providers
@@ -50,6 +52,7 @@ class ChatModel:
     def generate(
         self, prompt: str, system_prompt: Optional[str] = None, **kwargs
     ) -> str:
+        """生成回复，按 provider 顺序尝试，失败自动 fallback."""
         messages = []
         if system_prompt:
             messages.append(SystemMessage(content=system_prompt))
@@ -68,4 +71,5 @@ class ChatModel:
     def batch_generate(
         self, prompts: list[str], system_prompt: Optional[str] = None
     ) -> list[str]:
+        """批量生成."""
         return [self.generate(p, system_prompt) for p in prompts]

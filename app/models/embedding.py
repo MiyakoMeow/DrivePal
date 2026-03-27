@@ -7,6 +7,7 @@ from app.models.settings import EmbeddingProviderConfig, LLMSettings
 
 
 class EmbeddingModel:
+
     """文本嵌入模型封装，支持多provider自动fallback."""
 
     def __init__(
@@ -14,6 +15,7 @@ class EmbeddingModel:
         providers: list[EmbeddingProviderConfig] | None = None,
         device: str | None = None,
     ):
+        """初始化嵌入模型."""
         if providers is None:
             try:
                 settings = LLMSettings.load()
@@ -33,6 +35,7 @@ class EmbeddingModel:
 
     @property
     def client(self):
+        """获取或延迟创建嵌入模型客户端，按 provider 顺序尝试."""
         if self._client is not None:
             return self._client
 
@@ -67,11 +70,13 @@ class EmbeddingModel:
         )
 
     def encode(self, text: str) -> list[float]:
+        """编码文本为向量."""
         embeddings = self.client.embed_query(text)
         if isinstance(embeddings, list):
             return embeddings
         return list(embeddings)
 
     def batch_encode(self, texts: list[str]) -> list[list[float]]:
+        """批量编码."""
         embeddings = self.client.embed_documents(texts)
         return [list(emb) if not isinstance(emb, list) else emb for emb in embeddings]

@@ -17,6 +17,9 @@ CONFIG_PATH = "config/llm.json"
 
 @dataclass
 class LLMProviderConfig:
+
+    """单个 LLM 服务提供商配置."""
+
     model: str
     base_url: str | None = None
     api_key: str | None = None
@@ -24,6 +27,7 @@ class LLMProviderConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "LLMProviderConfig":
+        """从字典创建配置实例."""
         return cls(
             model=d["model"],
             base_url=d.get("base_url"),
@@ -34,6 +38,9 @@ class LLMProviderConfig:
 
 @dataclass
 class EmbeddingProviderConfig:
+
+    """单个 Embedding 服务提供商配置."""
+
     model: str
     device: str = "cpu"
     base_url: str | None = None
@@ -41,6 +48,7 @@ class EmbeddingProviderConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "EmbeddingProviderConfig":
+        """从字典创建配置实例."""
         return cls(
             model=d["model"],
             device=d.get("device", "cpu"),
@@ -51,11 +59,15 @@ class EmbeddingProviderConfig:
 
 @dataclass
 class LLMSettings:
+
+    """模型配置集合，包含 LLM 和 Embedding 提供商列表."""
+
     llm_providers: list[LLMProviderConfig] = field(default_factory=list)
     embedding_providers: list[EmbeddingProviderConfig] = field(default_factory=list)
 
     @classmethod
     def load(cls) -> "LLMSettings":
+        """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
         config_data: dict = {}
         config_path = os.path.join(os.getcwd(), CONFIG_PATH)
         if os.path.isfile(config_path):
@@ -118,6 +130,7 @@ def _build_deepseek_env_provider() -> LLMProviderConfig | None:
 
 
 def get_chat_model(temperature: float | None = None) -> "ChatModel":
+    """从配置创建 ChatModel 实例."""
     from app.models.chat import ChatModel
 
     settings = LLMSettings.load()
@@ -125,6 +138,7 @@ def get_chat_model(temperature: float | None = None) -> "ChatModel":
 
 
 def get_embedding_model(device: str | None = None) -> "EmbeddingModel":
+    """从配置创建 EmbeddingModel 实例."""
     from app.models.embedding import EmbeddingModel
 
     settings = LLMSettings.load()

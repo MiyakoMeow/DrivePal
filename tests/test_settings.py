@@ -1,6 +1,7 @@
 """Tests for model settings loader."""
 
 import json
+
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -8,7 +9,11 @@ from app.models.settings import LLMSettings, LLMProviderConfig, EmbeddingProvide
 
 
 class TestLLMProviderConfig:
+
+    """Tests for LLMProviderConfig."""
+
     def test_from_dict_full(self):
+        """Verify full dict parsing with all fields."""
         cfg = LLMProviderConfig.from_dict(
             {
                 "model": "gpt-4",
@@ -23,6 +28,7 @@ class TestLLMProviderConfig:
         assert cfg.temperature == 0.5
 
     def test_from_dict_defaults(self):
+        """Verify default values when optional fields are missing."""
         cfg = LLMProviderConfig.from_dict({"model": "test"})
         assert cfg.model == "test"
         assert cfg.base_url is None
@@ -31,7 +37,11 @@ class TestLLMProviderConfig:
 
 
 class TestEmbeddingProviderConfig:
+
+    """Tests for EmbeddingProviderConfig."""
+
     def test_from_dict_local(self):
+        """Verify local HuggingFace provider parsing."""
         cfg = EmbeddingProviderConfig.from_dict(
             {
                 "model": "BAAI/bge-small-zh-v1.5",
@@ -44,6 +54,7 @@ class TestEmbeddingProviderConfig:
         assert cfg.api_key is None
 
     def test_from_dict_remote(self):
+        """Verify remote OpenAI-compatible provider parsing."""
         cfg = EmbeddingProviderConfig.from_dict(
             {
                 "model": "text-embedding-3-small",
@@ -56,7 +67,11 @@ class TestEmbeddingProviderConfig:
 
 
 class TestLLMSettingsLoad:
+
+    """Tests for LLMSettings.load configuration loading."""
+
     def test_load_from_config_file(self, tmp_path, monkeypatch):
+        """Verify loading providers from config/llm.json."""
         config_file = tmp_path / "config" / "llm.json"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
@@ -81,6 +96,7 @@ class TestLLMSettingsLoad:
         assert settings.embedding_providers[0].model == "bge-test"
 
     def test_load_fallback_to_env_vars(self, tmp_path, monkeypatch):
+        """Verify OPENAI_XXX env vars are used when config file is absent."""
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
         monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -90,6 +106,7 @@ class TestLLMSettingsLoad:
         assert any(p.model == "gpt-4" for p in settings.llm_providers)
 
     def test_load_deepseek_env_as_final_fallback(self, tmp_path, monkeypatch):
+        """Verify DEEPSEEK_XXX env vars are used when OPENAI_XXX are absent."""
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
         monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
@@ -98,11 +115,13 @@ class TestLLMSettingsLoad:
         assert any(p.model == "deepseek-chat" for p in settings.llm_providers)
 
     def test_load_no_config_raises(self, tmp_path, monkeypatch):
+        """Verify RuntimeError when no LLM config is available."""
         monkeypatch.chdir(tmp_path)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
 
     def test_config_file_plus_env_merging(self, tmp_path, monkeypatch):
+        """Verify config file providers come before env var providers."""
         config_file = tmp_path / "config" / "llm.json"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
@@ -132,6 +151,7 @@ class TestLLMSettingsLoad:
         assert any(p.model == "model-c" for p in settings.llm_providers)
 
     def test_dedup_providers(self, tmp_path, monkeypatch):
+        """Verify duplicate providers are deduplicated by model+base_url."""
         config_file = tmp_path / "config" / "llm.json"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
@@ -160,7 +180,11 @@ class TestLLMSettingsLoad:
 
 
 class TestChatModelFallback:
+
+    """Tests for ChatModel multi-provider fallback behavior."""
+
     def test_generate_with_single_provider(self):
+        """Verify single provider generates successfully."""
         from app.models.chat import ChatModel
         from app.models.settings import LLMProviderConfig
 
@@ -175,6 +199,7 @@ class TestChatModelFallback:
         assert result == "response"
 
     def test_generate_falls_back_on_error(self):
+        """Verify fallback to next provider when the first fails."""
         from app.models.chat import ChatModel
         from app.models.settings import LLMProviderConfig
 
@@ -202,6 +227,7 @@ class TestChatModelFallback:
         assert call_count == 2
 
     def test_generate_all_providers_fail_raises(self):
+        """Verify RuntimeError when all providers fail."""
         from app.models.chat import ChatModel
         from app.models.settings import LLMProviderConfig
 
@@ -221,7 +247,11 @@ class TestChatModelFallback:
 
 
 class TestEmbeddingModelFallback:
+
+    """Tests for EmbeddingModel multi-provider fallback behavior."""
+
     def test_local_provider_creates_huggingface(self):
+        """Verify local provider uses HuggingFaceEmbeddings."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
 
@@ -237,6 +267,7 @@ class TestEmbeddingModelFallback:
         )
 
     def test_remote_provider_creates_openai(self):
+        """Verify remote provider uses OpenAIEmbeddings."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
 
@@ -254,6 +285,7 @@ class TestEmbeddingModelFallback:
         mock_cls.assert_called_once()
 
     def test_fallback_to_next_provider(self):
+        """Verify fallback when first embedding provider fails to load."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
 
@@ -277,6 +309,7 @@ class TestEmbeddingModelFallback:
         assert call_count == 2
 
     def test_encode_uses_client(self):
+        """Verify encode delegates to the cached client."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
 
