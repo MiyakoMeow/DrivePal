@@ -8,6 +8,7 @@ _STORE_NAME = "keyword"
 
 
 class KeywordMemoryStore(BaseMemoryStore):
+
     """关键词匹配检索 store."""
 
     @property
@@ -23,6 +24,7 @@ class KeywordMemoryStore(BaseMemoryStore):
 
         Returns:
             事件 ID
+
         """
         event = dict(event)
         event_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -39,6 +41,7 @@ class KeywordMemoryStore(BaseMemoryStore):
 
         Returns:
             匹配的事件列表
+
         """
         query_lower = query.lower()
         events = self.events_store.read()

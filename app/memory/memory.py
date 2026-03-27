@@ -28,6 +28,7 @@ def _import_all_stores() -> None:
 
 
 class MemoryModule:
+
     """统一记忆管理接口，Facade 模式."""
 
     def __init__(
@@ -36,6 +37,14 @@ class MemoryModule:
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
     ):
+        """初始化 MemoryModule 实例.
+
+        Args:
+            data_dir: 数据存储目录.
+            embedding_model: 向量嵌入模型 (可选).
+            chat_model: 聊天模型 (可选).
+
+        """
         _import_all_stores()
         self._stores: dict[str, any] = {}
         self._data_dir = data_dir

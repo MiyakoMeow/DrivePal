@@ -7,6 +7,7 @@ from app.storage.json_store import JSONStore
 
 
 class BaseMemoryStore(MemoryStore, ABC):
+
     """MemoryStore 基类."""
 
     def __init__(
