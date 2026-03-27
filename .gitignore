@@ -25,6 +25,7 @@ data/
 
 # Experiment scripts
 run_*.py
+!run_exp.py
 quick_test.py
 debug_*.py
 test_*.py
