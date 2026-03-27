@@ -10,7 +10,7 @@ def test_events_persist_across_instances(tmp_path):
     m1 = MemoryModule(str(tmp_path))
     m1.write({"content": "项目进度会议", "type": "meeting"})
     m2 = MemoryModule(str(tmp_path))
-    events = m2.events_store.read()
+    events = m2.get_history()
     assert len(events) == 1
     assert events[0]["content"] == "项目进度会议"
 

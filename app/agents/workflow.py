@@ -8,7 +8,6 @@ from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
-from app.memory.memory_bank import MemoryBankBackend
 from app.storage.json_store import JSONStore
 from langchain_core.messages import HumanMessage
 
@@ -187,15 +186,6 @@ class AgentWorkflow:
             "event_id": event_id,
             "messages": state["messages"] + [HumanMessage(content=result)],
         }
-
-    def _get_memorybank_backend(self) -> MemoryBankBackend:
-        if not hasattr(self, "_memorybank_backend") or self._memorybank_backend is None:
-            self._memorybank_backend = MemoryBankBackend(
-                self.data_dir,
-                embedding_model=getattr(self, "_embedding_model", None),
-                chat_model=self.memory_module.chat_model,
-            )
-        return self._memorybank_backend
 
     def run(self, user_input: str) -> tuple[str, Optional[str]]:
         """运行完整工作流并返回结果和事件ID."""
