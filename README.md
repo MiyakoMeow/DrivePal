@@ -277,7 +277,7 @@ uv run python run_exp.py --methods keyword llm_only --count 50 --seed 123
 ### 环境要求
 
 - Python 3.13+
-- DeepSeek API Key 或其他 OpenAI 兼容 API Key
+- 本地部署 vLLM（Qwen3.5-2B）或 OpenAI 兼容 API
 
 ### 1. 安装依赖
 
@@ -288,11 +288,11 @@ uv sync
 ### 2. 配置环境变量
 
 ```bash
-# Linux/macOS
-export DEEPSEEK_API_KEY="your-api-key"
+# 设置 vLLM 服务地址（默认 http://localhost:8000/v1）
+export VLLM_BASE_URL="http://localhost:8000/v1"
 
-# Windows (PowerShell)
-$env:DEEPSEEK_API_KEY="your-api-key"
+# 如需使用 DeepSeek 作为备用
+# export DEEPSEEK_API_KEY="your-api-key"
 ```
 
 ### 3. 初始化数据目录
@@ -338,6 +338,10 @@ uv run python run_exp.py --methods keyword embeddings --count 50 --seed 123
 
 ```python
 PROVIDERS = {
+    "qwen": {
+        "base_url": "http://localhost:8000/v1",  # 通过 VLLM_BASE_URL 环境变量配置
+        "model": "Qwen/Qwen3.5-2B",
+    },
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
         "model": "deepseek-chat",
@@ -432,7 +436,8 @@ uv run pytest tests/ -v
 |------|------|
 | **Web框架** | FastAPI + Uvicorn |
 | **AI工作流** | LangChain + LangGraph |
-| **LLM支持** | DeepSeek-chat, GPT-4, Claude-3 (OpenAI兼容接口) |
+| **LLM支持** | Qwen3.5-2B (vLLM, 默认), DeepSeek-chat, GPT-4, Claude-3 (OpenAI兼容接口) |
+| **LLM推理** | vLLM (本地部署), OpenAI兼容接口 |
 | **嵌入模型** | BGE-small-zh-v1.5 (HuggingFace) |
 | **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线 + 分层摘要) |
 | **数据存储** | JSON文件 (标准库json) |
