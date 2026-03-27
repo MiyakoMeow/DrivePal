@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
-
     """多Agent协作工作流."""
 
     def __init__(
@@ -31,13 +30,11 @@ class AgentWorkflow:
         if memory_module is not None:
             self.memory_module = memory_module
         else:
-            from app.models.chat import ChatModel
+            from app.models.settings import get_chat_model, get_embedding_model
 
-            chat_model = ChatModel()
+            chat_model = get_chat_model()
             if memory_mode == "embeddings" or memory_mode == "memorybank":
-                from app.models.embedding import EmbeddingModel
-
-                embedding_model = EmbeddingModel()
+                embedding_model = get_embedding_model()
                 self._embedding_model = embedding_model
                 self.memory_module = MemoryModule(
                     data_dir, embedding_model=embedding_model, chat_model=chat_model

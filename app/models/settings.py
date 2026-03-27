@@ -108,3 +108,17 @@ def _build_deepseek_env_provider() -> LLMProviderConfig | None:
         base_url=os.getenv("DEEPSEEK_BASE_URL"),
         api_key=os.getenv("DEEPSEEK_API_KEY"),
     )
+
+
+def get_chat_model(temperature: float | None = None) -> "ChatModel":
+    from app.models.chat import ChatModel
+
+    settings = LLMSettings.load()
+    return ChatModel(providers=settings.llm_providers, temperature=temperature)
+
+
+def get_embedding_model(device: str | None = None) -> "EmbeddingModel":
+    from app.models.embedding import EmbeddingModel
+
+    settings = LLMSettings.load()
+    return EmbeddingModel(providers=settings.embedding_providers, device=device)

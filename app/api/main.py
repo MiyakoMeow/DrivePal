@@ -6,8 +6,7 @@ from typing import Optional
 import os
 
 from app.memory.memory import MemoryModule
-from app.models.embedding import EmbeddingModel
-from app.models.chat import ChatModel
+from app.models.settings import get_chat_model, get_embedding_model
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,15 +16,14 @@ app = FastAPI(title="知行车秘 - 车载AI智能体")
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
 
-_embedding_model = EmbeddingModel()
-_chat_model = ChatModel()
+_chat_model = get_chat_model()
+_embedding_model = get_embedding_model()
 _memory_module = MemoryModule(
     data_dir=DATA_DIR, embedding_model=_embedding_model, chat_model=_chat_model
 )
 
 
 class QueryRequest(BaseModel):
-
     """用户查询请求."""
 
     query: str
@@ -33,7 +31,6 @@ class QueryRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-
     """用户反馈请求."""
 
     event_id: str
