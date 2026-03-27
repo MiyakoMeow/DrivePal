@@ -119,6 +119,10 @@ class MemoryModule:
             )
         return self._memorybank_backend
 
+    def write_interaction(self, query: str, response: str) -> str:
+        backend = self._get_memorybank_backend()
+        return backend.write_interaction(query, response)
+
     def _search_by_memorybank(self, query: str) -> list:
         backend = self._get_memorybank_backend()
         return backend.search(query)

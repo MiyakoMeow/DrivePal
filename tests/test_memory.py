@@ -79,3 +79,11 @@ def test_cosine_similarity_numpy(temp_data_dir):
 
     result = memory._cosine_similarity(vec1, vec2)
     assert abs(result - 1.0) < 0.001, "identical vectors should have similarity ~1"
+
+
+def test_write_interaction_delegates(temp_data_dir):
+    memory = MemoryModule(temp_data_dir)
+    interaction_id = memory.write_interaction("测试查询", "测试回复")
+    assert isinstance(interaction_id, str)
+    results = memory.search("测试", mode="memorybank")
+    assert len(results) > 0
