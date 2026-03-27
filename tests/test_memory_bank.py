@@ -219,3 +219,21 @@ class TestEventAggregation:
         backend.write_interaction("今天天气怎么样", "晴天")
         events = backend.events_store.read()
         assert len(events) == 2
+
+
+class TestUpdateEventSummary:
+    def test_update_summary_calls_llm(self, temp_data_dir, mock_chat_model):
+        backend = MemoryBankBackend(temp_data_dir, chat_model=mock_chat_model)
+        mock_chat_model.generate.return_value = "用户修改了会议时间"
+        backend.write_interaction("提醒我明天上午开会", "好的", event_type="meeting")
+        backend.write_interaction("明天下午也有会议", "已更新")
+        events = backend.events_store.read()
+        assert len(events) == 1
+        assert events[0]["content"] == "用户修改了会议时间"
+        assert mock_chat_model.generate.called
+
+    def test_no_llm_no_summary_update(self, backend):
+        backend.write_interaction("提醒我明天上午开会", "好的")
+        backend.write_interaction("明天下午也有会议", "已更新")
+        events = backend.events_store.read()
+        assert events[0]["content"] == "提醒我明天上午开会"

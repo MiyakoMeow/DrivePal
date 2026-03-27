@@ -284,7 +284,26 @@ class MemoryBankBackend:
         self.events_store.write(all_events)
 
     def _update_event_summary(self, event_id: str) -> None:
-        pass
+        if not self.chat_model:
+            return
+        interactions = self.interactions_store.read()
+        child_interactions = [i for i in interactions if i.get("event_id") == event_id]
+        if not child_interactions:
+            return
+        combined = "\n".join(
+            f"用户: {i['query']}\n系统: {i['response']}" for i in child_interactions
+        )
+        prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
+        try:
+            summary_text = self.chat_model.generate(prompt)
+        except Exception:
+            return
+        all_events = self.events_store.read()
+        for event in all_events:
+            if event.get("id") == event_id:
+                event["content"] = summary_text
+                break
+        self.events_store.write(all_events)
 
     def _persist_interaction(self, interaction: dict) -> None:
         all_interactions = self.interactions_store.read()
