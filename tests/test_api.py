@@ -4,11 +4,11 @@ from fastapi.testclient import TestClient
 
 import pytest
 
-from tests.conftest import is_vllm_unavailable
+from tests.conftest import is_llm_available
 
-SKIP_IF_NO_VLLM = pytest.mark.skipif(
-    is_vllm_unavailable(),
-    reason="vLLM not available at http://localhost:8000",
+SKIP_IF_NO_LLM = pytest.mark.skipif(
+    not is_llm_available(),
+    reason="OPENAI_MODEL not set",
 )
 
 
@@ -20,7 +20,7 @@ def client():
     return TestClient(app)
 
 
-@SKIP_IF_NO_VLLM
+@SKIP_IF_NO_LLM
 def test_query_endpoint(client):
     """Verify the /api/query endpoint returns a valid response."""
     response = client.post(
@@ -32,7 +32,7 @@ def test_query_endpoint(client):
     assert "event_id" in data
 
 
-@SKIP_IF_NO_VLLM
+@SKIP_IF_NO_LLM
 def test_feedback_endpoint(client):
     """Verify the /api/feedback endpoint accepts feedback actions."""
     response = client.post(
@@ -42,7 +42,7 @@ def test_feedback_endpoint(client):
     assert response.json()["status"] == "success"
 
 
-@SKIP_IF_NO_VLLM
+@SKIP_IF_NO_LLM
 def test_history_endpoint(client):
     """Verify the /api/history endpoint returns history records."""
     response = client.get("/api/history?limit=5")

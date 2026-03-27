@@ -39,3 +39,6 @@ data/raw/
 # Experiment results
 experiment_results/
 logs/
+
+# Model configuration (contains API keys)
+config/llm.json

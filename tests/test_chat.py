@@ -4,15 +4,15 @@ import pytest
 
 from app.memory.memory import MemoryModule
 from app.models.chat import ChatModel
-from tests.conftest import is_vllm_unavailable
+from tests.conftest import is_llm_available
 
-SKIP_IF_NO_VLLM = pytest.mark.skipif(
-    is_vllm_unavailable(),
-    reason="vLLM not available at http://localhost:8000",
+SKIP_IF_NO_LLM = pytest.mark.skipif(
+    not is_llm_available(),
+    reason="OPENAI_MODEL not set",
 )
 
 
-@SKIP_IF_NO_VLLM
+@SKIP_IF_NO_LLM
 def test_chat_drives_llm_memory_search(tmp_path):
     """Verify that chat-driven LLM memory search retrieves relevant events."""
     chat_model = ChatModel()
@@ -23,7 +23,7 @@ def test_chat_drives_llm_memory_search(tmp_path):
     assert "会议" in results[0]["content"]
 
 
-@SKIP_IF_NO_VLLM
+@SKIP_IF_NO_LLM
 def test_chat_feeds_workflow_context(tmp_path):
     """Verify that memory context is injected into the agent workflow state."""
     from app.agents.workflow import AgentWorkflow
