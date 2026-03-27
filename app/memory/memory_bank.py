@@ -7,6 +7,7 @@ from app.models.chat import ChatModel
 from app.models.embedding import EmbeddingModel
 from app.storage.json_store import JSONStore
 
+AGGREGATION_SIMILARITY_THRESHOLD = 0.8
 DAILY_SUMMARY_THRESHOLD = 5
 OVERALL_SUMMARY_THRESHOLD = 3
 SUMMARY_WEIGHT = 0.8
@@ -29,6 +30,7 @@ class MemoryBankBackend:
         self.embedding_model = embedding_model
         self.chat_model = chat_model
         self.events_store = JSONStore(data_dir, "events.json", list)
+        self.interactions_store = JSONStore(data_dir, "interactions.json", list)
         self._default_summaries = {"daily_summaries": {}, "overall_summary": ""}
         self.summaries_store = JSONStore(
             data_dir,
@@ -200,6 +202,69 @@ class MemoryBankBackend:
             summaries = self.summaries_store.read()
             summaries["daily_summaries"] = daily_summaries
             self.summaries_store.write(summaries)
+
+    def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        interaction_id = (
+            f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        )
+        today = date.today().isoformat()
+        interaction = {
+            "id": interaction_id,
+            "event_id": "",
+            "query": query,
+            "response": response,
+            "timestamp": datetime.now().isoformat(),
+            "memory_strength": 1,
+            "last_recall_date": today,
+        }
+        self.interactions_store.append(interaction)
+
+        append_event_id = self._should_append_to_event(interaction)
+        if append_event_id:
+            interaction["event_id"] = append_event_id
+            self._append_interaction_to_event(append_event_id, interaction_id)
+            self._update_event_summary(append_event_id)
+        else:
+            event_id = (
+                f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+            )
+            now_iso = datetime.now().isoformat()
+            event = {
+                "id": event_id,
+                "content": query,
+                "type": event_type,
+                "interaction_ids": [interaction_id],
+                "created_at": now_iso,
+                "updated_at": now_iso,
+                "memory_strength": 1,
+                "last_recall_date": today,
+                "date_group": today,
+            }
+            self.events_store.append(event)
+            interaction["event_id"] = event_id
+
+        self._persist_interaction(interaction)
+        self._maybe_summarize(today)
+        return interaction_id
+
+    def _should_append_to_event(self, interaction: dict) -> Optional[str]:
+        return None
+
+    def _append_interaction_to_event(self, event_id: str, interaction_id: str) -> None:
+        pass
+
+    def _update_event_summary(self, event_id: str) -> None:
+        pass
+
+    def _persist_interaction(self, interaction: dict) -> None:
+        all_interactions = self.interactions_store.read()
+        for i, item in enumerate(all_interactions):
+            if item["id"] == interaction["id"]:
+                all_interactions[i] = interaction
+                break
+        self.interactions_store.write(all_interactions)
 
     def _maybe_summarize(self, date_group: str) -> None:
         events = self.events_store.read()

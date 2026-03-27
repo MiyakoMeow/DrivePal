@@ -164,3 +164,35 @@ class TestHierarchicalSummarization:
         results = backend.search("讨论了")
         sources = [r.get("_source") for r in results]
         assert "daily_summary" in sources
+
+
+class TestWriteInteraction:
+    def test_write_interaction_creates_record(self, backend):
+        interaction_id = backend.write_interaction("提醒我开会", "好的")
+        interactions = backend.interactions_store.read()
+        assert len(interactions) == 1
+        assert interactions[0]["id"] == interaction_id
+        assert interactions[0]["query"] == "提醒我开会"
+        assert interactions[0]["response"] == "好的"
+        assert interactions[0]["memory_strength"] == 1
+        assert interactions[0]["event_id"] is not None
+
+    def test_write_interaction_creates_event(self, backend):
+        backend.write_interaction("提醒我开会", "好的")
+        events = backend.events_store.read()
+        assert len(events) == 1
+        assert events[0]["interaction_ids"] == [
+            backend.interactions_store.read()[0]["id"]
+        ]
+        assert events[0]["content"] == "提醒我开会"
+        assert "updated_at" in events[0]
+
+    def test_write_interaction_with_event_type(self, backend):
+        backend.write_interaction("提醒我开会", "好的", event_type="meeting")
+        events = backend.events_store.read()
+        assert events[0]["type"] == "meeting"
+
+    def test_write_interaction_returns_id(self, backend):
+        interaction_id = backend.write_interaction("测试", "回复")
+        assert isinstance(interaction_id, str)
+        assert len(interaction_id) > 0
