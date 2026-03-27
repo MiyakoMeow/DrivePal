@@ -28,18 +28,19 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 
 
 class LLMOnlyMemoryStore(BaseMemoryStore):
-
     """LLM 语义判断检索 store."""
 
     def __init__(
         self,
         data_dir: str,
+        embedding_model=None,
         chat_model: Optional["ChatModel"] = None,
     ):
         """初始化 LLMOnlyMemoryStore 实例.
 
         Args:
             data_dir: 数据存储目录路径.
+            embedding_model: 未使用，为兼容工厂签名.
             chat_model: LLM 模型实例.
 
         """
