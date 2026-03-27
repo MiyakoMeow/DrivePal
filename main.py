@@ -1,3 +1,5 @@
+"""记忆工作台主入口."""
+
 import uvicorn
 from app.api.main import app
 from fastapi.responses import FileResponse
@@ -8,6 +10,7 @@ webui_path = Path(__file__).parent / "webui"
 
 @app.get("/")
 async def root():
+    """返回前端 WebUI 入口页面."""
     return FileResponse(webui_path / "index.html")
 
 

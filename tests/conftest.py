@@ -1,3 +1,5 @@
+"""Shared test configuration and fixtures."""
+
 import os
 import urllib.request
 import urllib.error
@@ -10,6 +12,7 @@ def _get_vllm_base_url() -> str:
 
 
 def is_vllm_available() -> bool:
+    """Check whether the vLLM server is reachable."""
     base_url = _get_vllm_base_url()
     models_url = f"{base_url}/models"
     try:
@@ -21,4 +24,5 @@ def is_vllm_available() -> bool:
 
 
 def is_vllm_unavailable() -> bool:
+    """Check whether the vLLM server is not reachable."""
     return not is_vllm_available()

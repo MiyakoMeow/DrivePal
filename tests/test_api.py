@@ -1,3 +1,5 @@
+"""Tests for the API endpoints."""
+
 from fastapi.testclient import TestClient
 
 import pytest
@@ -12,6 +14,7 @@ SKIP_IF_NO_VLLM = pytest.mark.skipif(
 
 @pytest.fixture
 def client():
+    """Provide a FastAPI test client."""
     from app.api.main import app
 
     return TestClient(app)
@@ -19,6 +22,7 @@ def client():
 
 @SKIP_IF_NO_VLLM
 def test_query_endpoint(client):
+    """Verify the /api/query endpoint returns a valid response."""
     response = client.post(
         "/api/query", json={"query": "测试查询", "memory_mode": "keyword"}
     )
@@ -30,6 +34,7 @@ def test_query_endpoint(client):
 
 @SKIP_IF_NO_VLLM
 def test_feedback_endpoint(client):
+    """Verify the /api/feedback endpoint accepts feedback actions."""
     response = client.post(
         "/api/feedback", json={"event_id": "test123", "action": "accept"}
     )
@@ -39,6 +44,7 @@ def test_feedback_endpoint(client):
 
 @SKIP_IF_NO_VLLM
 def test_history_endpoint(client):
+    """Verify the /api/history endpoint returns history records."""
     response = client.get("/api/history?limit=5")
     assert response.status_code == 200
     assert "history" in response.json()

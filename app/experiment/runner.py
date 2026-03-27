@@ -1,3 +1,5 @@
+"""实验运行模块，提供多记忆检索方法的对比实验与评估功能."""
+
 import logging
 import re
 import time
@@ -13,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _compute_time_decay(event_time: datetime, half_life_days: float = 7.0) -> float:
-    """计算时间衰减权重，使用指数衰减公式"""
+    """计算时间衰减权重，使用指数衰减公式."""
     now = datetime.now()
     days_ago = (now - event_time).total_seconds() / (24 * 3600)
     if days_ago < 0:
@@ -22,7 +24,7 @@ def _compute_time_decay(event_time: datetime, half_life_days: float = 7.0) -> fl
 
 
 def _compute_context_weight(current_turn: int, last_turn: Optional[int]) -> float:
-    """计算多轮对话的上下文权重"""
+    """计算多轮对话的上下文权重."""
     if last_turn is None:
         return 1.0
     if current_turn == last_turn:
@@ -146,7 +148,7 @@ def _infer_intent(query: str) -> str:
 def _evaluate_semantic_accuracy(
     input_text: str, expected_type: str, output: str
 ) -> float:
-    """基于规则的语义准确率评估
+    """基于规则的语义准确率评估.
 
     使用 Task 1.1-1.3 添加的辅助函数。
     - 意图匹配 (40%): _infer_intent
@@ -187,7 +189,11 @@ def _evaluate_semantic_accuracy(
 
 
 class ExperimentRunner:
+
+    """实验对比运行器，支持多种记忆检索方法的基准测试."""
+
     def __init__(self, data_dir: str = "data", config_dir: str = "config"):
+        """初始化实验运行器."""
         self.data_dir = data_dir
         self.config_dir = config_dir
         self._evaluation_config = None
@@ -209,6 +215,7 @@ class ExperimentRunner:
         data_dir: str | None = None,
         seed: int | None = None,
     ) -> Dict[str, Any]:
+        """运行多方法对比实验并返回评估结果."""
         if not test_cases:
             raise ValueError("test_cases cannot be empty")
         for tc in test_cases:
@@ -339,11 +346,14 @@ class ExperimentRunner:
     def _evaluate_semantic_accuracy(
         self, input_text: str, expected_type: str, output: str
     ) -> float:
-        """评估语义理解准确率（委托给模块级函数）"""
+        """评估语义理解准确率（委托给模块级函数）.
+
+        根据意图匹配、否定模式处理和关键词重叠综合打分.
+        """
         return _evaluate_semantic_accuracy(input_text, expected_type, output)
 
     def _extract_task_indicators(self, output: str) -> Dict[str, int]:
-        """动态提取任务类型指示词"""
+        """从输出文本中动态提取各任务类型的指示词计数."""
         indicators = {}
 
         # 任务类型关键词（可配置，从外部获取）
@@ -357,7 +367,7 @@ class ExperimentRunner:
         return indicators
 
     def _get_type_patterns(self) -> Dict[str, List[str]]:
-        """获取任务类型模式 - 从配置文件读取"""
+        """获取任务类型关键词模式配置."""
         config = self._load_evaluation_config()
         return config.get(
             "type_patterns",
@@ -372,10 +382,7 @@ class ExperimentRunner:
     def _evaluate_context_relatedness(
         self, input_text: str, expected_type: str, output: str
     ) -> float:
-        """评估上下文相关度
-
-        使用更通用的方法：检查输出是否提及任务相关概念
-        """
+        """评估输出与任务类型的上下文相关度."""
         output_lower = output.lower()
 
         # 通用任务相关概念（从配置获取）
@@ -388,7 +395,7 @@ class ExperimentRunner:
         return relatedness
 
     def _get_task_concepts(self) -> Dict[str, List[str]]:
-        """获取任务相关概念 - 从配置文件读取"""
+        """获取各任务类型的相关概念词配置."""
         config = self._load_evaluation_config()
         return config.get(
             "task_concepts",
@@ -405,6 +412,7 @@ class ExperimentRunner:
         results_store.append(results)
 
     def generate_report(self) -> str:
+        """生成实验对比报告的Markdown文本."""
         results_store = JSONStore(self.data_dir, "experiment_results.json", list)
         results = results_store.read()
         if not results:

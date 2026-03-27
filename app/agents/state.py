@@ -1,9 +1,12 @@
+"""Agent状态定义模块."""
+
 from typing import TypedDict, Optional
 from langchain_core.messages import BaseMessage
 
 
 class AgentState(TypedDict):
-    """LangGraph Agent状态定义"""
+
+    """LangGraph Agent状态定义."""
 
     messages: list[BaseMessage]
     context: dict

@@ -1,3 +1,5 @@
+"""记忆库后端，实现基于遗忘曲线的记忆存储、聚合与摘要功能."""
+
 import math
 import uuid
 from datetime import date, datetime
@@ -15,18 +17,23 @@ TOP_K = 3
 
 
 def forgetting_curve(days_elapsed: int, strength: int) -> float:
+    """根据艾宾浩斯遗忘曲线计算记忆保留率."""
     if days_elapsed <= 0:
         return 1.0
     return math.exp(-days_elapsed / (5 * strength))
 
 
 class MemoryBankBackend:
+
+    """记忆库后端，支持遗忘曲线、记忆强化与自动摘要."""
+
     def __init__(
         self,
         data_dir: str,
         embedding_model: Optional[EmbeddingModel] = None,
         chat_model: Optional[ChatModel] = None,
     ):
+        """初始化记忆库后端."""
         self.embedding_model = embedding_model
         self.chat_model = chat_model
         self.events_store = JSONStore(data_dir, "events.json", list)
@@ -39,6 +46,7 @@ class MemoryBankBackend:
         )
 
     def write_with_memory(self, event: dict) -> str:
+        """写入事件并触发可能的每日摘要生成."""
         event_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         today = date.today().isoformat()
         event["id"] = event_id
@@ -51,6 +59,7 @@ class MemoryBankBackend:
         return event_id
 
     def search(self, query: str, top_k: int = TOP_K) -> list[dict]:
+        """根据查询检索相关事件和摘要."""
         if not query.strip():
             return []
         events = self.events_store.read()
@@ -236,6 +245,7 @@ class MemoryBankBackend:
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """写入交互记录，自动聚合到已有事件或创建新事件."""
         interaction_id = (
             f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         )

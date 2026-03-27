@@ -1,14 +1,18 @@
+"""SGD-Calendar数据集加载模块."""
+
 from datasets import load_dataset, Dataset
 from typing import List, Dict
 
 
 class SGDCalendarLoader:
-    """加载SGD-Calendar数据集"""
+
+    """加载SGD-Calendar数据集."""
 
     _cache = None
 
     @classmethod
     def load(cls) -> Dataset:
+        """加载SGD-Calendar数据集."""
         if cls._cache is None:
             cls._cache = load_dataset("vidhikatkoria/SGD_Calendar", split="train")
 
@@ -25,6 +29,7 @@ class SGDCalendarLoader:
 
     @classmethod
     def get_test_cases(cls) -> List[Dict]:
+        """获取SGD-Calendar测试用例列表."""
         ds = cls.load()
         test_cases = []
         for i, row in enumerate(ds):
@@ -66,7 +71,7 @@ class SGDCalendarLoader:
 
 
 def get_sgd_calendar_test_cases() -> List[Dict]:
-    """获取SGD-Calendar测试用例"""
+    """获取SGD-Calendar测试用例."""
     return SGDCalendarLoader.get_test_cases()
 
 

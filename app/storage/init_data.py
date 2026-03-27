@@ -1,15 +1,17 @@
+"""数据目录初始化与默认数据填充."""
+
 import json
 from pathlib import Path
 from typing import Optional
 
 
 def get_data_dir() -> str:
-    """获取数据目录路径"""
+    """获取数据目录路径."""
     return str(Path(__file__).parent.parent.parent / "data")
 
 
 def init_storage(data_dir: Optional[str] = None):
-    """初始化存储目录和数据文件"""
+    """初始化存储目录和数据文件."""
     if data_dir is None:
         data_dir = get_data_dir()
     Path(data_dir).mkdir(exist_ok=True)

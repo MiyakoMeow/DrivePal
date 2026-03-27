@@ -1,7 +1,10 @@
+"""Tests for the experiment runner."""
+
 from app.experiment.test_data import TestDataGenerator
 
 
 def test_seed_reproducibility():
+    """Verify that the same seed produces identical test cases."""
     gen = TestDataGenerator(config_dir="config")
     cases_a = gen.generate_test_cases(count=5, seed=42)
     cases_b = gen.generate_test_cases(count=5, seed=42)
@@ -9,6 +12,7 @@ def test_seed_reproducibility():
 
 
 def test_seed_produces_different_without_seed():
+    """Verify that different seeds produce different test cases."""
     gen = TestDataGenerator(config_dir="config")
     cases_a = gen.generate_test_cases(count=5, seed=42)
     cases_b = gen.generate_test_cases(count=5, seed=99)
@@ -18,6 +22,7 @@ def test_seed_produces_different_without_seed():
 
 
 def test_raw_preserved_in_context_node():
+    """Verify that raw LLM output is preserved in the context node."""
     from unittest.mock import MagicMock
     from app.agents.workflow import AgentWorkflow
 
@@ -48,6 +53,7 @@ def test_raw_preserved_in_context_node():
 
 
 def test_raw_preserved_in_strategy_node():
+    """Verify that raw LLM output is preserved in the strategy node."""
     from unittest.mock import MagicMock, patch
     from app.agents.workflow import AgentWorkflow
 
@@ -81,6 +87,7 @@ def test_raw_preserved_in_strategy_node():
 
 
 def test_split_words_uses_bigrams():
+    """Verify that semantic accuracy evaluation uses bigram tokenization."""
     from app.experiment.runner import _evaluate_semantic_accuracy
 
     score = _evaluate_semantic_accuracy(
@@ -92,6 +99,7 @@ def test_split_words_uses_bigrams():
 
 
 def test_semantic_accuracy_with_raw_output():
+    """Verify that semantic accuracy handles raw LLM JSON output correctly."""
     from app.experiment.runner import _evaluate_semantic_accuracy
 
     raw = '{"reasoning": "用户查询涉及日程安排和会议时间", "should_remind": false}'
@@ -104,6 +112,7 @@ def test_semantic_accuracy_with_raw_output():
 
 
 def test_context_relatedness_schedule_check():
+    """Verify that context relatedness scoring works for schedule checks."""
     from app.experiment.runner import ExperimentRunner
 
     runner = ExperimentRunner(config_dir="config")
@@ -116,6 +125,7 @@ def test_context_relatedness_schedule_check():
 
 
 def test_run_method_uses_isolated_data_dir(tmp_path):
+    """Verify that the run method uses an isolated data directory."""
     from unittest.mock import MagicMock, patch
     from app.experiment.runner import ExperimentRunner
 

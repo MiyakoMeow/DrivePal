@@ -1,3 +1,5 @@
+"""FastAPI应用主入口."""
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -23,11 +25,17 @@ _memory_module = MemoryModule(
 
 
 class QueryRequest(BaseModel):
+
+    """用户查询请求."""
+
     query: str
     memory_mode: Optional[str] = "keyword"
 
 
 class FeedbackRequest(BaseModel):
+
+    """用户反馈请求."""
+
     event_id: str
     action: str
     modified_content: Optional[str] = None
@@ -35,7 +43,7 @@ class FeedbackRequest(BaseModel):
 
 @app.post("/api/query")
 async def query(request: QueryRequest):
-    """处理用户查询"""
+    """处理用户查询."""
     from app.agents.workflow import AgentWorkflow
 
     try:
@@ -53,7 +61,7 @@ async def query(request: QueryRequest):
 
 @app.post("/api/feedback")
 async def feedback(request: FeedbackRequest):
-    """提交用户反馈"""
+    """提交用户反馈."""
     try:
         _memory_module.update_feedback(
             request.event_id,
@@ -67,7 +75,7 @@ async def feedback(request: FeedbackRequest):
 
 @app.get("/api/experiment/report")
 async def experiment_report():
-    """获取实验报告"""
+    """获取实验报告."""
     from app.experiment.runner import ExperimentRunner
 
     runner = ExperimentRunner(DATA_DIR)
@@ -76,7 +84,7 @@ async def experiment_report():
 
 @app.get("/api/history")
 async def history(limit: int = 10):
-    """获取历史记录"""
+    """获取历史记录."""
     try:
         history = _memory_module.get_history(limit=limit)
         return {"history": history}

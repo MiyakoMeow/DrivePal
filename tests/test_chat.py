@@ -1,3 +1,5 @@
+"""Tests for the chat model integration."""
+
 import pytest
 
 from app.memory.memory import MemoryModule
@@ -12,6 +14,7 @@ SKIP_IF_NO_VLLM = pytest.mark.skipif(
 
 @SKIP_IF_NO_VLLM
 def test_chat_drives_llm_memory_search(tmp_path):
+    """Verify that chat-driven LLM memory search retrieves relevant events."""
     chat_model = ChatModel()
     memory = MemoryModule(str(tmp_path), chat_model=chat_model)
     memory.write({"content": "明天下午三点项目会议", "type": "meeting"})
@@ -22,6 +25,7 @@ def test_chat_drives_llm_memory_search(tmp_path):
 
 @SKIP_IF_NO_VLLM
 def test_chat_feeds_workflow_context(tmp_path):
+    """Verify that memory context is injected into the agent workflow state."""
     from app.agents.workflow import AgentWorkflow
     from langchain_core.messages import HumanMessage
 

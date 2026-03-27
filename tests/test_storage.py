@@ -1,8 +1,11 @@
+"""Tests for the storage layer."""
+
 from app.memory.memory import MemoryModule
 from app.storage.init_data import init_storage
 
 
 def test_events_persist_across_instances(tmp_path):
+    """Verify that events persist when creating a new MemoryModule instance."""
     init_storage(str(tmp_path))
     m1 = MemoryModule(str(tmp_path))
     m1.write({"content": "项目进度会议", "type": "meeting"})
@@ -13,6 +16,7 @@ def test_events_persist_across_instances(tmp_path):
 
 
 def test_feedback_updates_strategies(tmp_path):
+    """Verify that accepting feedback increases the corresponding strategy weight."""
     from app.storage.json_store import JSONStore
 
     memory = MemoryModule(str(tmp_path))
@@ -23,6 +27,7 @@ def test_feedback_updates_strategies(tmp_path):
 
 
 def test_ignore_feedback_decreases_weight(tmp_path):
+    """Verify that ignoring feedback decreases the corresponding strategy weight."""
     from app.storage.json_store import JSONStore
 
     memory = MemoryModule(str(tmp_path))
@@ -33,6 +38,7 @@ def test_ignore_feedback_decreases_weight(tmp_path):
 
 
 def test_feedback_history_appended(tmp_path):
+    """Verify that each feedback entry is appended to the feedback history."""
     from app.storage.json_store import JSONStore
 
     memory = MemoryModule(str(tmp_path))

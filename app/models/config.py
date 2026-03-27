@@ -1,4 +1,4 @@
-"""模型配置，支持 qwen、DeepSeek 和其他 OpenAI 兼容接口"""
+"""模型配置，支持 qwen、DeepSeek 和其他 OpenAI 兼容接口."""
 
 import os
 
@@ -6,7 +6,8 @@ _DEFAULT_VLLM_BASE_URL = "http://localhost:8000/v1"
 
 
 class ModelConfig:
-    """模型配置"""
+
+    """模型配置."""
 
     PROVIDERS = {
         "qwen": {
@@ -26,4 +27,5 @@ class ModelConfig:
 
     @classmethod
     def get_provider(cls, name: str = "qwen"):
+        """获取指定提供商的配置，默认返回qwen配置."""
         return cls.PROVIDERS.get(name, cls.PROVIDERS["qwen"])

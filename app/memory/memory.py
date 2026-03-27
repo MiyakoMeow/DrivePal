@@ -1,3 +1,5 @@
+"""记忆模块，实现关键词、LLM、向量和记忆库四种检索模式."""
+
 import json
 import re
 import uuid
@@ -22,12 +24,16 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 
 
 class MemoryModule:
+
+    """统一记忆管理接口，支持多种检索模式."""
+
     def __init__(
         self,
         data_dir: str,
         embedding_model: Optional[EmbeddingModel] = None,
         chat_model: Optional[ChatModel] = None,
     ):
+        """初始化记忆模块."""
         self.data_dir = data_dir
         self.embedding_model = embedding_model
         self.chat_model = chat_model
@@ -36,7 +42,7 @@ class MemoryModule:
         self._memorybank_backend: Optional[MemoryBankBackend] = None
 
     def write(self, event: dict) -> str:
-        """写入事件，返回event_id"""
+        """写入事件，返回event_id."""
         event_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         event["id"] = event_id
         event["created_at"] = datetime.now().isoformat()
@@ -44,7 +50,7 @@ class MemoryModule:
         return event_id
 
     def search(self, query: str, mode: str = "keyword") -> list:
-        """检索记忆"""
+        """检索记忆."""
         if mode == "keyword":
             return self._search_by_keyword(query)
         elif mode == "llm_only":
@@ -57,7 +63,7 @@ class MemoryModule:
             raise ValueError(f"Unknown mode: {mode}")
 
     def _search_by_keyword(self, query: str) -> list:
-        """关键词匹配检索"""
+        """关键词匹配检索."""
         events = self.events_store.read()
         query_lower = query.lower()
         return [
@@ -68,7 +74,7 @@ class MemoryModule:
         ]
 
     def _search_by_llm(self, query: str) -> list:
-        """使用LLM进行语义检索"""
+        """使用LLM进行语义检索."""
         if not self.chat_model:
             return []
 
@@ -94,7 +100,7 @@ class MemoryModule:
         return results
 
     def _search_by_embeddings(self, query: str) -> list:
-        """向量相似度检索"""
+        """向量相似度检索."""
         if self.embedding_model is None:
             return self._search_by_keyword(query)
 
@@ -120,6 +126,7 @@ class MemoryModule:
         return self._memorybank_backend
 
     def write_interaction(self, query: str, response: str) -> str:
+        """写入交互记录并返回交互ID."""
         backend = self._get_memorybank_backend()
         return backend.write_interaction(query, response)
 
@@ -141,14 +148,14 @@ class MemoryModule:
         return dot / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
 
     def get_history(self, limit: int = 10) -> list:
-        """获取历史记录"""
+        """获取历史记录."""
         if limit < 0:
             raise ValueError(f"limit must be non-negative, got {limit}")
         events = self.events_store.read()
         return events[-limit:] if limit > 0 else []
 
     def update_feedback(self, event_id: str, feedback: dict):
-        """更新反馈"""
+        """更新反馈."""
         feedback_store = JSONStore(self.data_dir, "feedback.json", list)
         feedback["event_id"] = event_id
         feedback["timestamp"] = datetime.now().isoformat()
@@ -157,7 +164,7 @@ class MemoryModule:
         self._update_strategy(event_id, feedback)
 
     def _update_strategy(self, event_id: str, feedback: dict):
-        """根据反馈更新策略"""
+        """根据反馈更新策略."""
         strategies = self.strategies_store.read()
         action = feedback.get("action")
         event_type = feedback.get("type", "default")

@@ -1,9 +1,12 @@
+"""Scheduler数据集加载模块."""
+
 from datasets import load_dataset, Dataset
 from typing import List, Dict
 
 
 class SchedulerLoader:
-    """加载Scheduler数据集
+
+    """加载Scheduler数据集.
 
     源: https://huggingface.co/datasets/shawnha/scheduler_dataset
     """
@@ -12,6 +15,7 @@ class SchedulerLoader:
 
     @classmethod
     def load(cls) -> Dataset:
+        """加载Scheduler数据集."""
         if cls._cache is None:
             cls._cache = load_dataset("shawnha/scheduler_dataset", split="train")
 
@@ -28,6 +32,7 @@ class SchedulerLoader:
 
     @classmethod
     def get_test_cases(cls) -> List[Dict]:
+        """获取Scheduler测试用例列表."""
         ds = cls.load()
         test_cases = []
         for i, row in enumerate(ds):
@@ -55,7 +60,7 @@ class SchedulerLoader:
 
 
 def get_scheduler_test_cases() -> List[Dict]:
-    """获取Scheduler测试用例"""
+    """获取Scheduler测试用例."""
     return SchedulerLoader.get_test_cases()
 
 

@@ -1,3 +1,5 @@
+"""记忆方式对比实验运行脚本."""
+
 import argparse
 import shutil
 from datetime import datetime
@@ -9,6 +11,7 @@ from app.storage.json_store import JSONStore
 
 
 def main():
+    """运行记忆方式对比实验并输出结果报告."""
     parser = argparse.ArgumentParser(description="运行记忆方式对比实验")
     parser.add_argument(
         "--methods",

@@ -1,3 +1,5 @@
+"""Agent工作流编排模块."""
+
 import json
 import logging
 from typing import Any, Optional, cast
@@ -13,12 +15,16 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
+
+    """多Agent协作工作流."""
+
     def __init__(
         self,
         data_dir: str = "data",
         memory_mode: str = "keyword",
         memory_module: Optional[MemoryModule] = None,
     ):
+        """初始化工作流实例."""
         self.data_dir = data_dir
         self.memory_mode = memory_mode
 
@@ -46,7 +52,7 @@ class AgentWorkflow:
         self.graph = self._build_graph()
 
     def _build_graph(self) -> Any:
-        """构建LangGraph工作流"""
+        """构建LangGraph工作流."""
         workflow = StateGraph(cast(Any, AgentState))
 
         workflow.add_node("context_agent", self._context_node)
@@ -63,7 +69,7 @@ class AgentWorkflow:
         return workflow.compile()
 
     def _context_node(self, state: AgentState) -> dict:
-        """Context Agent节点"""
+        """Context Agent节点."""
         messages = state.get("messages", [])
         if not messages:
             user_input = ""
@@ -96,7 +102,7 @@ class AgentWorkflow:
 用户输入: {user_input}
 历史记录: {json.dumps(relevant_memories, ensure_ascii=False)}
 
-请输出JSON格式的上下文对象。"""
+请输出JSON格式的上下文对象. """
 
         if not self.memory.chat_model:
             raise RuntimeError("ChatModel not available for context generation")
@@ -119,7 +125,7 @@ class AgentWorkflow:
         }
 
     def _task_node(self, state: AgentState) -> dict:
-        """Task Agent节点"""
+        """Task Agent节点."""
         messages = state.get("messages", [])
         user_input = messages[-1].content if messages else ""
         context = state.get("context", {})
@@ -129,7 +135,7 @@ class AgentWorkflow:
 用户输入: {user_input}
 上下文: {json.dumps(context, ensure_ascii=False)}
 
-请输出JSON格式的任务对象。"""
+请输出JSON格式的任务对象. """
 
         if not self.memory.chat_model:
             raise RuntimeError("ChatModel not available for task generation")
@@ -149,7 +155,7 @@ class AgentWorkflow:
         }
 
     def _strategy_node(self, state: AgentState) -> dict:
-        """Strategy Agent节点"""
+        """Strategy Agent节点."""
         context = state.get("context", {})
         task = state.get("task", {})
 
@@ -161,7 +167,7 @@ class AgentWorkflow:
 任务: {json.dumps(task, ensure_ascii=False)}
 个性化策略: {json.dumps(strategies, ensure_ascii=False)}
 
-请输出JSON格式的决策结果。"""
+请输出JSON格式的决策结果. """
 
         if not self.memory.chat_model:
             raise RuntimeError("ChatModel not available for strategy generation")
@@ -181,7 +187,7 @@ class AgentWorkflow:
         }
 
     def _execution_node(self, state: AgentState) -> dict:
-        """Execution Agent节点"""
+        """执行提醒动作的Agent节点."""
         decision = state.get("decision") or {}
         messages = state.get("messages", [])
         user_input = str(messages[0].content) if messages else ""
@@ -213,7 +219,7 @@ class AgentWorkflow:
         return self._memorybank_backend
 
     def run(self, user_input: str) -> tuple[str, Optional[str]]:
-        """运行完整工作流，返回(result, event_id)"""
+        """运行完整工作流并返回结果和事件ID."""
         initial_state = {
             "messages": [HumanMessage(content=user_input)],
             "context": {},
@@ -233,5 +239,5 @@ class AgentWorkflow:
 def create_workflow(
     data_dir: str = "data", memory_mode: str = "keyword"
 ) -> AgentWorkflow:
-    """创建工作流实例"""
+    """创建工作流实例."""
     return AgentWorkflow(data_dir, memory_mode)
