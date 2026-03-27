@@ -1,7 +1,6 @@
 """Tests for model settings loader."""
 
 import json
-import os
 import pytest
 from unittest.mock import patch, MagicMock
 

@@ -1,8 +1,15 @@
 """统一 LLM/Embedding 配置加载器."""
 
+from __future__ import annotations
+
 import json
 import os
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
 
 CONFIG_PATH = "config/llm.json"
