@@ -107,10 +107,11 @@ class MemoryBankBackend:
     ) -> list[dict]:
         assert self.embedding_model is not None
         query_vector = self.embedding_model.encode(query)
+        event_texts = [event.get("content", "") for event in events]
+        all_event_vectors = self.embedding_model.batch_encode(event_texts)
         today = date.today()
         results = []
-        for event in events:
-            event_vector = self.embedding_model.encode(event.get("content", ""))
+        for event, event_vector in zip(events, all_event_vectors):
             similarity = cosine_similarity(query_vector, event_vector)
             strength = event.get("memory_strength", 1)
             last_recall = event.get("last_recall_date", today.isoformat())
@@ -384,9 +385,9 @@ class MemoryBankBackend:
         summaries["daily_summaries"] = daily_summaries
         self.summaries_store.write(summaries)
         if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
-            self._update_overall_summary(daily_summaries)
+            self._update_overall_summary(daily_summaries, summaries)
 
-    def _update_overall_summary(self, daily_summaries: dict) -> None:
+    def _update_overall_summary(self, daily_summaries: dict, summaries: dict) -> None:
         if not self.chat_model:
             return
         all_summaries = []
@@ -403,6 +404,5 @@ class MemoryBankBackend:
             overall = self.chat_model.generate(prompt)
         except Exception:
             return
-        summaries = self.summaries_store.read()
         summaries["overall_summary"] = overall
         self.summaries_store.write(summaries)
