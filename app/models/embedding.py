@@ -10,11 +10,16 @@ class EmbeddingModel:
     @property
     def client(self) -> HuggingFaceBgeEmbeddings:
         if self._client is None:
-            self._client = HuggingFaceBgeEmbeddings(
-                model_name=self.model_name,
-                model_kwargs={"device": self.device},
-                encode_kwargs={"normalize_embeddings": True},
-            )
+            try:
+                self._client = HuggingFaceBgeEmbeddings(
+                    model_name=self.model_name,
+                    model_kwargs={"device": self.device},
+                    encode_kwargs={"normalize_embeddings": True},
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to load embedding model '{self.model_name}': {type(e).__name__}"
+                ) from e
         return self._client
 
     def encode(self, text: str) -> list[float]:

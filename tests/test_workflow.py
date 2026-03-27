@@ -1,16 +1,11 @@
 from unittest.mock import Mock, patch
 
 
-@patch("app.agents.workflow.ChatModel")
-def test_workflow_init(mock_chat):
-    mock_instance = Mock()
-    mock_instance.generate.return_value = '{"context": {}}'
-    mock_chat.return_value = mock_instance
-
+def test_workflow_init():
     from app.agents.workflow import AgentWorkflow
 
     workflow = AgentWorkflow()
-    assert workflow.chat_model is not None
+    assert workflow.memory.chat_model is not None
 
 
 def test_workflow_init_with_memory_module():
@@ -23,20 +18,14 @@ def test_workflow_init_with_memory_module():
     assert workflow.memory_module is not None
 
 
-@patch("app.agents.workflow.ChatModel")
-def test_context_node_injects_memory_results(mock_chat):
+def test_context_node_injects_memory_results():
     from unittest.mock import Mock
     from app.agents.workflow import AgentWorkflow
     from app.memory.memory import MemoryModule
     from langchain_core.messages import HumanMessage
 
-    mock_instance = Mock()
-    mock_instance.generate.return_value = (
-        '{"context": {}, "related_events": [], "relevant_memories": []}'
-    )
-    mock_chat.return_value = mock_instance
-
-    mock_memory = Mock(spec=MemoryModule)
+    mock_memory = Mock()
+    mock_memory.chat_model.generate.return_value = '{"context": {}}'
     mock_memory.search.return_value = [
         {"id": "1", "content": "明天9点开会", "created_at": "2026-03-26"}
     ]

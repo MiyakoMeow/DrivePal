@@ -1,6 +1,12 @@
 import json
+import sys
 from pathlib import Path
 from typing import Any, Callable, TypeVar
+
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
 
 T = TypeVar("T")
 
@@ -10,10 +16,10 @@ class JSONStore:
         self,
         data_dir: str,
         filename: str,
-        default_factory: Callable[[], T] = dict,  # type: ignore[assignment]
+        default_factory: Callable[[], T] = dict,
     ) -> None:
         self.filepath = Path(data_dir) / filename
-        self.default_factory: Callable[[], T] = default_factory  # type: ignore[assignment]
+        self.default_factory: Callable[[], T] = default_factory
         self._ensure_file()
 
     def _ensure_file(self) -> None:
@@ -32,16 +38,39 @@ class JSONStore:
     def save(self, data: T) -> None:
         self._write(data)
 
-    def write(self, data: T) -> None:  # type: ignore[no-untyped-def]
+    def write(self, data: T) -> None:
         self._write(data)
 
     def append(self, item: Any) -> None:
-        data = self.read()
-        if isinstance(data, list):
-            data.append(item)
-            self._write(data)
-        else:
-            raise TypeError("Can only append to list-type stores")
+        with open(self.filepath, "a+", encoding="utf-8") as f:
+            if sys.platform == "win32":
+                try:
+                    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                except IOError:
+                    pass
+            else:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                f.seek(0)
+                content = f.read()
+                if content:
+                    data = json.loads(content)
+                else:
+                    data = []
+                if not isinstance(data, list):
+                    raise TypeError("Can only append to list-type stores")
+                data.append(item)
+                f.seek(0)
+                f.truncate()
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            finally:
+                if sys.platform == "win32":
+                    try:
+                        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                    except IOError:
+                        pass
+                else:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def update(self, key: str, value: Any) -> None:
         data = self.read()

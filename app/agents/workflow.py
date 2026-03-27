@@ -3,7 +3,6 @@ from typing import Any, Optional
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
-from app.models.chat import ChatModel
 from app.memory.memory import MemoryModule
 from app.storage.json_store import JSONStore
 from langchain_core.messages import HumanMessage
@@ -18,20 +17,24 @@ class AgentWorkflow:
     ):
         self.data_dir = data_dir
         self.memory_mode = memory_mode
-        self.chat_model = ChatModel()
 
         if memory_module is not None:
             self.memory_module = memory_module
         else:
+            from app.models.chat import ChatModel
+
+            chat_model = ChatModel()
             if memory_mode == "embeddings":
                 from app.models.embedding import EmbeddingModel
 
                 embedding_model = EmbeddingModel()
                 self.memory_module = MemoryModule(
-                    data_dir, embedding_model=embedding_model
+                    data_dir, embedding_model=embedding_model, chat_model=chat_model
                 )
+            elif memory_mode == "llm_only":
+                self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
             else:
-                self.memory_module = MemoryModule(data_dir)
+                self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
 
         self.memory = self.memory_module
 
@@ -39,7 +42,7 @@ class AgentWorkflow:
 
     def _build_graph(self) -> Any:
         """构建LangGraph工作流"""
-        workflow = StateGraph(AgentState)  # type: ignore[call-overload]
+        workflow = StateGraph(AgentState)
 
         workflow.add_node("context_agent", self._context_node)
         workflow.add_node("task_agent", self._task_node)
@@ -77,9 +80,13 @@ class AgentWorkflow:
 
 请输出JSON格式的上下文对象。"""
 
-        result = self.chat_model.generate(prompt)
+        if not self.memory.chat_model:
+            raise RuntimeError("ChatModel not available for context generation")
+        result = self.memory.chat_model.generate(prompt)
         try:
             context = json.loads(result)
+            if not isinstance(context, dict):
+                context = {"raw": result}
         except json.JSONDecodeError:
             context = {"raw": result}
 
@@ -105,9 +112,13 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象。"""
 
-        result = self.chat_model.generate(prompt)
+        if not self.memory.chat_model:
+            raise RuntimeError("ChatModel not available for task generation")
+        result = self.memory.chat_model.generate(prompt)
         try:
             task = json.loads(result)
+            if not isinstance(task, dict):
+                task = {"raw": result}
         except json.JSONDecodeError:
             task = {"raw": result}
 
@@ -132,9 +143,13 @@ class AgentWorkflow:
 
 请输出JSON格式的决策结果。"""
 
-        result = self.chat_model.generate(prompt)
+        if not self.memory.chat_model:
+            raise RuntimeError("ChatModel not available for strategy generation")
+        result = self.memory.chat_model.generate(prompt)
         try:
             decision = json.loads(result)
+            if not isinstance(decision, dict):
+                decision = {"raw": result}
         except json.JSONDecodeError:
             decision = {"raw": result}
 

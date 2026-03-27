@@ -233,22 +233,19 @@ class ExperimentRunner:
         for case in test_cases:
             start_time = time.time()
             try:
-                workflow.run(case["input"])
+                result, event_id = workflow.run(case["input"])
                 elapsed = (time.time() - start_time) * 1000
 
                 latencies.append(elapsed)
                 task_completions.append(1)
 
-                # Get actual output from storage for evaluation
-                actual_output = self._get_latest_output()
+                actual_output = result if result else self._get_latest_output()
 
-                # 计算语义理解准确率
                 accuracy = self._evaluate_semantic_accuracy(
                     case["input"], case["type"], actual_output
                 )
                 semantic_accuracies.append(accuracy)
 
-                # 计算上下文相关度
                 relatedness = self._evaluate_context_relatedness(
                     case["input"], case["type"], actual_output
                 )
@@ -283,7 +280,7 @@ class ExperimentRunner:
         events = events_store.read()
         if events and len(events) > 0:
             last_event = events[-1]
-            return last_event.get("decision", {}).get("raw", "")
+            return last_event.get("decision", {}).get("content", "")
         return ""
 
     def _evaluate_semantic_accuracy(
