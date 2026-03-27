@@ -7,14 +7,20 @@ from app.storage.json_store import JSONStore
 
 
 class BaseMemoryStore(MemoryStore, ABC):
-
     """MemoryStore 基类."""
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(
+        self,
+        data_dir: str,
+        embedding_model=None,
+        chat_model=None,
+    ) -> None:
         """初始化 BaseMemoryStore 实例.
 
         Args:
             data_dir: 数据存储目录路径.
+            embedding_model: 向量嵌入模型 (可选).
+            chat_model: 聊天模型 (可选).
 
         """
         self.data_dir = data_dir

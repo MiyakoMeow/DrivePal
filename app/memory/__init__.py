@@ -1,1 +1,5 @@
-"""记忆管理模块，提供多模式记忆检索与存储功能."""
+"""Memory module exports."""
+
+from app.memory.memory import MemoryModule, register_store
+
+__all__ = ["MemoryModule", "register_store"]
