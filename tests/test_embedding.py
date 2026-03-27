@@ -1,56 +1,79 @@
-from unittest.mock import Mock, patch
+import torch
+
+import pytest
+
+from app.memory.memory import MemoryModule
+from app.memory.memory_bank import (
+    AGGREGATION_SIMILARITY_THRESHOLD,
+    MemoryBankBackend,
+)
 from app.models.embedding import EmbeddingModel
 
 
-@patch("app.models.embedding.HuggingFaceBgeEmbeddings")
-def test_embedding_model_init(mock_hf):
-    mock_instance = Mock()
-    mock_instance.embed_query.return_value = [0.1, 0.2, 0.3]
-    mock_hf.return_value = mock_instance
-
-    model = EmbeddingModel()
-    assert model.model_name == "bge-small-zh-v1.5"
+def _pick_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
-@patch("app.models.embedding.HuggingFaceBgeEmbeddings")
-def test_encode(mock_hf):
-    mock_instance = Mock()
-    mock_instance.embed_query.return_value = [0.1, 0.2, 0.3]
-    mock_hf.return_value = mock_instance
-
-    model = EmbeddingModel()
-    result = model.encode("测试文本")
-    assert result == [0.1, 0.2, 0.3]
+@pytest.fixture(scope="module")
+def embedding():
+    return EmbeddingModel(device=_pick_device())
 
 
-@patch("app.models.embedding.HuggingFaceBgeEmbeddings")
-def test_encode_returns_list(mock_hf):
-    """Test that encode returns a Python list, not numpy array."""
-    import numpy as np
+class TestEmbeddingForMemorySearch:
+    def test_semantic_match_retrieves(self, embedding, tmp_path):
+        memory = MemoryModule(str(tmp_path), embedding_model=embedding)
+        memory.write({"content": "明天下午三点项目评审会议"})
+        results = memory.search("项目评审下午三点", mode="embeddings")
+        assert len(results) == 1
 
-    mock_instance = Mock()
-    mock_instance.embed_query.return_value = np.array([0.1, 0.2, 0.3])
-    mock_hf.return_value = mock_instance
-
-    model = EmbeddingModel()
-    result = model.encode("test")
-    assert isinstance(result, list), f"Expected list, got {type(result)}"
-    assert all(isinstance(x, (int, float)) for x in result)
+    def test_semantic_miss_skips(self, embedding, tmp_path):
+        memory = MemoryModule(str(tmp_path), embedding_model=embedding)
+        memory.write({"content": "明天下午三点项目评审会议"})
+        results = memory.search("天气预报查询", mode="embeddings")
+        assert results == []
 
 
-@patch("app.models.embedding.HuggingFaceBgeEmbeddings")
-def test_batch_encode_returns_list(mock_hf):
-    """Test that batch_encode returns list of lists."""
-    import numpy as np
+class TestEmbeddingForMemoryBankRetrieval:
+    def test_forgetting_weighted_ranking(self, embedding, tmp_path):
+        backend = MemoryBankBackend(str(tmp_path), embedding_model=embedding)
+        backend.write_with_memory({"content": "重要项目进度讨论"})
+        results = backend.search("项目进度")
+        assert len(results) > 0
+        assert results[0]["_score"] > 0
 
-    mock_instance = Mock()
-    mock_instance.embed_documents.return_value = [
-        np.array([0.1, 0.2]),
-        np.array([0.3, 0.4]),
-    ]
-    mock_hf.return_value = mock_instance
+    def test_low_similarity_below_keyword_threshold(self, embedding, tmp_path):
+        backend = MemoryBankBackend(str(tmp_path), embedding_model=embedding)
+        backend.write_with_memory({"content": "明天下午三点项目评审会议"})
+        results = backend.search("今晚吃什么好呢")
+        assert len(results) > 0
+        assert results[0]["_score"] < 0.5
 
-    model = EmbeddingModel()
-    result = model.batch_encode(["test1", "test2"])
-    assert isinstance(result, list), f"Expected list, got {type(result)}"
-    assert all(isinstance(row, list) for row in result)
+
+class TestEmbeddingForEventAggregation:
+    def test_similar_query_appends_to_event(self, embedding, tmp_path):
+        backend = MemoryBankBackend(str(tmp_path), embedding_model=embedding)
+        backend.write_interaction("提醒明天上午九点开会", "好的已添加")
+        backend.write_interaction("会议提醒明天上午九点", "已确认")
+        events = backend.events_store.read()
+        assert len(events) == 1
+        assert len(events[0]["interaction_ids"]) == 2
+
+    def test_unrelated_query_creates_new_event(self, embedding, tmp_path):
+        backend = MemoryBankBackend(str(tmp_path), embedding_model=embedding)
+        backend.write_interaction("提醒明天上午九点开会", "好的已添加")
+        backend.write_interaction("今天天气怎么样", "晴天适合出行")
+        events = backend.events_store.read()
+        assert len(events) == 2
+
+    def test_aggregation_threshold_enforced(self, embedding, tmp_path):
+        m = MemoryModule(str(tmp_path), embedding_model=embedding)
+        similar = m.embedding_model.encode("提醒明天上午九点开会")
+        unrelated = m.embedding_model.encode("今天天气怎么样")
+        s_similar = MemoryBankBackend._cosine_similarity(similar, similar)
+        s_unrelated = MemoryBankBackend._cosine_similarity(similar, unrelated)
+        assert s_similar >= AGGREGATION_SIMILARITY_THRESHOLD
+        assert s_unrelated < AGGREGATION_SIMILARITY_THRESHOLD

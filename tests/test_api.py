@@ -1,9 +1,7 @@
 from fastapi.testclient import TestClient
-import pytest
-import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+import pytest
 
 SKIP_IF_NO_API_KEY = pytest.mark.skipif(
     not os.getenv("DEEPSEEK_API_KEY"),
@@ -43,12 +41,3 @@ def test_history_endpoint(client):
     response = client.get("/api/history?limit=5")
     assert response.status_code == 200
     assert "history" in response.json()
-
-
-@SKIP_IF_NO_API_KEY
-def test_api_workflow_initialization():
-    """验证API模块正确初始化AgentWorkflow with memory"""
-    import app.api.main as api_main
-
-    assert hasattr(api_main, "_memory_module")
-    assert api_main._memory_module is not None

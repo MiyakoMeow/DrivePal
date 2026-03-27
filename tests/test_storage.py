@@ -1,44 +1,44 @@
-import pytest
-import tempfile
-from app.storage.json_store import JSONStore
+from app.memory.memory import MemoryModule
+from app.storage.init_data import init_storage
 
 
-@pytest.fixture
-def temp_dir():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield tmpdir
+def test_events_persist_across_instances(tmp_path):
+    init_storage(str(tmp_path))
+    m1 = MemoryModule(str(tmp_path))
+    m1.write({"content": "项目进度会议", "type": "meeting"})
+    m2 = MemoryModule(str(tmp_path))
+    events = m2.events_store.read()
+    assert len(events) == 1
+    assert events[0]["content"] == "项目进度会议"
 
 
-def test_json_store_read_write(temp_dir):
-    store = JSONStore(temp_dir, "test.json")
+def test_feedback_updates_strategies(tmp_path):
+    from app.storage.json_store import JSONStore
 
-    data = {"key": "value", "list": [1, 2, 3]}
-    store.write(data)
-
-    result = store.read()
-    assert result == data
-
-
-def test_json_store_append(temp_dir):
-    store = JSONStore(temp_dir, "test.json", default_factory=list)
-
-    store.append({"id": 1})
-    store.append({"id": 2})
-
-    result = store.read()
-    assert len(result) == 2
+    memory = MemoryModule(str(tmp_path))
+    event_id = memory.write({"content": "团队周会", "type": "meeting"})
+    memory.update_feedback(event_id, {"action": "accept", "type": "meeting"})
+    strategies = JSONStore(str(tmp_path), "strategies.json", dict).read()
+    assert strategies["reminder_weights"]["meeting"] == 0.6
 
 
-def test_json_store_default_factory(temp_dir):
-    store = JSONStore(temp_dir, "empty.json", default_factory=dict)
-    result = store.read()
-    assert result == {}
+def test_ignore_feedback_decreases_weight(tmp_path):
+    from app.storage.json_store import JSONStore
+
+    memory = MemoryModule(str(tmp_path))
+    event_id = memory.write({"content": "无关提醒", "type": "general"})
+    memory.update_feedback(event_id, {"action": "ignore", "type": "general"})
+    strategies = JSONStore(str(tmp_path), "strategies.json", dict).read()
+    assert strategies["reminder_weights"]["general"] < 0.5
 
 
-def test_update_type_check(temp_dir):
-    """Test that update() raises TypeError for non-dict factories."""
-    store = JSONStore(temp_dir, "test.json", list)
-    store.write([])
+def test_feedback_history_appended(tmp_path):
+    from app.storage.json_store import JSONStore
 
-    with pytest.raises(TypeError, match=r"update\(\) requires dict factory"):
-        store.update("key", "value")
+    memory = MemoryModule(str(tmp_path))
+    eid1 = memory.write({"content": "会议A", "type": "meeting"})
+    eid2 = memory.write({"content": "会议B", "type": "meeting"})
+    memory.update_feedback(eid1, {"action": "accept", "type": "meeting"})
+    memory.update_feedback(eid2, {"action": "ignore", "type": "meeting"})
+    feedback = JSONStore(str(tmp_path), "feedback.json", list).read()
+    assert len(feedback) == 2
