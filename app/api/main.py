@@ -37,6 +37,7 @@ def get_memory_module() -> MemoryModule:
 
 
 class QueryRequest(BaseModel):
+
     """用户查询请求."""
 
     query: str
@@ -44,6 +45,7 @@ class QueryRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
+
     """用户反馈请求."""
 
     event_id: str

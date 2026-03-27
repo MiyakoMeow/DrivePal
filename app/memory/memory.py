@@ -28,6 +28,7 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 
 
 class MemoryModule:
+
     """统一记忆管理接口，支持多种检索模式."""
 
     def __init__(

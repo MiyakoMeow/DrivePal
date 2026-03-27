@@ -28,6 +28,7 @@ def embedding():
 
 
 class TestEmbeddingForMemorySearch:
+
     """Tests for embedding-based memory search."""
 
     def test_semantic_match_retrieves(self, embedding, tmp_path):
@@ -46,6 +47,7 @@ class TestEmbeddingForMemorySearch:
 
 
 class TestEmbeddingForMemoryBankRetrieval:
+
     """Tests for embedding-based memory bank retrieval with forgetting."""
 
     def test_forgetting_weighted_ranking(self, embedding, tmp_path):
@@ -66,6 +68,7 @@ class TestEmbeddingForMemoryBankRetrieval:
 
 
 class TestEmbeddingForEventAggregation:
+
     """Tests for embedding-based event aggregation."""
 
     def test_similar_query_appends_to_event(self, embedding, tmp_path):

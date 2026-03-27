@@ -5,6 +5,7 @@ from langchain_core.messages import BaseMessage
 
 
 class AgentState(TypedDict):
+
     """LangGraph Agent状态定义."""
 
     messages: list[BaseMessage]

@@ -17,6 +17,7 @@ CONFIG_PATH = "config/llm.json"
 
 @dataclass
 class LLMProviderConfig:
+
     """单个 LLM 服务提供商配置."""
 
     model: str
@@ -37,6 +38,7 @@ class LLMProviderConfig:
 
 @dataclass
 class EmbeddingProviderConfig:
+
     """单个 Embedding 服务提供商配置."""
 
     model: str
@@ -57,6 +59,7 @@ class EmbeddingProviderConfig:
 
 @dataclass
 class LLMSettings:
+
     """模型配置集合，包含 LLM 和 Embedding 提供商列表."""
 
     llm_providers: list[LLMProviderConfig] = field(default_factory=list)

@@ -26,6 +26,7 @@ def mock_chat_model():
 
 
 class TestSearchWithForgetting:
+
     """Tests for search behavior with forgetting mechanism."""
 
     def test_search_no_embedding_returns_keyword(self, backend):
@@ -48,6 +49,7 @@ class TestSearchWithForgetting:
 
 
 class TestRecallStrengthening:
+
     """Tests for recall-based memory strengthening."""
 
     def test_search_increases_memory_strength(self, backend):
@@ -70,6 +72,7 @@ class TestRecallStrengthening:
 
 
 class TestHierarchicalSummarization:
+
     """Tests for hierarchical daily and overall summarization."""
 
     def test_summarize_trigger_threshold(self, tmp_path, mock_chat_model):
@@ -121,6 +124,7 @@ class TestHierarchicalSummarization:
 
 
 class TestWriteInteraction:
+
     """Tests for writing interactions to the memory bank."""
 
     def test_write_creates_record_and_event(self, backend):
@@ -141,6 +145,7 @@ class TestWriteInteraction:
 
 
 class TestEventAggregation:
+
     """Tests for event aggregation based on keyword overlap."""
 
     def test_similar_appends_to_event(self, backend):
@@ -160,6 +165,7 @@ class TestEventAggregation:
 
 
 class TestUpdateEventSummary:
+
     """Tests for LLM-based event summary updates."""
 
     def test_llm_updates_event_content(self, tmp_path, mock_chat_model):
@@ -181,6 +187,7 @@ class TestUpdateEventSummary:
 
 
 class TestSearchWithInteractions:
+
     """Tests for search that expands interactions."""
 
     def test_expands_interactions(self, backend):
@@ -205,6 +212,7 @@ class TestSearchWithInteractions:
 
 
 class TestMemoryModuleIntegration:
+
     """Tests for full MemoryModule integration with the memory bank."""
 
     def test_write_interaction_flow(self, tmp_path):
