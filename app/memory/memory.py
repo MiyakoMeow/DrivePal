@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from app.memory.memory_bank import MemoryBankBackend
+from app.memory.utils import cosine_similarity
 from app.storage.json_store import JSONStore
 from app.models.embedding import EmbeddingModel
 from app.models.chat import ChatModel
@@ -27,7 +28,6 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 
 
 class MemoryModule:
-
     """统一记忆管理接口，支持多种检索模式."""
 
     def __init__(
@@ -92,7 +92,7 @@ class MemoryModule:
 
             try:
                 response = self.chat_model.generate(prompt)
-                json_match = re.search(r"\{.*\}", response, re.DOTALL)
+                json_match = re.search(r"\{.*?\}", response, re.DOTALL)
                 if json_match:
                     data = json.loads(json_match.group())
                     if data.get("relevant"):
@@ -114,7 +114,7 @@ class MemoryModule:
         results = []
         for event in events:
             event_vector = self.embedding_model.encode(event.get("content", ""))
-            similarity = self._cosine_similarity(query_vector, event_vector)
+            similarity = cosine_similarity(query_vector, event_vector)
             if similarity > 0.7:
                 results.append(event)
 
@@ -137,19 +137,6 @@ class MemoryModule:
     def _search_by_memorybank(self, query: str) -> list:
         backend = self._get_memorybank_backend()
         return backend.search(query)
-
-    def _cosine_similarity(self, a, b) -> float:
-        import numpy as np
-
-        if isinstance(a, np.ndarray):
-            a = a.tolist()
-        if isinstance(b, np.ndarray):
-            b = b.tolist()
-
-        dot = sum(x * y for x, y in zip(a, b))
-        norm_a = sum(x * x for x in a) ** 0.5
-        norm_b = sum(x * x for x in b) ** 0.5
-        return dot / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
 
     def get_history(self, limit: int = 10) -> list:
         """获取历史记录."""
