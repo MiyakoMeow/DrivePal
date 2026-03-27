@@ -55,7 +55,13 @@ class MemoryModule:
     def _search_by_keyword(self, query: str) -> list:
         """关键词匹配检索"""
         events = self.events_store.read()
-        return [e for e in events if query in e.get("content", "")]
+        query_lower = query.lower()
+        return [
+            event
+            for event in events
+            if query_lower in event.get("content", "").lower()
+            or query_lower in event.get("description", "").lower()
+        ]
 
     def _search_by_llm(self, query: str) -> list:
         """使用LLM进行语义检索"""
@@ -100,7 +106,14 @@ class MemoryModule:
 
         return results
 
-    def _cosine_similarity(self, a: list, b: list) -> float:
+    def _cosine_similarity(self, a, b) -> float:
+        import numpy as np
+
+        if isinstance(a, np.ndarray):
+            a = a.tolist()
+        if isinstance(b, np.ndarray):
+            b = b.tolist()
+
         dot = sum(x * y for x, y in zip(a, b))
         norm_a = sum(x * x for x in a) ** 0.5
         norm_b = sum(x * x for x in b) ** 0.5
@@ -108,8 +121,10 @@ class MemoryModule:
 
     def get_history(self, limit: int = 10) -> list:
         """获取历史记录"""
+        if limit < 0:
+            raise ValueError(f"limit must be non-negative, got {limit}")
         events = self.events_store.read()
-        return events[-limit:] if len(events) > limit else events
+        return events[-limit:] if limit > 0 else []
 
     def update_feedback(self, event_id: str, feedback: dict):
         """更新反馈"""

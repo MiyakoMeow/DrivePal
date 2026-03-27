@@ -6,6 +6,10 @@ import os
 from app.memory.memory import MemoryModule
 from app.models.embedding import EmbeddingModel
 from app.models.chat import ChatModel
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="知行车秘 - 车载AI智能体")
 
@@ -43,23 +47,22 @@ async def query(request: QueryRequest):
         result, event_id = workflow.run(request.query)
         return {"result": result, "event_id": event_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Query failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/feedback")
 async def feedback(request: FeedbackRequest):
     """提交用户反馈"""
-    from app.memory.memory import MemoryModule
-
     try:
-        memory = MemoryModule(DATA_DIR)
-        memory.update_feedback(
+        _memory_module.update_feedback(
             request.event_id,
             {"action": request.action, "modified_content": request.modified_content},
         )
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Feedback failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/api/experiment/report")
@@ -74,7 +77,9 @@ async def experiment_report():
 @app.get("/api/history")
 async def history(limit: int = 10):
     """获取历史记录"""
-    from app.memory.memory import MemoryModule
-
-    memory = MemoryModule(DATA_DIR)
-    return {"history": memory.get_history(limit)}
+    try:
+        history = _memory_module.get_history(limit=limit)
+        return {"history": history}
+    except Exception as e:
+        logger.error(f"History retrieval failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")

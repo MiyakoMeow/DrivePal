@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.utils.utils import SecretStr
 
 
 class ChatModel:
@@ -15,18 +16,23 @@ class ChatModel:
         self.model_name = model
         self.temperature = temperature
         self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "API key not provided and DEEPSEEK_API_KEY environment variable not set"
+            )
         self.base_url = base_url
         self._client = None
 
     @property
     def client(self) -> ChatOpenAI:
         if self._client is None:
+            api_key_str = self.api_key or ""
             self._client = ChatOpenAI(
-                model=self.model_name,
-                api_key=self.api_key,
-                base_url=self.base_url,
+                model_name=self.model_name,
                 temperature=self.temperature,
-            )  # type: ignore[call-overload]
+                openai_api_key=SecretStr(api_key_str) if api_key_str else None,
+                openai_api_base=self.base_url,
+            )
         return self._client
 
     def generate(
@@ -38,8 +44,14 @@ class ChatModel:
             messages.append(SystemMessage(content=system_prompt))
         messages.append(HumanMessage(content=prompt))
 
-        response = self.client.invoke(messages, **kwargs)
-        return str(response.content)  # type: ignore[return-value]
+        try:
+            response = self.client.invoke(messages, **kwargs)
+            return str(response.content)
+        except Exception as e:
+            error_type = type(e).__name__.lower()
+            if "token" in error_type or "auth" in error_type:
+                raise RuntimeError("Invalid API key") from None
+            raise RuntimeError(f"LLM API call failed: {type(e).__name__}") from e
 
     def batch_generate(
         self, prompts: list[str], system_prompt: Optional[str] = None

@@ -33,3 +33,12 @@ def test_json_store_default_factory(temp_dir):
     store = JSONStore(temp_dir, "empty.json", default_factory=dict)
     result = store.read()
     assert result == {}
+
+
+def test_update_type_check(temp_dir):
+    """Test that update() raises TypeError for non-dict factories."""
+    store = JSONStore(temp_dir, "test.json", list)
+    store.write([])
+
+    with pytest.raises(TypeError, match=r"update\(\) requires dict factory"):
+        store.update("key", "value")

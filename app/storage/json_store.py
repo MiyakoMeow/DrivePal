@@ -1,6 +1,12 @@
 import json
+import sys
 from pathlib import Path
 from typing import Any, Callable, TypeVar
+
+if sys.platform == "win32":
+    pass
+else:
+    pass
 
 T = TypeVar("T")
 
@@ -10,10 +16,10 @@ class JSONStore:
         self,
         data_dir: str,
         filename: str,
-        default_factory: Callable[[], T] = dict,  # type: ignore[assignment]
+        default_factory: Callable[[], T] = lambda: dict(),
     ) -> None:
         self.filepath = Path(data_dir) / filename
-        self.default_factory: Callable[[], T] = default_factory  # type: ignore[assignment]
+        self.default_factory: Callable[[], T] = default_factory
         self._ensure_file()
 
     def _ensure_file(self) -> None:
@@ -32,18 +38,23 @@ class JSONStore:
     def save(self, data: T) -> None:
         self._write(data)
 
-    def write(self, data: T) -> None:  # type: ignore[no-untyped-def]
+    def write(self, data: T) -> None:
         self._write(data)
 
     def append(self, item: Any) -> None:
         data = self.read()
-        if isinstance(data, list):
-            data.append(item)
-            self._write(data)
-        else:
-            raise TypeError("Can only append to list-type stores")
+        if not isinstance(data, list):
+            raise TypeError(
+                f"append() requires list factory, got {type(data).__name__}"
+            )
+        data.append(item)
+        self._write(data)
 
     def update(self, key: str, value: Any) -> None:
         data = self.read()
+        if not isinstance(data, dict):
+            raise TypeError(
+                f"update() requires dict factory, got {type(data).__name__}"
+            )
         data[key] = value
         self._write(data)

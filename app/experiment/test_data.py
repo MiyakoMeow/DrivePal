@@ -51,11 +51,10 @@ class TestDataGenerator:
             templates = scenario.get("templates", [])
             template = random.choice(templates) if templates else "无模板内容"
 
-            driver_state = (
-                random.choice(self.DRIVER_STATES)
-                if self.DRIVER_STATES
-                else {"state": "unknown"}
-            )
+            if not self.DRIVER_STATES:
+                driver_state = "focused"
+            else:
+                driver_state = random.choice(self.DRIVER_STATES)
 
             test_cases.append(
                 {

@@ -21,7 +21,7 @@ def test_infer_intent_with_english():
 
 def test_time_decay_weight():
     from app.experiment.runner import _compute_time_decay
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
     now = datetime.now()
 
@@ -29,13 +29,7 @@ def test_time_decay_weight():
     assert _compute_time_decay(now) == pytest.approx(1.0, rel=0.1)
 
     # 7天前 ≈ e^(-1) ≈ 0.368 (指数衰减)
-    week_ago = datetime(
-        now.year,
-        now.month,
-        now.day - 7 if now.day > 7 else now.day + 23,
-        now.hour,
-        now.minute,
-    )
+    week_ago = now - timedelta(days=7)
     weight = _compute_time_decay(week_ago)
     assert 0.3 < weight < 0.4
 

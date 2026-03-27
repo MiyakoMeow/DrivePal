@@ -1,0 +1,32 @@
+[
+  {
+    "state": "focused",
+    "description": "专注驾驶",
+    "suitable_methods": ["visual", "audio"],
+    "interruption_tolerance": "low"
+  },
+  {
+    "state": "traffic_jam",
+    "description": "交通拥堵",
+    "suitable_methods": ["visual", "audio"],
+    "interruption_tolerance": "medium"
+  },
+  {
+    "state": "parked",
+    "description": "停车状态",
+    "suitable_methods": ["visual", "audio", "detailed"],
+    "interruption_tolerance": "high"
+  },
+  {
+    "state": "highway",
+    "description": "高速行驶",
+    "suitable_methods": ["audio"],
+    "interruption_tolerance": "very_low"
+  },
+  {
+    "state": "city_driving",
+    "description": "城市驾驶",
+    "suitable_methods": ["visual", "audio"],
+    "interruption_tolerance": "low"
+  }
+]
