@@ -17,7 +17,7 @@ def test_workflow_init_with_memory_module():
     from app.agents.workflow import AgentWorkflow
     from app.memory.memory import MemoryModule
 
-    memory = MemoryModule(data_dir="~/tmp/test_memory")
+    memory = MemoryModule(data_dir="data/test")
     workflow = AgentWorkflow(memory_module=memory)
 
     assert workflow.memory_module is not None

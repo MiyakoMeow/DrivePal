@@ -36,6 +36,6 @@ def test_search_llm_only(temp_data_dir):
 
 
 def test_search_by_llm_returns_list():
-    memory = MemoryModule(data_dir="~/tmp/test_memory", embedding_model=None)
+    memory = MemoryModule(data_dir="data/test", embedding_model=None)
     result = memory._search_by_llm("明天有什么日程")
     assert isinstance(result, list)
