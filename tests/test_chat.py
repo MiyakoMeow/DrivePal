@@ -1,17 +1,16 @@
-import os
-
 import pytest
 
 from app.memory.memory import MemoryModule
 from app.models.chat import ChatModel
+from tests.conftest import is_vllm_unavailable
 
-SKIP_IF_NO_API_KEY = pytest.mark.skipif(
-    not os.getenv("DEEPSEEK_API_KEY"),
-    reason="DEEPSEEK_API_KEY not set",
+SKIP_IF_NO_VLLM = pytest.mark.skipif(
+    is_vllm_unavailable(),
+    reason="vLLM not available at http://localhost:8000",
 )
 
 
-@SKIP_IF_NO_API_KEY
+@SKIP_IF_NO_VLLM
 def test_chat_drives_llm_memory_search(tmp_path):
     chat_model = ChatModel()
     memory = MemoryModule(str(tmp_path), chat_model=chat_model)
@@ -21,7 +20,7 @@ def test_chat_drives_llm_memory_search(tmp_path):
     assert "会议" in results[0]["content"]
 
 
-@SKIP_IF_NO_API_KEY
+@SKIP_IF_NO_VLLM
 def test_chat_feeds_workflow_context(tmp_path):
     from app.agents.workflow import AgentWorkflow
     from langchain_core.messages import HumanMessage
