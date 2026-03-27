@@ -31,10 +31,10 @@ def test_raw_preserved_in_context_node():
     workflow = AgentWorkflow.__new__(AgentWorkflow)
     workflow.data_dir = "data"
     workflow.memory_mode = "keyword"
-    workflow.memory = MagicMock()
-    workflow.memory.search.return_value = []
-    workflow.memory.get_history.return_value = []
-    workflow.memory.chat_model = mock_chat
+    workflow.memory_module = MagicMock()
+    workflow.memory_module.search.return_value = []
+    workflow.memory_module.get_history.return_value = []
+    workflow.memory_module.chat_model = mock_chat
 
     from app.agents.state import AgentState
     from langchain_core.messages import HumanMessage
@@ -62,8 +62,8 @@ def test_raw_preserved_in_strategy_node():
     workflow = AgentWorkflow.__new__(AgentWorkflow)
     workflow.data_dir = "data"
     workflow.memory_mode = "keyword"
-    workflow.memory = MagicMock()
-    workflow.memory.chat_model = mock_chat
+    workflow.memory_module = MagicMock()
+    workflow.memory_module.chat_model = mock_chat
 
     from app.agents.state import AgentState
     from langchain_core.messages import HumanMessage

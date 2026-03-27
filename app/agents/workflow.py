@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
+
     """多Agent协作工作流."""
 
     def __init__(
@@ -34,18 +35,14 @@ class AgentWorkflow:
             from app.models.settings import get_chat_model, get_embedding_model
 
             chat_model = get_chat_model()
-            if memory_mode == "embeddings" or memory_mode == "memorybank":
+            if memory_mode in ("embeddings", "memorybank"):
                 embedding_model = get_embedding_model()
                 self._embedding_model = embedding_model
                 self.memory_module = MemoryModule(
                     data_dir, embedding_model=embedding_model, chat_model=chat_model
                 )
-            elif memory_mode == "llm_only":
-                self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
             else:
                 self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
-
-        self.memory = self.memory_module
 
         self.graph = self._build_graph()
 
@@ -76,7 +73,7 @@ class AgentWorkflow:
 
         try:
             related_events = (
-                self.memory.search(user_input, mode=self.memory_mode)
+                self.memory_module.search(user_input, mode=self.memory_mode)
                 if user_input
                 else []
             )
@@ -86,7 +83,7 @@ class AgentWorkflow:
 
         try:
             relevant_memories = (
-                related_events if related_events else self.memory.get_history()
+                related_events if related_events else self.memory_module.get_history()
             )
         except ValueError as e:
             logger.warning(f"Memory get_history failed: {e}")
@@ -102,9 +99,9 @@ class AgentWorkflow:
 
 请输出JSON格式的上下文对象. """
 
-        if not self.memory.chat_model:
+        if not self.memory_module.chat_model:
             raise RuntimeError("ChatModel not available for context generation")
-        result = self.memory.chat_model.generate(prompt)
+        result = self.memory_module.chat_model.generate(prompt)
         try:
             context = json.loads(result)
             if not isinstance(context, dict):
@@ -135,9 +132,9 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象. """
 
-        if not self.memory.chat_model:
+        if not self.memory_module.chat_model:
             raise RuntimeError("ChatModel not available for task generation")
-        result = self.memory.chat_model.generate(prompt)
+        result = self.memory_module.chat_model.generate(prompt)
         try:
             task = json.loads(result)
             if not isinstance(task, dict):
@@ -167,9 +164,9 @@ class AgentWorkflow:
 
 请输出JSON格式的决策结果. """
 
-        if not self.memory.chat_model:
+        if not self.memory_module.chat_model:
             raise RuntimeError("ChatModel not available for strategy generation")
-        result = self.memory.chat_model.generate(prompt)
+        result = self.memory_module.chat_model.generate(prompt)
         try:
             decision = json.loads(result)
             if not isinstance(decision, dict):
@@ -192,10 +189,10 @@ class AgentWorkflow:
 
         content = decision.get("content", "无提醒内容")
         if self.memory_mode == "memorybank":
-            event_id = self.memory.write_interaction(user_input, content)
+            event_id = self.memory_module.write_interaction(user_input, content)
         else:
             event_data = {"content": content, "type": "reminder", "decision": decision}
-            event_id = self.memory.write(event_data)
+            event_id = self.memory_module.write(event_data)
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
             event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
@@ -212,7 +209,7 @@ class AgentWorkflow:
             self._memorybank_backend = MemoryBankBackend(
                 self.data_dir,
                 embedding_model=getattr(self, "_embedding_model", None),
-                chat_model=self.memory.chat_model,
+                chat_model=self.memory_module.chat_model,
             )
         return self._memorybank_backend
 
