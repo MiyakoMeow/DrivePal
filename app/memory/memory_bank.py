@@ -93,6 +93,7 @@ class MemoryBankBackend:
     def _search_by_embedding(
         self, query: str, events: list[dict], top_k: int
     ) -> list[dict]:
+        assert self.embedding_model is not None
         query_vector = self.embedding_model.encode(query)
         today = date.today()
         results = []

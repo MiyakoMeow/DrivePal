@@ -1,17 +1,17 @@
-from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 
 class EmbeddingModel:
-    def __init__(self, model_name: str = "bge-small-zh-v1.5", device: str = "cpu"):
+    def __init__(self, model_name: str = "BAAI/bge-small-zh-v1.5", device: str = "cpu"):
         self.model_name = model_name
         self.device = device
         self._client = None
 
     @property
-    def client(self) -> HuggingFaceBgeEmbeddings:
+    def client(self) -> HuggingFaceEmbeddings:
         if self._client is None:
             try:
-                self._client = HuggingFaceBgeEmbeddings(
+                self._client = HuggingFaceEmbeddings(
                     model_name=self.model_name,
                     model_kwargs={"device": self.device},
                     encode_kwargs={"normalize_embeddings": True},
