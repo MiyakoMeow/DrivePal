@@ -7,8 +7,8 @@ class AgentState(TypedDict):
 
     messages: list[BaseMessage]
     context: dict
-    task: dict
-    decision: dict
+    task: Optional[dict]
+    decision: Optional[dict]
     memory_mode: str
     result: Optional[str]
     event_id: Optional[str]

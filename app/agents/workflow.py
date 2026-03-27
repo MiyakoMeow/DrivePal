@@ -182,7 +182,7 @@ class AgentWorkflow:
 
     def _execution_node(self, state: AgentState) -> dict:
         """Execution Agent节点"""
-        decision = state.get("decision", {})
+        decision = state.get("decision") or {}
         messages = state.get("messages", [])
         user_input = str(messages[0].content) if messages else ""
 

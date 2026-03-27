@@ -171,7 +171,7 @@ class TestSearchWithInteractions:
 class TestMemoryModuleIntegration:
     def test_write_interaction_flow(self, tmp_path):
         memory = MemoryModule(str(tmp_path))
-        interaction_id = memory.write_interaction("测试查询", "测试回复")
+        memory.write_interaction("测试查询", "测试回复")
         results = memory.search("测试", mode="memorybank")
         assert len(results) > 0
         assert len(results[0]["interactions"]) >= 1

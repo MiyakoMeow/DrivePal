@@ -28,7 +28,9 @@ def test_chat_feeds_workflow_context(tmp_path):
     memory = MemoryModule(str(tmp_path), chat_model=ChatModel())
     memory.write({"content": "下午三点开会", "type": "meeting"})
     workflow = AgentWorkflow(memory_module=memory)
-    state = {
+    from app.agents.state import AgentState
+
+    state: AgentState = {
         "messages": [HumanMessage(content="查一下会议")],
         "context": {},
         "task": None,

@@ -71,6 +71,7 @@ class TestEmbeddingForEventAggregation:
 
     def test_aggregation_threshold_enforced(self, embedding, tmp_path):
         m = MemoryModule(str(tmp_path), embedding_model=embedding)
+        assert m.embedding_model is not None
         similar = m.embedding_model.encode("提醒明天上午九点开会")
         unrelated = m.embedding_model.encode("今天天气怎么样")
         s_similar = MemoryBankBackend._cosine_similarity(similar, similar)
