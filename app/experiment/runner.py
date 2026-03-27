@@ -203,18 +203,19 @@ class ExperimentRunner:
         return self._evaluation_config
 
     def run_comparison(
-        self, test_cases: List[Dict[str, str]], methods: Optional[List[str]] = None
+        self,
+        test_cases: List[Dict[str, str]],
+        methods: Optional[List[str]] = None,
+        data_dir: str | None = None,
+        seed: int | None = None,
     ) -> Dict[str, Any]:
-        """运行对比实验"""
         if not test_cases:
             raise ValueError("test_cases cannot be empty")
-
         for tc in test_cases:
             if not isinstance(tc, dict):
                 raise ValueError(f"test_case must be dict, got {type(tc)}")
             if "input" not in tc:
                 raise ValueError("test_case missing required field 'input'")
-
         valid_methods = {"keyword", "llm_only", "embeddings", "memorybank"}
         if methods is None:
             methods = ["keyword", "llm_only", "embeddings", "memorybank"]
@@ -222,51 +223,57 @@ class ExperimentRunner:
             invalid = set(methods) - valid_methods
             if invalid:
                 raise ValueError(f"Invalid methods: {invalid}")
-
         results = {
             "timestamp": datetime.now().isoformat(),
             "test_cases": len(test_cases),
             "methods": methods,
+            "seed": seed,
             "metrics": {},
         }
-
         for method in methods:
-            method_results = self._run_method(method, test_cases)
+            method_results = self._run_method(method, test_cases, data_dir=data_dir)
             results["metrics"][method] = method_results
-
         self._save_results(results)
         return results
 
-    def _run_method(self, method: str, test_cases: List[Dict]) -> Dict:
-        """运行单个方法的实验"""
-        workflow = create_workflow(self.data_dir, memory_mode=method)
+    def _run_method(
+        self, method: str, test_cases: List[Dict], data_dir: str | None = None
+    ) -> Dict:
+        effective_data_dir = data_dir if data_dir is not None else self.data_dir
+        workflow = create_workflow(effective_data_dir, memory_mode=method)
 
         latencies = []
         task_completions = []
         semantic_accuracies = []
         context_relatedness_scores = []
+        per_case = []
 
         for case in test_cases:
             start_time = time.time()
             try:
                 result, event_id = workflow.run(case["input"])
                 elapsed = (time.time() - start_time) * 1000
-
                 latencies.append(elapsed)
                 task_completions.append(1)
-
-                actual_output = result if result else self._get_latest_output()
-
+                actual_output = self._extract_scoring_output(result, effective_data_dir)
                 accuracy = self._evaluate_semantic_accuracy(
                     case["input"], case["type"], actual_output
                 )
                 semantic_accuracies.append(accuracy)
-
                 relatedness = self._evaluate_context_relatedness(
                     case["input"], case["type"], actual_output
                 )
                 context_relatedness_scores.append(relatedness)
-
+                per_case.append(
+                    {
+                        "input": case["input"],
+                        "type": case["type"],
+                        "output": actual_output[:200],
+                        "latency_ms": elapsed,
+                        "semantic_accuracy": accuracy,
+                        "context_relatedness": relatedness,
+                    }
+                )
             except Exception as e:
                 logger.warning(
                     f"Experiment run failed for case '{case.get('input', 'unknown')}': {e}"
@@ -275,6 +282,17 @@ class ExperimentRunner:
                 task_completions.append(0)
                 semantic_accuracies.append(0)
                 context_relatedness_scores.append(0)
+                per_case.append(
+                    {
+                        "input": case["input"],
+                        "type": case["type"],
+                        "output": "",
+                        "latency_ms": 0,
+                        "semantic_accuracy": 0,
+                        "context_relatedness": 0,
+                        "error": str(e),
+                    }
+                )
 
         return {
             "avg_latency_ms": sum(latencies) / len(latencies) if latencies else 0,
@@ -288,16 +306,35 @@ class ExperimentRunner:
             / len(context_relatedness_scores)
             if context_relatedness_scores
             else 0,
+            "per_case": per_case,
         }
 
-    def _get_latest_output(self) -> str:
-        """从存储中获取最新的输出结果"""
-        events_store = JSONStore(self.data_dir, "events.json", list)
+    def _get_latest_output(self, data_dir: str | None = None) -> str:
+        effective_dir = data_dir if data_dir is not None else self.data_dir
+        events_store = JSONStore(effective_dir, "events.json", list)
         events = events_store.read()
         if events and len(events) > 0:
             last_event = events[-1]
             return last_event.get("decision", {}).get("content", "")
         return ""
+
+    def _extract_scoring_output(self, result: str, data_dir: str | None = None) -> str:
+        effective_dir = data_dir if data_dir is not None else self.data_dir
+        events_store = JSONStore(effective_dir, "events.json", list)
+        events = events_store.read()
+        if events:
+            last_event = events[-1]
+            decision = last_event.get("decision", {})
+            if isinstance(decision, str):
+                return decision
+            raw = decision.get("raw", "")
+            if raw:
+                return raw
+            reasoning = decision.get("reasoning", "")
+            content = decision.get("content", "")
+            if reasoning or content:
+                return f"{reasoning} {content}".strip()
+        return result if result else self._get_latest_output(data_dir=effective_dir)
 
     def _evaluate_semantic_accuracy(
         self, input_text: str, expected_type: str, output: str
@@ -368,26 +405,19 @@ class ExperimentRunner:
         results_store.append(results)
 
     def generate_report(self) -> str:
-        """生成对比报告"""
         results_store = JSONStore(self.data_dir, "experiment_results.json", list)
         results = results_store.read()
-
         if not results:
             return "暂无实验数据"
-
         latest = results[-1]
         report = "# 实验对比报告\n\n"
-        report += f"时间: {latest['timestamp']}\n\n"
-        report += f"测试用例数: {latest['test_cases']}\n\n"
-        report += "## 方法对比\n\n"
-
+        report += f"时间: {latest['timestamp']}\n"
+        report += f"测试用例数: {latest['test_cases']}\n"
+        if "seed" in latest:
+            report += f"随机种子: {latest['seed']}\n"
+        report += "\n## 方法对比\n\n"
+        report += "| 方法 | 平均延迟(ms) | 完成率 | 语义准确率 | 上下文相关度 |\n"
+        report += "|------|-------------|--------|-----------|-------------|\n"
         for method, metrics in latest["metrics"].items():
-            report += f"### {method}\n"
-            report += f"- 平均延迟: {metrics['avg_latency_ms']:.2f}ms\n"
-            report += f"- 任务完成率: {metrics['task_completion_rate'] * 100:.1f}%\n"
-            report += (
-                f"- 语义理解准确率: {metrics.get('semantic_accuracy', 0) * 100:.1f}%\n"
-            )
-            report += f"- 上下文相关度: {metrics.get('context_relatedness', 0) * 100:.1f}%\n\n"
-
+            report += f"| {method} | {metrics['avg_latency_ms']:.1f} | {metrics['task_completion_rate'] * 100:.1f}% | {metrics.get('semantic_accuracy', 0) * 100:.1f}% | {metrics.get('context_relatedness', 0) * 100:.1f}% |\n"
         return report

@@ -113,3 +113,24 @@ def test_context_relatedness_schedule_check():
         "你的日程安排如下：明天下午三点有个会议提醒",
     )
     assert score > 0
+
+
+def test_run_method_uses_isolated_data_dir(tmp_path):
+    from unittest.mock import MagicMock, patch
+    from app.experiment.runner import ExperimentRunner
+
+    runner = ExperimentRunner(data_dir=str(tmp_path), config_dir="config")
+
+    with patch("app.experiment.runner.create_workflow") as mock_create:
+        mock_workflow = MagicMock()
+        mock_workflow.run.return_value = ("处理完成", "test_id")
+        mock_create.return_value = mock_workflow
+
+        runner._run_method(
+            "keyword",
+            [{"input": "测试", "type": "general"}],
+            data_dir=str(tmp_path / "iso"),
+        )
+        mock_create.assert_called_once_with(
+            str(tmp_path / "iso"), memory_mode="keyword"
+        )
