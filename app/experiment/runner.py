@@ -325,34 +325,12 @@ class ExperimentRunner:
         effective_dir = data_dir if data_dir is not None else self.data_dir
         events_store = JSONStore(effective_dir, "events.json", list)
         events = events_store.read()
-        if events and len(events) > 0:
-            last_event = events[-1]
-            return last_event.get("decision", {}).get("content", "")
+        if events:
+            return events[-1].get("content", "")
         return ""
 
     def _extract_scoring_output(self, result: str, data_dir: str | None = None) -> str:
-        effective_dir = data_dir if data_dir is not None else self.data_dir
-        events_store = JSONStore(effective_dir, "events.json", list)
-        events = events_store.read()
-        if events:
-            last_event = events[-1]
-            decision = last_event.get("decision", {})
-            if isinstance(decision, str):
-                return decision
-            content = (
-                decision.get("reminder_content")
-                or decision.get("remind_content")
-                or decision.get("content")
-            )
-            if content:
-                return content
-            reasoning = decision.get("reasoning", "")
-            if reasoning:
-                return reasoning
-            raw = decision.get("raw", "")
-            if raw:
-                return raw
-        return result if result else self._get_latest_output(data_dir=effective_dir)
+        return result if result else self._get_latest_output(data_dir=data_dir)
 
     def _evaluate_semantic_accuracy(
         self, input_text: str, expected_type: str, output: str

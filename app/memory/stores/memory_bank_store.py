@@ -302,7 +302,7 @@ class MemoryBankStore(BaseMemoryStore):
 
         self._persist_interaction(interaction)
         self._maybe_summarize(today)
-        return interaction_id
+        return interaction["event_id"]
 
     def _should_append_to_event(self, interaction: dict) -> Optional[str]:
         events = self.events_store.read()

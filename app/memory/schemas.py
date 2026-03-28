@@ -20,6 +20,18 @@ class MemoryEvent(BaseModel):
     updated_at: str = ""
     model_config = ConfigDict(extra="allow")
 
+    def to_public(self) -> dict:
+        """返回不含内部字段的纯事件数据."""
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "content": self.content,
+            "type": self.type,
+            "description": self.description,
+            "date_group": self.date_group,
+            "interaction_ids": self.interaction_ids,
+        }
+
 
 class InteractionRecord(BaseModel):
     """交互记录数据模型."""

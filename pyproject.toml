@@ -27,7 +27,7 @@ dev = [
 ]
 
 [tool.ruff.lint]
-extend-select = ["D", "DOC"]
+extend-select = ["D"]
 ignore = ["D211", "D213", "D203"]
 
 [dependency-groups]
