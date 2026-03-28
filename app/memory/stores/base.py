@@ -1,8 +1,11 @@
 """MemoryStore 基类，提供共享的 events_store 和通用逻辑."""
 
+import uuid
 from abc import ABC
 from datetime import datetime
+
 from app.memory.interfaces import MemoryStore
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.storage.json_store import JSONStore
 
 
@@ -19,46 +22,46 @@ class BaseMemoryStore(MemoryStore, ABC):
         embedding_model=None,
         chat_model=None,
     ) -> None:
-        """初始化 BaseMemoryStore 实例.
-
-        Args:
-            data_dir: 数据存储目录路径.
-            embedding_model: 向量嵌入模型 (可选).
-            chat_model: 聊天模型 (可选).
-
-        """
         self.data_dir = data_dir
         self.events_store = JSONStore(data_dir, "events.json", list)
         self.strategies_store = JSONStore(data_dir, "strategies.json", dict)
 
-    def get_history(self, limit: int = 10) -> list[dict]:
-        """获取历史记录，按时间倒序返回最近 limit 条.
+    def _generate_id(self) -> str:
+        return f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
-        Args:
-            limit: 返回记录数量上限.
+    def write(self, event: MemoryEvent) -> str:
+        event = event.model_copy(deep=True)
+        event.id = self._generate_id()
+        event.created_at = datetime.now().isoformat()
+        self.events_store.append(event.model_dump())
+        return event.id
 
-        Returns:
-            事件列表.
+    def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        events = self.events_store.read()
+        matched = self._keyword_search(query, events)
+        return [SearchResult(event=e) for e in matched[:top_k]]
 
-        """
+    def _keyword_search(self, query: str, events: list[dict]) -> list[dict]:
+        query_lower = query.lower()
+        return [
+            e
+            for e in events
+            if query_lower in e.get("content", "").lower()
+            or query_lower in e.get("description", "").lower()
+        ]
+
+    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         events = self.events_store.read()
         if limit <= 0:
             return []
-        return events[-limit:]
+        return [MemoryEvent(**e) for e in events[-limit:]]
 
-    def update_feedback(self, event_id: str, feedback: dict) -> None:
-        """更新反馈，同时更新策略权重.
-
-        Args:
-            event_id: 事件ID.
-            feedback: 反馈数据，包含 action 和 type 等字段.
-
-        """
+    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        feedback.event_id = event_id
+        feedback.timestamp = datetime.now().isoformat()
         feedback_store = JSONStore(self.data_dir, "feedback.json", list)
-        feedback["event_id"] = event_id
-        feedback["timestamp"] = datetime.now().isoformat()
-        feedback_store.append(feedback)
-        self._update_strategy(event_id, feedback)
+        feedback_store.append(feedback.model_dump())
+        self._update_strategy(event_id, feedback.model_dump())
 
     def _update_strategy(self, event_id: str, feedback: dict) -> None:
         strategies = self.strategies_store.read()
@@ -82,15 +85,9 @@ class BaseMemoryStore(MemoryStore, ABC):
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
-        """将交互记录作为普通事件写入.
-
-        Args:
-            query: 用户查询.
-            response: 系统响应.
-            event_type: 事件类型.
-
-        Returns:
-            事件 ID.
-
-        """
-        return self.write({"content": response, "type": event_type})
+        event = MemoryEvent(
+            content=response,
+            type=event_type,
+            description=query,
+        )
+        return self.write(event)

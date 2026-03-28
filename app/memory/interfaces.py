@@ -2,13 +2,15 @@
 
 from abc import ABC, abstractmethod
 
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+
 
 class MemoryStore(ABC):
     """记忆存储抽象接口."""
 
-    requires_embedding: bool
-    requires_chat: bool
-    supports_interaction: bool
+    requires_embedding: bool = False
+    requires_chat: bool = False
+    supports_interaction: bool = False
 
     @property
     @abstractmethod
@@ -17,28 +19,25 @@ class MemoryStore(ABC):
         pass
 
     @abstractmethod
-    def write(self, event: dict) -> str:
+    def write(self, event: MemoryEvent) -> str:
         """写入事件，返回 event_id."""
         pass
 
     @abstractmethod
-    def search(self, query: str) -> list[dict]:
-        """检索记忆，返回匹配的事件列表."""
+    def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """检索记忆，返回匹配的结果列表."""
         pass
 
-    @abstractmethod
-    def get_history(self, limit: int = 10) -> list[dict]:
+    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         """获取历史记录，按时间倒序返回最近 limit 条."""
-        pass
+        raise NotImplementedError
 
-    @abstractmethod
-    def update_feedback(self, event_id: str, feedback: dict) -> None:
+    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈，同时更新策略权重."""
-        pass
+        raise NotImplementedError
 
-    @abstractmethod
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录，返回 event_id."""
-        pass
+        raise NotImplementedError
