@@ -306,10 +306,11 @@ uv run python run_experiment.py judge --run-id <id> --judge-model deepseek-chat
 |------|------|
 | 新增 | `app/experiment/runners/__init__.py` |
 | 新增 | `app/experiment/runners/prepare.py` |
-| 新增 | `app/experiment/runners/execute.py` |
+| 新增 | `app/experiment/runners/execute.py` — 包含从 `runner.py` 迁移的规则评估函数 |
 | 新增 | `app/experiment/runners/judge.py` |
 | 修改 | `app/models/settings.py` — 新增 JudgeProviderConfig |
 | 修改 | `config/llm.json` — 新增 judge 配置节 |
 | 重写 | `run_experiment.py` — 子命令式 CLI |
-| 删除 | `app/experiment/runner.py` — 旧 ExperimentRunner |
-| 保留 | 数据集加载器、MemoryModule、各 store、规则评估函数（`runner.py` 中） |
+| 删除 | `app/experiment/runner.py` — 旧 ExperimentRunner，评估函数已迁移至 `execute.py` |
+| 删除 | `app/experiment/test_data.py` — Prepare 阶段直接使用数据集 loader，不再需要 |
+| 保留 | 数据集加载器、MemoryModule、各 store |
