@@ -1,49 +1,56 @@
 """Tests for MemoryModule Facade."""
 
 import pytest
+from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.memory import MemoryModule
 
 
 @pytest.fixture
 def mm(tmp_path):
-    """Provide a MemoryModule instance for testing."""
     return MemoryModule(str(tmp_path))
 
 
 class TestMemoryModuleFacade:
-    """Tests for MemoryModule Facade interface."""
-
     def test_default_mode_is_memorybank(self, mm):
-        """Verify the default mode is memorybank."""
         assert mm._default_mode == "memorybank"
 
     def test_write_uses_default_mode(self, mm):
-        """Verify write uses the default mode store."""
-        mm.write({"content": "事件"})
+        mm.write(MemoryEvent(content="事件"))
         history = mm.get_history()
         assert len(history) == 1
+        assert isinstance(history[0], MemoryEvent)
 
     def test_search_routes_to_correct_store(self, mm):
-        """Verify search routes to the correct store based on mode."""
-        mm.write({"content": "测试事件"})
+        mm.write(MemoryEvent(content="测试事件"))
         results = mm.search("测试", mode="keyword")
         assert len(results) == 1
+        assert isinstance(results[0], SearchResult)
 
     def test_set_default_mode(self, mm):
-        """Verify set_default_mode changes the default mode."""
         mm.set_default_mode("keyword")
         assert mm._default_mode == "keyword"
 
     def test_write_interaction_calls_memorybank(self, mm):
-        """Verify write_interaction calls the memorybank store."""
         interaction_id = mm.write_interaction("提醒我开会", "好的")
         assert isinstance(interaction_id, str)
 
-    def test_write_interaction_falls_back_to_write_for_non_memorybank(self, mm):
-        """Verify write_interaction falls back to write for non-memorybank modes."""
+    def test_write_interaction_for_non_memorybank(self, mm):
         mm.set_default_mode("keyword")
-        interaction_id = mm.write_interaction("q", "r")
+        interaction_id = mm.write_interaction("查询内容", "响应内容")
         assert isinstance(interaction_id, str)
         history = mm.get_history()
         assert len(history) == 1
-        assert history[0]["content"] == "r"
+        assert history[0].content == "响应内容"
+        assert history[0].description == "查询内容"
+
+    def test_search_returns_search_result_objects(self, mm):
+        mm.write(MemoryEvent(content="特殊关键词事件"))
+        results = mm.search("特殊关键词", mode="keyword")
+        assert all(isinstance(r, SearchResult) for r in results)
+        pub = results[0].to_public()
+        assert "score" not in pub
+
+    def test_get_history_returns_memory_event_objects(self, mm):
+        mm.write(MemoryEvent(content="事件"))
+        history = mm.get_history()
+        assert all(isinstance(e, MemoryEvent) for e in history)

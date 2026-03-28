@@ -1,24 +1,28 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
+import logging
 from typing import Any, Optional, TYPE_CHECKING
 
 from app.memory.interfaces import MemoryStore
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
+logger = logging.getLogger(__name__)
+
 _STORES_REGISTRY: dict[MemoryMode, type[MemoryStore]] = {}
 
 
 def register_store(name: MemoryMode, store_cls: type[MemoryStore]) -> None:
-    """注册 MemoryStore 实现类，用于工厂创建."""
+    if name in _STORES_REGISTRY:
+        return
     _STORES_REGISTRY[name] = store_cls
 
 
 def _import_all_stores() -> None:
-    """延迟导入所有 store 类并注册到工厂注册表."""
     from app.memory.stores.keyword_store import KeywordMemoryStore
     from app.memory.stores.llm_store import LLMOnlyMemoryStore
     from app.memory.stores.embedding_store import EmbeddingMemoryStore
@@ -39,14 +43,6 @@ class MemoryModule:
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
     ):
-        """初始化 MemoryModule 实例.
-
-        Args:
-            data_dir: 数据存储目录.
-            embedding_model: 向量嵌入模型 (可选，未传则按需加载).
-            chat_model: 聊天模型 (可选，未传则按需加载).
-
-        """
         _import_all_stores()
         self._stores: dict[MemoryMode, MemoryStore] = {}
         self._data_dir = data_dir
@@ -56,7 +52,6 @@ class MemoryModule:
 
     @property
     def chat_model(self):
-        """返回聊天模型实例."""
         if self._chat_model is None:
             from app.models.settings import get_chat_model
 
@@ -64,13 +59,11 @@ class MemoryModule:
         return self._chat_model
 
     def _get_store(self, mode: MemoryMode) -> MemoryStore:
-        """懒加载获取指定模式的 store."""
         if mode not in self._stores:
             self._stores[mode] = self._create_store(mode)
         return self._stores[mode]
 
     def _create_store(self, mode: MemoryMode) -> MemoryStore:
-        """工厂方法创建 store，根据 Store 类属性按需加载模型."""
         if mode not in _STORES_REGISTRY:
             raise ValueError(
                 f"Unknown mode: {mode}. Available: {list(_STORES_REGISTRY.keys())}"
@@ -92,32 +85,28 @@ class MemoryModule:
         return store_cls(**kwargs)
 
     def set_default_mode(self, mode: MemoryMode) -> None:
-        """设置默认模式."""
         if mode not in _STORES_REGISTRY:
             raise ValueError(f"Unknown mode: {mode}")
         self._default_mode = mode
 
-    def write(self, event: dict) -> str:
-        """写入事件到当前模式的 store."""
-        store = self._get_store(self._default_mode)
-        return store.write(event)
+    def write(self, event: MemoryEvent) -> str:
+        return self._get_store(self._default_mode).write(event)
 
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
-        """写入交互记录."""
-        store = self._get_store(self._default_mode)
-        return store.write_interaction(query, response, event_type)
+        return self._get_store(self._default_mode).write_interaction(
+            query, response, event_type
+        )
 
-    def search(self, query: str, mode: MemoryMode | None = None) -> list:
-        """检索记忆."""
+    def search(
+        self, query: str, mode: MemoryMode | None = None, top_k: int = 10
+    ) -> list[SearchResult]:
         target_mode = mode or self._default_mode
-        return self._get_store(target_mode).search(query)
+        return self._get_store(target_mode).search(query, top_k=top_k)
 
-    def get_history(self, limit: int = 10) -> list:
-        """获取历史记录."""
+    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         return self._get_store(self._default_mode).get_history(limit)
 
-    def update_feedback(self, event_id: str, feedback: dict) -> None:
-        """更新反馈."""
+    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         self._get_store(self._default_mode).update_feedback(event_id, feedback)
