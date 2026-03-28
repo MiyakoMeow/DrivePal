@@ -45,14 +45,11 @@ class EmbeddingModel:
                 settings = LLMSettings.load()
                 providers = settings.embedding_providers
             except RuntimeError:
-                if device is not None:
-                    providers = [
-                        EmbeddingProviderConfig(
-                            model="BAAI/bge-small-zh-v1.5", device=device
-                        )
-                    ]
-                else:
-                    raise
+                providers = [
+                    EmbeddingProviderConfig(
+                        model="BAAI/bge-small-zh-v1.5", device=device or "cpu"
+                    )
+                ]
         self.providers = providers
         self.device = device
         self._client = None
