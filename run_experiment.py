@@ -20,6 +20,7 @@ import time
 from datetime import datetime
 
 from app.experiment.runner import ExperimentRunner
+from app.memory.types import MemoryMode
 
 
 def setup_test_dir(test_data_dir: str) -> None:
@@ -117,7 +118,7 @@ def run_full_experiment(
 
     """
     if methods is None:
-        methods = ["keyword", "llm_only", "embeddings", "memorybank"]
+        methods = [m.value for m in MemoryMode]
 
     if test_cases is None:
         test_cases = get_test_cases(count_per_type=2)
@@ -231,7 +232,7 @@ def main():
     parser.add_argument(
         "--methods",
         nargs="+",
-        choices=["keyword", "llm_only", "embeddings", "memorybank"],
+        choices=[m.value for m in MemoryMode],
         help="Methods to test (default: all four)",
     )
     parser.add_argument(

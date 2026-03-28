@@ -8,6 +8,8 @@ import os
 import math
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+
+from app.memory.types import MemoryMode
 from app.agents.workflow import create_workflow
 from app.storage.json_store import JSONStore
 
@@ -226,9 +228,9 @@ class ExperimentRunner:
                 raise ValueError(f"test_case must be dict, got {type(tc)}")
             if "input" not in tc:
                 raise ValueError("test_case missing required field 'input'")
-        valid_methods = {"keyword", "llm_only", "embeddings", "memorybank"}
+        valid_methods = set(MemoryMode)
         if methods is None:
-            methods = ["keyword", "llm_only", "embeddings", "memorybank"]
+            methods = [m.value for m in MemoryMode]
         else:
             invalid = set(methods) - valid_methods
             if invalid:

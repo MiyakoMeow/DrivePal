@@ -2,11 +2,12 @@
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional, Literal
+from typing import Optional
 import os
 import logging
 
 from app.memory.memory import MemoryModule
+from app.memory.types import MemoryMode
 from app.models.settings import get_chat_model, get_embedding_model
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ class QueryRequest(BaseModel):
     """用户查询请求."""
 
     query: str
-    memory_mode: Literal["keyword", "llm_only", "embeddings", "memorybank"] = "keyword"
+    memory_mode: MemoryMode = MemoryMode.KEYWORD
 
 
 class FeedbackRequest(BaseModel):
@@ -59,7 +60,7 @@ async def query(request: QueryRequest, mm: MemoryModule = Depends(get_memory_mod
     try:
         workflow = AgentWorkflow(
             data_dir=DATA_DIR,
-            memory_mode=request.memory_mode or "keyword",
+            memory_mode=request.memory_mode,
             memory_module=mm,
         )
         result, event_id = workflow.run(request.query)
