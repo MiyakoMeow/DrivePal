@@ -88,6 +88,7 @@ NEGATIVE_PATTERNS = [
 
 
 def infer_intent(query: str) -> str:
+    """根据关键词推断用户意图."""
     query_lower = query.lower()
     for intent, keywords in INTENT_KEYWORDS.items():
         if intent == "general":
@@ -106,6 +107,7 @@ def _has_negative_pattern(query: str) -> bool:
 def evaluate_semantic_accuracy(
     input_text: str, expected_type: str, output: str
 ) -> float:
+    """评估语义理解准确率."""
     score = 0.0
 
     inferred = infer_intent(input_text)
@@ -183,6 +185,7 @@ def _load_task_concepts(config_dir: str = "config") -> Dict[str, List[str]]:
 def evaluate_context_relatedness(
     input_text: str, expected_type: str, output: str, config_dir: str = "config"
 ) -> float:
+    """评估输出与任务类型的上下文相关度."""
     output_lower = output.lower()
     concepts = _load_task_concepts(config_dir) or _DEFAULT_TASK_CONCEPTS
     type_concepts = concepts.get(expected_type, [])

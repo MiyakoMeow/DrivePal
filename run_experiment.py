@@ -6,6 +6,7 @@ import os
 
 
 def cmd_prepare(args):
+    """Prepare 阶段：加载数据集、划分、预热."""
     from app.experiment.runners.prepare import prepare
 
     result = prepare(
@@ -23,6 +24,7 @@ def cmd_prepare(args):
 
 
 def cmd_run(args):
+    """Run 阶段：执行测试用例."""
     from app.experiment.runners.execute import execute
 
     prepared_dir = os.path.join(args.base_dir, args.run_id)
@@ -33,6 +35,7 @@ def cmd_run(args):
 
 
 def cmd_judge(args):
+    """Judge 阶段：LLM-as-Judge 多维评分."""
     from app.experiment.runners.judge import judge
 
     prepared_dir = os.path.join(args.base_dir, args.run_id)
@@ -53,6 +56,7 @@ def cmd_judge(args):
 
 
 def cmd_all(args):
+    """全流程：prepare → run → judge."""
     prep = cmd_prepare(args)
     exp_dir = os.path.join(args.output_dir, "exp")
     run_args = argparse.Namespace(run_id=prep["run_id"], base_dir=exp_dir)
@@ -62,6 +66,7 @@ def cmd_all(args):
 
 
 def main():
+    """CLI 入口."""
     parser = argparse.ArgumentParser(
         description="Experiment Pipeline: prepare -> run -> judge"
     )

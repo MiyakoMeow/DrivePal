@@ -57,6 +57,8 @@ class EmbeddingProviderConfig:
 
 @dataclass
 class JudgeProviderConfig:
+    """Judge 评估模型配置."""
+
     model: str
     base_url: str | None = None
     api_key: str | None = None
@@ -64,6 +66,7 @@ class JudgeProviderConfig:
 
     @classmethod
     def from_dict(cls, d: dict) -> "JudgeProviderConfig":
+        """从字典创建配置实例."""
         return cls(
             model=d["model"],
             base_url=d.get("base_url"),
@@ -153,6 +156,7 @@ def get_embedding_model(device: str | None = None) -> "EmbeddingModel":
 
 
 def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
+    """从配置文件或环境变量构建 judge provider."""
     judge_model = os.getenv("JUDGE_MODEL")
     judge_dict = config_data.get("judge")
     if judge_model:
@@ -168,6 +172,7 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
 
 
 def get_judge_model() -> "ChatModel":
+    """从配置创建 judge ChatModel 实例."""
     from app.models.chat import ChatModel
 
     settings = LLMSettings.load()
@@ -175,4 +180,10 @@ def get_judge_model() -> "ChatModel":
         raise RuntimeError(
             "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.json"
         )
-    return ChatModel(providers=[settings.judge_provider])
+    provider = LLMProviderConfig(
+        model=settings.judge_provider.model,
+        base_url=settings.judge_provider.base_url,
+        api_key=settings.judge_provider.api_key,
+        temperature=settings.judge_provider.temperature,
+    )
+    return ChatModel(providers=[provider])
