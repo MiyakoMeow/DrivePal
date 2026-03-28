@@ -43,6 +43,8 @@ class AgentWorkflow:
             else:
                 self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
 
+        self.memory_module.set_default_mode(memory_mode)
+
         self.graph = self._build_graph()
 
     def _build_graph(self) -> Any:

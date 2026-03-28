@@ -1,6 +1,6 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
@@ -46,7 +46,7 @@ class MemoryModule:
 
         """
         _import_all_stores()
-        self._stores: dict[str, any] = {}
+        self._stores: dict[str, Any] = {}
         self._data_dir = data_dir
         self._embedding_model = embedding_model
         self._chat_model = chat_model
