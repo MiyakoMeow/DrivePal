@@ -39,8 +39,11 @@ class TestMemoryModuleFacade:
         interaction_id = mm.write_interaction("提醒我开会", "好的")
         assert isinstance(interaction_id, str)
 
-    def test_write_interaction_raises_for_non_memorybank(self, mm):
-        """Verify write_interaction raises NotImplementedError for non-memorybank modes."""
+    def test_write_interaction_falls_back_to_write_for_non_memorybank(self, mm):
+        """Verify write_interaction falls back to write for non-memorybank modes."""
         mm.set_default_mode("keyword")
-        with pytest.raises(NotImplementedError):
-            mm.write_interaction("q", "r")
+        interaction_id = mm.write_interaction("q", "r")
+        assert isinstance(interaction_id, str)
+        history = mm.get_history()
+        assert len(history) == 1
+        assert history[0]["content"] == "r"

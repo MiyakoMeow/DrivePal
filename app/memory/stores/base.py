@@ -9,6 +9,10 @@ from app.storage.json_store import JSONStore
 class BaseMemoryStore(MemoryStore, ABC):
     """MemoryStore 基类."""
 
+    requires_embedding: bool = False
+    requires_chat: bool = False
+    supports_interaction: bool = False
+
     def __init__(
         self,
         data_dir: str,
@@ -74,3 +78,8 @@ class BaseMemoryStore(MemoryStore, ABC):
             )
 
         self.strategies_store.write(strategies)
+
+    def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        return self.write({"content": response, "type": event_type})

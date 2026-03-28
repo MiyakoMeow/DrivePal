@@ -31,3 +31,10 @@ class MemoryStore(ABC):
     def update_feedback(self, event_id: str, feedback: dict) -> None:
         """更新反馈，同时更新策略权重."""
         pass
+
+    @abstractmethod
+    def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        """写入交互记录，返回 event_id."""
+        pass
