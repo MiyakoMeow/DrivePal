@@ -118,7 +118,7 @@ class AgentWorkflow:
 请输出JSON格式的上下文对象. """
 
         context = self._call_llm_json(prompt)
-        context["related_events"] = related_events
+        context["related_events"] = relevant_memories
         context["relevant_memories"] = relevant_memories
 
         return {

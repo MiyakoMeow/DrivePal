@@ -5,7 +5,7 @@ import logging
 import re
 from typing import Optional, TYPE_CHECKING
 
-from app.memory.schemas import MemoryEvent, SearchResult
+from app.memory.schemas import SearchResult
 from app.memory.stores.base import BaseMemoryStore
 
 if TYPE_CHECKING:
