@@ -28,7 +28,6 @@ def _import_all_stores() -> None:
 
 
 class MemoryModule:
-
     """统一记忆管理接口，Facade 模式."""
 
     def __init__(
@@ -51,6 +50,11 @@ class MemoryModule:
         self._embedding_model = embedding_model
         self._chat_model = chat_model
         self._default_mode: str = "memorybank"
+
+    @property
+    def chat_model(self):
+        """返回聊天模型实例."""
+        return self._chat_model
 
     def _get_store(self, mode: str):
         """懒加载获取指定模式的 store."""

@@ -5,7 +5,6 @@ from typing import List, Dict
 
 
 class SGDCalendarLoader:
-
     """加载SGD-Calendar数据集."""
 
     _cache = None

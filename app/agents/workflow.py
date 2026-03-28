@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflow:
-
     """多Agent协作工作流."""
 
     def __init__(

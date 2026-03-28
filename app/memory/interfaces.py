@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 
 
 class MemoryStore(ABC):
-
     """记忆存储抽象接口."""
 
     @property

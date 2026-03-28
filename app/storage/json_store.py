@@ -8,7 +8,6 @@ T = TypeVar("T")
 
 
 class JSONStore:
-
     """基于JSON文件的通用存储引擎."""
 
     def __init__(

@@ -26,7 +26,6 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
 
 
 class MemoryBankStore(BaseMemoryStore):
-
     """记忆库后端，支持遗忘曲线、记忆强化与自动摘要."""
 
     @property

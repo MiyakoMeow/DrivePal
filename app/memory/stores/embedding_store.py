@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 
 
 class EmbeddingMemoryStore(BaseMemoryStore):
-
     """向量相似度检索 store."""
 
     def __init__(

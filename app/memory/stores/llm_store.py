@@ -28,7 +28,6 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 
 
 class LLMOnlyMemoryStore(BaseMemoryStore):
-
     """LLM 语义判断检索 store."""
 
     def __init__(

@@ -9,7 +9,6 @@ from app.models.settings import LLMSettings, LLMProviderConfig, EmbeddingProvide
 
 
 class TestLLMProviderConfig:
-
     """Tests for LLMProviderConfig."""
 
     def test_from_dict_full(self):
@@ -37,7 +36,6 @@ class TestLLMProviderConfig:
 
 
 class TestEmbeddingProviderConfig:
-
     """Tests for EmbeddingProviderConfig."""
 
     def test_from_dict_local(self):
@@ -67,7 +65,6 @@ class TestEmbeddingProviderConfig:
 
 
 class TestLLMSettingsLoad:
-
     """Tests for LLMSettings.load configuration loading."""
 
     def test_load_from_config_file(self, tmp_path, monkeypatch):
@@ -180,7 +177,6 @@ class TestLLMSettingsLoad:
 
 
 class TestChatModelFallback:
-
     """Tests for ChatModel multi-provider fallback behavior."""
 
     def test_generate_with_single_provider(self):
@@ -247,7 +243,6 @@ class TestChatModelFallback:
 
 
 class TestEmbeddingModelFallback:
-
     """Tests for EmbeddingModel multi-provider fallback behavior."""
 
     def test_local_provider_creates_huggingface(self):

@@ -8,7 +8,6 @@ _STORE_NAME = "keyword"
 
 
 class KeywordMemoryStore(BaseMemoryStore):
-
     """关键词匹配检索 store."""
 
     @property

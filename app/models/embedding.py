@@ -1,5 +1,7 @@
 """文本嵌入模型封装，支持 HuggingFace 本地模型和 OpenAI 兼容远程接口."""
 
+from typing import Any
+
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 
@@ -7,7 +9,6 @@ from app.models.settings import EmbeddingProviderConfig, LLMSettings
 
 
 class EmbeddingModel:
-
     """文本嵌入模型封装，支持多provider自动fallback."""
 
     def __init__(
@@ -56,7 +57,7 @@ class EmbeddingModel:
     def _create_client(self, provider: EmbeddingProviderConfig):
         device = self.device or provider.device
         if provider.base_url:
-            kwargs = {"model": provider.model}
+            kwargs: dict[str, Any] = {"model": provider.model}
             if provider.api_key:
                 from langchain_core.utils.utils import SecretStr
 

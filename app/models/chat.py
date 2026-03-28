@@ -9,7 +9,6 @@ from app.models.settings import LLMProviderConfig, LLMSettings
 
 
 class ChatModel:
-
     """LLM对话模型封装，支持多provider自动fallback."""
 
     def __init__(

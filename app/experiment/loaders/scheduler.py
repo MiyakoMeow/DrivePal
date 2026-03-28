@@ -5,7 +5,6 @@ from typing import List, Dict
 
 
 class SchedulerLoader:
-
     """加载Scheduler数据集.
 
     源: https://huggingface.co/datasets/shawnha/scheduler_dataset
