@@ -30,6 +30,8 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 class LLMOnlyMemoryStore(BaseMemoryStore):
     """LLM 语义判断检索 store."""
 
+    requires_chat: bool = True
+
     def __init__(
         self,
         data_dir: str,

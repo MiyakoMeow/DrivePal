@@ -28,6 +28,10 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
 class MemoryBankStore(BaseMemoryStore):
     """记忆库后端，支持遗忘曲线、记忆强化与自动摘要."""
 
+    requires_embedding: bool = True
+    requires_chat: bool = True
+    supports_interaction: bool = True
+
     @property
     def store_name(self) -> str:
         """返回 store 名称."""
