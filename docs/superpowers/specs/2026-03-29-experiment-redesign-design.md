@@ -62,8 +62,10 @@ app/experiment/
 
 ```
 data/exp/{run_id}/
-├── prepared.json              # 划分方案
-├── test_cases.json            # 测试用例列表
+├── prepared.json              # 划分方案 + 测试用例 + 预热数据引用
+├── warmup/                    # 预热数据（独立文件，避免 prepared.json 过大）
+│   ├── sgd_calendar.json
+│   └── scheduler.json
 ├── stores/                    # 各后端预热的记忆库
 │   ├── keyword/
 │   ├── llm_only/
@@ -76,7 +78,9 @@ data/exp/{run_id}/
 对每个后端：
 1. 创建 `MemoryModule` 实例，指向 `stores/{method}/`
 2. 逐条调用 `memory_module.write_interaction(input, response)` 写入预热数据
-3. response 由 LLM 生成（或直接用 input 作为简化 response）
+3. response 使用 LLM 生成：将 input 送入工作流 LLM，获取简短日程回复作为 response
+   - 这样 embeddings/memorybank 后端能建立有意义的语义索引
+   - Prepare 阶段需要调用 LLM API（不可离线重跑），但只需处理预热数据量（~70 条）
 
 ### prepared.json 格式
 
@@ -92,11 +96,18 @@ data/exp/{run_id}/
   "test_cases": [
     {"id": "sgd_0", "input": "...", "type": "event_add", "dataset": "sgd_calendar"}
   ],
-  "warmup_data": {
-    "sgd_calendar": [{"input": "...", "type": "..."}],
-    "scheduler": [{"input": "...", "type": "..."}]
+  "warmup_files": {
+    "sgd_calendar": "warmup/sgd_calendar.json",
+    "scheduler": "warmup/scheduler.json"
   }
 }
+```
+
+`warmup/*.json` 格式：
+```json
+[
+  {"id": "sgd_5", "input": "...", "type": "event_add", "response": "LLM生成的回复"}
+]
 ```
 
 ## 阶段 2：Run（Execute）
@@ -301,4 +312,4 @@ uv run python run_experiment.py judge --run-id <id> --judge-model deepseek-chat
 | 修改 | `config/llm.json` — 新增 judge 配置节 |
 | 重写 | `run_experiment.py` — 子命令式 CLI |
 | 删除 | `app/experiment/runner.py` — 旧 ExperimentRunner |
-| 保留 | 数据集加载器、MemoryModule、各 store、规则评估函数 |
+| 保留 | 数据集加载器、MemoryModule、各 store、规则评估函数（`runner.py` 中） |
