@@ -9,7 +9,7 @@ from tests.conftest import is_llm_available
 def _get_store_params():
     if is_llm_available():
         return ["keyword", "llm_only", "embeddings", "memorybank"]
-    return ["keyword"]
+    return ["keyword", "embeddings"]
 
 
 class TestMemoryStoreContract:
