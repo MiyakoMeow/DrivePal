@@ -5,6 +5,7 @@ import torch
 import pytest
 
 from app.memory.memory import MemoryModule
+from app.memory.types import MemoryMode
 from app.memory.stores.memory_bank_store import (
     AGGREGATION_SIMILARITY_THRESHOLD,
     MemoryBankStore,
@@ -34,14 +35,14 @@ class TestEmbeddingForMemorySearch:
         """Verify that semantically similar queries retrieve the correct memory."""
         memory = MemoryModule(str(tmp_path), embedding_model=embedding)
         memory.write({"content": "明天下午三点项目评审会议"})
-        results = memory.search("项目评审下午三点", mode="embeddings")
+        results = memory.search("项目评审下午三点", mode=MemoryMode.EMBEDDINGS)
         assert len(results) == 1
 
     def test_semantic_miss_skips(self, embedding, tmp_path):
         """Verify that semantically unrelated queries return no results."""
         memory = MemoryModule(str(tmp_path), embedding_model=embedding)
         memory.write({"content": "明天下午三点项目评审会议"})
-        results = memory.search("天气预报查询", mode="embeddings")
+        results = memory.search("天气预报查询", mode=MemoryMode.EMBEDDINGS)
         assert results == []
 
 

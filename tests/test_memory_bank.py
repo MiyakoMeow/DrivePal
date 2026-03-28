@@ -11,6 +11,7 @@ from app.memory.stores.memory_bank_store import (
 )
 
 from app.memory.memory import MemoryModule
+from app.memory.types import MemoryMode
 
 
 @pytest.fixture
@@ -211,6 +212,6 @@ class TestMemoryModuleIntegration:
         """Verify the end-to-end write interaction and search flow."""
         memory = MemoryModule(str(tmp_path))
         memory.write_interaction("测试查询", "测试回复")
-        results = memory.search("测试", mode="memorybank")
+        results = memory.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) > 0
         assert len(results[0]["interactions"]) >= 1

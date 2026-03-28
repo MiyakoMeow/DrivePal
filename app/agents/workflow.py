@@ -9,6 +9,7 @@ from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
+from app.memory.types import MemoryMode
 from app.storage.json_store import JSONStore
 from langchain_core.messages import HumanMessage
 
@@ -21,7 +22,7 @@ class AgentWorkflow:
     def __init__(
         self,
         data_dir: str = "data",
-        memory_mode: str = "keyword",
+        memory_mode: MemoryMode = MemoryMode.KEYWORD,
         memory_module: Optional[MemoryModule] = None,
     ):
         """初始化工作流实例."""
@@ -31,17 +32,10 @@ class AgentWorkflow:
         if memory_module is not None:
             self.memory_module = memory_module
         else:
-            from app.models.settings import get_chat_model, get_embedding_model
+            from app.models.settings import get_chat_model
 
             chat_model = get_chat_model()
-            if memory_mode in ("embeddings", "memorybank"):
-                embedding_model = get_embedding_model()
-                self._embedding_model = embedding_model
-                self.memory_module = MemoryModule(
-                    data_dir, embedding_model=embedding_model, chat_model=chat_model
-                )
-            else:
-                self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
+            self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
 
         self.memory_module.set_default_mode(memory_mode)
 
@@ -185,11 +179,7 @@ class AgentWorkflow:
             content = remind_content
         else:
             content = decision.get("content", "无提醒内容")
-        if self.memory_mode == "memorybank":
-            event_id = self.memory_module.write_interaction(user_input, content)
-        else:
-            event_data = {"content": content, "type": "reminder", "decision": decision}
-            event_id = self.memory_module.write(event_data)
+        event_id = self.memory_module.write_interaction(user_input, content)
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
             event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
@@ -223,4 +213,4 @@ def create_workflow(
     data_dir: str = "data", memory_mode: str = "keyword"
 ) -> AgentWorkflow:
     """创建工作流实例."""
-    return AgentWorkflow(data_dir, memory_mode)
+    return AgentWorkflow(data_dir, MemoryMode(memory_mode))

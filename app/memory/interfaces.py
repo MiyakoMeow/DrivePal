@@ -6,6 +6,10 @@ from abc import ABC, abstractmethod
 class MemoryStore(ABC):
     """记忆存储抽象接口."""
 
+    requires_embedding: bool
+    requires_chat: bool
+    supports_interaction: bool
+
     @property
     @abstractmethod
     def store_name(self) -> str:
