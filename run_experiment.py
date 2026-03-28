@@ -16,7 +16,6 @@ import argparse
 import json
 import os
 import shutil
-import sys
 import time
 from datetime import datetime
 
@@ -53,6 +52,7 @@ def get_test_cases(count_per_type: int = 2) -> list[dict]:
 
     Returns:
         测试用例列表
+
     """
     scenarios = [
         {
@@ -118,6 +118,7 @@ def run_full_experiment(
 
     Returns:
         实验结果字典
+
     """
     if methods is None:
         methods = ["keyword", "llm_only", "embeddings", "memorybank"]
@@ -227,6 +228,7 @@ def run_full_experiment(
 
 
 def main():
+    """命令行入口点."""
     parser = argparse.ArgumentParser(
         description="Run memory retrieval comparison experiment"
     )

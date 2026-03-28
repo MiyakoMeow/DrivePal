@@ -1,6 +1,6 @@
 """文本嵌入模型封装，支持 HuggingFace 本地模型和 OpenAI 兼容远程接口."""
 
-from typing import Any, Optional
+from typing import Any
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
@@ -18,6 +18,7 @@ def get_cached_embedding_model(device: str | None = None) -> "EmbeddingModel":
 
     Returns:
         缓存的 EmbeddingModel 实例
+
     """
     cache_key = f"device={device or 'default'}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
