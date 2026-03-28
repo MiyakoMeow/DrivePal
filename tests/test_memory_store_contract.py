@@ -3,12 +3,19 @@
 import pytest
 
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from tests.conftest import is_llm_available
+
+
+def _get_store_params():
+    if is_llm_available():
+        return ["keyword", "llm_only", "embeddings", "memorybank"]
+    return ["keyword"]
 
 
 class TestMemoryStoreContract:
     """验证所有 MemoryStore 实现满足接口契约."""
 
-    @pytest.fixture(params=["keyword", "llm_only", "embeddings", "memorybank"])
+    @pytest.fixture(params=_get_store_params())
     def store(self, request, tmp_path):
         """提供参数化的 MemoryStore 实例."""
         from app.memory.memory import MemoryModule

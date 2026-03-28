@@ -3,6 +3,7 @@
 import pytest
 from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.memory import MemoryModule
+from tests.conftest import SKIP_IF_NO_LLM
 
 
 @pytest.fixture
@@ -11,6 +12,7 @@ def mm(tmp_path):
     return MemoryModule(str(tmp_path))
 
 
+@SKIP_IF_NO_LLM
 class TestMemoryModuleFacade:
     """MemoryModule Facade 接口测试."""
 

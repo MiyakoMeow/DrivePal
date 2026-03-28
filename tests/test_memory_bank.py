@@ -13,6 +13,7 @@ from app.memory.stores.memory_bank_store import (
 
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
+from tests.conftest import SKIP_IF_NO_LLM
 
 
 @pytest.fixture
@@ -143,6 +144,7 @@ class TestUpdateEventSummary:
         assert events[0]["content"] == "提醒我明天上午开会"
 
 
+@SKIP_IF_NO_LLM
 class TestMemoryModuleIntegration:
     """Tests for full MemoryModule integration with the memory bank."""
 

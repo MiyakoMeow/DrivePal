@@ -1,7 +1,5 @@
 """Tests for the chat model integration."""
 
-import pytest
-
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode

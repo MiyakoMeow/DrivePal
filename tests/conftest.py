@@ -1,6 +1,5 @@
 """Shared test configuration and fixtures."""
 
-import os
 from functools import lru_cache
 
 import pytest

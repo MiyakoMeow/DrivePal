@@ -3,8 +3,10 @@
 from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent
 from app.storage.init_data import init_storage
+from tests.conftest import SKIP_IF_NO_LLM
 
 
+@SKIP_IF_NO_LLM
 def test_events_persist_across_instances(tmp_path):
     """Verify that events persist when creating a new MemoryModule instance."""
     init_storage(str(tmp_path))
@@ -16,6 +18,7 @@ def test_events_persist_across_instances(tmp_path):
     assert events[0].content == "项目进度会议"
 
 
+@SKIP_IF_NO_LLM
 def test_feedback_updates_strategies(tmp_path):
     """Verify that accepting feedback increases the corresponding strategy weight."""
     from app.storage.json_store import JSONStore
@@ -27,6 +30,7 @@ def test_feedback_updates_strategies(tmp_path):
     assert strategies["reminder_weights"]["meeting"] == 0.6
 
 
+@SKIP_IF_NO_LLM
 def test_ignore_feedback_decreases_weight(tmp_path):
     """Verify that ignoring feedback decreases the corresponding strategy weight."""
     from app.storage.json_store import JSONStore
@@ -38,6 +42,7 @@ def test_ignore_feedback_decreases_weight(tmp_path):
     assert strategies["reminder_weights"]["general"] < 0.5
 
 
+@SKIP_IF_NO_LLM
 def test_feedback_history_appended(tmp_path):
     """Verify that each feedback entry is appended to the feedback history."""
     from app.storage.json_store import JSONStore
