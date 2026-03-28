@@ -332,13 +332,15 @@ class ExperimentRunner:
             decision = last_event.get("decision", {})
             if isinstance(decision, str):
                 return decision
+            content = decision.get("remind_content") or decision.get("content")
+            if content:
+                return content
+            reasoning = decision.get("reasoning", "")
+            if reasoning:
+                return reasoning
             raw = decision.get("raw", "")
             if raw:
                 return raw
-            reasoning = decision.get("reasoning", "")
-            content = decision.get("content", "")
-            if reasoning or content:
-                return f"{reasoning} {content}".strip()
         return result if result else self._get_latest_output(data_dir=effective_dir)
 
     def _evaluate_semantic_accuracy(
@@ -355,14 +357,12 @@ class ExperimentRunner:
     ) -> float:
         """评估输出与任务类型的上下文相关度."""
         output_lower = output.lower()
-
-        # 通用任务相关概念（从配置获取）
         task_concepts = self._get_task_concepts()
         concepts = task_concepts.get(expected_type, [])
-
+        if not concepts:
+            return 0.5
         relevant = sum(1 for c in concepts if c in output_lower)
         relatedness = min(relevant / max(len(concepts), 1), 1.0)
-
         return relatedness
 
     def _get_task_concepts(self) -> Dict[str, List[str]]:

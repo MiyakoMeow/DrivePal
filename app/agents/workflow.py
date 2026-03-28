@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import re
 from typing import Any, Optional, cast
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
@@ -68,8 +69,10 @@ class AgentWorkflow:
         if not self.memory_module.chat_model:
             raise RuntimeError("ChatModel not available")
         result = self.memory_module.chat_model.generate(user_prompt)
+        cleaned = re.sub(r"^```(?:json)?\s*", "", result.strip())
+        cleaned = re.sub(r"\s*```$", "", cleaned)
         try:
-            parsed = json.loads(result)
+            parsed = json.loads(cleaned)
             if not isinstance(parsed, dict):
                 parsed = {"raw": result}
         except json.JSONDecodeError:
