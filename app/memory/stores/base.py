@@ -82,4 +82,15 @@ class BaseMemoryStore(MemoryStore, ABC):
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """将交互记录作为普通事件写入.
+
+        Args:
+            query: 用户查询.
+            response: 系统响应.
+            event_type: 事件类型.
+
+        Returns:
+            事件 ID.
+
+        """
         return self.write({"content": response, "type": event_type})
