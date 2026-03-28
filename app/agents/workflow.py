@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import re
+from datetime import datetime
 from typing import Any, Optional, cast
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
@@ -110,7 +111,12 @@ class AgentWorkflow:
                 [e.to_public() for e in related_events] if related_events else []
             )
 
-        prompt = f"""{SYSTEM_PROMPTS["context"]}
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        system_prompt = SYSTEM_PROMPTS["context"].format(
+            current_datetime=current_datetime
+        )
+
+        prompt = f"""{system_prompt}
 
 用户输入: {user_input}
 历史记录: {json.dumps(relevant_memories, ensure_ascii=False)}
