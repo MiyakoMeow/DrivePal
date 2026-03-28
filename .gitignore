@@ -24,10 +24,12 @@ data/
 .idea/
 
 # Experiment scripts
-run_*.py
+!run_exp.py
+!run_experiment.py
 quick_test.py
 debug_*.py
 test_*.py
+!tests/test_*.py
 
 # Dataset directories
 datasets/
@@ -37,3 +39,6 @@ data/raw/
 # Experiment results
 experiment_results/
 logs/
+
+# Model configuration (contains API keys)
+config/llm.json

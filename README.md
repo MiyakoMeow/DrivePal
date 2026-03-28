@@ -25,12 +25,12 @@
 
 ## 项目概述
 
-知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于 LangGraph 构建多Agent协作工作流，支持三种记忆检索策略的对比实验。
+知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于 LangGraph 构建多Agent协作工作流，支持四种记忆检索策略的对比实验。
 
 ### 设计目标
 
 1. **驾驶安全优先**：根据驾驶员状态（专注驾驶、交通拥堵、高速行驶等）智能调整提醒方式
-2. **多策略对比**：支持关键词、纯LLM、向量嵌入三种记忆检索方式的性能对比
+2. **多策略对比**：支持关键词、纯LLM、向量嵌入、MemoryBank 四种记忆检索方式的性能对比
 3. **可解释决策**：明确输出提醒决策的理由，支持用户反馈迭代优化
 
 ---
@@ -42,45 +42,42 @@ thesis-cockpit-memo/
 ├── app/                          # 应用核心代码
 │   ├── __init__.py              # 存储初始化入口
 │   ├── agents/                   # AI智能体核心模块
-│   │   ├── workflow.py         # LangGraph工作流编排 (219行)
+│   │   ├── workflow.py         # LangGraph工作流编排
 │   │   ├── state.py            # Agent状态类型定义
 │   │   └── prompts.py          # 系统提示词模板
 │   ├── models/                   # AI模型封装
-│   │   ├── chat.py             # LLM调用封装 (60行)
-│   │   ├── embedding.py         # 嵌入模型封装 (35行)
+│   │   ├── chat.py             # LLM调用封装
+│   │   ├── embedding.py         # 嵌入模型封装
 │   │   └── config.py           # 多provider配置
 │   ├── memory/                   # 记忆模块
-│   │   └── memory.py           # 三种检索模式实现 (156行)
+│   │   ├── memory.py           # MemoryModule调度层
+│   │   └── memory_bank.py      # MemoryBank后端（分层记忆）
 │   ├── storage/                  # 存储模块
-│   │   ├── json_store.py       # JSON文件存储 (60行)
-│   │   └── init_data.py        # 数据初始化 (42行)
+│   │   ├── json_store.py       # JSON文件存储
+│   │   └── init_data.py        # 数据初始化
 │   ├── experiment/               # 实验对比模块
-│   │   ├── runner.py           # 实验运行器 (391行)
+│   │   ├── runner.py           # 实验运行器
 │   │   ├── test_data.py        # 测试数据生成器
 │   │   └── loaders/            # 数据集加载器
 │   │       ├── sgd_calendar.py # SGD-Calendar数据集
 │   │       └── scheduler.py    # Scheduler数据集
 │   └── api/                     # FastAPI接口
-│       └── main.py              # REST API (85行)
+│       └── main.py              # REST API
 ├── config/                       # 配置文件
-│   ├── scenarios.json           # 驾驶场景模板 (49行)
-│   ├── driver_states.json      # 驾驶员状态配置 (32行)
+│   ├── scenarios.json           # 驾驶场景模板
+│   ├── driver_states.json      # 驾驶员状态配置
 │   └── evaluation_config.json   # 评估配置
 ├── data/                         # 数据目录（运行时生成）
-├── tests/                        # 单元测试
-│   ├── test_api.py             # API测试
-│   ├── test_chat.py            # ChatModel测试
-│   ├── test_embedding.py       # EmbeddingModel测试
-│   ├── test_experiment.py      # 实验模块测试
-│   ├── test_integration.py     # 集成测试
-│   ├── test_memory.py          # 记忆模块测试
-│   ├── test_storage.py         # 存储模块测试
-│   └── test_workflow.py        # 工作流测试
+├── tests/                        # 集成测试
+│   ├── test_api.py             # API端点测试
+│   ├── test_chat.py            # Chat→Memory→Workflow集成测试
+│   ├── test_embedding.py       # Embedding→Memory检索集成测试
+│   ├── test_memory_bank.py     # MemoryBank分层记忆测试
+│   └── test_storage.py         # Storage→Memory持久化测试
 ├── webui/                        # Web界面
-│   └── index.html              # 单页应用 (100行)
-├── main.py                       # Web服务入口 (15行)
-├── run_exp.py                    # 实验运行脚本 (42行)
-├── test_run.py                   # 快速测试脚本
+│   └── index.html              # 单页应用
+├── main.py                       # Web服务入口
+├── run_exp.py                    # 实验运行脚本（CLI）
 └── pyproject.toml               # 项目配置
 ```
 
@@ -96,11 +93,11 @@ thesis-cockpit-memo/
 ┌─────────────┐     ┌──────────────┐     ┌────────────────┐     ┌─────────────────┐
 │   用户输入    │ ──▶ │ Context Agent│ ──▶ │  Task Agent    │ ──▶ │ Strategy Agent  │
 └─────────────┘     └──────────────┘     └────────────────┘     └─────────────────┘
-                                                                          │
-                                                                          ▼
-                                                                    ┌─────────────────┐
-                                                                    │ Execution Agent  │
-                                                                    └─────────────────┘
+                                                                           │
+                                                                           ▼
+                                                                     ┌─────────────────┐
+                                                                     │ Execution Agent  │
+                                                                     └─────────────────┘
 ```
 
 #### Agent职责
@@ -112,24 +109,11 @@ thesis-cockpit-memo/
 | **Strategy Agent** | 上下文 + 任务 + 个性化策略 | JSON决策对象 | 决定提醒时机、方式、内容 |
 | **Execution Agent** | 决策对象 | 执行结果 + event_id | 存储事件，返回提醒内容 |
 
-#### 工作流状态定义 (`app/agents/state.py`)
-
-```python
-class AgentState(TypedDict):
-    messages: list[BaseMessage]    # 对话消息历史
-    context: dict                  # 上下文对象
-    task: dict                     # 任务对象
-    decision: dict                 # 决策对象
-    memory_mode: str               # 当前检索模式
-    result: Optional[str]          # 执行结果
-    event_id: Optional[str]        # 事件ID
-```
-
 ---
 
 ### 2. 记忆检索系统
 
-支持三种检索模式，可通过 `memory_mode` 参数切换：
+支持四种检索模式，可通过 `memory_mode` 参数切换：
 
 #### 检索模式对比
 
@@ -138,6 +122,33 @@ class AgentState(TypedDict):
 | `keyword` | `_search_by_keyword` | 关键词大小写不敏感匹配 | 快速、简单查询 |
 | `llm_only` | `_search_by_llm` | LLM判断语义相关性 | 复杂语义理解 |
 | `embeddings` | `_search_by_embeddings` | BGE向量余弦相似度 > 0.7 | 语义模糊查询 |
+| `memorybank` | `MemoryBankBackend` | Ebbinghaus遗忘曲线 + 分层记忆 | 长期记忆管理 |
+
+#### MemoryBank 分层记忆结构
+
+基于 MemoryBank 论文实现的三层记忆架构：
+
+```
+Interaction (原始交互)
+  ├── id, query, response, memory_strength
+        │
+        ▼ 聚合
+Event (语义摘要)
+  ├── content, interaction_ids, memory_strength, date_group
+        │
+        ▼ 聚合
+Summary (层级摘要)
+  ├── daily_summaries: {date → {content, memory_strength}}
+  └── overall_summary: str
+```
+
+**核心机制：**
+
+- **遗忘曲线**：`retention = e^(-days / (5 × strength))`，模拟人类记忆衰减
+- **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存
+- **自动聚合**：语义相似的交互自动聚合为同一事件（余弦相似度 ≥ 0.8 或关键词重叠 ≥ 50%）
+- **层级摘要**：事件数达到日阈值后生成 daily_summary，daily_summary 数量达到总阈值后生成 overall_summary
+- **结果展开**：检索命中事件时，自动附加其关联的原始交互记录
 
 #### 反馈学习机制
 
@@ -150,26 +161,32 @@ class AgentState(TypedDict):
 
 ### 3. 实验对比框架
 
-#### 评估指标 (`app/experiment/runner.py:277-289`)
+#### 运行实验
+
+```bash
+# 默认：全部4种方法，20个测试用例，随机种子42
+uv run python run_exp.py
+
+# 指定方法和用例数
+uv run python run_exp.py --methods keyword llm_only --count 50 --seed 123
+
+# 可选参数：--methods, --count, --seed
+```
+
+每次实验为每种方法创建独立临时数据目录，运行后自动清理，不污染主数据。
+
+#### 数据隔离机制
+
+四种方法各自使用隔离的临时数据目录（`data/exp_tmp/{method}/`），所有方法运行**相同的测试用例**（由 seed 保证可复现），确保公平对比。
+
+#### 评估指标
 
 | 指标 | 说明 | 计算方式 |
 |------|------|----------|
 | `avg_latency_ms` | 平均响应延迟 | 毫秒 |
 | `task_completion_rate` | 任务完成率 | 成功数/总数 |
-| `semantic_accuracy` | 语义理解准确率 | 意图匹配40% + 否定处理20% + 关键词重叠40% |
+| `semantic_accuracy` | 语义理解准确率 | 意图匹配40% + 否定处理20% + 关键词重叠40%（bigram分词） |
 | `context_relatedness` | 上下文相关度 | 任务相关概念命中数/总概念数 |
-
-#### 意图识别 (`app/experiment/runner.py:38-107`)
-
-内置意图关键词库（支持中英文）：
-
-```python
-INTENT_KEYWORDS = {
-    "schedule_check": ["时间", "日程", "schedule", "when", ...],
-    "event_add": ["添加", "提醒", "add", "remind", ...],
-    "event_delete": ["删除", "取消", "delete", "cancel", ...],
-}
-```
 
 #### 数据集加载器
 
@@ -201,7 +218,7 @@ INTENT_KEYWORDS = {
 ```json
 {
   "query": "明天上午9点有个会议",
-  "memory_mode": "keyword"   // 可选: keyword | llm_only | embeddings
+  "memory_mode": "keyword"   // 可选: keyword | llm_only | embeddings | memorybank
 }
 ```
 
@@ -236,36 +253,11 @@ INTENT_KEYWORDS = {
 
 ##### GET `/api/history` - 获取历史记录
 
-**参数：**
-
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `limit` | int | 10 | 返回记录数（0 = 全部） |
 
-**响应：**
-
-```json
-{
-  "history": [
-    {
-      "id": "20260327120000_a1b2c3d4",
-      "content": "提醒已发送: 明天上午9点会议提醒",
-      "type": "reminder",
-      "created_at": "2026-03-27T12:00:00"
-    }
-  ]
-}
-```
-
 ##### GET `/api/experiment/report` - 获取实验报告
-
-**响应：**
-
-```json
-{
-  "report": "# 实验对比报告\n\n时间: 2026-03-27T12:00:00\n\n测试用例数: 10\n\n## 方法对比\n\n### keyword\n- 平均延迟: 1234.56ms\n..."
-}
-```
 
 ---
 
@@ -285,7 +277,7 @@ INTENT_KEYWORDS = {
 ### 环境要求
 
 - Python 3.13+
-- DeepSeek API Key 或其他 OpenAI 兼容 API Key
+- 本地部署 vLLM（Qwen3.5-2B）或 OpenAI 兼容 API
 
 ### 1. 安装依赖
 
@@ -296,14 +288,11 @@ uv sync
 ### 2. 配置环境变量
 
 ```bash
-# Linux/macOS
-export DEEPSEEK_API_KEY="your-api-key"
+# 设置 vLLM 服务地址（默认 http://localhost:8000/v1）
+export VLLM_BASE_URL="http://localhost:8000/v1"
 
-# Windows (CMD)
-set DEEPSEEK_API_KEY=your-api-key
-
-# Windows (PowerShell)
-$env:DEEPSEEK_API_KEY="your-api-key"
+# 如需使用 DeepSeek 作为备用
+# export DEEPSEEK_API_KEY="your-api-key"
 ```
 
 ### 3. 初始化数据目录
@@ -323,7 +312,11 @@ python main.py
 ### 5. 运行对比实验
 
 ```bash
-python run_exp.py
+# 默认：全部4种方法，20个测试用例
+uv run python run_exp.py
+
+# 自定义参数
+uv run python run_exp.py --methods keyword embeddings --count 50 --seed 123
 ```
 
 ---
@@ -345,6 +338,10 @@ python run_exp.py
 
 ```python
 PROVIDERS = {
+    "qwen": {
+        "base_url": "http://localhost:8000/v1",  # 通过 VLLM_BASE_URL 环境变量配置
+        "model": "Qwen/Qwen3.5-2B",
+    },
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
         "model": "deepseek-chat",
@@ -386,18 +383,17 @@ PROVIDERS = {
 ### 存储目录结构
 
 ```
-data/                          # 由 DATA_DIR 环境变量指定
-├── events.json               # 事件历史（列表）
-├── contexts.json            # 上下文缓存（字典）
+data/
+├── events.json               # 事件历史（含 interaction_ids）
+├── interactions.json          # 原始交互记录（MemoryBank）
+├── memorybank_summaries.json  # MemoryBank 层级摘要
+│   ├── daily_summaries: {}    # {date → {content, memory_strength, event_count}}
+│   └── overall_summary: ""    # 总摘要
+├── contexts.json            # 上下文缓存
 ├── preferences.json         # 用户偏好
 ├── feedback.json            # 用户反馈记录
 ├── strategies.json          # 个性化策略
-│   ├── preferred_time_offset: 15      # 偏好时间偏移（分钟）
-│   ├── preferred_method: "visual"     # 偏好提醒方式
-│   ├── reminder_weights: {}          # 事件类型权重
-│   ├── ignored_patterns: []          # 忽略模式
-│   └── cooldown_periods: {}          # 冷却周期
-└── experiment_results.json   # 实验结果（列表）
+└── experiment_results.json   # 实验结果
 ```
 
 ### 存储接口 (`app/storage/json_store.py`)
@@ -418,34 +414,19 @@ store.update(key, val) # 更新键值（仅dict类型）
 ### 运行所有测试
 
 ```bash
-pytest
-```
-
-### 运行特定测试文件
-
-```bash
-pytest tests/test_memory.py
-pytest tests/test_workflow.py
-```
-
-### 运行带详细输出的测试
-
-```bash
-pytest -v
+uv run pytest tests/ -v
 ```
 
 ### 测试覆盖模块
 
-| 文件 | 测试内容 |
-|------|----------|
-| `test_api.py` | API端点、Mock验证 |
-| `test_chat.py` | ChatModel初始化和生成 |
-| `test_embedding.py` | EmbeddingModel编码 |
-| `test_experiment.py` | 意图识别、时间衰减、语义评估 |
-| `test_integration.py` | 完整查询流程、不同memory_mode |
-| `test_memory.py` | 记忆写入、检索、历史 |
-| `test_storage.py` | JSON存储读写追加 |
-| `test_workflow.py` | 工作流初始化、节点调用 |
+| 文件 | 测试内容 | 引用模块 |
+|------|----------|----------|
+| `test_api.py` | API端点集成测试 | API→Workflow→Memory→Chat |
+| `test_chat.py` | Chat驱动LLM记忆搜索、Workflow上下文注入 | Chat→Memory→Workflow |
+| `test_embedding.py` | Embedding语义检索、MemoryBank检索与聚合 | Embedding→MemoryModule→MemoryBankBackend |
+| `test_experiment_runner.py` | 实验框架：seed可复现、raw输出保留、评估指标、数据隔离 | ExperimentRunner, TestDataGenerator, AgentWorkflow |
+| `test_memory_bank.py` | 遗忘曲线检索、层级摘要、交互写入与聚合 | MemoryBankBackend→JSONStore, MemoryModule |
+| `test_storage.py` | 跨实例持久化、反馈策略更新 | MemoryModule→init_storage→JSONStore |
 
 ---
 
@@ -455,11 +436,13 @@ pytest -v
 |------|------|
 | **Web框架** | FastAPI + Uvicorn |
 | **AI工作流** | LangChain + LangGraph |
-| **LLM支持** | DeepSeek-chat, GPT-4, Claude-3 (OpenAI兼容接口) |
+| **LLM支持** | Qwen3.5-2B (vLLM, 默认), DeepSeek-chat, GPT-4, Claude-3 (OpenAI兼容接口) |
+| **LLM推理** | vLLM (本地部署), OpenAI兼容接口 |
 | **嵌入模型** | BGE-small-zh-v1.5 (HuggingFace) |
+| **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线 + 分层摘要) |
 | **数据存储** | JSON文件 (标准库json) |
 | **数据集** | HuggingFace Datasets |
-| **开发工具** | uv (包管理), pytest (测试), ruff (lint) |
+| **开发工具** | uv (包管理), pytest (测试), ruff (lint), ty (类型检查) |
 
 ---
 

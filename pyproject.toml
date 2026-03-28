@@ -15,16 +15,20 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "datasets>=4.8.4",
     "huggingface-hub>=1.8.0",
+    "sentence-transformers>=5.3.0",
+    "langchain-huggingface>=1.2.1",
 ]
-
-[tool.ty.rules]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
-    "ruff>=0.6.0",
+    "ruff>=0.15.8",
 ]
+
+[tool.ruff.lint]
+extend-select = ["D", "DOC"]
+ignore = ["D211", "D213", "D203"]
 
 [dependency-groups]
 dev = [

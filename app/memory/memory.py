@@ -1,156 +1,123 @@
-import json
-import re
-import uuid
-from datetime import datetime
-from typing import Optional
-from app.storage.json_store import JSONStore
-from app.models.embedding import EmbeddingModel
-from app.models.chat import ChatModel
+"""统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
-LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
+import logging
+from typing import Any, Optional, TYPE_CHECKING
 
-判断用户的查询与给定的事件描述是否语义相关。
+from app.memory.interfaces import MemoryStore
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.memory.types import MemoryMode
 
-查询: {query}
+if TYPE_CHECKING:
+    from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
-事件: {event_description}
+logger = logging.getLogger(__name__)
 
-请返回JSON格式:
-{{"relevant": true/false, "reasoning": "简短原因"}}
-"""
+_STORES_REGISTRY: dict[MemoryMode, type[MemoryStore]] = {}
+
+
+def register_store(name: MemoryMode, store_cls: type[MemoryStore]) -> None:
+    """注册记忆存储实现到全局注册表."""
+    if name in _STORES_REGISTRY:
+        return
+    _STORES_REGISTRY[name] = store_cls
+
+
+def _import_all_stores() -> None:
+    from app.memory.stores.keyword_store import KeywordMemoryStore
+    from app.memory.stores.llm_store import LLMOnlyMemoryStore
+    from app.memory.stores.embedding_store import EmbeddingMemoryStore
+    from app.memory.stores.memory_bank_store import MemoryBankStore
+
+    register_store(MemoryMode.KEYWORD, KeywordMemoryStore)
+    register_store(MemoryMode.LLM_ONLY, LLMOnlyMemoryStore)
+    register_store(MemoryMode.EMBEDDINGS, EmbeddingMemoryStore)
+    register_store(MemoryMode.MEMORY_BANK, MemoryBankStore)
+
+
+_import_all_stores()
 
 
 class MemoryModule:
+    """统一记忆管理接口，Facade 模式."""
+
     def __init__(
         self,
         data_dir: str,
-        embedding_model: Optional[EmbeddingModel] = None,
-        chat_model: Optional[ChatModel] = None,
-    ):
-        self.data_dir = data_dir
-        self.embedding_model = embedding_model
-        self.chat_model = chat_model
-        self.events_store = JSONStore(data_dir, "events.json", list)
-        self.strategies_store = JSONStore(data_dir, "strategies.json", dict)
+        embedding_model: Optional["EmbeddingModel"] = None,
+        chat_model: Optional["ChatModel"] = None,
+    ) -> None:
+        """初始化记忆模块."""
+        self._stores: dict[MemoryMode, MemoryStore] = {}
+        self._data_dir = data_dir
+        self._embedding_model = embedding_model
+        self._chat_model = chat_model
+        self._default_mode: MemoryMode = MemoryMode.MEMORY_BANK
 
-    def write(self, event: dict) -> str:
-        """写入事件，返回event_id"""
-        event_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-        event["id"] = event_id
-        event["created_at"] = datetime.now().isoformat()
-        self.events_store.append(event)
-        return event_id
+    @property
+    def chat_model(self):
+        """获取聊天模型，延迟初始化."""
+        if self._chat_model is None:
+            from app.models.settings import get_chat_model
 
-    def search(self, query: str, mode: str = "keyword") -> list:
-        """检索记忆"""
-        if mode == "keyword":
-            return self._search_by_keyword(query)
-        elif mode == "llm_only":
-            return self._search_by_llm(query)
-        elif mode == "embeddings":
-            return self._search_by_embeddings(query)
-        else:
+            self._chat_model = get_chat_model()
+        return self._chat_model
+
+    def _get_store(self, mode: MemoryMode) -> MemoryStore:
+        if mode not in self._stores:
+            self._stores[mode] = self._create_store(mode)
+        return self._stores[mode]
+
+    def _create_store(self, mode: MemoryMode) -> MemoryStore:
+        if mode not in _STORES_REGISTRY:
+            raise ValueError(
+                f"Unknown mode: {mode}. Available: {list(_STORES_REGISTRY.keys())}"
+            )
+        store_cls = _STORES_REGISTRY[mode]
+        kwargs: dict[str, Any] = {"data_dir": self._data_dir}
+        if store_cls.requires_embedding:
+            if self._embedding_model is None:
+                from app.models.settings import get_embedding_model
+
+                self._embedding_model = get_embedding_model()
+            kwargs["embedding_model"] = self._embedding_model
+        if store_cls.requires_chat:
+            if self._chat_model is None:
+                from app.models.settings import get_chat_model
+
+                self._chat_model = get_chat_model()
+            kwargs["chat_model"] = self._chat_model
+        return store_cls(**kwargs)
+
+    def set_default_mode(self, mode: MemoryMode) -> None:
+        """设置默认记忆检索模式."""
+        if mode not in _STORES_REGISTRY:
             raise ValueError(f"Unknown mode: {mode}")
+        self._default_mode = mode
 
-    def _search_by_keyword(self, query: str) -> list:
-        """关键词匹配检索"""
-        events = self.events_store.read()
-        query_lower = query.lower()
-        return [
-            event
-            for event in events
-            if query_lower in event.get("content", "").lower()
-            or query_lower in event.get("description", "").lower()
-        ]
+    def write(self, event: MemoryEvent) -> str:
+        """写入记忆事件."""
+        return self._get_store(self._default_mode).write(event)
 
-    def _search_by_llm(self, query: str) -> list:
-        """使用LLM进行语义检索"""
-        if not self.chat_model:
-            return []
+    def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        """写入交互记录."""
+        return self._get_store(self._default_mode).write_interaction(
+            query, response, event_type
+        )
 
-        events = self.events_store.read()
-        if not events:
-            return []
+    def search(
+        self, query: str, mode: MemoryMode | None = None, top_k: int = 10
+    ) -> list[SearchResult]:
+        """检索记忆，可指定模式，默认使用默认模式."""
+        target_mode = mode or self._default_mode
+        return self._get_store(target_mode).search(query, top_k=top_k)
 
-        results = []
-        for event in events:
-            event_text = event.get("content", "") or event.get("description", "")
-            prompt = LLM_SEARCH_PROMPT.format(query=query, event_description=event_text)
+    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        """获取历史记忆事件."""
+        return self._get_store(self._default_mode).get_history(limit)
 
-            try:
-                response = self.chat_model.generate(prompt)
-                json_match = re.search(r"\{.*\}", response, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group())
-                    if data.get("relevant"):
-                        results.append(event)
-            except Exception:
-                continue
-
-        return results
-
-    def _search_by_embeddings(self, query: str) -> list:
-        """向量相似度检索"""
-        if self.embedding_model is None:
-            return self._search_by_keyword(query)
-
-        query_vector = self.embedding_model.encode(query)
-        events = self.events_store.read()
-
-        results = []
-        for event in events:
-            event_vector = self.embedding_model.encode(event.get("content", ""))
-            similarity = self._cosine_similarity(query_vector, event_vector)
-            if similarity > 0.7:
-                results.append(event)
-
-        return results
-
-    def _cosine_similarity(self, a, b) -> float:
-        import numpy as np
-
-        if isinstance(a, np.ndarray):
-            a = a.tolist()
-        if isinstance(b, np.ndarray):
-            b = b.tolist()
-
-        dot = sum(x * y for x, y in zip(a, b))
-        norm_a = sum(x * x for x in a) ** 0.5
-        norm_b = sum(x * x for x in b) ** 0.5
-        return dot / (norm_a * norm_b) if norm_a * norm_b > 0 else 0
-
-    def get_history(self, limit: int = 10) -> list:
-        """获取历史记录"""
-        if limit < 0:
-            raise ValueError(f"limit must be non-negative, got {limit}")
-        events = self.events_store.read()
-        return events[-limit:] if limit > 0 else []
-
-    def update_feedback(self, event_id: str, feedback: dict):
-        """更新反馈"""
-        feedback_store = JSONStore(self.data_dir, "feedback.json", list)
-        feedback["event_id"] = event_id
-        feedback["timestamp"] = datetime.now().isoformat()
-        feedback_store.append(feedback)
-
-        self._update_strategy(event_id, feedback)
-
-    def _update_strategy(self, event_id: str, feedback: dict):
-        """根据反馈更新策略"""
-        strategies = self.strategies_store.read()
-        action = feedback.get("action")
-        event_type = feedback.get("type", "default")
-
-        if "reminder_weights" not in strategies:
-            strategies["reminder_weights"] = {}
-
-        if action == "accept":
-            strategies["reminder_weights"][event_type] = min(
-                strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
-            )
-        elif action == "ignore":
-            strategies["reminder_weights"][event_type] = max(
-                strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
-            )
-
-        self.strategies_store.write(strategies)
+    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """更新事件反馈."""
+        self._get_store(self._default_mode).update_feedback(event_id, feedback)

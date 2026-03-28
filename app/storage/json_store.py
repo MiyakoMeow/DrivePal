@@ -1,23 +1,22 @@
+"""JSON文件存储后端，支持列表和字典类型的读写操作."""
+
 import json
-import sys
 from pathlib import Path
 from typing import Any, Callable, TypeVar
-
-if sys.platform == "win32":
-    pass
-else:
-    pass
 
 T = TypeVar("T")
 
 
 class JSONStore:
+    """基于JSON文件的通用存储引擎."""
+
     def __init__(
         self,
         data_dir: str,
         filename: str,
         default_factory: Callable[[], T] = lambda: dict(),
     ) -> None:
+        """初始化JSON存储，指定数据目录和文件名."""
         self.filepath = Path(data_dir) / filename
         self.default_factory: Callable[[], T] = default_factory
         self._ensure_file()
@@ -32,16 +31,16 @@ class JSONStore:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def read(self) -> T:
+        """读取JSON文件中的全部数据."""
         with open(self.filepath, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def save(self, data: T) -> None:
-        self._write(data)
-
     def write(self, data: T) -> None:
+        """写入数据到JSON文件."""
         self._write(data)
 
     def append(self, item: Any) -> None:
+        """向列表类型存储追加一个元素."""
         data = self.read()
         if not isinstance(data, list):
             raise TypeError(
@@ -51,6 +50,7 @@ class JSONStore:
         self._write(data)
 
     def update(self, key: str, value: Any) -> None:
+        """更新字典类型存储中指定键的值."""
         data = self.read()
         if not isinstance(data, dict):
             raise TypeError(

@@ -1,25 +1,23 @@
+"""Tests for the API endpoints."""
+
 from fastapi.testclient import TestClient
+
 import pytest
-import sys
-import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-SKIP_IF_NO_API_KEY = pytest.mark.skipif(
-    not os.getenv("DEEPSEEK_API_KEY"),
-    reason="DEEPSEEK_API_KEY not set",
-)
+from tests.conftest import SKIP_IF_NO_LLM
 
 
 @pytest.fixture
 def client():
+    """Provide a FastAPI test client."""
     from app.api.main import app
 
     return TestClient(app)
 
 
-@SKIP_IF_NO_API_KEY
+@SKIP_IF_NO_LLM
 def test_query_endpoint(client):
+    """Verify the /api/query endpoint returns a valid response."""
     response = client.post(
         "/api/query", json={"query": "测试查询", "memory_mode": "keyword"}
     )
@@ -29,8 +27,9 @@ def test_query_endpoint(client):
     assert "event_id" in data
 
 
-@SKIP_IF_NO_API_KEY
+@SKIP_IF_NO_LLM
 def test_feedback_endpoint(client):
+    """Verify the /api/feedback endpoint accepts feedback actions."""
     response = client.post(
         "/api/feedback", json={"event_id": "test123", "action": "accept"}
     )
@@ -38,17 +37,9 @@ def test_feedback_endpoint(client):
     assert response.json()["status"] == "success"
 
 
-@SKIP_IF_NO_API_KEY
+@SKIP_IF_NO_LLM
 def test_history_endpoint(client):
+    """Verify the /api/history endpoint returns history records."""
     response = client.get("/api/history?limit=5")
     assert response.status_code == 200
     assert "history" in response.json()
-
-
-@SKIP_IF_NO_API_KEY
-def test_api_workflow_initialization():
-    """验证API模块正确初始化AgentWorkflow with memory"""
-    import app.api.main as api_main
-
-    assert hasattr(api_main, "_memory_module")
-    assert api_main._memory_module is not None

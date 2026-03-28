@@ -1,22 +1,42 @@
-import pytest
-import os
+"""Tests for the chat model integration."""
+
+from app.memory.memory import MemoryModule
+from app.memory.schemas import MemoryEvent
+from app.memory.types import MemoryMode
 from app.models.chat import ChatModel
-
-SKIP_IF_NO_API_KEY = pytest.mark.skipif(
-    not os.getenv("DEEPSEEK_API_KEY"),
-    reason="DEEPSEEK_API_KEY not set",
-)
+from tests.conftest import SKIP_IF_NO_LLM
 
 
-@SKIP_IF_NO_API_KEY
-def test_chat_model_init():
-    model = ChatModel()
-    assert model.model_name == "deepseek-chat"
+@SKIP_IF_NO_LLM
+def test_chat_drives_llm_memory_search(tmp_path):
+    """Verify that chat-driven LLM memory search retrieves relevant events."""
+    chat_model = ChatModel()
+    memory = MemoryModule(str(tmp_path), chat_model=chat_model)
+    memory.write(MemoryEvent(content="明天下午三点项目会议", type="meeting"))
+    results = memory.search("有什么会议安排", mode=MemoryMode.LLM_ONLY)
+    assert len(results) > 0
+    assert "会议" in results[0].event["content"]
 
 
-@SKIP_IF_NO_API_KEY
-def test_generate():
-    model = ChatModel()
-    result = model.generate("你好")
-    assert isinstance(result, str)
-    assert len(result) > 0
+@SKIP_IF_NO_LLM
+def test_chat_feeds_workflow_context(tmp_path):
+    """Verify that memory context is injected into the agent workflow state."""
+    from app.agents.workflow import AgentWorkflow
+    from langchain_core.messages import HumanMessage
+
+    memory = MemoryModule(str(tmp_path), chat_model=ChatModel())
+    memory.write(MemoryEvent(content="下午三点开会", type="meeting"))
+    workflow = AgentWorkflow(memory_module=memory)
+    from app.agents.state import AgentState
+
+    state: AgentState = {
+        "messages": [HumanMessage(content="查一下会议")],
+        "context": {},
+        "task": None,
+        "decision": None,
+        "memory_mode": "keyword",
+        "result": None,
+        "event_id": None,
+    }
+    result = workflow._context_node(state)
+    assert "related_events" in result["context"]

@@ -1,60 +1,74 @@
-import os
+"""LLM对话模型封装，基于LangChain OpenAI兼容接口，支持多provider自动fallback."""
+
 from typing import Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.utils.utils import SecretStr
 
+from app.models.settings import LLMProviderConfig, LLMSettings
+
 
 class ChatModel:
+    """LLM对话模型封装，支持多provider自动fallback."""
+
     def __init__(
         self,
-        model: str = "deepseek-chat",
-        temperature: float = 0.7,
-        api_key: Optional[str] = None,
-        base_url: str = "https://api.deepseek.com/v1",
+        providers: list[LLMProviderConfig] | None = None,
+        temperature: float | None = None,
     ):
-        self.model_name = model
+        """初始化对话模型."""
+        if providers is None:
+            settings = LLMSettings.load()
+            providers = settings.llm_providers
+        if not providers:
+            raise RuntimeError("No LLM providers configured")
+        self.providers = providers
         self.temperature = temperature
-        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "API key not provided and DEEPSEEK_API_KEY environment variable not set"
-            )
-        self.base_url = base_url
-        self._client = None
 
-    @property
-    def client(self) -> ChatOpenAI:
-        if self._client is None:
-            api_key_str = self.api_key or ""
-            self._client = ChatOpenAI(
-                model_name=self.model_name,
-                temperature=self.temperature,
-                openai_api_key=SecretStr(api_key_str) if api_key_str else None,
-                openai_api_base=self.base_url,
-            )
-        return self._client
+    def _create_client(self, provider: LLMProviderConfig) -> ChatOpenAI:
+        temp = (
+            self.temperature if self.temperature is not None else provider.temperature
+        )
+        kwargs: dict = {
+            "model": provider.model,
+            "temperature": temp,
+        }
+        if provider.api_key:
+            kwargs["openai_api_key"] = SecretStr(provider.api_key)
+        else:
+            kwargs["openai_api_key"] = None
+        if provider.base_url:
+            kwargs["openai_api_base"] = provider.base_url
+        return ChatOpenAI(**kwargs)
+
+    def _invoke_provider(
+        self, provider: LLMProviderConfig, messages: list, **kwargs
+    ) -> str:
+        client = self._create_client(provider)
+        response = client.invoke(messages, **kwargs)
+        return str(response.content)
 
     def generate(
         self, prompt: str, system_prompt: Optional[str] = None, **kwargs
     ) -> str:
-        """生成回复"""
+        """生成回复，按 provider 顺序尝试，失败自动 fallback."""
         messages = []
         if system_prompt:
             messages.append(SystemMessage(content=system_prompt))
         messages.append(HumanMessage(content=prompt))
 
-        try:
-            response = self.client.invoke(messages, **kwargs)
-            return str(response.content)
-        except Exception as e:
-            error_type = type(e).__name__.lower()
-            if "token" in error_type or "auth" in error_type:
-                raise RuntimeError("Invalid API key") from None
-            raise RuntimeError(f"LLM API call failed: {type(e).__name__}") from e
+        errors = []
+        for provider in self.providers:
+            try:
+                return self._invoke_provider(provider, messages, **kwargs)
+            except Exception as e:
+                errors.append(f"{provider.model}: {e}")
+                continue
+
+        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
     def batch_generate(
         self, prompts: list[str], system_prompt: Optional[str] = None
     ) -> list[str]:
-        """批量生成"""
+        """批量生成."""
         return [self.generate(p, system_prompt) for p in prompts]

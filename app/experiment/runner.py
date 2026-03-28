@@ -1,3 +1,5 @@
+"""实验运行模块，提供多记忆检索方法的对比实验与评估功能."""
+
 import logging
 import re
 import time
@@ -6,6 +8,8 @@ import os
 import math
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+
+from app.memory.types import MemoryMode
 from app.agents.workflow import create_workflow
 from app.storage.json_store import JSONStore
 
@@ -13,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _compute_time_decay(event_time: datetime, half_life_days: float = 7.0) -> float:
-    """计算时间衰减权重，使用指数衰减公式"""
+    """计算时间衰减权重，使用指数衰减公式."""
     now = datetime.now()
     days_ago = (now - event_time).total_seconds() / (24 * 3600)
     if days_ago < 0:
@@ -22,7 +26,7 @@ def _compute_time_decay(event_time: datetime, half_life_days: float = 7.0) -> fl
 
 
 def _compute_context_weight(current_turn: int, last_turn: Optional[int]) -> float:
-    """计算多轮对话的上下文权重"""
+    """计算多轮对话的上下文权重."""
     if last_turn is None:
         return 1.0
     if current_turn == last_turn:
@@ -113,7 +117,6 @@ NEGATIVE_PATTERNS = [
     "去掉",
     "删除",
     "移除",
-    "不",
     "don't",
     "dont",
     "cancel",
@@ -146,7 +149,7 @@ def _infer_intent(query: str) -> str:
 def _evaluate_semantic_accuracy(
     input_text: str, expected_type: str, output: str
 ) -> float:
-    """基于规则的语义准确率评估
+    """基于规则的语义准确率评估.
 
     使用 Task 1.1-1.3 添加的辅助函数。
     - 意图匹配 (40%): _infer_intent
@@ -169,23 +172,28 @@ def _evaluate_semantic_accuracy(
 
     # 3. 关键词重叠 (40%)
     def split_words(text: str) -> set:
-        chinese_chars = re.findall(r"[\u4e00-\u9fff]+", text.lower())
-        english_words = re.findall(r"[a-zA-Z]+", text.lower())
-        chinese_set = set("".join(chinese_chars))
-        english_set = set(english_words)
-        return chinese_set | english_set
+        chinese_chars = re.findall(r"[\u4e00-\u9fff]", text)
+        english_words = set(re.findall(r"[a-zA-Z]+", text.lower()))
+        chinese_bigrams = {
+            chinese_chars[i] + chinese_chars[i + 1]
+            for i in range(len(chinese_chars) - 1)
+        }
+        return chinese_bigrams | english_words
 
     input_words = split_words(input_text)
     output_words = split_words(output)
     overlap = len(input_words & output_words)
     if overlap > 0:
-        score += min(0.4, overlap * 0.1)
+        score += min(0.4, overlap * 0.05)
 
     return min(1.0, score)
 
 
 class ExperimentRunner:
+    """实验对比运行器，支持多种记忆检索方法的基准测试."""
+
     def __init__(self, data_dir: str = "data", config_dir: str = "config"):
+        """初始化实验运行器."""
         self.data_dir = data_dir
         self.config_dir = config_dir
         self._evaluation_config = None
@@ -200,71 +208,84 @@ class ExperimentRunner:
                 self._evaluation_config = {}
         return self._evaluation_config
 
+    def _reset_events_store(self, data_dir: str) -> None:
+        """重置 events.json 为空列表，确保每个测试用例在干净状态下运行."""
+        events_store = JSONStore(data_dir, "events.json", list)
+        events_store.write([])
+
     def run_comparison(
-        self, test_cases: List[Dict[str, str]], methods: Optional[List[str]] = None
+        self,
+        test_cases: List[Dict[str, str]],
+        methods: Optional[List[str]] = None,
+        data_dir: str | None = None,
+        seed: int | None = None,
     ) -> Dict[str, Any]:
-        """运行对比实验"""
+        """运行多方法对比实验并返回评估结果."""
         if not test_cases:
             raise ValueError("test_cases cannot be empty")
-
         for tc in test_cases:
             if not isinstance(tc, dict):
                 raise ValueError(f"test_case must be dict, got {type(tc)}")
             if "input" not in tc:
                 raise ValueError("test_case missing required field 'input'")
-
-        valid_methods = {"keyword", "llm_only", "embeddings"}
+        valid_methods = set(MemoryMode)
         if methods is None:
-            methods = ["keyword", "llm_only", "embeddings"]
+            methods = [m.value for m in MemoryMode]
         else:
             invalid = set(methods) - valid_methods
             if invalid:
                 raise ValueError(f"Invalid methods: {invalid}")
-
         results = {
             "timestamp": datetime.now().isoformat(),
             "test_cases": len(test_cases),
             "methods": methods,
+            "seed": seed,
             "metrics": {},
         }
-
         for method in methods:
-            method_results = self._run_method(method, test_cases)
+            method_results = self._run_method(method, test_cases, data_dir=data_dir)
             results["metrics"][method] = method_results
-
         self._save_results(results)
         return results
 
-    def _run_method(self, method: str, test_cases: List[Dict]) -> Dict:
-        """运行单个方法的实验"""
-        workflow = create_workflow(self.data_dir, memory_mode=method)
-
+    def _run_method(
+        self, method: str, test_cases: List[Dict], data_dir: str | None = None
+    ) -> Dict:
+        effective_data_dir = data_dir if data_dir is not None else self.data_dir
         latencies = []
         task_completions = []
         semantic_accuracies = []
         context_relatedness_scores = []
+        per_case = []
 
         for case in test_cases:
+            workflow = create_workflow(effective_data_dir, memory_mode=method)
+            self._reset_events_store(effective_data_dir)
             start_time = time.time()
             try:
                 result, event_id = workflow.run(case["input"])
                 elapsed = (time.time() - start_time) * 1000
-
                 latencies.append(elapsed)
                 task_completions.append(1)
-
-                actual_output = result if result else self._get_latest_output()
-
+                actual_output = self._extract_scoring_output(result, effective_data_dir)
                 accuracy = self._evaluate_semantic_accuracy(
                     case["input"], case["type"], actual_output
                 )
                 semantic_accuracies.append(accuracy)
-
                 relatedness = self._evaluate_context_relatedness(
                     case["input"], case["type"], actual_output
                 )
                 context_relatedness_scores.append(relatedness)
-
+                per_case.append(
+                    {
+                        "input": case["input"],
+                        "type": case["type"],
+                        "output": actual_output[:500],
+                        "latency_ms": elapsed,
+                        "semantic_accuracy": accuracy,
+                        "context_relatedness": relatedness,
+                    }
+                )
             except Exception as e:
                 logger.warning(
                     f"Experiment run failed for case '{case.get('input', 'unknown')}': {e}"
@@ -273,6 +294,17 @@ class ExperimentRunner:
                 task_completions.append(0)
                 semantic_accuracies.append(0)
                 context_relatedness_scores.append(0)
+                per_case.append(
+                    {
+                        "input": case["input"],
+                        "type": case["type"],
+                        "output": "",
+                        "latency_ms": 0,
+                        "semantic_accuracy": 0,
+                        "context_relatedness": 0,
+                        "error": str(e),
+                    }
+                )
 
         return {
             "avg_latency_ms": sum(latencies) / len(latencies) if latencies else 0,
@@ -286,78 +318,101 @@ class ExperimentRunner:
             / len(context_relatedness_scores)
             if context_relatedness_scores
             else 0,
+            "per_case": per_case,
         }
 
-    def _get_latest_output(self) -> str:
-        """从存储中获取最新的输出结果"""
-        events_store = JSONStore(self.data_dir, "events.json", list)
+    def _get_latest_output(self, data_dir: str | None = None) -> str:
+        effective_dir = data_dir if data_dir is not None else self.data_dir
+        events_store = JSONStore(effective_dir, "events.json", list)
         events = events_store.read()
         if events and len(events) > 0:
             last_event = events[-1]
             return last_event.get("decision", {}).get("content", "")
         return ""
 
+    def _extract_scoring_output(self, result: str, data_dir: str | None = None) -> str:
+        effective_dir = data_dir if data_dir is not None else self.data_dir
+        events_store = JSONStore(effective_dir, "events.json", list)
+        events = events_store.read()
+        if events:
+            last_event = events[-1]
+            decision = last_event.get("decision", {})
+            if isinstance(decision, str):
+                return decision
+            content = (
+                decision.get("reminder_content")
+                or decision.get("remind_content")
+                or decision.get("content")
+            )
+            if content:
+                return content
+            reasoning = decision.get("reasoning", "")
+            if reasoning:
+                return reasoning
+            raw = decision.get("raw", "")
+            if raw:
+                return raw
+        return result if result else self._get_latest_output(data_dir=effective_dir)
+
     def _evaluate_semantic_accuracy(
         self, input_text: str, expected_type: str, output: str
     ) -> float:
-        """评估语义理解准确率（委托给模块级函数）"""
+        """评估语义理解准确率（委托给模块级函数）.
+
+        根据意图匹配、否定模式处理和关键词重叠综合打分.
+        """
         return _evaluate_semantic_accuracy(input_text, expected_type, output)
-
-    def _extract_task_indicators(self, output: str) -> Dict[str, int]:
-        """动态提取任务类型指示词"""
-        indicators = {}
-
-        # 任务类型关键词（可配置，从外部获取）
-        type_patterns = self._get_type_patterns()
-
-        for task_type, patterns in type_patterns.items():
-            count = sum(1 for p in patterns if p in output)
-            if count > 0:
-                indicators[task_type] = count
-
-        return indicators
-
-    def _get_type_patterns(self) -> Dict[str, List[str]]:
-        """获取任务类型模式 - 从配置文件读取"""
-        config = self._load_evaluation_config()
-        return config.get(
-            "type_patterns",
-            {
-                "meeting": ["会议", "meeting", "评审", "沟通会"],
-                "travel": ["出差", "travel", "行程"],
-                "shopping": ["购物", "shopping", "采购"],
-                "contact": ["联系", "contact", "电话"],
-            },
-        )
 
     def _evaluate_context_relatedness(
         self, input_text: str, expected_type: str, output: str
     ) -> float:
-        """评估上下文相关度
-
-        使用更通用的方法：检查输出是否提及任务相关概念
-        """
+        """评估输出与任务类型的上下文相关度."""
         output_lower = output.lower()
-
-        # 通用任务相关概念（从配置获取）
         task_concepts = self._get_task_concepts()
         concepts = task_concepts.get(expected_type, [])
-
+        if not concepts:
+            return 0.5
         relevant = sum(1 for c in concepts if c in output_lower)
         relatedness = min(relevant / max(len(concepts), 1), 1.0)
-
         return relatedness
 
     def _get_task_concepts(self) -> Dict[str, List[str]]:
-        """获取任务相关概念 - 从配置文件读取"""
+        """获取各任务类型的相关概念词配置."""
         config = self._load_evaluation_config()
         return config.get(
             "task_concepts",
             {
-                "meeting": ["时间", "提醒", "会议", "地点", "确认", "安排"],
-                "travel": ["时间", "提醒", "行程", "地址", "确认", "安排", "出差"],
-                "shopping": ["时间", "提醒", "购物", "确认", "安排", "买"],
-                "contact": ["时间", "提醒", "联系", "确认", "安排"],
+                "schedule_check": [
+                    "时间",
+                    "日程",
+                    "安排",
+                    "查询",
+                    "提醒",
+                    "会议",
+                    "几点",
+                    "什么",
+                ],
+                "event_add": [
+                    "添加",
+                    "创建",
+                    "提醒",
+                    "设置",
+                    "安排",
+                    "记录",
+                    "新建",
+                    "会议",
+                    "点",
+                ],
+                "event_delete": [
+                    "取消",
+                    "删除",
+                    "移除",
+                    "去掉",
+                    "不要",
+                    "no",
+                    "cancel",
+                ],
+                "general": ["好", "天气", "最近", "怎么样", "hello", "how", "今天"],
             },
         )
 
@@ -366,26 +421,20 @@ class ExperimentRunner:
         results_store.append(results)
 
     def generate_report(self) -> str:
-        """生成对比报告"""
+        """生成实验对比报告的Markdown文本."""
         results_store = JSONStore(self.data_dir, "experiment_results.json", list)
         results = results_store.read()
-
         if not results:
             return "暂无实验数据"
-
         latest = results[-1]
         report = "# 实验对比报告\n\n"
-        report += f"时间: {latest['timestamp']}\n\n"
-        report += f"测试用例数: {latest['test_cases']}\n\n"
-        report += "## 方法对比\n\n"
-
+        report += f"时间: {latest['timestamp']}\n"
+        report += f"测试用例数: {latest['test_cases']}\n"
+        if "seed" in latest:
+            report += f"随机种子: {latest['seed']}\n"
+        report += "\n## 方法对比\n\n"
+        report += "| 方法 | 平均延迟(ms) | 完成率 | 语义准确率 | 上下文相关度 |\n"
+        report += "|------|-------------|--------|-----------|-------------|\n"
         for method, metrics in latest["metrics"].items():
-            report += f"### {method}\n"
-            report += f"- 平均延迟: {metrics['avg_latency_ms']:.2f}ms\n"
-            report += f"- 任务完成率: {metrics['task_completion_rate'] * 100:.1f}%\n"
-            report += (
-                f"- 语义理解准确率: {metrics.get('semantic_accuracy', 0) * 100:.1f}%\n"
-            )
-            report += f"- 上下文相关度: {metrics.get('context_relatedness', 0) * 100:.1f}%\n\n"
-
+            report += f"| {method} | {metrics['avg_latency_ms']:.1f} | {metrics['task_completion_rate'] * 100:.1f}% | {metrics.get('semantic_accuracy', 0) * 100:.1f}% | {metrics.get('context_relatedness', 0) * 100:.1f}% |\n"
         return report
