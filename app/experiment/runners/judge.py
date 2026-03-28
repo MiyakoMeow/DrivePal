@@ -38,7 +38,8 @@ JUDGE_PROMPT_TEMPLATE = """你是一个车载AI智能体的质量评估专家。
 4. **上下文一致性 (coherence)**: 回复在驾驶场景下是否合理连贯？(1=完全不连贯, 5=非常连贯)
 5. **整体有用性 (helpfulness)**: 对驾驶员的实际帮助程度？(1=无帮助, 5=非常有帮助)
 
-请以JSON格式输出评分结果："""
+请严格按照以下JSON格式输出，不要输出其他内容：
+{{"memory_recall": {{"score": 4, "reason": "理由"}}, "relevance": {{"score": 5, "reason": "理由"}}, "task_quality": {{"score": 3, "reason": "理由"}}, "coherence": {{"score": 4, "reason": "理由"}}, "helpfulness": {{"score": 4, "reason": "理由"}}}}"""
 
 
 def _parse_judge_response(response: str) -> dict | None:
@@ -72,20 +73,26 @@ def _parse_judge_response(response: str) -> dict | None:
     return None
 
 
+def _extract_score(dim_data: Any) -> float:
+    if isinstance(dim_data, dict):
+        return float(dim_data.get("score", 0))
+    if isinstance(dim_data, (int, float)):
+        return float(dim_data)
+    return 0.0
+
+
 def _compute_weighted_total(scores: dict) -> float:
     total = 0.0
     for dim, weight in JUDGE_WEIGHTS.items():
-        dim_data = scores.get(dim, {})
-        score = dim_data.get("score", 0) if isinstance(dim_data, dict) else 0
-        total += score * weight
+        total += _extract_score(scores.get(dim, {})) * weight
     return round(total, 2)
 
 
 def _judge_case(judge_model, case: dict[str, Any]) -> dict[str, Any]:
-    prompt = JUDGE_PROMPT_TEMPLATE.format(
-        input=case.get("input", ""),
-        output=case.get("output", ""),
-        task_type=case.get("type", "general"),
+    prompt = (
+        JUDGE_PROMPT_TEMPLATE.replace("{input}", str(case.get("input", "")))
+        .replace("{output}", str(case.get("output", "")))
+        .replace("{task_type}", str(case.get("type", "general")))
     )
     try:
         response = judge_model.generate(prompt)
@@ -184,8 +191,7 @@ def _build_final_report(
         for dim in JUDGE_WEIGHTS:
             s = 0.0
             for c in valid:
-                d = c.get("scores", {}).get(dim, {})
-                s += d.get("score", 0) if isinstance(d, dict) else 0
+                s += _extract_score(c.get("scores", {}).get(dim, {}))
             dim_avgs[dim] = round(s / n, 2)
 
         latency_total = 0.0
