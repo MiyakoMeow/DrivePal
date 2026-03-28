@@ -57,6 +57,7 @@ class MemoryBankStore(BaseMemoryStore):
         )
 
     def write(self, event: MemoryEvent) -> str:
+        """写入记忆事件，初始化遗忘曲线相关字段."""
         event = event.model_copy(deep=True)
         event.id = self._generate_id()
         event.created_at = datetime.now().isoformat()
@@ -69,6 +70,7 @@ class MemoryBankStore(BaseMemoryStore):
         return event.id
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """综合事件和摘要进行记忆检索，应用遗忘曲线评分."""
         if not query.strip():
             return []
         events = self.events_store.read()

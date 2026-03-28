@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 
 class EmbeddingMemoryStore(BaseMemoryStore):
+    """向量相似度检索 store."""
+
     requires_embedding: bool = True
 
     def __init__(
@@ -18,15 +20,18 @@ class EmbeddingMemoryStore(BaseMemoryStore):
         data_dir: str,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model=None,
-    ):
+    ) -> None:
+        """初始化向量检索 store."""
         super().__init__(data_dir)
         self.embedding_model = embedding_model
 
     @property
     def store_name(self) -> str:
+        """返回存储名称."""
         return "embeddings"
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """使用向量相似度进行记忆检索."""
         if self.embedding_model is None:
             return super().search(query, top_k=top_k)
 

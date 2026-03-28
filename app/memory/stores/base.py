@@ -22,6 +22,7 @@ class BaseMemoryStore(MemoryStore, ABC):
         embedding_model=None,
         chat_model=None,
     ) -> None:
+        """初始化基础记忆存储."""
         self.data_dir = data_dir
         self.events_store = JSONStore(data_dir, "events.json", list)
         self.strategies_store = JSONStore(data_dir, "strategies.json", dict)
@@ -30,6 +31,7 @@ class BaseMemoryStore(MemoryStore, ABC):
         return f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     def write(self, event: MemoryEvent) -> str:
+        """写入记忆事件，自动生成 ID 和时间戳."""
         event = event.model_copy(deep=True)
         event.id = self._generate_id()
         event.created_at = datetime.now().isoformat()
@@ -37,6 +39,7 @@ class BaseMemoryStore(MemoryStore, ABC):
         return event.id
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """基于关键词匹配检索记忆事件."""
         events = self.events_store.read()
         matched = self._keyword_search(query, events)
         return [SearchResult(event=e) for e in matched[:top_k]]
@@ -51,12 +54,14 @@ class BaseMemoryStore(MemoryStore, ABC):
         ]
 
     def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        """获取最近的历史记忆事件."""
         events = self.events_store.read()
         if limit <= 0:
             return []
         return [MemoryEvent(**e) for e in events[-limit:]]
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """更新事件反馈并调整策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now().isoformat()
         feedback_store = JSONStore(self.data_dir, "feedback.json", list)
@@ -85,6 +90,7 @@ class BaseMemoryStore(MemoryStore, ABC):
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """写入交互记录并创建对应的记忆事件."""
         event = MemoryEvent(
             content=response,
             type=event_type,

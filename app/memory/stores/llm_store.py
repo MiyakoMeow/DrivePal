@@ -27,6 +27,8 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 
 
 class LLMOnlyMemoryStore(BaseMemoryStore):
+    """LLM 语义判断检索 store."""
+
     requires_chat: bool = True
 
     def __init__(
@@ -34,15 +36,18 @@ class LLMOnlyMemoryStore(BaseMemoryStore):
         data_dir: str,
         embedding_model=None,
         chat_model: Optional["ChatModel"] = None,
-    ):
+    ) -> None:
+        """初始化 LLM 检索 store."""
         super().__init__(data_dir)
         self.chat_model = chat_model
 
     @property
     def store_name(self) -> str:
+        """返回存储名称."""
         return "llm_only"
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """使用 LLM 语义判断进行记忆检索."""
         if not self.chat_model:
             return []
 

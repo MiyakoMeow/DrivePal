@@ -3,6 +3,7 @@
 import pytest
 
 from app.memory.memory import MemoryModule
+from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.models.chat import ChatModel
 from tests.conftest import is_llm_available
@@ -18,10 +19,10 @@ def test_chat_drives_llm_memory_search(tmp_path):
     """Verify that chat-driven LLM memory search retrieves relevant events."""
     chat_model = ChatModel()
     memory = MemoryModule(str(tmp_path), chat_model=chat_model)
-    memory.write({"content": "明天下午三点项目会议", "type": "meeting"})
+    memory.write(MemoryEvent(content="明天下午三点项目会议", type="meeting"))
     results = memory.search("有什么会议安排", mode=MemoryMode.LLM_ONLY)
     assert len(results) > 0
-    assert "会议" in results[0]["content"]
+    assert "会议" in results[0].event["content"]
 
 
 @SKIP_IF_NO_LLM
@@ -31,7 +32,7 @@ def test_chat_feeds_workflow_context(tmp_path):
     from langchain_core.messages import HumanMessage
 
     memory = MemoryModule(str(tmp_path), chat_model=ChatModel())
-    memory.write({"content": "下午三点开会", "type": "meeting"})
+    memory.write(MemoryEvent(content="下午三点开会", type="meeting"))
     workflow = AgentWorkflow(memory_module=memory)
     from app.agents.state import AgentState
 

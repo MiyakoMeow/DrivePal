@@ -17,6 +17,7 @@ _STORES_REGISTRY: dict[MemoryMode, type[MemoryStore]] = {}
 
 
 def register_store(name: MemoryMode, store_cls: type[MemoryStore]) -> None:
+    """注册记忆存储实现到全局注册表."""
     if name in _STORES_REGISTRY:
         return
     _STORES_REGISTRY[name] = store_cls
@@ -34,6 +35,9 @@ def _import_all_stores() -> None:
     register_store(MemoryMode.MEMORY_BANK, MemoryBankStore)
 
 
+_import_all_stores()
+
+
 class MemoryModule:
     """统一记忆管理接口，Facade 模式."""
 
@@ -42,8 +46,8 @@ class MemoryModule:
         data_dir: str,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
-    ):
-        _import_all_stores()
+    ) -> None:
+        """初始化记忆模块."""
         self._stores: dict[MemoryMode, MemoryStore] = {}
         self._data_dir = data_dir
         self._embedding_model = embedding_model
@@ -52,6 +56,7 @@ class MemoryModule:
 
     @property
     def chat_model(self):
+        """获取聊天模型，延迟初始化."""
         if self._chat_model is None:
             from app.models.settings import get_chat_model
 
@@ -85,16 +90,19 @@ class MemoryModule:
         return store_cls(**kwargs)
 
     def set_default_mode(self, mode: MemoryMode) -> None:
+        """设置默认记忆检索模式."""
         if mode not in _STORES_REGISTRY:
             raise ValueError(f"Unknown mode: {mode}")
         self._default_mode = mode
 
     def write(self, event: MemoryEvent) -> str:
+        """写入记忆事件."""
         return self._get_store(self._default_mode).write(event)
 
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """写入交互记录."""
         return self._get_store(self._default_mode).write_interaction(
             query, response, event_type
         )
@@ -102,11 +110,14 @@ class MemoryModule:
     def search(
         self, query: str, mode: MemoryMode | None = None, top_k: int = 10
     ) -> list[SearchResult]:
+        """检索记忆，可指定模式，默认使用默认模式."""
         target_mode = mode or self._default_mode
         return self._get_store(target_mode).search(query, top_k=top_k)
 
     def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        """获取历史记忆事件."""
         return self._get_store(self._default_mode).get_history(limit)
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """更新事件反馈."""
         self._get_store(self._default_mode).update_feedback(event_id, feedback)
