@@ -9,7 +9,7 @@ import os
 from typing import List, Dict
 
 
-class TestDataGenerator:
+class DataGenerator:
     """生成模拟驾驶场景的测试用例"""
 
     def __init__(self, config_dir: str = "config"):

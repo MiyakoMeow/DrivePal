@@ -12,7 +12,7 @@ from app.storage.json_store import JSONStore
 from app.memory.utils import cosine_similarity
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
-DAILY_SUMMARY_THRESHOLD = 5
+DAILY_SUMMARY_THRESHOLD = 2
 OVERALL_SUMMARY_THRESHOLD = 3
 SUMMARY_WEIGHT = 0.8
 TOP_K = 3
@@ -252,7 +252,10 @@ class MemoryBankStore(BaseMemoryStore):
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
-        """写入交互记录，自动聚合到已有事件或创建新事件."""
+        """写入交互记录，自动聚合到已有事件或创建新事件.
+
+        保留完整的自动聚合和摘要生成逻辑.
+        """
         interaction_id = (
             f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         )

@@ -1,11 +1,11 @@
 """Tests for the experiment runner."""
 
-from app.experiment.test_data import TestDataGenerator
+from app.experiment.test_data import DataGenerator
 
 
 def test_seed_reproducibility():
     """Verify that the same seed produces identical test cases."""
-    gen = TestDataGenerator(config_dir="config")
+    gen = DataGenerator(config_dir="config")
     cases_a = gen.generate_test_cases(count=5, seed=42)
     cases_b = gen.generate_test_cases(count=5, seed=42)
     assert [c["input"] for c in cases_a] == [c["input"] for c in cases_b]
@@ -13,7 +13,7 @@ def test_seed_reproducibility():
 
 def test_seed_produces_different_without_seed():
     """Verify that different seeds produce different test cases."""
-    gen = TestDataGenerator(config_dir="config")
+    gen = DataGenerator(config_dir="config")
     cases_a = gen.generate_test_cases(count=5, seed=42)
     cases_b = gen.generate_test_cases(count=5, seed=99)
     inputs_a = [c["input"] for c in cases_a]

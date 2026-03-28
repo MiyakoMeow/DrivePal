@@ -23,25 +23,21 @@ from app.experiment.runner import ExperimentRunner
 
 
 def setup_test_dir(test_data_dir: str) -> None:
-    """初始化测试数据目录."""
+    """初始化测试数据目录，重置所有相关JSON文件."""
     if os.path.exists(test_data_dir):
         shutil.rmtree(test_data_dir)
     os.makedirs(test_data_dir)
 
-    for fname in [
-        "events.json",
-        "strategies.json",
-        "interactions.json",
-        "memorybank_summaries.json",
-        "feedback.json",
-    ]:
+    test_files = {
+        "events.json": [],
+        "strategies.json": {},
+        "interactions.json": [],
+        "memorybank_summaries.json": {"daily_summaries": {}, "overall_summary": ""},
+        "feedback.json": [],
+    }
+    for fname, initial_data in test_files.items():
         with open(os.path.join(test_data_dir, fname), "w", encoding="utf-8") as f:
-            if fname == "strategies.json":
-                json.dump({}, f)
-            elif fname in ["events.json", "interactions.json", "feedback.json"]:
-                json.dump([], f)
-            else:
-                json.dump({"daily_summaries": {}, "overall_summary": ""}, f)
+            json.dump(initial_data, f, ensure_ascii=False, indent=2)
 
 
 def get_test_cases(count_per_type: int = 2) -> list[dict]:
