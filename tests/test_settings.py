@@ -315,3 +315,45 @@ class TestEmbeddingModelFallback:
         emb._client = mock_client
         result = emb.encode("test")
         assert result == [0.1, 0.2, 0.3]
+
+
+def test_judge_provider_config_from_dict():
+    from app.models.settings import JudgeProviderConfig
+
+    d = {
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "sk-xxx",
+        "temperature": 0.1,
+    }
+    cfg = JudgeProviderConfig.from_dict(d)
+    assert cfg.model == "deepseek-chat"
+    assert cfg.base_url == "https://api.deepseek.com/v1"
+    assert cfg.api_key == "sk-xxx"
+    assert cfg.temperature == 0.1
+
+
+def test_judge_provider_config_defaults():
+    from app.models.settings import JudgeProviderConfig
+
+    cfg = JudgeProviderConfig.from_dict({"model": "test"})
+    assert cfg.base_url is None
+    assert cfg.api_key is None
+    assert cfg.temperature == 0.1
+
+
+def test_llm_settings_loads_judge(tmp_path, monkeypatch):
+    from app.models.settings import LLMSettings
+    import json
+
+    config = {
+        "llm": [{"model": "qwen", "base_url": "http://localhost:8000/v1"}],
+        "judge": {"model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
+    }
+    config_file = tmp_path / "llm.json"
+    config_file.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr("app.models.settings.CONFIG_PATH", str(config_file))
+
+    settings = LLMSettings.load()
+    assert settings.judge_provider is not None
+    assert settings.judge_provider.model == "deepseek-chat"

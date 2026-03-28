@@ -56,11 +56,29 @@ class EmbeddingProviderConfig:
 
 
 @dataclass
+class JudgeProviderConfig:
+    model: str
+    base_url: str | None = None
+    api_key: str | None = None
+    temperature: float = 0.1
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "JudgeProviderConfig":
+        return cls(
+            model=d["model"],
+            base_url=d.get("base_url"),
+            api_key=d.get("api_key"),
+            temperature=d.get("temperature", 0.1),
+        )
+
+
+@dataclass
 class LLMSettings:
     """模型配置集合，包含 LLM 和 Embedding 提供商列表."""
 
     llm_providers: list[LLMProviderConfig] = field(default_factory=list)
     embedding_providers: list[EmbeddingProviderConfig] = field(default_factory=list)
+    judge_provider: JudgeProviderConfig | None = None
 
     @classmethod
     def load(cls) -> "LLMSettings":
@@ -98,7 +116,13 @@ class LLMSettings:
             for item in config_data.get("embedding", [])
         ]
 
-        return cls(llm_providers=deduped, embedding_providers=embedding_providers)
+        judge_provider = _build_judge_provider(config_data)
+
+        return cls(
+            llm_providers=deduped,
+            embedding_providers=embedding_providers,
+            judge_provider=judge_provider,
+        )
 
 
 def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
@@ -126,3 +150,29 @@ def get_embedding_model(device: str | None = None) -> "EmbeddingModel":
     from app.models.embedding import get_cached_embedding_model
 
     return get_cached_embedding_model(device=device)
+
+
+def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
+    judge_model = os.getenv("JUDGE_MODEL")
+    judge_dict = config_data.get("judge")
+    if judge_model:
+        return JudgeProviderConfig(
+            model=judge_model,
+            base_url=os.getenv("JUDGE_BASE_URL"),
+            api_key=os.getenv("JUDGE_API_KEY"),
+            temperature=float(os.getenv("JUDGE_TEMPERATURE", "0.1")),
+        )
+    if judge_dict:
+        return JudgeProviderConfig.from_dict(judge_dict)
+    return None
+
+
+def get_judge_model() -> "ChatModel":
+    from app.models.chat import ChatModel
+
+    settings = LLMSettings.load()
+    if settings.judge_provider is None:
+        raise RuntimeError(
+            "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.json"
+        )
+    return ChatModel(providers=[settings.judge_provider])
