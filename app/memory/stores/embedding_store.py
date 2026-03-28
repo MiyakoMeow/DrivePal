@@ -14,6 +14,7 @@ class EmbeddingMemoryStore(BaseMemoryStore):
     """向量相似度检索 store."""
 
     requires_embedding: bool = True
+    SIMILARITY_THRESHOLD = 0.4
 
     def __init__(
         self,
@@ -30,23 +31,40 @@ class EmbeddingMemoryStore(BaseMemoryStore):
         """返回存储名称."""
         return "embeddings"
 
-    def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+    def search(
+        self, query: str, top_k: int = 10, min_results: int = 1
+    ) -> list[SearchResult]:
         """使用向量相似度进行记忆检索."""
-        if self.embedding_model is None:
-            return super().search(query, top_k=top_k)
-
-        query_vector = self.embedding_model.encode(query)
         events = self.events_store.read()
         if not events:
             return []
 
-        event_texts = [event.get("content", "") for event in events]
-        all_embeddings = self.embedding_model.batch_encode(event_texts)
-
         results = []
-        for event, event_vector in zip(events, all_embeddings):
-            similarity = cosine_similarity(query_vector, event_vector)
-            if similarity > 0.7:
-                results.append(SearchResult(event=dict(event), score=similarity))
+        if self.embedding_model:
+            query_vector = self.embedding_model.encode(query)
+            event_texts = [event.get("content", "") for event in events]
+            all_embeddings = self.embedding_model.batch_encode(event_texts)
+
+            seen_ids = set()
+            scored = []
+            for event, emb in zip(events, all_embeddings):
+                sim = cosine_similarity(query_vector, emb)
+                if sim > self.SIMILARITY_THRESHOLD:
+                    scored.append((sim, event))
+
+            scored.sort(key=lambda x: x[0], reverse=True)
+            for sim, event in scored[:top_k]:
+                seen_ids.add(event.get("id", ""))
+                results.append(SearchResult(event=dict(event), score=sim))
+
+            if len(results) < min_results:
+                keyword_results = self._keyword_search(query, events)
+                for event in keyword_results:
+                    if event.get("id", "") not in seen_ids and len(results) < top_k:
+                        seen_ids.add(event.get("id", ""))
+                        results.append(SearchResult(event=dict(event), score=0.0))
+        else:
+            matched = self._keyword_search(query, events)
+            results = [SearchResult(event=dict(e)) for e in matched[:top_k]]
 
         return results[:top_k]
