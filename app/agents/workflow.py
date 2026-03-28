@@ -174,9 +174,42 @@ class AgentWorkflow:
         messages = state.get("messages", [])
         user_input = str(messages[0].content) if messages else ""
 
-        content = decision.get("content", "无提醒内容")
+        remind_content = decision.get("reminder_content") or decision.get(
+            "remind_content"
+        )
+        if isinstance(remind_content, dict):
+            content = remind_content.get("text") or remind_content.get(
+                "content", "无提醒内容"
+            )
+        elif isinstance(remind_content, str):
+            content = remind_content
+        else:
+            content = decision.get("content", "无提醒内容")
         if self.memory_mode == "memorybank":
             event_id = self.memory_module.write_interaction(user_input, content)
+            store = self.memory_module._get_store(self.memory_mode)
+            decision_content_field = decision.get("reminder_content") or decision.get(
+                "remind_content"
+            )
+            if decision_content_field:
+                if isinstance(decision_content_field, dict):
+                    decision_content = decision_content_field.get("text") or str(
+                        decision_content_field
+                    )
+                else:
+                    decision_content = decision_content_field
+                event_data = {
+                    "content": decision_content,
+                    "type": "reminder",
+                    "decision": decision,
+                }
+            else:
+                event_data = {
+                    "content": content,
+                    "type": "reminder",
+                    "decision": decision,
+                }
+            store.events_store.append(event_data)
         else:
             event_data = {"content": content, "type": "reminder", "decision": decision}
             event_id = self.memory_module.write(event_data)

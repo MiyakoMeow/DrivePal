@@ -1,11 +1,33 @@
 """文本嵌入模型封装，支持 HuggingFace 本地模型和 OpenAI 兼容远程接口."""
 
-from typing import Any
+from typing import Any, Optional
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 
 from app.models.settings import EmbeddingProviderConfig, LLMSettings
+
+_EMBEDDING_MODEL_CACHE: dict[str, "EmbeddingModel"] = {}
+
+
+def get_cached_embedding_model(device: str | None = None) -> "EmbeddingModel":
+    """获取缓存的 embedding 模型实例，避免重复加载.
+
+    Args:
+        device: 设备类型 (cpu/cuda)
+
+    Returns:
+        缓存的 EmbeddingModel 实例
+    """
+    cache_key = f"device={device or 'default'}"
+    if cache_key not in _EMBEDDING_MODEL_CACHE:
+        _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(device=device)
+    return _EMBEDDING_MODEL_CACHE[cache_key]
+
+
+def clear_embedding_model_cache() -> None:
+    """清除 embedding 模型缓存."""
+    _EMBEDDING_MODEL_CACHE.clear()
 
 
 class EmbeddingModel:

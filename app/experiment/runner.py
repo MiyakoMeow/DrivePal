@@ -206,6 +206,11 @@ class ExperimentRunner:
                 self._evaluation_config = {}
         return self._evaluation_config
 
+    def _reset_events_store(self, data_dir: str) -> None:
+        """重置 events.json 为空列表，确保每个测试用例在干净状态下运行."""
+        events_store = JSONStore(data_dir, "events.json", list)
+        events_store.write([])
+
     def run_comparison(
         self,
         test_cases: List[Dict[str, str]],
@@ -245,8 +250,6 @@ class ExperimentRunner:
         self, method: str, test_cases: List[Dict], data_dir: str | None = None
     ) -> Dict:
         effective_data_dir = data_dir if data_dir is not None else self.data_dir
-        workflow = create_workflow(effective_data_dir, memory_mode=method)
-
         latencies = []
         task_completions = []
         semantic_accuracies = []
@@ -254,6 +257,8 @@ class ExperimentRunner:
         per_case = []
 
         for case in test_cases:
+            workflow = create_workflow(effective_data_dir, memory_mode=method)
+            self._reset_events_store(effective_data_dir)
             start_time = time.time()
             try:
                 result, event_id = workflow.run(case["input"])
@@ -273,7 +278,7 @@ class ExperimentRunner:
                     {
                         "input": case["input"],
                         "type": case["type"],
-                        "output": actual_output[:200],
+                        "output": actual_output[:500],
                         "latency_ms": elapsed,
                         "semantic_accuracy": accuracy,
                         "context_relatedness": relatedness,
@@ -332,7 +337,11 @@ class ExperimentRunner:
             decision = last_event.get("decision", {})
             if isinstance(decision, str):
                 return decision
-            content = decision.get("remind_content") or decision.get("content")
+            content = (
+                decision.get("reminder_content")
+                or decision.get("remind_content")
+                or decision.get("content")
+            )
             if content:
                 return content
             reasoning = decision.get("reasoning", "")

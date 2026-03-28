@@ -122,8 +122,7 @@ def get_chat_model(temperature: float | None = None) -> "ChatModel":
 
 
 def get_embedding_model(device: str | None = None) -> "EmbeddingModel":
-    """从配置创建 EmbeddingModel 实例."""
-    from app.models.embedding import EmbeddingModel
+    """从配置创建 EmbeddingModel 实例（使用缓存避免重复加载）."""
+    from app.models.embedding import get_cached_embedding_model
 
-    settings = LLMSettings.load()
-    return EmbeddingModel(providers=settings.embedding_providers, device=device)
+    return get_cached_embedding_model(device=device)
