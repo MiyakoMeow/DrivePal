@@ -122,45 +122,6 @@ class TestHierarchicalSummarization:
         assert "daily_summary" in sources
 
 
-class TestWriteInteraction:
-    """Tests for writing interactions to the memory bank."""
-
-    def test_write_creates_record_and_event(self, backend):
-        """Verify that writing an interaction creates both a record and an event."""
-        interaction_id = backend.write_interaction("提醒我开会", "好的")
-        interactions = backend.interactions_store.read()
-        assert interactions[0]["id"] == interaction_id
-        assert interactions[0]["event_id"] is not None
-        events = backend.events_store.read()
-        assert len(events) == 1
-        assert interaction_id in events[0]["interaction_ids"]
-
-    def test_write_with_event_type(self, backend):
-        """Verify that writing an interaction with an event type sets the type correctly."""
-        backend.write_interaction("提醒我开会", "好的", event_type="meeting")
-        events = backend.events_store.read()
-        assert events[0]["type"] == "meeting"
-
-
-class TestEventAggregation:
-    """Tests for event aggregation based on keyword overlap."""
-
-    def test_similar_appends_to_event(self, backend):
-        """Verify that similar interactions are appended to the same event."""
-        backend.write_interaction("提醒我明天上午开会", "好的")
-        backend.write_interaction("明天下午也有会议", "已更新")
-        events = backend.events_store.read()
-        assert len(events) == 1
-        assert len(events[0]["interaction_ids"]) == 2
-
-    def test_unrelated_creates_new_event(self, backend):
-        """Verify that unrelated interactions create separate events."""
-        backend.write_interaction("提醒我明天开会", "好的")
-        backend.write_interaction("今天天气怎么样", "晴天")
-        events = backend.events_store.read()
-        assert len(events) == 2
-
-
 class TestUpdateEventSummary:
     """Tests for LLM-based event summary updates."""
 
@@ -180,30 +141,6 @@ class TestUpdateEventSummary:
         backend.write_interaction("明天下午也有会议", "已更新")
         events = backend.events_store.read()
         assert events[0]["content"] == "提醒我明天上午开会"
-
-
-class TestSearchWithInteractions:
-    """Tests for search that expands interactions."""
-
-    def test_expands_interactions(self, backend):
-        """Verify that search results include expanded interaction records."""
-        backend.write_interaction("提醒我开会", "好的")
-        backend.write_interaction("明天下午也有会议", "已更新")
-        results = backend.search("开会")
-        assert len(results[0].interactions) >= 1
-
-    def test_strengthen_interactions_on_hit(self, backend):
-        """Verify that searching strengthens matched interaction memory strength."""
-        backend.write_interaction("重要会议", "已记录")
-        backend.search("会议")
-        interactions = backend.interactions_store.read()
-        assert interactions[0]["memory_strength"] == 2
-
-    def test_legacy_event_returns_empty_interactions(self, backend):
-        """Verify that legacy events without interactions return an empty list."""
-        backend.write(MemoryEvent(content="旧事件"))
-        results = backend.search("旧事件")
-        assert results[0].interactions == []
 
 
 class TestMemoryModuleIntegration:

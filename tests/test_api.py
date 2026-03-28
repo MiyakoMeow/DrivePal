@@ -4,12 +4,7 @@ from fastapi.testclient import TestClient
 
 import pytest
 
-from tests.conftest import is_llm_available
-
-SKIP_IF_NO_LLM = pytest.mark.skipif(
-    not is_llm_available(),
-    reason="OPENAI_MODEL not set",
-)
+from tests.conftest import SKIP_IF_NO_LLM
 
 
 @pytest.fixture

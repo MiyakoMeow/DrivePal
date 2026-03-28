@@ -6,12 +6,7 @@ from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.models.chat import ChatModel
-from tests.conftest import is_llm_available
-
-SKIP_IF_NO_LLM = pytest.mark.skipif(
-    not is_llm_available(),
-    reason="OPENAI_MODEL not set",
-)
+from tests.conftest import SKIP_IF_NO_LLM
 
 
 @SKIP_IF_NO_LLM

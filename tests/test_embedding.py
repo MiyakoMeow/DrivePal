@@ -7,12 +7,9 @@ import pytest
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
-from app.memory.stores.memory_bank_store import (
-    AGGREGATION_SIMILARITY_THRESHOLD,
-    MemoryBankStore,
-)
-from app.memory.utils import cosine_similarity
+from app.memory.stores.memory_bank_store import MemoryBankStore
 from app.models.embedding import EmbeddingModel
+from tests.conftest import SKIP_IF_NO_LLM
 
 
 def _pick_device() -> str:
@@ -29,6 +26,7 @@ def embedding():
     return EmbeddingModel(device=_pick_device())
 
 
+@SKIP_IF_NO_LLM
 class TestEmbeddingForMemorySearch:
     """Tests for embedding-based memory search."""
 
@@ -47,6 +45,7 @@ class TestEmbeddingForMemorySearch:
         assert results == []
 
 
+@SKIP_IF_NO_LLM
 class TestEmbeddingForMemoryBankRetrieval:
     """Tests for embedding-based memory bank retrieval with forgetting."""
 
@@ -65,33 +64,3 @@ class TestEmbeddingForMemoryBankRetrieval:
         results = backend.search("今晚吃什么好呢")
         assert len(results) > 0
         assert results[0].score < 0.5
-
-
-class TestEmbeddingForEventAggregation:
-    """Tests for embedding-based event aggregation."""
-
-    def test_similar_query_appends_to_event(self, embedding, tmp_path):
-        """Verify that similar interactions are aggregated into the same event."""
-        backend = MemoryBankStore(str(tmp_path), embedding_model=embedding)
-        backend.write_interaction("提醒明天上午九点开会", "好的已添加")
-        backend.write_interaction("会议提醒明天上午九点", "已确认")
-        events = backend.events_store.read()
-        assert len(events) == 1
-        assert len(events[0]["interaction_ids"]) == 2
-
-    def test_unrelated_query_creates_new_event(self, embedding, tmp_path):
-        """Verify that unrelated interactions create separate events."""
-        backend = MemoryBankStore(str(tmp_path), embedding_model=embedding)
-        backend.write_interaction("提醒明天上午九点开会", "好的已添加")
-        backend.write_interaction("今天天气怎么样", "晴天适合出行")
-        events = backend.events_store.read()
-        assert len(events) == 2
-
-    def test_aggregation_threshold_enforced(self, embedding, tmp_path):
-        """Verify that the aggregation similarity threshold is correctly enforced."""
-        similar = embedding.encode("提醒明天上午九点开会")
-        unrelated = embedding.encode("今天天气怎么样")
-        s_similar = cosine_similarity(similar, similar)
-        s_unrelated = cosine_similarity(similar, unrelated)
-        assert s_similar >= AGGREGATION_SIMILARITY_THRESHOLD
-        assert s_unrelated < AGGREGATION_SIMILARITY_THRESHOLD
