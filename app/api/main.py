@@ -76,10 +76,13 @@ async def feedback(
 ):
     """提交用户反馈."""
     try:
-        mm.update_feedback(
-            request.event_id,
-            {"action": request.action, "modified_content": request.modified_content},
+        from app.memory.schemas import FeedbackData
+
+        feedback = FeedbackData(
+            action=request.action,
+            modified_content=request.modified_content,
         )
+        mm.update_feedback(request.event_id, feedback)
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Feedback failed: {e}", exc_info=True)
@@ -99,8 +102,8 @@ async def experiment_report():
 async def history(limit: int = 10, mm: MemoryModule = Depends(get_memory_module)):
     """获取历史记录."""
     try:
-        history_data = mm.get_history(limit=limit)
-        return {"history": history_data}
+        events = mm.get_history(limit=limit)
+        return {"history": [e.model_dump() for e in events]}
     except Exception as e:
         logger.error(f"History retrieval failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")

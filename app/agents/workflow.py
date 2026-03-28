@@ -93,15 +93,22 @@ class AgentWorkflow:
             related_events = []
 
         try:
-            relevant_memories = (
-                related_events if related_events else self.memory_module.get_history()
-            )
+            if related_events:
+                relevant_memories = [e.to_public() for e in related_events]
+            else:
+                relevant_memories = [
+                    e.model_dump() for e in self.memory_module.get_history()
+                ]
         except ValueError as e:
             logger.warning(f"Memory get_history failed: {e}")
-            relevant_memories = related_events if related_events else []
+            relevant_memories = (
+                [e.to_public() for e in related_events] if related_events else []
+            )
         except Exception as e:
             logger.warning(f"Memory get_history failed: {e}")
-            relevant_memories = related_events if related_events else []
+            relevant_memories = (
+                [e.to_public() for e in related_events] if related_events else []
+            )
 
         prompt = f"""{SYSTEM_PROMPTS["context"]}
 
