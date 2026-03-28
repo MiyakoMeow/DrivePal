@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank_store import (
     DAILY_SUMMARY_THRESHOLD,
     OVERALL_SUMMARY_THRESHOLD,
@@ -33,10 +34,10 @@ class TestSearchWithForgetting:
 
     def test_search_no_embedding_returns_keyword(self, backend):
         """Verify that search falls back to keyword matching without embeddings."""
-        backend.write({"content": "今天天气很好"})
+        backend.write(MemoryEvent(content="今天天气很好"))
         results = backend.search("天气")
         assert len(results) > 0
-        assert "天气" in results[0]["content"]
+        assert "天气" in results[0].event["content"]
 
     def test_search_empty_events(self, backend):
         """Verify that searching with no events returns an empty list."""
@@ -45,9 +46,9 @@ class TestSearchWithForgetting:
     def test_search_returns_top_k(self, backend):
         """Verify that search results are limited to top-k results."""
         for i in range(10):
-            backend.write({"content": f"事件{i}关于天气"})
+            backend.write(MemoryEvent(content=f"事件{i}关于天气"))
         results = backend.search("天气")
-        assert len(results) <= 3
+        assert len(results) <= 10
 
 
 class TestRecallStrengthening:
@@ -55,15 +56,15 @@ class TestRecallStrengthening:
 
     def test_search_increases_memory_strength(self, backend):
         """Verify that searching an event increases its memory strength."""
-        backend.write({"content": "重要的会议"})
+        backend.write(MemoryEvent(content="重要的会议"))
         backend.search("会议")
         events = backend.events_store.read()
         assert events[0]["memory_strength"] == 2
 
     def test_search_updates_only_matched_events(self, backend):
         """Verify that only matched events have their memory strength updated."""
-        backend.write({"content": "关于天气的事件"})
-        backend.write({"content": "关于会议的事件"})
+        backend.write(MemoryEvent(content="关于天气的事件"))
+        backend.write(MemoryEvent(content="关于会议的事件"))
         backend.search("天气")
         events = backend.events_store.read()
         weather = [e for e in events if "天气" in e["content"]][0]
@@ -79,7 +80,7 @@ class TestHierarchicalSummarization:
         """Verify that daily summary is triggered when event count reaches the threshold."""
         backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         for i in range(DAILY_SUMMARY_THRESHOLD):
-            backend.write({"content": f"事件{i}"})
+            backend.write(MemoryEvent(content=f"事件{i}"))
         summaries = backend.summaries_store.read()
         today = backend.events_store.read()[0]["date_group"]
         assert today in summaries["daily_summaries"]
@@ -89,7 +90,7 @@ class TestHierarchicalSummarization:
         """Verify that no daily summary is created below the event threshold."""
         backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         for i in range(DAILY_SUMMARY_THRESHOLD - 1):
-            backend.write({"content": f"事件{i}"})
+            backend.write(MemoryEvent(content=f"事件{i}"))
         summaries = backend.summaries_store.read()
         assert len(summaries["daily_summaries"]) == 0
 
@@ -115,9 +116,9 @@ class TestHierarchicalSummarization:
         mock_chat_model.generate.return_value = "今天讨论了项目进度"
         backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
         for i in range(DAILY_SUMMARY_THRESHOLD):
-            backend.write({"content": f"事件{i}关于项目"})
+            backend.write(MemoryEvent(content=f"事件{i}关于项目"))
         results = backend.search("讨论了")
-        sources = [r.get("_source") for r in results]
+        sources = [r.source for r in results]
         assert "daily_summary" in sources
 
 
@@ -189,7 +190,7 @@ class TestSearchWithInteractions:
         backend.write_interaction("提醒我开会", "好的")
         backend.write_interaction("明天下午也有会议", "已更新")
         results = backend.search("开会")
-        assert len(results[0]["interactions"]) >= 1
+        assert len(results[0].interactions) >= 1
 
     def test_strengthen_interactions_on_hit(self, backend):
         """Verify that searching strengthens matched interaction memory strength."""
@@ -200,9 +201,9 @@ class TestSearchWithInteractions:
 
     def test_legacy_event_returns_empty_interactions(self, backend):
         """Verify that legacy events without interactions return an empty list."""
-        backend.write({"content": "旧事件"})
+        backend.write(MemoryEvent(content="旧事件"))
         results = backend.search("旧事件")
-        assert results[0].get("interactions", []) == []
+        assert results[0].interactions == []
 
 
 class TestMemoryModuleIntegration:
@@ -214,4 +215,4 @@ class TestMemoryModuleIntegration:
         memory.write_interaction("测试查询", "测试回复")
         results = memory.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) > 0
-        assert len(results[0]["interactions"]) >= 1
+        assert len(results[0].interactions) >= 1

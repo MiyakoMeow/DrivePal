@@ -5,6 +5,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
+from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.stores.base import BaseMemoryStore
 from app.models.chat import ChatModel
 from app.models.embedding import EmbeddingModel
@@ -55,21 +56,19 @@ class MemoryBankStore(BaseMemoryStore):
             lambda: dict(self._default_summaries),
         )
 
-    def write(self, event: dict) -> str:
-        """写入事件并触发可能的每日摘要生成."""
-        event_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    def write(self, event: MemoryEvent) -> str:
+        event = event.model_copy(deep=True)
+        event.id = self._generate_id()
+        event.created_at = datetime.now().isoformat()
         today = date.today().isoformat()
-        event["id"] = event_id
-        event["created_at"] = datetime.now().isoformat()
-        event["memory_strength"] = 1
-        event["last_recall_date"] = today
-        event["date_group"] = today
-        self.events_store.append(event)
+        event.memory_strength = 1
+        event.last_recall_date = today
+        event.date_group = today
+        self.events_store.append(event.model_dump())
         self._maybe_summarize(today)
-        return event_id
+        return event.id
 
-    def search(self, query: str, top_k: int = TOP_K) -> list[dict]:
-        """根据查询检索相关事件和摘要."""
+    def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         if not query.strip():
             return []
         events = self.events_store.read()
@@ -83,13 +82,13 @@ class MemoryBankStore(BaseMemoryStore):
             event_results = self._search_by_embedding(query, events, top_k)
         summary_results = self._search_summaries(query, daily_summaries, top_k=1)
         all_results = event_results + summary_results
-        all_results.sort(key=lambda x: x.get("_score", 0.0), reverse=True)
+        all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
         return self._expand_event_interactions(top_results)
 
     def _search_by_keyword(
         self, query: str, events: list[dict], top_k: int
-    ) -> list[dict]:
+    ) -> list[SearchResult]:
         query_lower = query.lower()
         today = date.today()
         results = []
@@ -104,17 +103,17 @@ class MemoryBankStore(BaseMemoryStore):
                 except (ValueError, TypeError):
                     days_elapsed = 0
                 retention = forgetting_curve(days_elapsed, strength)
-                scored = dict(event)
-                scored["_score"] = retention
-                results.append(scored)
-        results.sort(key=lambda x: x["_score"], reverse=True)
+                results.append(
+                    SearchResult(event=dict(event), score=retention, source="event")
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
         top_results = results[:top_k]
-        self._strengthen_events(top_results)
+        self._strengthen_events([r.event for r in top_results])
         return top_results
 
     def _search_by_embedding(
         self, query: str, events: list[dict], top_k: int
-    ) -> list[dict]:
+    ) -> list[SearchResult]:
         assert self.embedding_model is not None
         query_vector = self.embedding_model.encode(query)
         event_texts = [event.get("content", "") for event in events]
@@ -133,15 +132,17 @@ class MemoryBankStore(BaseMemoryStore):
             retention = forgetting_curve(days_elapsed, strength)
             score = similarity * retention
             if score > 0:
-                scored = dict(event)
-                scored["_score"] = score
-                results.append(scored)
-        results.sort(key=lambda x: x["_score"], reverse=True)
+                results.append(
+                    SearchResult(event=dict(event), score=score, source="event")
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
         top_results = results[:top_k]
-        self._strengthen_events(top_results)
+        self._strengthen_events([r.event for r in top_results])
         return top_results
 
-    def _expand_event_interactions(self, results: list[dict]) -> list[dict]:
+    def _expand_event_interactions(
+        self, results: list[SearchResult]
+    ) -> list[SearchResult]:
         interactions = self.interactions_store.read()
         interaction_by_event: dict[str, list[dict]] = {}
         for i in interactions:
@@ -149,8 +150,8 @@ class MemoryBankStore(BaseMemoryStore):
             if eid:
                 interaction_by_event.setdefault(eid, []).append(i)
         for result in results:
-            eid = result.get("id", "")
-            result["interactions"] = interaction_by_event.get(eid, [])
+            eid = result.event.get("id", "")
+            result.interactions = interaction_by_event.get(eid, [])
         return results
 
     def _strengthen_interactions(self, event_ids: set[str]) -> None:
@@ -185,15 +186,11 @@ class MemoryBankStore(BaseMemoryStore):
                 updated = True
         if updated:
             self.events_store.write(all_events)
-        for event in matched_events:
-            if "id" in event:
-                event["memory_strength"] = event.get("memory_strength", 1) + 1
-                event["last_recall_date"] = today
         self._strengthen_interactions(matched_ids)
 
     def _search_summaries(
         self, query: str, daily_summaries: dict, top_k: int = 1
-    ) -> list[dict]:
+    ) -> list[SearchResult]:
         if not daily_summaries:
             return []
         query_lower = query.lower()
@@ -218,17 +215,19 @@ class MemoryBankStore(BaseMemoryStore):
                 retention = forgetting_curve(days_elapsed, strength)
                 score = retention * SUMMARY_WEIGHT
                 results.append(
-                    {
-                        "_source": "daily_summary",
-                        "_score": score,
-                        "content": content,
-                        "date_group": date_group,
-                        "memory_strength": strength,
-                        "last_recall_date": last_recall,
-                    }
+                    SearchResult(
+                        event={
+                            "content": content,
+                            "date_group": date_group,
+                            "memory_strength": strength,
+                            "last_recall_date": last_recall,
+                        },
+                        score=score,
+                        source="daily_summary",
+                    )
                 )
                 matched_keys.append(date_group)
-        results.sort(key=lambda x: x["_score"], reverse=True)
+        results.sort(key=lambda x: x.score, reverse=True)
         self._strengthen_summaries(matched_keys, daily_summaries)
         return results[:top_k]
 
