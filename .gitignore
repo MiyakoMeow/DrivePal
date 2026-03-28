@@ -24,7 +24,6 @@ data/
 .idea/
 
 # Experiment scripts
-run_*.py
 !run_exp.py
 !run_experiment.py
 quick_test.py
