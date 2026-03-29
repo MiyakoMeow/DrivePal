@@ -515,6 +515,7 @@ uv run pytest tests/ -v
 | `test_settings.py` | 模型配置加载与环境变量覆盖 |
 | `test_schemas.py` | 数据模型定义 |
 | `test_memory_types.py` | MemoryMode 枚举 |
+| `test_components.py` | 可组合组件（forgetting_curve, EventStorage, KeywordSearch, FeedbackManager, SimpleInteractionWriter, MemoryBankEngine） |
 | `test_memory_module_facade.py` | MemoryModule 调度层 |
 | `test_memory_store_contract.py` | 记忆后端契约测试 |
 
