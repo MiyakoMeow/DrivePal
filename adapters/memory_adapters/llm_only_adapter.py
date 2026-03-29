@@ -1,4 +1,4 @@
-"""LLM-only memory adapter."""
+"""仅使用LLM的记忆适配器."""
 
 from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
 from adapters.model_config import get_store_chat_model
@@ -6,16 +6,16 @@ from app.memory.stores.llm_store import LLMOnlyMemoryStore
 
 
 class LLMOnlyAdapter:
-    """Adapter using LLM for relevance determination."""
+    """使用LLM判断相关性的适配器."""
 
     TAG = "llm_only"
 
     def __init__(self, data_dir: str):
-        """Initialize with data directory."""
+        """使用数据目录初始化."""
         self.data_dir = data_dir
 
     def add(self, history_text: str) -> LLMOnlyMemoryStore:
-        """Add history text to the LLM store."""
+        """将历史文本添加到LLM存储."""
         chat_model = get_store_chat_model()
         store = LLMOnlyMemoryStore(data_dir=self.data_dir, chat_model=chat_model)
         for record in history_to_interaction_records(history_text):
@@ -23,13 +23,13 @@ class LLMOnlyAdapter:
         return store
 
     def get_search_client(self, store) -> StoreClient:
-        """Get a search client for the store."""
+        """获取存储的搜索客户端."""
         return StoreClient(store)
 
     def init_state(self):
-        """Initialize state (no-op for this adapter)."""
+        """初始化状态（此适配器无需操作）."""
         return None
 
     def close_state(self, state):
-        """Close state (no-op for this adapter)."""
+        """关闭状态（此适配器无需操作）."""
         pass

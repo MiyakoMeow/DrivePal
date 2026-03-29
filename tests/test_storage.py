@@ -1,4 +1,4 @@
-"""Tests for the storage layer."""
+"""存储层测试."""
 
 from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent

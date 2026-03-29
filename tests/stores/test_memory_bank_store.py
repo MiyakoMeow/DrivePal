@@ -1,4 +1,4 @@
-"""Tests for MemoryBankStore - store-level only tests."""
+"""MemoryBankStore 测试 - 仅存储级别测试."""
 
 from unittest.mock import MagicMock
 

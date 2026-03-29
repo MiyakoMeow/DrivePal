@@ -1,4 +1,4 @@
-"""Tests for runner module."""
+"""runner 模块测试."""
 
 
 def test_setup_vehiclemembench_path():

@@ -1,4 +1,4 @@
-"""Tests for KeywordMemoryStore."""
+"""KeywordMemoryStore 测试."""
 
 import pytest
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult

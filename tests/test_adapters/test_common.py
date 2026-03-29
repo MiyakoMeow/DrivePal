@@ -1,4 +1,4 @@
-"""Tests for common adapter utilities."""
+"""适配器通用工具测试."""
 
 from adapters.memory_adapters.common import (
     history_to_interaction_records,

@@ -1,4 +1,4 @@
-"""Tests for memory adapters."""
+"""记忆适配器测试."""
 
 from adapters.memory_adapters import ADAPTERS
 from adapters.memory_adapters.keyword_adapter import KeywordAdapter

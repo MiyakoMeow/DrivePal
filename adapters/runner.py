@@ -1,4 +1,4 @@
-"""Benchmark runner for VehicleMemBench evaluation."""
+"""VehicleMemBench 评估基准的测试运行器."""
 
 import sys
 import os
@@ -22,7 +22,7 @@ OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"
 
 
 def setup_vehiclemembench_path():
-    """Add VehicleMemBench paths to sys.path."""
+    """将 VehicleMemBench 路径添加到 sys.path."""
     for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
         d_str = str(d)
         if not any(os.path.abspath(p) == os.path.abspath(d_str) for p in sys.path):
@@ -48,7 +48,7 @@ from evaluation.agent_client import AgentClient
 
 
 def parse_file_range(range_str: str) -> list[int]:
-    """Parse file range string like '1-5' or '1,3,5' into list of integers."""
+    """将形如 '1-5' 或 '1,3,5' 的文件范围字符串解析为整数列表."""
     result = []
     for part in range_str.split(","):
         part = part.strip()
@@ -93,7 +93,7 @@ def prepare(
     file_range: str = "1-50",
     memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
 ):
-    """Prepare benchmark data for specified file range and memory types."""
+    """为指定文件范围和记忆类型准备基准测试数据."""
     file_nums = parse_file_range(file_range)
     types = [t.strip() for t in memory_types.split(",")]
     agent_client = _get_agent_client()
@@ -143,7 +143,7 @@ def run(
     memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
     reflect_num: int = 10,
 ):
-    """Run benchmark evaluation for specified file range and memory types."""
+    """为指定文件范围和记忆类型运行基准评估."""
     file_nums = parse_file_range(file_range)
     types = [t.strip() for t in memory_types.split(",")]
     agent_client = _get_agent_client()
@@ -291,7 +291,7 @@ def _run_custom_adapter(
 
 
 def report(output_path: Optional[str] = None):
-    """Generate and print benchmark report from results."""
+    """从结果生成并打印基准测试报告."""
     output_dir = _get_output_dir()
     all_results = {}
 

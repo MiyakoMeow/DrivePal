@@ -1,4 +1,4 @@
-"""Tests for model settings loader."""
+"""模型设置加载器测试."""
 
 import json
 

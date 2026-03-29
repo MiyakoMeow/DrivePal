@@ -1,11 +1,11 @@
-"""Common utilities for memory adapters."""
+"""记忆适配器通用工具函数."""
 
 import re
 from app.memory.schemas import MemoryEvent
 
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
-    """Convert history text to interaction records."""
+    """将历史文本转换为交互记录."""
     if not history_text.strip():
         return []
     pattern = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
@@ -32,7 +32,7 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
 
 
 def format_search_results(results) -> tuple[str, int]:
-    """Format search results into text and count."""
+    """将搜索结果格式化为文本和数量."""
     if not results:
         return ("", 0)
     texts = []
@@ -50,12 +50,12 @@ def format_search_results(results) -> tuple[str, int]:
 
 
 class StoreClient:
-    """Client for searching in memory stores."""
+    """用于在记忆存储中搜索的客户端."""
 
     def __init__(self, store):
-        """Initialize with a store instance."""
+        """使用存储实例初始化."""
         self.store = store
 
     def search(self, query, user_id=None, top_k=5):
-        """Search the store for relevant results."""
+        """在存储中搜索相关结果."""
         return self.store.search(query=query, top_k=top_k)

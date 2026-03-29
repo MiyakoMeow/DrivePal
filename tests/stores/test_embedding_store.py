@@ -1,4 +1,4 @@
-"""Tests for EmbeddingMemoryStore."""
+"""EmbeddingMemoryStore 测试."""
 
 from unittest.mock import MagicMock
 

@@ -1,4 +1,4 @@
-"""Tests for composable components in app.memory.components."""
+"""app.memory.components 可组合组件测试."""
 
 import math
 

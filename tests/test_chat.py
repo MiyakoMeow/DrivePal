@@ -1,4 +1,4 @@
-"""Tests for the chat model integration."""
+"""聊天模型集成测试."""
 
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent

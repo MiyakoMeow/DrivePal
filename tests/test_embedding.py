@@ -1,4 +1,4 @@
-"""Tests for the embedding model."""
+"""嵌入模型测试."""
 
 import torch
 

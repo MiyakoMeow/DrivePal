@@ -1,4 +1,4 @@
-"""Tests for the memory bank backend and integration."""
+"""记忆库后端和集成测试."""
 
 from unittest.mock import MagicMock
 

@@ -1,4 +1,4 @@
-"""Memory bank adapter combining embeddings and LLM."""
+"""结合嵌入向量和LLM的记忆库适配器."""
 
 from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
 from adapters.model_config import get_store_chat_model, get_store_embedding_model
@@ -6,16 +6,16 @@ from app.memory.stores.memory_bank_store import MemoryBankStore
 
 
 class MemoryBankAdapter:
-    """Adapter combining embeddings and LLM for memory search."""
+    """结合嵌入向量和LLM进行记忆搜索的适配器."""
 
     TAG = "memory_bank"
 
     def __init__(self, data_dir: str):
-        """Initialize with data directory."""
+        """使用数据目录初始化."""
         self.data_dir = data_dir
 
     def add(self, history_text: str) -> MemoryBankStore:
-        """Add history text to the memory bank store."""
+        """将历史文本添加到记忆库存储."""
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()
         store = MemoryBankStore(
@@ -28,13 +28,13 @@ class MemoryBankAdapter:
         return store
 
     def get_search_client(self, store) -> StoreClient:
-        """Get a search client for the store."""
+        """获取存储的搜索客户端."""
         return StoreClient(store)
 
     def init_state(self):
-        """Initialize state (no-op for this adapter)."""
+        """初始化状态（此适配器无需操作）."""
         return None
 
     def close_state(self, state):
-        """Close state (no-op for this adapter)."""
+        """关闭状态（此适配器无需操作）."""
         pass

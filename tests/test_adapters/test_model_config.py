@@ -1,4 +1,4 @@
-"""Tests for model_config module."""
+"""model_config 模块测试."""
 
 import json
 

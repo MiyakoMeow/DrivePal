@@ -1,4 +1,4 @@
-"""Tests for the API endpoints."""
+"""API 端点测试."""
 
 from fastapi.testclient import TestClient
 
