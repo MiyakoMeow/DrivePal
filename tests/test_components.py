@@ -295,6 +295,7 @@ class TestMemoryBankEngineWriteInteraction:
         """Verify that write_interaction returns a non-empty interaction ID."""
         iid = engine.write_interaction("查询", "响应")
         assert isinstance(iid, str)
+        assert len(iid) > 0
 
     def test_write_interaction_creates_event_and_interaction(self, engine, storage):
         """Verify that write_interaction creates both an event and interaction."""
