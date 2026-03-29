@@ -5,7 +5,7 @@ from typing import Any
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 
-from app.models.settings import EmbeddingProviderConfig, LLMSettings
+from app.models.settings import EmbeddingProviderConfig, LLMSettings, ProviderConfig
 
 _EMBEDDING_MODEL_CACHE: dict[str, "EmbeddingModel"] = {}
 
@@ -47,7 +47,8 @@ class EmbeddingModel:
             except RuntimeError:
                 providers = [
                     EmbeddingProviderConfig(
-                        model="BAAI/bge-small-zh-v1.5", device=device or "cpu"
+                        provider=ProviderConfig(model="BAAI/bge-small-zh-v1.5"),
+                        device=device or "cpu",
                     )
                 ]
         self.providers = providers
@@ -69,23 +70,23 @@ class EmbeddingModel:
                 self._client = self._create_client(provider)
                 return self._client
             except Exception as e:
-                errors.append(f"{provider.model}: {e}")
+                errors.append(f"{provider.provider.model}: {e}")
                 continue
 
         raise RuntimeError(f"All embedding providers failed: {'; '.join(errors)}")
 
     def _create_client(self, provider: EmbeddingProviderConfig):
         device = self.device or provider.device
-        if provider.base_url:
-            kwargs: dict[str, Any] = {"model": provider.model}
-            if provider.api_key:
+        if provider.provider.base_url:
+            kwargs: dict[str, Any] = {"model": provider.provider.model}
+            if provider.provider.api_key:
                 from langchain_core.utils.utils import SecretStr
 
-                kwargs["openai_api_key"] = SecretStr(provider.api_key)
-            kwargs["openai_api_base"] = provider.base_url
+                kwargs["openai_api_key"] = SecretStr(provider.provider.api_key)
+            kwargs["openai_api_base"] = provider.provider.base_url
             return OpenAIEmbeddings(**kwargs)
         return HuggingFaceEmbeddings(
-            model_name=provider.model,
+            model_name=provider.provider.model,
             model_kwargs={"device": device},
             encode_kwargs={"normalize_embeddings": True},
         )

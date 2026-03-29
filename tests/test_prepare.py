@@ -1,7 +1,7 @@
 """Tests for PrepareRunner."""
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.experiment.runners.prepare import prepare
 
@@ -27,7 +27,7 @@ def _mock_dataset(name):
 def _mock_chat_model():
     model = MagicMock()
     model.generate = MagicMock(
-        side_effect=lambda prompt, **kw: f"reply to: {prompt[:20]}"
+        side_effect=lambda prompt, **kw: f"reply to: {prompt[:20]}",
     )
     return model
 
@@ -47,9 +47,12 @@ def _make_mock_memory_module():
     side_effect=_make_mock_memory_module(),
 )
 @patch("app.experiment.runners.prepare.get_chat_model")
-@patch("app.experiment.runners.prepare._load_dataset", side_effect=_mock_dataset)
+@patch("app.experiment.runners.prepare.get_test_cases", side_effect=_mock_dataset)
 def test_prepare_creates_directory_structure(
-    mock_load, mock_get_model, mock_mem_cls, tmp_path
+    mock_load,
+    mock_get_model,
+    mock_mem_cls,
+    tmp_path,
 ):
     mock_get_model.return_value = _mock_chat_model()
     result = prepare(base_dir=str(tmp_path), test_count=5, warmup_ratio=0.7, seed=42)
@@ -69,7 +72,7 @@ def test_prepare_creates_directory_structure(
     side_effect=_make_mock_memory_module(),
 )
 @patch("app.experiment.runners.prepare.get_chat_model")
-@patch("app.experiment.runners.prepare._load_dataset", side_effect=_mock_dataset)
+@patch("app.experiment.runners.prepare.get_test_cases", side_effect=_mock_dataset)
 def test_prepare_splits_correctly(mock_load, mock_get_model, mock_mem_cls, tmp_path):
     mock_get_model.return_value = _mock_chat_model()
     result = prepare(base_dir=str(tmp_path), test_count=5, warmup_ratio=0.7, seed=42)
@@ -88,7 +91,7 @@ def test_prepare_splits_correctly(mock_load, mock_get_model, mock_mem_cls, tmp_p
     side_effect=_make_mock_memory_module(),
 )
 @patch("app.experiment.runners.prepare.get_chat_model")
-@patch("app.experiment.runners.prepare._load_dataset", side_effect=_mock_dataset)
+@patch("app.experiment.runners.prepare.get_test_cases", side_effect=_mock_dataset)
 def test_prepare_reproducible(mock_load, mock_get_model, mock_mem_cls, tmp_path):
     mock_get_model.return_value = _mock_chat_model()
 
@@ -105,7 +108,7 @@ def test_prepare_reproducible(mock_load, mock_get_model, mock_mem_cls, tmp_path)
     side_effect=_make_mock_memory_module(),
 )
 @patch("app.experiment.runners.prepare.get_chat_model")
-@patch("app.experiment.runners.prepare._load_dataset", side_effect=_mock_dataset)
+@patch("app.experiment.runners.prepare.get_test_cases", side_effect=_mock_dataset)
 def test_prepare_warmup_file_format(mock_load, mock_get_model, mock_mem_cls, tmp_path):
     mock_get_model.return_value = _mock_chat_model()
     result = prepare(base_dir=str(tmp_path), test_count=5, warmup_ratio=0.7, seed=42)

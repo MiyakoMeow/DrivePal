@@ -58,7 +58,7 @@ def _valid_judge_json() -> str:
 def _make_mock_judge_model(response: str):
     model = MagicMock()
     model.generate.return_value = response
-    model.providers = [MagicMock(model="deepseek-chat")]
+    model.providers = [MagicMock(provider=MagicMock(model="deepseek-chat"))]
     return model
 
 

@@ -30,15 +30,15 @@ class ChatModel:
             self.temperature if self.temperature is not None else provider.temperature
         )
         kwargs: dict = {
-            "model": provider.model,
+            "model": provider.provider.model,
             "temperature": temp,
         }
-        if provider.api_key:
-            kwargs["openai_api_key"] = SecretStr(provider.api_key)
+        if provider.provider.api_key:
+            kwargs["openai_api_key"] = SecretStr(provider.provider.api_key)
         else:
             kwargs["openai_api_key"] = None
-        if provider.base_url:
-            kwargs["openai_api_base"] = provider.base_url
+        if provider.provider.base_url:
+            kwargs["openai_api_base"] = provider.provider.base_url
         return ChatOpenAI(**kwargs)
 
     def _invoke_provider(
@@ -62,7 +62,7 @@ class ChatModel:
             try:
                 return self._invoke_provider(provider, messages, **kwargs)
             except Exception as e:
-                errors.append(f"{provider.model}: {e}")
+                errors.append(f"{provider.provider.model}: {e}")
                 continue
 
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")

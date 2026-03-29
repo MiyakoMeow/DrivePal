@@ -5,10 +5,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.memory.schemas import MemoryEvent
-from app.memory.stores.memory_bank_store import (
-    DAILY_SUMMARY_THRESHOLD,
-    MemoryBankStore,
-)
+from app.memory.components import DAILY_SUMMARY_THRESHOLD
+from app.memory.stores.memory_bank_store import MemoryBankStore
 
 
 @pytest.fixture

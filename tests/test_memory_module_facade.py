@@ -51,8 +51,8 @@ class TestMemoryModuleFacade:
         assert isinstance(interaction_id, str)
         history = mm.get_history()
         assert len(history) == 1
-        assert history[0].content == "响应内容"
-        assert history[0].description == "查询内容"
+        assert history[0].content == "查询内容"
+        assert history[0].description == "响应内容"
 
     def test_search_returns_search_result_objects(self, mm):
         """验证 search 返回 SearchResult 对象列表."""

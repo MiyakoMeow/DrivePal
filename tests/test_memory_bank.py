@@ -5,11 +5,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.memory.schemas import MemoryEvent
-from app.memory.stores.memory_bank_store import (
-    DAILY_SUMMARY_THRESHOLD,
-    OVERALL_SUMMARY_THRESHOLD,
-    MemoryBankStore,
-)
+from app.memory.components import DAILY_SUMMARY_THRESHOLD, OVERALL_SUMMARY_THRESHOLD
+from app.memory.stores.memory_bank_store import MemoryBankStore
 
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
@@ -108,7 +105,7 @@ class TestHierarchicalSummarization:
                 "last_recall_date": date_group,
             }
         backend.summaries_store.write(summaries)
-        backend._update_overall_summary(summaries["daily_summaries"], summaries)
+        backend._engine._update_overall_summary(summaries["daily_summaries"], summaries)
         updated = backend.summaries_store.read()
         assert updated["overall_summary"] == "总体摘要"
 

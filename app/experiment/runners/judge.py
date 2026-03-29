@@ -163,7 +163,8 @@ def _judge_method(
         "cases": judged_cases,
     }
     judged_path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
     return result
 
@@ -206,11 +207,7 @@ def _build_final_report(
         completed = 0
         total_cases = len(cases)
         raw_cases = []
-        rp = (
-            Path(all_results[method].get("_prepared_dir", ""))
-            / "results"
-            / f"{method}_raw.json"
-        )
+        rp = Path(result.get("_prepared_dir", "")) / "results" / f"{method}_raw.json"
         try:
             raw_data = json.loads(rp.read_text(encoding="utf-8"))
             raw_cases = raw_data.get("cases", [])
@@ -242,7 +239,7 @@ def judge(prepared_dir: str) -> dict[str, Any]:
     prepared_path = Path(prepared_dir)
     judge_model = get_judge_model()
     judge_model_name = (
-        judge_model.providers[0].model if judge_model.providers else "unknown"
+        judge_model.providers[0].provider.model if judge_model.providers else "unknown"
     )
 
     run_id = ""
@@ -263,6 +260,7 @@ def judge(prepared_dir: str) -> dict[str, Any]:
     judged_dir.mkdir(parents=True, exist_ok=True)
     report_path = judged_dir / "final_report.json"
     report_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
     return report

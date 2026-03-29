@@ -5,7 +5,12 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from app.models.settings import LLMSettings, LLMProviderConfig, EmbeddingProviderConfig
+from app.models.settings import (
+    LLMSettings,
+    LLMProviderConfig,
+    EmbeddingProviderConfig,
+    ProviderConfig,
+)
 
 
 class TestLLMProviderConfig:
@@ -21,17 +26,17 @@ class TestLLMProviderConfig:
                 "temperature": 0.5,
             }
         )
-        assert cfg.model == "gpt-4"
-        assert cfg.base_url == "https://api.openai.com/v1"
-        assert cfg.api_key == "sk-test"
+        assert cfg.provider.model == "gpt-4"
+        assert cfg.provider.base_url == "https://api.openai.com/v1"
+        assert cfg.provider.api_key == "sk-test"
         assert cfg.temperature == 0.5
 
     def test_from_dict_defaults(self):
         """Verify default values when optional fields are missing."""
         cfg = LLMProviderConfig.from_dict({"model": "test"})
-        assert cfg.model == "test"
-        assert cfg.base_url is None
-        assert cfg.api_key is None
+        assert cfg.provider.model == "test"
+        assert cfg.provider.base_url is None
+        assert cfg.provider.api_key is None
         assert cfg.temperature == 0.7
 
 
@@ -46,10 +51,10 @@ class TestEmbeddingProviderConfig:
                 "device": "cuda",
             }
         )
-        assert cfg.model == "BAAI/bge-small-zh-v1.5"
+        assert cfg.provider.model == "BAAI/bge-small-zh-v1.5"
         assert cfg.device == "cuda"
-        assert cfg.base_url is None
-        assert cfg.api_key is None
+        assert cfg.provider.base_url is None
+        assert cfg.provider.api_key is None
 
     def test_from_dict_remote(self):
         """Verify remote OpenAI-compatible provider parsing."""
@@ -60,8 +65,8 @@ class TestEmbeddingProviderConfig:
                 "api_key": "sk-test",
             }
         )
-        assert cfg.model == "text-embedding-3-small"
-        assert cfg.base_url == "https://api.openai.com/v1"
+        assert cfg.provider.model == "text-embedding-3-small"
+        assert cfg.provider.base_url == "https://api.openai.com/v1"
 
 
 class TestLLMSettingsLoad:
@@ -88,9 +93,9 @@ class TestLLMSettingsLoad:
         monkeypatch.chdir(tmp_path)
         settings = LLMSettings.load()
         assert len(settings.llm_providers) == 1
-        assert settings.llm_providers[0].model == "gpt-4"
+        assert settings.llm_providers[0].provider.model == "gpt-4"
         assert len(settings.embedding_providers) == 1
-        assert settings.embedding_providers[0].model == "bge-test"
+        assert settings.embedding_providers[0].provider.model == "bge-test"
 
     def test_load_fallback_to_env_vars(self, tmp_path, monkeypatch):
         """Verify OPENAI_XXX env vars are used when config file is absent."""
@@ -100,7 +105,7 @@ class TestLLMSettingsLoad:
         monkeypatch.setenv("OPENAI_MODEL", "gpt-4")
         settings = LLMSettings.load()
         assert len(settings.llm_providers) >= 1
-        assert any(p.model == "gpt-4" for p in settings.llm_providers)
+        assert any(p.provider.model == "gpt-4" for p in settings.llm_providers)
 
     def test_load_deepseek_env_as_final_fallback(self, tmp_path, monkeypatch):
         """Verify DEEPSEEK_XXX env vars are used when OPENAI_XXX are absent."""
@@ -109,7 +114,7 @@ class TestLLMSettingsLoad:
         monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
         monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
         settings = LLMSettings.load()
-        assert any(p.model == "deepseek-chat" for p in settings.llm_providers)
+        assert any(p.provider.model == "deepseek-chat" for p in settings.llm_providers)
 
     def test_load_no_config_raises(self, tmp_path, monkeypatch):
         """Verify RuntimeError when no LLM config is available."""
@@ -143,9 +148,9 @@ class TestLLMSettingsLoad:
         monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.com/v1")
         monkeypatch.setenv("DEEPSEEK_MODEL", "model-c")
         settings = LLMSettings.load()
-        assert settings.llm_providers[0].model == "model-a"
-        assert any(p.model == "model-b" for p in settings.llm_providers)
-        assert any(p.model == "model-c" for p in settings.llm_providers)
+        assert settings.llm_providers[0].provider.model == "model-a"
+        assert any(p.provider.model == "model-b" for p in settings.llm_providers)
+        assert any(p.provider.model == "model-c" for p in settings.llm_providers)
 
     def test_dedup_providers(self, tmp_path, monkeypatch):
         """Verify duplicate providers are deduplicated by model+base_url."""
@@ -172,7 +177,9 @@ class TestLLMSettingsLoad:
         )
         monkeypatch.chdir(tmp_path)
         settings = LLMSettings.load()
-        llm_models = [(p.model, p.base_url) for p in settings.llm_providers]
+        llm_models = [
+            (p.provider.model, p.provider.base_url) for p in settings.llm_providers
+        ]
         assert len(llm_models) == len(set(llm_models))
 
 
@@ -186,7 +193,11 @@ class TestChatModelFallback:
 
         providers = [
             LLMProviderConfig(
-                model="test-model", base_url="http://fake:8000/v1", api_key="sk-test"
+                provider=ProviderConfig(
+                    model="test-model",
+                    base_url="http://fake:8000/v1",
+                    api_key="sk-test",
+                ),
             )
         ]
         chat = ChatModel(providers=providers)
@@ -201,10 +212,16 @@ class TestChatModelFallback:
 
         providers = [
             LLMProviderConfig(
-                model="bad-model", base_url="http://fake1:8000/v1", api_key="sk-bad"
+                provider=ProviderConfig(
+                    model="bad-model", base_url="http://fake1:8000/v1", api_key="sk-bad"
+                ),
             ),
             LLMProviderConfig(
-                model="good-model", base_url="http://fake2:8000/v1", api_key="sk-good"
+                provider=ProviderConfig(
+                    model="good-model",
+                    base_url="http://fake2:8000/v1",
+                    api_key="sk-good",
+                ),
             ),
         ]
         chat = ChatModel(providers=providers)
@@ -229,10 +246,14 @@ class TestChatModelFallback:
 
         providers = [
             LLMProviderConfig(
-                model="bad1", base_url="http://fake1:8000/v1", api_key="sk-1"
+                provider=ProviderConfig(
+                    model="bad1", base_url="http://fake1:8000/v1", api_key="sk-1"
+                ),
             ),
             LLMProviderConfig(
-                model="bad2", base_url="http://fake2:8000/v1", api_key="sk-2"
+                provider=ProviderConfig(
+                    model="bad2", base_url="http://fake2:8000/v1", api_key="sk-2"
+                ),
             ),
         ]
         chat = ChatModel(providers=providers)
@@ -250,7 +271,11 @@ class TestEmbeddingModelFallback:
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
 
-        providers = [EmbeddingProviderConfig(model="fake-model", device="cpu")]
+        providers = [
+            EmbeddingProviderConfig(
+                provider=ProviderConfig(model="fake-model"), device="cpu"
+            )
+        ]
         emb = EmbeddingModel(providers=providers)
         with patch("app.models.embedding.HuggingFaceEmbeddings") as mock_cls:
             mock_cls.return_value = MagicMock()
@@ -268,9 +293,11 @@ class TestEmbeddingModelFallback:
 
         providers = [
             EmbeddingProviderConfig(
-                model="text-embedding-3-small",
-                base_url="https://api.openai.com/v1",
-                api_key="sk-test",
+                provider=ProviderConfig(
+                    model="text-embedding-3-small",
+                    base_url="https://api.openai.com/v1",
+                    api_key="sk-test",
+                ),
             )
         ]
         emb = EmbeddingModel(providers=providers)
@@ -285,8 +312,12 @@ class TestEmbeddingModelFallback:
         from app.models.settings import EmbeddingProviderConfig
 
         providers = [
-            EmbeddingProviderConfig(model="bad-model", device="cpu"),
-            EmbeddingProviderConfig(model="good-model", device="cpu"),
+            EmbeddingProviderConfig(
+                provider=ProviderConfig(model="bad-model"), device="cpu"
+            ),
+            EmbeddingProviderConfig(
+                provider=ProviderConfig(model="good-model"), device="cpu"
+            ),
         ]
         emb = EmbeddingModel(providers=providers)
 
@@ -308,7 +339,11 @@ class TestEmbeddingModelFallback:
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
 
-        providers = [EmbeddingProviderConfig(model="fake-model", device="cpu")]
+        providers = [
+            EmbeddingProviderConfig(
+                provider=ProviderConfig(model="fake-model"), device="cpu"
+            )
+        ]
         emb = EmbeddingModel(providers=providers)
         mock_client = MagicMock()
         mock_client.embed_query.return_value = [0.1, 0.2, 0.3]
@@ -327,9 +362,9 @@ def test_judge_provider_config_from_dict():
         "temperature": 0.1,
     }
     cfg = JudgeProviderConfig.from_dict(d)
-    assert cfg.model == "deepseek-chat"
-    assert cfg.base_url == "https://api.deepseek.com/v1"
-    assert cfg.api_key == "sk-xxx"
+    assert cfg.provider.model == "deepseek-chat"
+    assert cfg.provider.base_url == "https://api.deepseek.com/v1"
+    assert cfg.provider.api_key == "sk-xxx"
     assert cfg.temperature == 0.1
 
 
@@ -337,8 +372,8 @@ def test_judge_provider_config_defaults():
     from app.models.settings import JudgeProviderConfig
 
     cfg = JudgeProviderConfig.from_dict({"model": "test"})
-    assert cfg.base_url is None
-    assert cfg.api_key is None
+    assert cfg.provider.base_url is None
+    assert cfg.provider.api_key is None
     assert cfg.temperature == 0.1
 
 
@@ -356,4 +391,4 @@ def test_llm_settings_loads_judge(tmp_path, monkeypatch):
 
     settings = LLMSettings.load()
     assert settings.judge_provider is not None
-    assert settings.judge_provider.model == "deepseek-chat"
+    assert settings.judge_provider.provider.model == "deepseek-chat"

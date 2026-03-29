@@ -16,15 +16,18 @@ def is_llm_available() -> bool:
         return False
 
     for provider in settings.llm_providers:
-        if not provider.base_url:
+        if not provider.provider.base_url:
             continue
         try:
             import requests
 
+            base = provider.provider.base_url.rstrip("/")
+            if base.endswith("/v1"):
+                base = base[:-3]
             resp = requests.get(
-                f"{provider.base_url.rstrip('/v1')}/models",
-                headers={"Authorization": f"Bearer {provider.api_key}"}
-                if provider.api_key
+                f"{base}/models",
+                headers={"Authorization": f"Bearer {provider.provider.api_key}"}
+                if provider.provider.api_key
                 else {},
                 timeout=5,
             )

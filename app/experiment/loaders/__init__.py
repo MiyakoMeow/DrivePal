@@ -1,19 +1,19 @@
 """数据集加载器模块."""
 
-from app.experiment.loaders.sgd_calendar import get_sgd_calendar_test_cases
-from app.experiment.loaders.scheduler import get_scheduler_test_cases
-from typing import List, Dict
+from collections.abc import Callable
+
+from app.experiment.loaders.base import DatasetLoader
+from app.experiment.loaders.scheduler import SchedulerLoader
+from app.experiment.loaders.sgd_calendar import SGDCalendarLoader
+
+_LOADERS: dict[str, Callable[[], DatasetLoader]] = {
+    "sgd_calendar": SGDCalendarLoader,
+    "scheduler": SchedulerLoader,
+}
 
 
-class DatasetLoader:
-    """数据集加载器 - 整合HuggingFace数据集."""
-
-    @staticmethod
-    def get_test_cases(dataset: str) -> List[Dict]:
-        """根据数据集名称获取测试用例."""
-        if dataset == "sgd_calendar":
-            return get_sgd_calendar_test_cases()
-        elif dataset == "scheduler":
-            return get_scheduler_test_cases()
-        else:
-            raise ValueError(f"Unknown dataset: {dataset}")
+def get_test_cases(dataset: str) -> list[dict]:
+    """根据数据集名称获取测试用例."""
+    if dataset not in _LOADERS:
+        raise ValueError(f"Unknown dataset: {dataset}")
+    return _LOADERS[dataset]().get_test_cases()
