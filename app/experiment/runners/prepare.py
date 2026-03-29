@@ -50,7 +50,8 @@ def _warmup_stores(
         for _dataset_name, items in warmup_items.items():
             for item in items:
                 response = item.get("response") or chat_model.generate(
-                    item["input"], system_prompt=_SYSTEM_PROMPT,
+                    item["input"],
+                    system_prompt=_SYSTEM_PROMPT,
                 )
                 mem.write_interaction(item["input"], response)
 
@@ -119,7 +120,8 @@ def prepare(
     for ds_name, items in warmup_items.items():
         warmup_path = warmup_dir / f"{ds_name}.json"
         warmup_path.write_text(
-            json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8",
+            json.dumps(items, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
         warmup_files[ds_name] = f"warmup/{ds_name}.json"
 
@@ -138,7 +140,8 @@ def prepare(
 
     prepared_path = run_dir / "prepared.json"
     prepared_path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8",
+        json.dumps(result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
 
     return result

@@ -68,10 +68,14 @@ def execute(prepared_dir: str) -> dict[str, Any]:
                 latency_ms = (time.time() - start) * 1000
                 raw_output = _extract_output(result, store_dir)
                 metrics = evaluate_semantic_accuracy(
-                    case["input"], case["type"], raw_output,
+                    case["input"],
+                    case["type"],
+                    raw_output,
                 )
                 relatedness = evaluate_context_relatedness(
-                    case["input"], case["type"], raw_output,
+                    case["input"],
+                    case["type"],
+                    raw_output,
                 )
                 print(f"[{mode.value}] {case_id} OK ({latency_ms:.0f}ms)")
                 cases.append(

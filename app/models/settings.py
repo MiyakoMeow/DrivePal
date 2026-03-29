@@ -17,6 +17,8 @@ CONFIG_PATH = "config/llm.json"
 
 @dataclass
 class ProviderConfig:
+    """LLM 提供商基础配置."""
+
     model: str
     base_url: str | None = None
     api_key: str | None = None

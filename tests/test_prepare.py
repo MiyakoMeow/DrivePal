@@ -49,7 +49,10 @@ def _make_mock_memory_module():
 @patch("app.experiment.runners.prepare.get_chat_model")
 @patch("app.experiment.loaders.get_test_cases", side_effect=_mock_dataset)
 def test_prepare_creates_directory_structure(
-    mock_load, mock_get_model, mock_mem_cls, tmp_path,
+    mock_load,
+    mock_get_model,
+    mock_mem_cls,
+    tmp_path,
 ):
     mock_get_model.return_value = _mock_chat_model()
     result = prepare(base_dir=str(tmp_path), test_count=5, warmup_ratio=0.7, seed=42)

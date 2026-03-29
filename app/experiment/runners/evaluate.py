@@ -104,7 +104,9 @@ def _has_negative_pattern(query: str) -> bool:
 
 
 def evaluate_semantic_accuracy(
-    input_text: str, expected_type: str, output: str,
+    input_text: str,
+    expected_type: str,
+    output: str,
 ) -> float:
     """评估语义理解准确率."""
     score = 0.0
@@ -182,7 +184,10 @@ def _load_task_concepts(config_dir: str = "config") -> dict[str, list[str]]:
 
 
 def evaluate_context_relatedness(
-    input_text: str, expected_type: str, output: str, config_dir: str = "config",
+    input_text: str,
+    expected_type: str,
+    output: str,
+    config_dir: str = "config",
 ) -> float:
     """评估输出与任务类型的上下文相关度."""
     output_lower = output.lower()

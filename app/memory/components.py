@@ -19,6 +19,7 @@ TOP_K = 3
 
 
 def forgetting_curve(days_elapsed: int, strength: int) -> float:
+    """遗忘曲线衰减函数."""
     if days_elapsed <= 0:
         return 1.0
     return math.exp(-days_elapsed / (5 * strength))
@@ -28,19 +29,24 @@ class EventStorage:
     """事件 JSON 文件 CRUD + ID 生成."""
 
     def __init__(self, data_dir: str) -> None:
+        """初始化事件存储."""
         self._store = JSONStore(data_dir, "events.json", list)
         self.data_dir = data_dir
 
     def generate_id(self) -> str:
+        """生成唯一事件 ID."""
         return f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     def read_events(self) -> list[dict]:
+        """读取所有事件."""
         return self._store.read()
 
     def write_events(self, events: list[dict]) -> None:
+        """覆写全部事件."""
         self._store.write(events)
 
     def append_event(self, event: MemoryEvent) -> str:
+        """追加事件并返回 ID."""
         event = event.model_copy(deep=True)
         event.id = self.generate_id()
         event.created_at = datetime.now().isoformat()
@@ -54,6 +60,7 @@ class KeywordSearch:
     def search(
         self, query: str, events: list[dict], top_k: int = 10
     ) -> list[SearchResult]:
+        """关键词搜索事件."""
         query_lower = query.lower()
         matched = [
             e
@@ -68,10 +75,12 @@ class FeedbackManager:
     """反馈更新 + 策略权重管理."""
 
     def __init__(self, data_dir: str) -> None:
+        """初始化反馈管理器."""
         self._strategies_store = JSONStore(data_dir, "strategies.json", dict)
         self.data_dir = data_dir
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """记录反馈并更新策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now().isoformat()
         feedback_store = JSONStore(self.data_dir, "feedback.json", list)
@@ -102,11 +111,13 @@ class SimpleInteractionWriter:
     """简单交互写入（创建 MemoryEvent 写入 EventStorage）."""
 
     def __init__(self, storage: EventStorage) -> None:
+        """初始化交互写入器."""
         self._storage = storage
 
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """写入交互记录."""
         event = MemoryEvent(
             content=query,
             type=event_type,
@@ -127,6 +138,7 @@ class MemoryBankEngine:
         embedding_model: Optional[EmbeddingModel] = None,
         chat_model: Optional[ChatModel] = None,
     ) -> None:
+        """初始化记忆库引擎."""
         self.data_dir = data_dir
         self._storage = storage
         self.embedding_model = embedding_model
@@ -140,6 +152,7 @@ class MemoryBankEngine:
         )
 
     def write(self, event: MemoryEvent) -> str:
+        """写入事件并触发摘要."""
         event = event.model_copy(deep=True)
         event.id = self._storage.generate_id()
         event.created_at = datetime.now().isoformat()
@@ -152,6 +165,7 @@ class MemoryBankEngine:
         return event.id
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """搜索记忆事件与摘要."""
         if not query.strip():
             return []
         events = self._storage.read_events()
@@ -340,6 +354,7 @@ class MemoryBankEngine:
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """写入交互记录并关联事件."""
         interaction_id = (
             f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         )

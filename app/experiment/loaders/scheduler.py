@@ -14,6 +14,7 @@ class SchedulerLoader:
     """
 
     def load(self) -> Dataset:
+        """加载 Scheduler 数据集."""
         global _cache
         if _cache is None:
             _cache = load_dataset("shawnha/scheduler_dataset", split="train")
@@ -28,6 +29,7 @@ class SchedulerLoader:
         return _cache
 
     def get_test_cases(self) -> list[dict]:
+        """从数据集提取测试用例."""
         ds = self.load()
         test_cases = []
         for i, row in enumerate(ds):

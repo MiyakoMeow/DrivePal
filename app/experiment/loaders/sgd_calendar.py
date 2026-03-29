@@ -11,6 +11,7 @@ class SGDCalendarLoader:
     """加载SGD-Calendar数据集."""
 
     def load(self) -> Dataset:
+        """加载 SGD-Calendar 数据集."""
         global _cache
         if _cache is None:
             _cache = load_dataset("vidhikatkoria/SGD_Calendar", split="train")
@@ -25,6 +26,7 @@ class SGDCalendarLoader:
         return _cache
 
     def get_test_cases(self) -> list[dict]:
+        """从数据集提取测试用例."""
         ds = self.load()
         test_cases = []
         for i, row in enumerate(ds):
