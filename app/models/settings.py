@@ -16,21 +16,28 @@ CONFIG_PATH = "config/llm.json"
 
 
 @dataclass
-class LLMProviderConfig:
-    """单个 LLM 服务提供商配置."""
-
+class ProviderConfig:
     model: str
     base_url: str | None = None
     api_key: str | None = None
+
+
+@dataclass
+class LLMProviderConfig:
+    """单个 LLM 服务提供商配置."""
+
+    provider: ProviderConfig
     temperature: float = 0.7
 
     @classmethod
     def from_dict(cls, d: dict) -> "LLMProviderConfig":
         """从字典创建配置实例."""
         return cls(
-            model=d["model"],
-            base_url=d.get("base_url"),
-            api_key=d.get("api_key"),
+            provider=ProviderConfig(
+                model=d["model"],
+                base_url=d.get("base_url"),
+                api_key=d.get("api_key"),
+            ),
             temperature=d.get("temperature", 0.7),
         )
 
@@ -39,19 +46,19 @@ class LLMProviderConfig:
 class EmbeddingProviderConfig:
     """单个 Embedding 服务提供商配置."""
 
-    model: str
+    provider: ProviderConfig
     device: str = "cpu"
-    base_url: str | None = None
-    api_key: str | None = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "EmbeddingProviderConfig":
         """从字典创建配置实例."""
         return cls(
-            model=d["model"],
+            provider=ProviderConfig(
+                model=d["model"],
+                base_url=d.get("base_url"),
+                api_key=d.get("api_key"),
+            ),
             device=d.get("device", "cpu"),
-            base_url=d.get("base_url"),
-            api_key=d.get("api_key"),
         )
 
 
@@ -59,18 +66,18 @@ class EmbeddingProviderConfig:
 class JudgeProviderConfig:
     """Judge 评估模型配置."""
 
-    model: str
-    base_url: str | None = None
-    api_key: str | None = None
+    provider: ProviderConfig
     temperature: float = 0.1
 
     @classmethod
     def from_dict(cls, d: dict) -> "JudgeProviderConfig":
         """从字典创建配置实例."""
         return cls(
-            model=d["model"],
-            base_url=d.get("base_url"),
-            api_key=d.get("api_key"),
+            provider=ProviderConfig(
+                model=d["model"],
+                base_url=d.get("base_url"),
+                api_key=d.get("api_key"),
+            ),
             temperature=d.get("temperature", 0.1),
         )
 
@@ -109,7 +116,7 @@ class LLMSettings:
         seen = set()
         deduped = []
         for p in llm_providers:
-            key = (p.model, p.base_url)
+            key = (p.provider.model, p.provider.base_url)
             if key not in seen:
                 seen.add(key)
                 deduped.append(p)
@@ -134,9 +141,11 @@ def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
     if not model:
         return None
     return LLMProviderConfig(
-        model=model,
-        base_url=os.getenv(f"{prefix}_BASE_URL"),
-        api_key=os.getenv(f"{prefix}_API_KEY"),
+        provider=ProviderConfig(
+            model=model,
+            base_url=os.getenv(f"{prefix}_BASE_URL"),
+            api_key=os.getenv(f"{prefix}_API_KEY"),
+        ),
     )
 
 
@@ -161,9 +170,11 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
     judge_dict = config_data.get("judge")
     if judge_model:
         return JudgeProviderConfig(
-            model=judge_model,
-            base_url=os.getenv("JUDGE_BASE_URL"),
-            api_key=os.getenv("JUDGE_API_KEY"),
+            provider=ProviderConfig(
+                model=judge_model,
+                base_url=os.getenv("JUDGE_BASE_URL"),
+                api_key=os.getenv("JUDGE_API_KEY"),
+            ),
             temperature=float(os.getenv("JUDGE_TEMPERATURE", "0.1")),
         )
     if judge_dict:
@@ -181,9 +192,11 @@ def get_judge_model() -> "ChatModel":
             "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.json"
         )
     provider = LLMProviderConfig(
-        model=settings.judge_provider.model,
-        base_url=settings.judge_provider.base_url,
-        api_key=settings.judge_provider.api_key,
+        provider=ProviderConfig(
+            model=settings.judge_provider.provider.model,
+            base_url=settings.judge_provider.provider.base_url,
+            api_key=settings.judge_provider.provider.api_key,
+        ),
         temperature=settings.judge_provider.temperature,
     )
     return ChatModel(providers=[provider])

@@ -72,7 +72,7 @@ def test_e2e_execute_then_judge(tmp_path: Path) -> None:
             "helpfulness": {"score": 4, "reason": "ok"},
         }
     )
-    mock_judge.providers = [MagicMock(model="mock-judge")]
+    mock_judge.providers = [MagicMock(provider=MagicMock(model="mock-judge"))]
 
     with patch("app.experiment.runners.judge.get_judge_model", return_value=mock_judge):
         report = judge(str(prepared_dir))

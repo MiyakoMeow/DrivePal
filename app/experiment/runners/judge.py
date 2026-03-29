@@ -242,7 +242,7 @@ def judge(prepared_dir: str) -> dict[str, Any]:
     prepared_path = Path(prepared_dir)
     judge_model = get_judge_model()
     judge_model_name = (
-        judge_model.providers[0].model if judge_model.providers else "unknown"
+        judge_model.providers[0].provider.model if judge_model.providers else "unknown"
     )
 
     run_id = ""
