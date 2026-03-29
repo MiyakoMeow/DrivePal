@@ -37,9 +37,14 @@ extend-select = ["D"]
 ignore = ["D211", "D213", "D203"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D100", "D103"]
-"adapters/**" = ["D100", "D101", "D102", "D103", "D104", "D107", "E402"]
-"run_benchmark.py" = ["D100", "D103"]
+"vendor/**" = ["ALL"]
+"adapters/runner.py" = ["E402"]
+
+[tool.ty.src]
+exclude = ["vendor"]
+
+[tool.ty.analysis]
+allowed-unresolved-imports = ["evaluation.**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

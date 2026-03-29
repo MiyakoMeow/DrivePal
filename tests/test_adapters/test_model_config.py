@@ -1,9 +1,10 @@
-import os
+"""Tests for model_config module."""
+
 import json
-import pytest
 
 
 def test_get_benchmark_client_returns_openai_instance(tmp_path, monkeypatch):
+    """Test get_benchmark_client returns an OpenAI instance."""
     config = {
         "llm": [
             {
@@ -25,6 +26,7 @@ def test_get_benchmark_client_returns_openai_instance(tmp_path, monkeypatch):
 
 
 def test_get_benchmark_client_uses_llm_config_when_no_benchmark(tmp_path, monkeypatch):
+    """Test get_benchmark_client uses LLM config when no benchmark config exists."""
     config = {
         "llm": [
             {
@@ -45,6 +47,7 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(tmp_path, monkey
 
 
 def test_get_benchmark_client_uses_benchmark_config_with_env(tmp_path, monkeypatch):
+    """Test get_benchmark_client uses benchmark config with environment variable."""
     monkeypatch.setenv("TEST_API_KEY", "sk-test123")
     config = {
         "llm": [
@@ -73,6 +76,7 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(tmp_path, monkeypat
 
 
 def test_get_store_chat_model(tmp_path, monkeypatch):
+    """Test get_store_chat_model returns a chat model."""
     config = {
         "llm": [
             {

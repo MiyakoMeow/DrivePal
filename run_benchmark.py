@@ -1,7 +1,10 @@
+"""Command-line interface for VehicleMemBench evaluation."""
+
 import argparse
 
 
 def main():
+    """Entry point for benchmark CLI."""
     parser = argparse.ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
 

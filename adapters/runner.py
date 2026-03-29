@@ -1,3 +1,5 @@
+"""Benchmark runner for VehicleMemBench evaluation."""
+
 import sys
 import os
 import json
@@ -20,6 +22,7 @@ OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"
 
 
 def setup_vehiclemembench_path():
+    """Add VehicleMemBench paths to sys.path."""
     for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
         d_str = str(d)
         if not any(os.path.abspath(p) == os.path.abspath(d_str) for p in sys.path):
@@ -45,6 +48,7 @@ from evaluation.agent_client import AgentClient
 
 
 def parse_file_range(range_str: str) -> list[int]:
+    """Parse file range string like '1-5' or '1,3,5' into list of integers."""
     result = []
     for part in range_str.split(","):
         part = part.strip()
@@ -89,6 +93,7 @@ def prepare(
     file_range: str = "1-50",
     memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
 ):
+    """Prepare benchmark data for specified file range and memory types."""
     file_nums = parse_file_range(file_range)
     types = [t.strip() for t in memory_types.split(",")]
     agent_client = _get_agent_client()
@@ -138,6 +143,7 @@ def run(
     memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
     reflect_num: int = 10,
 ):
+    """Run benchmark evaluation for specified file range and memory types."""
     file_nums = parse_file_range(file_range)
     types = [t.strip() for t in memory_types.split(",")]
     agent_client = _get_agent_client()
@@ -285,6 +291,7 @@ def _run_custom_adapter(
 
 
 def report(output_path: Optional[str] = None):
+    """Generate and print benchmark report from results."""
     output_dir = _get_output_dir()
     all_results = {}
 

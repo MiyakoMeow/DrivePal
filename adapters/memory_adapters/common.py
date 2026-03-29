@@ -1,8 +1,11 @@
+"""Common utilities for memory adapters."""
+
 import re
 from app.memory.schemas import MemoryEvent
 
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
+    """Convert history text to interaction records."""
     if not history_text.strip():
         return []
     pattern = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
@@ -29,6 +32,7 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
 
 
 def format_search_results(results) -> tuple[str, int]:
+    """Format search results into text and count."""
     if not results:
         return ("", 0)
     texts = []
@@ -46,8 +50,12 @@ def format_search_results(results) -> tuple[str, int]:
 
 
 class StoreClient:
+    """Client for searching in memory stores."""
+
     def __init__(self, store):
+        """Initialize with a store instance."""
         self.store = store
 
     def search(self, query, user_id=None, top_k=5):
+        """Search the store for relevant results."""
         return self.store.search(query=query, top_k=top_k)

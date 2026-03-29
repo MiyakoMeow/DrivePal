@@ -1,3 +1,5 @@
+"""Tests for common adapter utilities."""
+
 from adapters.memory_adapters.common import (
     history_to_interaction_records,
     format_search_results,
@@ -9,6 +11,7 @@ SAMPLE_HISTORY = "[2025-03-03 08:30] Gary Allen: I like the seat heating on leve
 
 
 def test_history_to_interaction_records():
+    """Test converting history text to interaction records."""
     records = history_to_interaction_records(SAMPLE_HISTORY)
     assert len(records) == 3
     assert records[0].content == "Gary Allen: I like the seat heating on level 3"
@@ -18,17 +21,20 @@ def test_history_to_interaction_records():
 
 
 def test_history_to_interaction_records_empty():
+    """Test empty history returns empty list."""
     records = history_to_interaction_records("")
     assert records == []
 
 
 def test_format_search_results_empty():
+    """Test formatting empty results."""
     text, count = format_search_results([])
     assert text == ""
     assert count == 0
 
 
 def test_format_search_results_with_events():
+    """Test formatting search results with events."""
     from app.memory.schemas import SearchResult
 
     results = [
@@ -46,6 +52,8 @@ def test_format_search_results_with_events():
 
 
 def test_store_client_delegates_to_store():
+    """Test that StoreClient delegates search to store."""
+
     class FakeStore:
         def search(self, query, top_k=10):
             return [

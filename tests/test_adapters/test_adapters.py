@@ -1,4 +1,5 @@
-import pytest
+"""Tests for memory adapters."""
+
 from adapters.memory_adapters import ADAPTERS
 from adapters.memory_adapters.keyword_adapter import KeywordAdapter
 
@@ -7,10 +8,12 @@ SAMPLE_HISTORY = "[2025-03-03 08:30] Gary Allen: I like the seat heating on leve
 
 
 def test_adapters_registry_has_all_four():
+    """Test that ADAPTERS registry contains all four adapter types."""
     assert set(ADAPTERS.keys()) == {"keyword", "llm_only", "embeddings", "memory_bank"}
 
 
 def test_all_adapters_have_tag():
+    """Test that all adapters have a TAG attribute."""
     for name, cls in ADAPTERS.items():
         adapter = cls.__new__(cls)
         assert hasattr(adapter, "TAG")
@@ -18,6 +21,7 @@ def test_all_adapters_have_tag():
 
 
 def test_keyword_adapter_add_and_search(tmp_path):
+    """Test KeywordAdapter can add history and search."""
     adapter = KeywordAdapter(data_dir=str(tmp_path / "keyword"))
     store = adapter.add(SAMPLE_HISTORY)
     assert store is not None
@@ -27,6 +31,7 @@ def test_keyword_adapter_add_and_search(tmp_path):
 
 
 def test_all_adapters_have_required_methods():
+    """Test that all adapters have the required methods."""
     for name, cls in ADAPTERS.items():
         adapter = cls.__new__(cls)
         assert callable(getattr(adapter, "add", None))

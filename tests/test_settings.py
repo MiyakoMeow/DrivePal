@@ -353,6 +353,7 @@ class TestEmbeddingModelFallback:
 
 
 def test_judge_provider_config_from_dict():
+    """Test JudgeProviderConfig.from_dict creates correct config."""
     from app.models.settings import JudgeProviderConfig
 
     d = {
@@ -369,6 +370,7 @@ def test_judge_provider_config_from_dict():
 
 
 def test_judge_provider_config_defaults():
+    """Test JudgeProviderConfig defaults are applied correctly."""
     from app.models.settings import JudgeProviderConfig
 
     cfg = JudgeProviderConfig.from_dict({"model": "test"})
@@ -378,6 +380,7 @@ def test_judge_provider_config_defaults():
 
 
 def test_llm_settings_loads_judge(tmp_path, monkeypatch):
+    """Test LLMSettings loads judge provider from config."""
     from app.models.settings import LLMSettings
     import json
 
