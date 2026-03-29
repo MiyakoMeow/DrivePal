@@ -16,7 +16,7 @@ class KeywordMemoryStore:
     store_name = "keyword"
     requires_embedding = False
     requires_chat = False
-    supports_interaction = False
+    supports_interaction = True
 
     def __init__(self, data_dir: str, **kwargs) -> None:
         """初始化关键词存储."""

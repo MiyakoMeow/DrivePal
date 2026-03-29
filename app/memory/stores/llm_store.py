@@ -38,7 +38,7 @@ class LLMOnlyMemoryStore:
     store_name = "llm_only"
     requires_embedding = False
     requires_chat = True
-    supports_interaction = False
+    supports_interaction = True
 
     def __init__(
         self,

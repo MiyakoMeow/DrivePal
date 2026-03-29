@@ -21,7 +21,7 @@ def is_llm_available() -> bool:
         try:
             import requests
 
-            base = provider.provider.base_url
+            base = provider.provider.base_url.rstrip("/")
             if base.endswith("/v1"):
                 base = base[:-3]
             resp = requests.get(

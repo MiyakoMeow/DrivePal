@@ -22,6 +22,8 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
     """遗忘曲线衰减函数."""
     if days_elapsed <= 0:
         return 1.0
+    if strength <= 0:
+        return 0.0
     return math.exp(-days_elapsed / (5 * strength))
 
 
@@ -368,7 +370,6 @@ class MemoryBankEngine:
             "memory_strength": 1,
             "last_recall_date": today,
         }
-        self._interactions_store.append(interaction)
 
         append_event_id = self._should_append_to_event(interaction)
         if append_event_id:
@@ -394,7 +395,7 @@ class MemoryBankEngine:
             self._storage._store.append(event)
             interaction["event_id"] = event_id
 
-        self._persist_interaction(interaction)
+        self._interactions_store.append(interaction)
         self._maybe_summarize(today)
         return interaction_id
 

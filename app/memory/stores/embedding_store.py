@@ -21,7 +21,7 @@ class EmbeddingMemoryStore:
     store_name = "embeddings"
     requires_embedding = True
     requires_chat = False
-    supports_interaction = False
+    supports_interaction = True
     SIMILARITY_THRESHOLD = 0.4
 
     def __init__(
