@@ -187,6 +187,10 @@ class MemoryBankEngine:
         top_results = all_results[:top_k]
         return self._expand_event_interactions(top_results)
 
+    def _get_searchable_text(self, event: dict) -> str:
+        parts = [event.get("content", ""), event.get("description", "")]
+        return "\n".join(p for p in parts if p)
+
     def _search_by_keyword(
         self, query: str, events: list[dict], top_k: int
     ) -> list[SearchResult]:
@@ -194,8 +198,8 @@ class MemoryBankEngine:
         today = date.today()
         results = []
         for event in events:
-            content = event.get("content", "").lower()
-            if query_lower in content:
+            searchable_text = self._get_searchable_text(event).lower()
+            if query_lower in searchable_text:
                 strength = event.get("memory_strength", 1)
                 last_recall = event.get("last_recall_date", today.isoformat())
                 try:
@@ -217,7 +221,7 @@ class MemoryBankEngine:
     ) -> list[SearchResult]:
         assert self.embedding_model is not None
         query_vector = self.embedding_model.encode(query)
-        event_texts = [event.get("content", "") for event in events]
+        event_texts = [self._get_searchable_text(event) for event in events]
         all_event_vectors = self.embedding_model.batch_encode(event_texts)
         today = date.today()
         results = []
@@ -374,8 +378,6 @@ class MemoryBankEngine:
         append_event_id = self._should_append_to_event(interaction)
         if append_event_id:
             interaction["event_id"] = append_event_id
-            self._append_interaction_to_event(append_event_id, interaction_id)
-            self._update_event_summary(append_event_id)
         else:
             event_id = (
                 f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -392,10 +394,16 @@ class MemoryBankEngine:
                 "last_recall_date": today,
                 "date_group": today,
             }
-            self._storage._store.append(event)
             interaction["event_id"] = event_id
 
         self._interactions_store.append(interaction)
+
+        if append_event_id:
+            self._append_interaction_to_event(append_event_id, interaction_id)
+            self._update_event_summary(append_event_id)
+        else:
+            self._storage._store.append(event)
+
         self._maybe_summarize(today)
         return interaction_id
 
@@ -471,9 +479,17 @@ class MemoryBankEngine:
             return
         summaries = self._summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
+        latest_source_ts = max(
+            (e.get("updated_at") or e.get("created_at", "") for e in group_events),
+            default="",
+        )
         if date_group in daily_summaries:
             existing = daily_summaries[date_group]
-            if isinstance(existing, dict) and existing.get("event_count", 0) >= count:
+            if (
+                isinstance(existing, dict)
+                and existing.get("event_count", 0) >= count
+                and existing.get("source_updated_at", "") >= latest_source_ts
+            ):
                 return
         if not self.chat_model:
             return
@@ -490,6 +506,7 @@ class MemoryBankEngine:
             "memory_strength": 1,
             "last_recall_date": date_group,
             "event_count": count,
+            "source_updated_at": latest_source_ts,
         }
         summaries["daily_summaries"] = daily_summaries
         self._summaries_store.write(summaries)
