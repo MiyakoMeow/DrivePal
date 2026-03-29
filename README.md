@@ -1,6 +1,6 @@
 # 知行车秘 - 车载AI智能体原型系统
 
-基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略对比实验。
+基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略的自动化对比实验（LLM-as-Judge 评估）。
 
 ---
 
@@ -15,9 +15,8 @@
   - [REST API](#4-rest-api)
   - [Web界面](#5-web界面)
 - [快速开始](#快速开始)
-- [API文档](#api文档)
+- [实验流程](#实验流程)
 - [配置说明](#配置说明)
-- [数据存储](#数据存储)
 - [测试](#测试)
 - [技术栈](#技术栈)
 
@@ -40,45 +39,46 @@
 ```
 thesis-cockpit-memo/
 ├── app/                          # 应用核心代码
-│   ├── __init__.py              # 存储初始化入口
 │   ├── agents/                   # AI智能体核心模块
-│   │   ├── workflow.py         # LangGraph工作流编排
-│   │   ├── state.py            # Agent状态类型定义
-│   │   └── prompts.py          # 系统提示词模板
+│   │   ├── workflow.py           # LangGraph工作流编排
+│   │   ├── state.py              # Agent状态类型定义
+│   │   └── prompts.py            # 系统提示词模板
 │   ├── models/                   # AI模型封装
-│   │   ├── chat.py             # LLM调用封装
-│   │   ├── embedding.py         # 嵌入模型封装
-│   │   └── config.py           # 多provider配置
+│   │   ├── chat.py               # LLM调用封装
+│   │   ├── embedding.py          # 嵌入模型封装
+│   │   └── settings.py           # 多provider配置 + Judge配置
 │   ├── memory/                   # 记忆模块
-│   │   ├── memory.py           # MemoryModule调度层
-│   │   └── memory_bank.py      # MemoryBank后端（分层记忆）
-│   ├── storage/                  # 存储模块
-│   │   ├── json_store.py       # JSON文件存储
-│   │   └── init_data.py        # 数据初始化
+│   │   ├── memory.py             # MemoryModule调度层
+│   │   ├── types.py              # MemoryMode枚举
+│   │   ├── schemas.py            # 数据模型定义
+│   │   └── stores/               # 各记忆后端实现
+│   │       ├── base.py           # BaseMemoryStore + keyword检索
+│   │       ├── embedding_store.py # Embedding检索（混合检索）
+│   │       ├── llm_store.py      # LLM语义检索
+│   │       └── memory_bank_store.py # MemoryBank后端
 │   ├── experiment/               # 实验对比模块
-│   │   ├── runner.py           # 实验运行器
-│   │   ├── test_data.py        # 测试数据生成器
-│   │   └── loaders/            # 数据集加载器
-│   │       ├── sgd_calendar.py # SGD-Calendar数据集
-│   │       └── scheduler.py    # Scheduler数据集
-│   └── api/                     # FastAPI接口
-│       └── main.py              # REST API
+│   │   ├── runners/              # 三阶段Pipeline运行器
+│   │   │   ├── prepare.py        # Prepare阶段：数据加载+预热
+│   │   │   ├── execute.py        # Run阶段：执行测试+规则评估
+│   │   │   ├── judge.py          # Judge阶段：LLM-as-Judge评分
+│   │   │   └── evaluate.py       # 规则评估函数
+│   │   └── loaders/              # 数据集加载器
+│   │       ├── sgd_calendar.py   # SGD-Calendar数据集
+│   │       └── scheduler.py      # Scheduler数据集
+│   ├── storage/                  # 存储模块
+│   │   └── json_store.py         # JSON文件存储
+│   └── api/                      # FastAPI接口
+│       └── main.py               # REST API
 ├── config/                       # 配置文件
-│   ├── scenarios.json           # 驾驶场景模板
-│   ├── driver_states.json      # 驾驶员状态配置
-│   └── evaluation_config.json   # 评估配置
+│   ├── scenarios.json            # 驾驶场景模板
+│   ├── driver_states.json        # 驾驶员状态配置
+│   └── evaluation_config.json    # 评估配置
 ├── data/                         # 数据目录（运行时生成）
-├── tests/                        # 集成测试
-│   ├── test_api.py             # API端点测试
-│   ├── test_chat.py            # Chat→Memory→Workflow集成测试
-│   ├── test_embedding.py       # Embedding→Memory检索集成测试
-│   ├── test_memory_bank.py     # MemoryBank分层记忆测试
-│   └── test_storage.py         # Storage→Memory持久化测试
+├── tests/                        # 测试
 ├── webui/                        # Web界面
-│   └── index.html              # 单页应用
+├── run_experiment.py             # 实验Pipeline CLI
 ├── main.py                       # Web服务入口
-├── run_exp.py                    # 实验运行脚本（CLI）
-└── pyproject.toml               # 项目配置
+└── pyproject.toml                # 项目配置
 ```
 
 ---
@@ -161,43 +161,100 @@ Summary (层级摘要)
 
 ### 3. 实验对比框架
 
+三阶段 Pipeline 架构：Prepare → Execute → Judge，每阶段可独立运行/重试。
+
+#### Pipeline 流程
+
+```
+[数据集] → Prepare → data/exp/{run_id}/prepared.json
+                         ↓
+                       Execute → data/exp/{run_id}/results/{method}_raw.json
+                         ↓
+                       Judge → data/exp/{run_id}/judged/final_report.json
+```
+
+#### 四种记忆后端
+
+| 后端 | 实现类 | 原理 | 适用场景 |
+|------|--------|------|----------|
+| `keyword` | `BaseMemoryStore` | 关键词大小写不敏感匹配 + 子串搜索 | 快速、简单查询 |
+| `llm_only` | `LLMOnlyMemoryStore` | LLM判断语义相关性 | 复杂语义理解 |
+| `embeddings` | `EmbeddingMemoryStore` | BGE向量余弦相似度 + keyword fallback | 语义模糊查询 |
+| `memorybank` | `MemoryBankBackend` | Ebbinghaus遗忘曲线 + 分层记忆 + 混合检索 | 长期记忆管理 |
+
 #### 运行实验
 
 ```bash
-# 默认：全部4种方法，20个测试用例，随机种子42
-uv run python run_exp.py
+# 全流程（推荐）
+uv run python run_experiment.py all --datasets sgd_calendar scheduler --test-count 50
 
-# 指定方法和用例数
-uv run python run_exp.py --methods keyword llm_only --count 50 --seed 123
-
-# 可选参数：--methods, --count, --seed
+# 分阶段运行
+uv run python run_experiment.py prepare --datasets sgd_calendar scheduler --test-count 50 --seed 42
+uv run python run_experiment.py run --run-id <run_id>
+uv run python run_experiment.py judge --run-id <run_id>
 ```
 
-每次实验为每种方法创建独立临时数据目录，运行后自动清理，不污染主数据。
+#### CLI 参数
 
-#### 数据隔离机制
+| 子命令 | 参数 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `prepare` | `--datasets` | `sgd_calendar scheduler` | 使用的数据集 |
+| `prepare` | `--test-count` | `50` | 每数据集测试用例数 |
+| `prepare` | `--warmup-ratio` | `0.7` | 预热数据占比 |
+| `prepare` | `--seed` | `42` | 随机种子 |
+| `run` | `--run-id` | 必填 | Prepare 生成的 run ID |
+| `judge` | `--run-id` | 必填 | 同上 |
 
-四种方法各自使用隔离的临时数据目录（`data/exp_tmp/{method}/`），所有方法运行**相同的测试用例**（由 seed 保证可复现），确保公平对比。
+#### LLM-as-Judge 评估
 
-#### 评估指标
+使用独立 Judge 模型对每个后端的输出做多维评分（1-5分）：
 
-| 指标 | 说明 | 计算方式 |
-|------|------|----------|
-| `avg_latency_ms` | 平均响应延迟 | 毫秒 |
-| `task_completion_rate` | 任务完成率 | 成功数/总数 |
-| `semantic_accuracy` | 语义理解准确率 | 意图匹配40% + 否定处理20% + 关键词重叠40%（bigram分词） |
-| `context_relatedness` | 上下文相关度 | 任务相关概念命中数/总概念数 |
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| `memory_recall` | 25% | 是否正确利用了历史记忆/上下文信息 |
+| `relevance` | 25% | 回复是否与用户意图相关 |
+| `task_quality` | 20% | 日程管理任务是否被正确处理 |
+| `coherence` | 15% | 驾驶场景下是否合理连贯 |
+| `helpfulness` | 15% | 对驾驶员的实际帮助程度 |
 
-#### 数据集加载器
+Judge 配置在 `config/llm.json` 的 `judge` 字段，支持环境变量覆盖：`JUDGE_MODEL` / `JUDGE_BASE_URL` / `JUDGE_API_KEY`。
 
-- **SGD-Calendar** (`app/experiment/loaders/sgd_calendar.py`)
-  - 来源：`vidhikatkoria/SGD_Calendar` (HuggingFace)
-  - 提取 User: 开头的对话轮次
-  - 最大60条测试用例
+#### 实验数据结构
 
-- **Scheduler** (`app/experiment/loaders/scheduler.py`)
-  - 来源：`shawnha/scheduler_dataset` (HuggingFace)
-  - 类型推断：flight_booking / hotel_booking / schedule_check / general
+```
+data/exp/{run_id}/
+├── prepared.json              # 划分方案 + 测试用例 + 预热数据引用
+├── warmup/                    # 预热数据
+│   ├── sgd_calendar.json
+│   └── scheduler.json
+├── stores/                    # 各后端预热的记忆库
+│   ├── keyword/
+│   ├── llm_only/
+│   ├── embeddings/
+│   └── memorybank/
+├── results/                   # Execute 阶段原始结果
+│   ├── keyword_raw.json
+│   ├── llm_only_raw.json
+│   ├── embeddings_raw.json
+│   └── memorybank_raw.json
+└── judged/                    # Judge 阶段评分
+    ├── keyword_judged.json
+    ├── llm_only_judged.json
+    ├── embeddings_judged.json
+    ├── memorybank_judged.json
+    └── final_report.json      # 汇总报告
+```
+
+#### 数据集
+
+| 数据集 | 来源 | 样本量 | 说明 |
+|--------|------|--------|------|
+| **SGD-Calendar** | `vidhikatkoria/SGD_Calendar` (HuggingFace) | 60 条 | 日程管理对话 |
+| **Scheduler** | `shawnha/scheduler_dataset` (HuggingFace) | 1110 条 | 航班/酒店/日程查询 |
+
+#### 断点续评
+
+Judge 阶段支持断点续评：已成功评判的用例会被跳过，只重试失败的。重新运行 `judge` 即可继续。
 
 ---
 
@@ -312,50 +369,52 @@ python main.py
 ### 5. 运行对比实验
 
 ```bash
-# 默认：全部4种方法，20个测试用例
-uv run python run_exp.py
+# 全流程（推荐）
+uv run python run_experiment.py all --datasets sgd_calendar scheduler --test-count 50
 
-# 自定义参数
-uv run python run_exp.py --methods keyword embeddings --count 50 --seed 123
+# 分阶段运行
+uv run python run_experiment.py prepare --datasets sgd_calendar --test-count 30 --seed 42
+uv run python run_experiment.py run --run-id <run_id>
+uv run python run_experiment.py judge --run-id <run_id>
 ```
-
----
-
-## API文档
-
-启动服务后访问：
-
-- Swagger UI：http://localhost:8000/docs
-- ReDoc：http://localhost:8000/redoc
 
 ---
 
 ## 配置说明
 
-### 模型配置 (`app/models/config.py`)
+### 模型配置 (`config/llm.json`)
 
-支持多Provider配置：
+所有 LLM、Embedding、Judge 模型配置统一在 `config/llm.json` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。
 
-```python
-PROVIDERS = {
-    "qwen": {
-        "base_url": "http://localhost:8000/v1",  # 通过 VLLM_BASE_URL 环境变量配置
-        "model": "Qwen/Qwen3.5-2B",
-    },
-    "deepseek": {
-        "base_url": "https://api.deepseek.com/v1",
-        "model": "deepseek-chat",
-    },
-    "openai": {
-        "base_url": "https://api.openai.com/v1",
-        "model": "gpt-4",
-    },
-    "anthropic": {
-        "base_url": "https://api.anthropic.com",
-        "model": "claude-3-sonnet-20240229",
-    },
+```json
+{
+  "llm": [
+    {
+      "model": "qwen3.5-2b",
+      "base_url": "http://localhost:50721/v1",
+      "api_key": "local",
+      "temperature": 0.7
+    }
+  ],
+  "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
+  "judge": {
+    "model": "qwen3.5-2b",
+    "base_url": "http://localhost:50721/v1",
+    "api_key": "local",
+    "temperature": 0.1
+  }
 }
 ```
+
+**环境变量覆盖：**
+
+| 变量 | 说明 |
+|------|------|
+| `VLLM_BASE_URL` | 默认 LLM provider 的 base_url |
+| `JUDGE_MODEL` | Judge 模型名称（优先于 llm.json 中的 judge 字段） |
+| `JUDGE_BASE_URL` | Judge 模型的 base_url |
+| `JUDGE_API_KEY` | Judge 模型的 API key |
+| `OPENAI_MODEL` / `DEEPSEEK_MODEL` | 自动注册为额外 LLM provider |
 
 ### 驾驶场景配置 (`config/scenarios.json`)
 
@@ -419,14 +478,28 @@ uv run pytest tests/ -v
 
 ### 测试覆盖模块
 
-| 文件 | 测试内容 | 引用模块 |
-|------|----------|----------|
-| `test_api.py` | API端点集成测试 | API→Workflow→Memory→Chat |
-| `test_chat.py` | Chat驱动LLM记忆搜索、Workflow上下文注入 | Chat→Memory→Workflow |
-| `test_embedding.py` | Embedding语义检索、MemoryBank检索与聚合 | Embedding→MemoryModule→MemoryBankBackend |
-| `test_experiment_runner.py` | 实验框架：seed可复现、raw输出保留、评估指标、数据隔离 | ExperimentRunner, TestDataGenerator, AgentWorkflow |
-| `test_memory_bank.py` | 遗忘曲线检索、层级摘要、交互写入与聚合 | MemoryBankBackend→JSONStore, MemoryModule |
-| `test_storage.py` | 跨实例持久化、反馈策略更新 | MemoryModule→init_storage→JSONStore |
+| 文件 | 说明 |
+|------|------|
+| `test_prepare.py` | Prepare 阶段：数据划分、预热、seed 可复现 |
+| `test_execute.py` | Execute 阶段：多后端执行、raw 输出保留 |
+| `test_judge.py` | Judge 阶段：LLM-as-Judge 评分、断点续评 |
+| `test_evaluate.py` | 规则评估函数 |
+| `test_e2e_pipeline.py` | 端到端 Pipeline 集成测试 |
+| `test_experiment_runner.py` | Workflow 集成：数据隔离、评估指标 |
+| `stores/test_keyword_store.py` | Keyword 记忆后端 |
+| `stores/test_embedding_store.py` | Embedding 记忆后端 |
+| `stores/test_llm_store.py` | LLM 记忆后端 |
+| `stores/test_memory_bank_store.py` | MemoryBank 后端 |
+| `test_api.py` | API 端点集成测试 |
+| `test_chat.py` | Chat 驱动 LLM 记忆搜索、Workflow 上下文注入 |
+| `test_embedding.py` | Embedding 语义检索与聚合 |
+| `test_memory_bank.py` | 遗忘曲线、层级摘要、交互聚合 |
+| `test_storage.py` | 跨实例持久化、反馈策略更新 |
+| `test_settings.py` | 模型配置加载与环境变量覆盖 |
+| `test_schemas.py` | 数据模型定义 |
+| `test_memory_types.py` | MemoryMode 枚举 |
+| `test_memory_module_facade.py` | MemoryModule 调度层 |
+| `test_memory_store_contract.py` | 记忆后端契约测试 |
 
 ---
 
