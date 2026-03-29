@@ -5,7 +5,6 @@ from typing import Optional, TYPE_CHECKING
 from app.memory.components import (
     EventStorage,
     FeedbackManager,
-    KeywordSearch,
     SimpleInteractionWriter,
 )
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -34,7 +33,6 @@ class EmbeddingMemoryStore:
     ) -> None:
         """初始化向量存储."""
         self._storage = EventStorage(data_dir)
-        self._keyword_search = KeywordSearch()
         self._feedback = FeedbackManager(data_dir)
         self._interaction = SimpleInteractionWriter(self._storage)
         self.embedding_model = embedding_model
