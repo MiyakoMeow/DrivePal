@@ -99,6 +99,14 @@ def _judge_case(judge_model, case: dict[str, Any]) -> dict[str, Any]:
         parsed = _parse_judge_response(response)
         if parsed is None:
             return {"id": case["id"], "judge_error": "Failed to parse judge response"}
+        missing = [d for d in JUDGE_WEIGHTS if d not in parsed]
+        if len(missing) > 2:
+            return {
+                "id": case["id"],
+                "judge_error": f"Incomplete scores, missing: {missing}",
+            }
+        for d in missing:
+            parsed[d] = {"score": 3, "reason": "judge未评分，使用默认中值"}
         return {
             "id": case["id"],
             "scores": parsed,
