@@ -33,6 +33,9 @@ ignore = ["D211", "D213", "D203"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D103"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [dependency-groups]
 dev = [
     "mypy>=1.19.1",
