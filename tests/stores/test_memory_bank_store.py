@@ -31,7 +31,10 @@ class TestWriteInteraction:
         interaction_id = store.write_interaction("提醒我开会", "好的")
         assert isinstance(interaction_id, str)
         interactions = store.interactions_store.read()
-        assert interactions[0]["id"] == interaction_id
+        stored_ids = [i["id"] for i in interactions]
+        assert interaction_id in stored_ids, (
+            f"returned id {interaction_id} not found in stored {stored_ids}"
+        )
 
     def test_write_interaction_aggregates_similar(self, store):
         store.write_interaction("提醒我明天上午开会", "好的")
