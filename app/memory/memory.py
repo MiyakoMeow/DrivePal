@@ -103,9 +103,12 @@ class MemoryModule:
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录."""
-        return self._get_store(self._default_mode).write_interaction(
-            query, response, event_type
-        )
+        store = self._get_store(self._default_mode)
+        if not getattr(store, "supports_interaction", False):
+            raise NotImplementedError(
+                f"Store '{store.store_name}' does not support write_interaction"
+            )
+        return store.write_interaction(query, response, event_type)
 
     def search(
         self, query: str, mode: MemoryMode | None = None, top_k: int = 10
