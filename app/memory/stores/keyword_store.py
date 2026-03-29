@@ -1,14 +1,54 @@
 """关键词匹配检索 store."""
 
-from app.memory.stores.base import BaseMemoryStore
+from app.memory.components import (
+    EventStorage,
+    FeedbackManager,
+    KeywordSearch,
+    SimpleInteractionWriter,
+)
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.storage.json_store import JSONStore
 
-_STORE_NAME = "keyword"
 
-
-class KeywordMemoryStore(BaseMemoryStore):
+class KeywordMemoryStore:
     """关键词匹配检索 store."""
 
+    store_name = "keyword"
+    requires_embedding = False
+    requires_chat = False
+    supports_interaction = False
+
+    def __init__(self, data_dir: str, **kwargs) -> None:
+        self._storage = EventStorage(data_dir)
+        self._search = KeywordSearch()
+        self._feedback = FeedbackManager(data_dir)
+        self._interaction = SimpleInteractionWriter(self._storage)
+
     @property
-    def store_name(self) -> str:
-        """返回存储名称."""
-        return _STORE_NAME
+    def events_store(self) -> JSONStore:
+        return self._storage._store
+
+    @property
+    def strategies_store(self) -> JSONStore:
+        return self._feedback._strategies_store
+
+    def write(self, event: MemoryEvent) -> str:
+        return self._storage.append_event(event)
+
+    def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        events = self._storage.read_events()
+        return self._search.search(query, events, top_k)
+
+    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        events = self._storage.read_events()
+        if limit <= 0:
+            return []
+        return [MemoryEvent(**e) for e in events[-limit:]]
+
+    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        self._feedback.update_feedback(event_id, feedback)
+
+    def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        return self._interaction.write_interaction(query, response, event_type)

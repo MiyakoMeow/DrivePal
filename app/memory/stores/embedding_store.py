@@ -2,18 +2,27 @@
 
 from typing import Optional, TYPE_CHECKING
 
-from app.memory.schemas import SearchResult
-from app.memory.stores.base import BaseMemoryStore
+from app.memory.components import (
+    EventStorage,
+    FeedbackManager,
+    KeywordSearch,
+    SimpleInteractionWriter,
+)
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.utils import cosine_similarity
+from app.storage.json_store import JSONStore
 
 if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
 
 
-class EmbeddingMemoryStore(BaseMemoryStore):
+class EmbeddingMemoryStore:
     """向量相似度检索 store."""
 
-    requires_embedding: bool = True
+    store_name = "embeddings"
+    requires_embedding = True
+    requires_chat = False
+    supports_interaction = False
     SIMILARITY_THRESHOLD = 0.4
 
     def __init__(
@@ -21,21 +30,29 @@ class EmbeddingMemoryStore(BaseMemoryStore):
         data_dir: str,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model=None,
+        **kwargs,
     ) -> None:
-        """初始化向量检索 store."""
-        super().__init__(data_dir)
+        self._storage = EventStorage(data_dir)
+        self._keyword_search = KeywordSearch()
+        self._feedback = FeedbackManager(data_dir)
+        self._interaction = SimpleInteractionWriter(self._storage)
         self.embedding_model = embedding_model
 
     @property
-    def store_name(self) -> str:
-        """返回存储名称."""
-        return "embeddings"
+    def events_store(self) -> JSONStore:
+        return self._storage._store
+
+    @property
+    def strategies_store(self) -> JSONStore:
+        return self._feedback._strategies_store
+
+    def write(self, event: MemoryEvent) -> str:
+        return self._storage.append_event(event)
 
     def search(
         self, query: str, top_k: int = 10, min_results: int = 1
     ) -> list[SearchResult]:
-        """使用向量相似度进行记忆检索."""
-        events = self.events_store.read()
+        events = self._storage.read_events()
         if not events:
             return []
 
@@ -58,13 +75,36 @@ class EmbeddingMemoryStore(BaseMemoryStore):
                 results.append(SearchResult(event=dict(event), score=sim))
 
             if len(results) < min_results:
-                keyword_results = self._keyword_search(query, events)
+                keyword_results = self._keyword_fallback(query, events)
                 for event in keyword_results:
                     if event.get("id", "") not in seen_ids and len(results) < top_k:
                         seen_ids.add(event.get("id", ""))
                         results.append(SearchResult(event=dict(event), score=0.0))
         else:
-            matched = self._keyword_search(query, events)
-            results = [SearchResult(event=dict(e)) for e in matched[:top_k]]
+            keyword_results = self._keyword_fallback(query, events)
+            results = [SearchResult(event=dict(e)) for e in keyword_results[:top_k]]
 
         return results[:top_k]
+
+    def _keyword_fallback(self, query: str, events: list[dict]) -> list[dict]:
+        query_lower = query.lower()
+        return [
+            e
+            for e in events
+            if query_lower in e.get("content", "").lower()
+            or query_lower in e.get("description", "").lower()
+        ]
+
+    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        events = self._storage.read_events()
+        if limit <= 0:
+            return []
+        return [MemoryEvent(**e) for e in events[-limit:]]
+
+    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        self._feedback.update_feedback(event_id, feedback)
+
+    def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        return self._interaction.write_interaction(query, response, event_type)

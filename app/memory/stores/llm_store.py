@@ -6,8 +6,13 @@ import re
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from app.memory.schemas import SearchResult
-from app.memory.stores.base import BaseMemoryStore
+from app.memory.components import (
+    EventStorage,
+    FeedbackManager,
+    SimpleInteractionWriter,
+)
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.storage.json_store import JSONStore
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
@@ -27,32 +32,42 @@ LLM_SEARCH_PROMPT = """你是一个语义相关性判断助手。
 """
 
 
-class LLMOnlyMemoryStore(BaseMemoryStore):
+class LLMOnlyMemoryStore:
     """LLM 语义判断检索 store."""
 
-    requires_chat: bool = True
+    store_name = "llm_only"
+    requires_embedding = False
+    requires_chat = True
+    supports_interaction = False
 
     def __init__(
         self,
         data_dir: str,
         embedding_model=None,
         chat_model: Optional["ChatModel"] = None,
+        **kwargs,
     ) -> None:
-        """初始化 LLM 检索 store."""
-        super().__init__(data_dir)
+        self._storage = EventStorage(data_dir)
+        self._feedback = FeedbackManager(data_dir)
+        self._interaction = SimpleInteractionWriter(self._storage)
         self.chat_model = chat_model
 
     @property
-    def store_name(self) -> str:
-        """返回存储名称."""
-        return "llm_only"
+    def events_store(self) -> JSONStore:
+        return self._storage._store
+
+    @property
+    def strategies_store(self) -> JSONStore:
+        return self._feedback._strategies_store
+
+    def write(self, event: MemoryEvent) -> str:
+        return self._storage.append_event(event)
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
-        """使用 LLM 语义判断进行记忆检索."""
         if not self.chat_model:
             return []
 
-        events = self.events_store.read()
+        events = self._storage.read_events()
         if not events:
             return []
 
@@ -76,3 +91,17 @@ class LLMOnlyMemoryStore(BaseMemoryStore):
                 continue
 
         return results[:top_k]
+
+    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        events = self._storage.read_events()
+        if limit <= 0:
+            return []
+        return [MemoryEvent(**e) for e in events[-limit:]]
+
+    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        self._feedback.update_feedback(event_id, feedback)
+
+    def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        return self._interaction.write_interaction(query, response, event_type)

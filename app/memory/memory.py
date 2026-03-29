@@ -13,10 +13,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_STORES_REGISTRY: dict[MemoryMode, type[MemoryStore]] = {}
+_STORES_REGISTRY: dict[MemoryMode, type] = {}
 
 
-def register_store(name: MemoryMode, store_cls: type[MemoryStore]) -> None:
+def register_store(name: MemoryMode, store_cls: type) -> None:
     """注册记忆存储实现到全局注册表."""
     if name in _STORES_REGISTRY:
         return
@@ -75,13 +75,13 @@ class MemoryModule:
             )
         store_cls = _STORES_REGISTRY[mode]
         kwargs: dict[str, Any] = {"data_dir": self._data_dir}
-        if store_cls.requires_embedding:
+        if getattr(store_cls, "requires_embedding", False):
             if self._embedding_model is None:
                 from app.models.settings import get_embedding_model
 
                 self._embedding_model = get_embedding_model()
             kwargs["embedding_model"] = self._embedding_model
-        if store_cls.requires_chat:
+        if getattr(store_cls, "requires_chat", False):
             if self._chat_model is None:
                 from app.models.settings import get_chat_model
 
