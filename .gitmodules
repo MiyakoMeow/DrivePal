@@ -1,0 +1,3 @@
+[submodule "vendor/VehicleMemBench"]
+	path = vendor/VehicleMemBench
+	url = https://github.com/isyuhaochen/VehicleMemBench.git
