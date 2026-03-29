@@ -92,8 +92,8 @@ class BaseMemoryStore(MemoryStore, ABC):
     ) -> str:
         """写入交互记录并创建对应的记忆事件."""
         event = MemoryEvent(
-            content=response,
+            content=query,
             type=event_type,
-            description=query,
+            description=response,
         )
         return self.write(event)

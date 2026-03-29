@@ -32,6 +32,7 @@ class MemoryBankStore(BaseMemoryStore):
     requires_embedding: bool = True
     requires_chat: bool = True
     supports_interaction: bool = True
+    EMBEDDING_MIN_SIMILARITY = 0.3
 
     @property
     def store_name(self) -> str:
@@ -82,6 +83,8 @@ class MemoryBankStore(BaseMemoryStore):
             event_results = self._search_by_keyword(query, events, top_k)
         else:
             event_results = self._search_by_embedding(query, events, top_k)
+            if not event_results:
+                event_results = self._search_by_keyword(query, events, top_k)
         summary_results = self._search_summaries(query, daily_summaries, top_k=1)
         all_results = event_results + summary_results
         all_results.sort(key=lambda x: x.score, reverse=True)
@@ -133,7 +136,7 @@ class MemoryBankStore(BaseMemoryStore):
                 days_elapsed = 0
             retention = forgetting_curve(days_elapsed, strength)
             score = similarity * retention
-            if score > 0:
+            if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
                 results.append(
                     SearchResult(event=dict(event), score=score, source="event")
                 )

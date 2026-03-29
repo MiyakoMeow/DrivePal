@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
 from app.memory.schemas import SearchResult
@@ -55,10 +56,13 @@ class LLMOnlyMemoryStore(BaseMemoryStore):
         if not events:
             return []
 
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
         results = []
         for event in events:
             event_text = event.get("content", "") or event.get("description", "")
-            prompt = LLM_SEARCH_PROMPT.format(query=query, event_description=event_text)
+            prompt = f"当前时间：{now}\n\n" + LLM_SEARCH_PROMPT.format(
+                query=query, event_description=event_text
+            )
 
             try:
                 response = self.chat_model.generate(prompt)

@@ -59,5 +59,5 @@ class TestKeywordMemoryStore:
     def test_write_interaction_stores_query_as_description(self, store):
         store.write_interaction("查询内容", "响应内容")
         history = store.get_history(limit=1)
-        assert history[0].content == "响应内容"
-        assert history[0].description == "查询内容"
+        assert history[0].content == "查询内容"
+        assert history[0].description == "响应内容"

@@ -92,10 +92,7 @@ async def feedback(
 @app.get("/api/experiment/report")
 async def experiment_report():
     """获取实验报告."""
-    from app.experiment.runner import ExperimentRunner
-
-    runner = ExperimentRunner(DATA_DIR)
-    return {"report": runner.generate_report()}
+    return {"report": "Experiment runner migrated to CLI pipeline"}
 
 
 @app.get("/api/history")

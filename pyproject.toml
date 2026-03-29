@@ -30,6 +30,9 @@ dev = [
 extend-select = ["D", "DOC"]
 ignore = ["D211", "D213", "D203"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D103"]
+
 [dependency-groups]
 dev = [
     "mypy>=1.19.1",
