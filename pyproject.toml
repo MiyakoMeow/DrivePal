@@ -37,7 +37,8 @@ extend-select = ["D"]
 ignore = ["D211", "D213", "D203"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D103"]
+"tests/**" = ["D100", "D103"]
+"adapters/runner.py" = ["D100", "D103", "E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
