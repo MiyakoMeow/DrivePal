@@ -21,8 +21,11 @@ def is_llm_available() -> bool:
         try:
             import requests
 
+            base = provider.provider.base_url
+            if base.endswith("/v1"):
+                base = base[:-3]
             resp = requests.get(
-                f"{provider.provider.base_url.rstrip('/v1')}/models",
+                f"{base}/models",
                 headers={"Authorization": f"Bearer {provider.provider.api_key}"}
                 if provider.provider.api_key
                 else {},
