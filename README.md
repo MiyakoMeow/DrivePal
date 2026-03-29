@@ -46,14 +46,16 @@ thesis-cockpit-memo/
 │   ├── models/                   # AI模型封装
 │   │   ├── chat.py               # LLM调用封装
 │   │   ├── embedding.py          # 嵌入模型封装
-│   │   └── settings.py           # 多provider配置 + Judge配置
+│   │   └── settings.py           # ProviderConfig组合配置 + Judge配置
 │   ├── memory/                   # 记忆模块
 │   │   ├── memory.py             # MemoryModule调度层
+│   │   ├── interfaces.py         # MemoryStore Protocol定义
+│   │   ├── components.py         # 可组合组件（EventStorage等）
 │   │   ├── types.py              # MemoryMode枚举
 │   │   ├── schemas.py            # 数据模型定义
-│   │   └── stores/               # 各记忆后端实现
-│   │       ├── base.py           # BaseMemoryStore + keyword检索
+│   │   └── stores/               # 各记忆后端实现（组合components）
 │   │       ├── embedding_store.py # Embedding检索（混合检索）
+│   │       ├── keyword_store.py  # 关键词检索
 │   │       ├── llm_store.py      # LLM语义检索
 │   │       └── memory_bank_store.py # MemoryBank后端
 │   ├── experiment/               # 实验对比模块
@@ -62,7 +64,8 @@ thesis-cockpit-memo/
 │   │   │   ├── execute.py        # Run阶段：执行测试+规则评估
 │   │   │   ├── judge.py          # Judge阶段：LLM-as-Judge评分
 │   │   │   └── evaluate.py       # 规则评估函数
-│   │   └── loaders/              # 数据集加载器
+│   │   └── loaders/              # 数据集加载器（Protocol + 注册表）
+│   │       ├── base.py           # DatasetLoader Protocol定义
 │   │       ├── sgd_calendar.py   # SGD-Calendar数据集
 │   │       └── scheduler.py      # Scheduler数据集
 │   ├── storage/                  # 存储模块
@@ -113,16 +116,16 @@ thesis-cockpit-memo/
 
 ### 2. 记忆检索系统
 
-支持四种检索模式，可通过 `memory_mode` 参数切换：
+支持四种检索模式，各 Store 通过组合 `app/memory/components.py` 中的可复用组件实现，无需继承公共基类。通过 `memory_mode` 参数切换：
 
 #### 检索模式对比
 
 | 模式 | 实现类 | 原理 | 适用场景 |
 |------|--------|------|----------|
-| `keyword` | `_search_by_keyword` | 关键词大小写不敏感匹配 | 快速、简单查询 |
-| `llm_only` | `_search_by_llm` | LLM判断语义相关性 | 复杂语义理解 |
-| `embeddings` | `_search_by_embeddings` | BGE向量余弦相似度 > 0.7 | 语义模糊查询 |
-| `memorybank` | `MemoryBankBackend` | Ebbinghaus遗忘曲线 + 分层记忆 | 长期记忆管理 |
+| `keyword` | `KeywordMemoryStore` | 关键词大小写不敏感匹配 | 快速、简单查询 |
+| `llm_only` | `LLMOnlyMemoryStore` | LLM判断语义相关性 | 复杂语义理解 |
+| `embeddings` | `EmbeddingMemoryStore` | BGE向量余弦相似度 + keyword fallback | 语义模糊查询 |
+| `memorybank` | `MemoryBankStore` | Ebbinghaus遗忘曲线 + 分层记忆 + 混合检索 | 长期记忆管理 |
 
 #### MemoryBank 分层记忆结构
 
@@ -150,6 +153,18 @@ Summary (层级摘要)
 - **层级摘要**：事件数达到日阈值后生成 daily_summary，daily_summary 数量达到总阈值后生成 overall_summary
 - **结果展开**：检索命中事件时，自动附加其关联的原始交互记录
 
+#### 可组合组件架构
+
+`app/memory/components.py` 提供独立可复用的组件，各 Store 通过组合而非继承共享行为：
+
+| 组件 | 职责 |
+|------|------|
+| `EventStorage` | 事件 JSON 文件 CRUD + ID 生成 |
+| `KeywordSearch` | 关键词大小写不敏感搜索 |
+| `FeedbackManager` | 反馈记录 + 策略权重更新 |
+| `SimpleInteractionWriter` | 交互记录写入 |
+| `MemoryBankEngine` | 遗忘曲线衰减 + 事件聚合 + 分层摘要 |
+
 #### 反馈学习机制
 
 用户反馈（accept/ignore）会更新 `strategies.json` 中的 `reminder_weights`：
@@ -175,12 +190,14 @@ Summary (层级摘要)
 
 #### 四种记忆后端
 
-| 后端 | 实现类 | 原理 | 适用场景 |
-|------|--------|------|----------|
-| `keyword` | `BaseMemoryStore` | 关键词大小写不敏感匹配 + 子串搜索 | 快速、简单查询 |
-| `llm_only` | `LLMOnlyMemoryStore` | LLM判断语义相关性 | 复杂语义理解 |
-| `embeddings` | `EmbeddingMemoryStore` | BGE向量余弦相似度 + keyword fallback | 语义模糊查询 |
-| `memorybank` | `MemoryBankBackend` | Ebbinghaus遗忘曲线 + 分层记忆 + 混合检索 | 长期记忆管理 |
+各后端通过组合 `components.py` 中的可复用组件实现，满足 `MemoryStore` Protocol（结构化子类型）。
+
+| 后端 | 实现类 | 核心组件 | 适用场景 |
+|------|--------|----------|----------|
+| `keyword` | `KeywordMemoryStore` | `EventStorage` + `KeywordSearch` + `FeedbackManager` | 快速、简单查询 |
+| `llm_only` | `LLMOnlyMemoryStore` | `EventStorage` + `FeedbackManager` + LLM语义判断 | 复杂语义理解 |
+| `embeddings` | `EmbeddingMemoryStore` | `EventStorage` + `FeedbackManager` + BGE向量检索 + keyword fallback | 语义模糊查询 |
+| `memorybank` | `MemoryBankStore` | `MemoryBankEngine`（遗忘曲线 + 聚合 + 摘要） | 长期记忆管理 |
 
 #### 运行实验
 
@@ -384,7 +401,7 @@ uv run python run_experiment.py judge --run-id <run_id>
 
 ### 模型配置 (`config/llm.json`)
 
-所有 LLM、Embedding、Judge 模型配置统一在 `config/llm.json` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。
+所有 LLM、Embedding、Judge 模型配置统一在 `config/llm.json` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。配置采用组合模式：`ProviderConfig`（model/base_url/api_key）被各专用配置（`LLMProviderConfig`/`EmbeddingProviderConfig`/`JudgeProviderConfig`）组合引用。
 
 ```json
 {
