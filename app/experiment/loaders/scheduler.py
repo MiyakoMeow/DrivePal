@@ -1,7 +1,10 @@
 """Scheduler数据集加载模块."""
 
-from datasets import load_dataset, Dataset
-from typing import List, Dict
+import logging
+
+from datasets import Dataset, load_dataset
+
+_cache = None
 
 
 class SchedulerLoader:
@@ -10,29 +13,22 @@ class SchedulerLoader:
     源: https://huggingface.co/datasets/shawnha/scheduler_dataset
     """
 
-    _cache = None
+    def load(self) -> Dataset:
+        global _cache
+        if _cache is None:
+            _cache = load_dataset("shawnha/scheduler_dataset", split="train")
 
-    @classmethod
-    def load(cls) -> Dataset:
-        """加载Scheduler数据集."""
-        if cls._cache is None:
-            cls._cache = load_dataset("shawnha/scheduler_dataset", split="train")
-
-        if len(cls._cache) > 0:
-            sample = cls._cache[0]
+        if len(_cache) > 0:
+            sample = _cache[0]
             required_cols = ["text"]
             missing = [c for c in required_cols if c not in sample]
             if missing:
-                import logging
-
                 logging.warning(f"Scheduler dataset missing columns: {missing}")
 
-        return cls._cache
+        return _cache
 
-    @classmethod
-    def get_test_cases(cls) -> List[Dict]:
-        """获取Scheduler测试用例列表."""
-        ds = cls.load()
+    def get_test_cases(self) -> list[dict]:
+        ds = self.load()
         test_cases = []
         for i, row in enumerate(ds):
             text = row.get("text", "")
@@ -40,14 +36,13 @@ class SchedulerLoader:
                 test_cases.append(
                     {
                         "input": text,
-                        "type": cls._infer_type(text),
+                        "type": self._infer_type(text),
                         "id": f"scheduler_{i}",
-                    }
+                    },
                 )
         return test_cases
 
-    @classmethod
-    def _infer_type(cls, text: str) -> str:
+    def _infer_type(self, text: str) -> str:
         text_lower = text.lower()
         if "flight" in text_lower or "机票" in text:
             return "flight_booking"
@@ -56,15 +51,3 @@ class SchedulerLoader:
         if "calendar" in text_lower or "日程" in text or "schedule" in text_lower:
             return "schedule_check"
         return "general"
-
-
-def get_scheduler_test_cases() -> List[Dict]:
-    """获取Scheduler测试用例."""
-    return SchedulerLoader.get_test_cases()
-
-
-if __name__ == "__main__":
-    cases = get_scheduler_test_cases()
-    print(f"Scheduler测试用例数: {len(cases)}")
-    for c in cases[:3]:
-        print(f"  - {c}")

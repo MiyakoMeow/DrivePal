@@ -3,9 +3,8 @@
 import json
 import os
 import re
-from typing import Dict, List
 
-INTENT_KEYWORDS: Dict[str, List[str]] = {
+INTENT_KEYWORDS: dict[str, list[str]] = {
     "schedule_check": [
         "时间",
         "日程",
@@ -105,7 +104,7 @@ def _has_negative_pattern(query: str) -> bool:
 
 
 def evaluate_semantic_accuracy(
-    input_text: str, expected_type: str, output: str
+    input_text: str, expected_type: str, output: str,
 ) -> float:
     """评估语义理解准确率."""
     score = 0.0
@@ -138,7 +137,7 @@ def evaluate_semantic_accuracy(
     return min(1.0, score)
 
 
-_DEFAULT_TASK_CONCEPTS: Dict[str, List[str]] = {
+_DEFAULT_TASK_CONCEPTS: dict[str, list[str]] = {
     "schedule_check": [
         "时间",
         "日程",
@@ -173,17 +172,17 @@ _DEFAULT_TASK_CONCEPTS: Dict[str, List[str]] = {
 }
 
 
-def _load_task_concepts(config_dir: str = "config") -> Dict[str, List[str]]:
+def _load_task_concepts(config_dir: str = "config") -> dict[str, list[str]]:
     config_path = os.path.join(config_dir, "evaluation_config.json")
     if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         return config.get("task_concepts", {})
     return {}
 
 
 def evaluate_context_relatedness(
-    input_text: str, expected_type: str, output: str, config_dir: str = "config"
+    input_text: str, expected_type: str, output: str, config_dir: str = "config",
 ) -> float:
     """评估输出与任务类型的上下文相关度."""
     output_lower = output.lower()

@@ -7,8 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from app.experiment.loaders.sgd_calendar import get_sgd_calendar_test_cases
-from app.experiment.loaders.scheduler import get_scheduler_test_cases
+from app.experiment.loaders import get_test_cases
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
 from app.models.settings import get_chat_model
@@ -29,11 +28,7 @@ _SYSTEM_PROMPT = (
 
 
 def _load_dataset(name: str) -> list[dict[str, Any]]:
-    if name == "sgd_calendar":
-        return get_sgd_calendar_test_cases()
-    if name == "scheduler":
-        return get_scheduler_test_cases()
-    raise ValueError(f"Unknown dataset: {name}")
+    return get_test_cases(name)
 
 
 def _init_store_files(store_dir: Path) -> None:
@@ -55,7 +50,7 @@ def _warmup_stores(
         for _dataset_name, items in warmup_items.items():
             for item in items:
                 response = item.get("response") or chat_model.generate(
-                    item["input"], system_prompt=_SYSTEM_PROMPT
+                    item["input"], system_prompt=_SYSTEM_PROMPT,
                 )
                 mem.write_interaction(item["input"], response)
 
@@ -114,7 +109,7 @@ def prepare(
                     "input": tc["input"],
                     "type": tc["type"],
                     "dataset": ds_name,
-                }
+                },
             )
 
         warmup_items[ds_name] = warmup
@@ -124,7 +119,7 @@ def prepare(
     for ds_name, items in warmup_items.items():
         warmup_path = warmup_dir / f"{ds_name}.json"
         warmup_path.write_text(
-            json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8",
         )
         warmup_files[ds_name] = f"warmup/{ds_name}.json"
 
@@ -143,7 +138,7 @@ def prepare(
 
     prepared_path = run_dir / "prepared.json"
     prepared_path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8",
     )
 
     return result

@@ -163,7 +163,7 @@ def _judge_method(
         "cases": judged_cases,
     }
     judged_path.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8",
     )
     return result
 
@@ -207,7 +207,7 @@ def _build_final_report(
         total_cases = len(cases)
         raw_cases = []
         rp = (
-            Path(all_results[method].get("_prepared_dir", ""))
+            Path(result.get("_prepared_dir", ""))
             / "results"
             / f"{method}_raw.json"
         )
@@ -263,6 +263,6 @@ def judge(prepared_dir: str) -> dict[str, Any]:
     judged_dir.mkdir(parents=True, exist_ok=True)
     report_path = judged_dir / "final_report.json"
     report_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8",
     )
     return report

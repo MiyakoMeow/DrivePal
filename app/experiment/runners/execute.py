@@ -37,7 +37,7 @@ def _extract_output(result: str, store_dir: str) -> str:
         raw = decision.get("raw", "")
         if raw:
             return raw
-    return result if result else ""
+    return result or ""
 
 
 def execute(prepared_dir: str) -> dict[str, Any]:
@@ -68,10 +68,10 @@ def execute(prepared_dir: str) -> dict[str, Any]:
                 latency_ms = (time.time() - start) * 1000
                 raw_output = _extract_output(result, store_dir)
                 metrics = evaluate_semantic_accuracy(
-                    case["input"], case["type"], raw_output
+                    case["input"], case["type"], raw_output,
                 )
                 relatedness = evaluate_context_relatedness(
-                    case["input"], case["type"], raw_output
+                    case["input"], case["type"], raw_output,
                 )
                 print(f"[{mode.value}] {case_id} OK ({latency_ms:.0f}ms)")
                 cases.append(
@@ -87,7 +87,7 @@ def execute(prepared_dir: str) -> dict[str, Any]:
                         "semantic_accuracy": metrics,
                         "context_relatedness": relatedness,
                         "error": None,
-                    }
+                    },
                 )
             except Exception as e:
                 latency_ms = (time.time() - start) * 1000
@@ -105,7 +105,7 @@ def execute(prepared_dir: str) -> dict[str, Any]:
                         "semantic_accuracy": 0.0,
                         "context_relatedness": 0.0,
                         "error": str(e),
-                    }
+                    },
                 )
 
         method_result: dict[str, Any] = {
