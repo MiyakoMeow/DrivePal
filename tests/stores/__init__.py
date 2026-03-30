@@ -1,1 +1,1 @@
-"""Memory store tests."""
+"""记忆存储测试."""

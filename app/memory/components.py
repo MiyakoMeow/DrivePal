@@ -2,7 +2,8 @@
 
 import math
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -30,14 +31,14 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
 class EventStorage:
     """事件 JSON 文件 CRUD + ID 生成."""
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: Path) -> None:
         """初始化事件存储."""
-        self._store = JSONStore(data_dir, "events.json", list)
+        self._store = JSONStore(data_dir, Path("events.json"), list)
         self.data_dir = data_dir
 
     def generate_id(self) -> str:
         """生成唯一事件 ID."""
-        return f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     def read_events(self) -> list[dict]:
         """读取所有事件."""
@@ -51,7 +52,7 @@ class EventStorage:
         """追加事件并返回 ID."""
         event = event.model_copy(deep=True)
         event.id = self.generate_id()
-        event.created_at = datetime.now().isoformat()
+        event.created_at = datetime.now(timezone.utc).isoformat()
         self._store.append(event.model_dump())
         return event.id
 
@@ -76,16 +77,16 @@ class KeywordSearch:
 class FeedbackManager:
     """反馈更新 + 策略权重管理."""
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: Path) -> None:
         """初始化反馈管理器."""
-        self._strategies_store = JSONStore(data_dir, "strategies.json", dict)
+        self._strategies_store = JSONStore(data_dir, Path("strategies.json"), dict)
         self.data_dir = data_dir
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
-        feedback.timestamp = datetime.now().isoformat()
-        feedback_store = JSONStore(self.data_dir, "feedback.json", list)
+        feedback.timestamp = datetime.now(timezone.utc).isoformat()
+        feedback_store = JSONStore(self.data_dir, Path("feedback.json"), list)
         feedback_store.append(feedback.model_dump())
         self._update_strategy(event_id, feedback.model_dump())
 
@@ -135,7 +136,7 @@ class MemoryBankEngine:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         storage: EventStorage,
         embedding_model: Optional[EmbeddingModel] = None,
         chat_model: Optional[ChatModel] = None,
@@ -145,11 +146,11 @@ class MemoryBankEngine:
         self._storage = storage
         self.embedding_model = embedding_model
         self.chat_model = chat_model
-        self._interactions_store = JSONStore(data_dir, "interactions.json", list)
+        self._interactions_store = JSONStore(data_dir, Path("interactions.json"), list)
         self._default_summaries = {"daily_summaries": {}, "overall_summary": ""}
         self._summaries_store = JSONStore(
             data_dir,
-            "memorybank_summaries.json",
+            Path("memorybank_summaries.json"),
             lambda: dict(self._default_summaries),
         )
 
@@ -157,8 +158,8 @@ class MemoryBankEngine:
         """写入事件并触发摘要."""
         event = event.model_copy(deep=True)
         event.id = self._storage.generate_id()
-        event.created_at = datetime.now().isoformat()
-        today = date.today().isoformat()
+        event.created_at = datetime.now(timezone.utc).isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         event.memory_strength = 1
         event.last_recall_date = today
         event.date_group = today
@@ -195,7 +196,7 @@ class MemoryBankEngine:
         self, query: str, events: list[dict], top_k: int
     ) -> list[SearchResult]:
         query_lower = query.lower()
-        today = date.today()
+        today = datetime.now(timezone.utc).date()
         results = []
         for event in events:
             searchable_text = self._get_searchable_text(event).lower()
@@ -223,7 +224,7 @@ class MemoryBankEngine:
         query_vector = self.embedding_model.encode(query)
         event_texts = [self._get_searchable_text(event) for event in events]
         all_event_vectors = self.embedding_model.batch_encode(event_texts)
-        today = date.today()
+        today = datetime.now(timezone.utc).date()
         results = []
         for event, event_vector in zip(events, all_event_vectors):
             similarity = cosine_similarity(query_vector, event_vector)
@@ -266,7 +267,7 @@ class MemoryBankEngine:
         if not matched_ids:
             return
         all_events = self._storage.read_events()
-        today = date.today().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         updated = False
         for event in all_events:
             if event.get("id") in matched_ids:
@@ -281,7 +282,7 @@ class MemoryBankEngine:
         if not event_ids:
             return
         all_interactions = self._interactions_store.read()
-        today = date.today().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         updated = False
         for interaction in all_interactions:
             if interaction.get("event_id") in event_ids:
@@ -299,7 +300,7 @@ class MemoryBankEngine:
         if not daily_summaries:
             return []
         query_lower = query.lower()
-        today = date.today()
+        today = datetime.now(timezone.utc).date()
         results = []
         matched_keys = []
         for date_group, summary_data in daily_summaries.items():
@@ -341,7 +342,7 @@ class MemoryBankEngine:
     ) -> None:
         if not matched_keys:
             return
-        today = date.today().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         updated = False
         for key in matched_keys:
             if key in daily_summaries:
@@ -361,28 +362,25 @@ class MemoryBankEngine:
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录并关联事件."""
-        interaction_id = (
-            f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-        )
-        today = date.today().isoformat()
+        interaction_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        today = datetime.now(timezone.utc).date().isoformat()
         interaction = {
             "id": interaction_id,
             "event_id": "",
             "query": query,
             "response": response,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "memory_strength": 1,
             "last_recall_date": today,
         }
 
         append_event_id = self._should_append_to_event(interaction)
+        event = None
         if append_event_id:
             interaction["event_id"] = append_event_id
         else:
-            event_id = (
-                f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-            )
-            now_iso = datetime.now().isoformat()
+            event_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+            now_iso = datetime.now(timezone.utc).isoformat()
             event = {
                 "id": event_id,
                 "content": query,
@@ -411,7 +409,7 @@ class MemoryBankEngine:
         events = self._storage.read_events()
         if not events:
             return None
-        today = date.today().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         recent = events[-1]
         if recent.get("date_group") != today:
             return None
@@ -437,7 +435,7 @@ class MemoryBankEngine:
         for event in all_events:
             if event.get("id") == event_id:
                 event.setdefault("interaction_ids", []).append(interaction_id)
-                event["updated_at"] = datetime.now().isoformat()
+                event["updated_at"] = datetime.now(timezone.utc).isoformat()
                 break
         self._storage.write_events(all_events)
 

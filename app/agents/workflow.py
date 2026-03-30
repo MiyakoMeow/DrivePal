@@ -4,9 +4,12 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional, cast
+
 from langgraph.graph import StateGraph, END
+from langgraph.graph.state import CompiledStateGraph
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
@@ -22,10 +25,10 @@ class AgentWorkflow:
 
     def __init__(
         self,
-        data_dir: str = "data",
+        data_dir: Path = Path("data"),
         memory_mode: MemoryMode = MemoryMode.KEYWORD,
         memory_module: Optional[MemoryModule] = None,
-    ):
+    ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
         self.memory_mode = memory_mode
@@ -42,7 +45,7 @@ class AgentWorkflow:
 
         self.graph = self._build_graph()
 
-    def _build_graph(self) -> Any:
+    def _build_graph(self) -> CompiledStateGraph:
         """构建LangGraph工作流."""
         workflow = StateGraph(cast(Any, AgentState))
 
@@ -111,7 +114,7 @@ class AgentWorkflow:
                 [e.to_public() for e in related_events] if related_events else []
             )
 
-        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_datetime = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         system_prompt = SYSTEM_PROMPTS["context"].format(
             current_datetime=current_datetime
         )
@@ -158,7 +161,7 @@ class AgentWorkflow:
         context = state.get("context", {})
         task = state.get("task", {})
 
-        strategies = JSONStore(self.data_dir, "strategies.json", dict).read()
+        strategies = JSONStore(self.data_dir, Path("strategies.json"), dict).read()
 
         prompt = f"""{SYSTEM_PROMPTS["strategy"]}
 
@@ -191,7 +194,7 @@ class AgentWorkflow:
         elif isinstance(remind_content, str):
             content = remind_content
         else:
-            content = decision.get("content", "无提醒内容")
+            content = decision.get("content") or "无提醒内容"
         event_id = self.memory_module.write_interaction(user_input, content)
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
@@ -223,7 +226,7 @@ class AgentWorkflow:
 
 
 def create_workflow(
-    data_dir: str = "data", memory_mode: str = "keyword"
+    data_dir: Path = Path("data"), memory_mode: str = "keyword"
 ) -> AgentWorkflow:
     """创建工作流实例."""
     return AgentWorkflow(data_dir, MemoryMode(memory_mode))

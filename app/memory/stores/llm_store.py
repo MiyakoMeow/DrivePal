@@ -3,8 +3,9 @@
 import json
 import logging
 import re
-from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
 
 from app.memory.components import (
     EventStorage,
@@ -12,10 +13,9 @@ from app.memory.components import (
     SimpleInteractionWriter,
 )
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 from app.storage.json_store import JSONStore
-
-if TYPE_CHECKING:
-    from app.models.chat import ChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +42,10 @@ class LLMOnlyMemoryStore:
 
     def __init__(
         self,
-        data_dir: str,
-        embedding_model=None,
+        data_dir: Path,
+        embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
-        **kwargs,
+        **kwargs: dict,
     ) -> None:
         """初始化 LLM 存储."""
         self._storage = EventStorage(data_dir)
@@ -76,7 +76,7 @@ class LLMOnlyMemoryStore:
         if not events:
             return []
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         results = []
         for event in events:
             event_text = event.get("content", "") or event.get("description", "")
@@ -86,11 +86,16 @@ class LLMOnlyMemoryStore:
 
             try:
                 response = self.chat_model.generate(prompt)
-                json_match = re.search(r"\{.*?\}", response, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group())
-                    if data.get("relevant"):
-                        results.append(SearchResult(event=dict(event)))
+                json_match = re.search(r"\{.*\}", response, re.DOTALL)
+                if not json_match:
+                    continue
+                json_str = json_match.group()
+                json_str = re.sub(r"```json\s*|\s*```", "", json_str)
+                json_str = json_str.replace("\\'", "'")
+                json_str = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", json_str)
+                data = json.loads(json_str)
+                if data.get("relevant"):
+                    results.append(SearchResult(event=dict(event)))
             except Exception as e:
                 logger.warning("LLM relevance check failed: %s", e, exc_info=True)
                 continue

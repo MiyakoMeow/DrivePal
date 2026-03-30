@@ -1,6 +1,7 @@
 """向量相似度检索 store."""
 
-from typing import Optional, TYPE_CHECKING
+from pathlib import Path
+from typing import Optional
 
 from app.memory.components import (
     EventStorage,
@@ -9,10 +10,9 @@ from app.memory.components import (
 )
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.utils import cosine_similarity
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 from app.storage.json_store import JSONStore
-
-if TYPE_CHECKING:
-    from app.models.embedding import EmbeddingModel
 
 
 class EmbeddingMemoryStore:
@@ -26,10 +26,10 @@ class EmbeddingMemoryStore:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model=None,
-        **kwargs,
+        chat_model: Optional["ChatModel"] = None,
+        **kwargs: dict,
     ) -> None:
         """初始化向量存储."""
         self._storage = EventStorage(data_dir)

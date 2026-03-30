@@ -1,6 +1,6 @@
 """文本嵌入模型封装，支持 HuggingFace 本地模型和 OpenAI 兼容远程接口."""
 
-from typing import Any
+from typing import Any, Union
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
@@ -38,7 +38,7 @@ class EmbeddingModel:
         self,
         providers: list[EmbeddingProviderConfig] | None = None,
         device: str | None = None,
-    ):
+    ) -> None:
         """初始化嵌入模型."""
         if providers is None:
             try:
@@ -56,7 +56,7 @@ class EmbeddingModel:
         self._client = None
 
     @property
-    def client(self):
+    def client(self) -> Union[HuggingFaceEmbeddings, OpenAIEmbeddings]:
         """获取或延迟创建嵌入模型客户端，按 provider 顺序尝试."""
         if self._client is not None:
             return self._client
@@ -75,7 +75,9 @@ class EmbeddingModel:
 
         raise RuntimeError(f"All embedding providers failed: {'; '.join(errors)}")
 
-    def _create_client(self, provider: EmbeddingProviderConfig):
+    def _create_client(
+        self, provider: EmbeddingProviderConfig
+    ) -> Union[HuggingFaceEmbeddings, OpenAIEmbeddings]:
         device = self.device or provider.device
         if provider.provider.base_url:
             kwargs: dict[str, Any] = {"model": provider.provider.model}

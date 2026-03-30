@@ -1,15 +1,14 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+from pathlib import Path
+from typing import Any, Optional
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
-
-if TYPE_CHECKING:
-    from app.models.chat import ChatModel
-    from app.models.embedding import EmbeddingModel
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class MemoryModule:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
     ) -> None:
@@ -55,7 +54,7 @@ class MemoryModule:
         self._default_mode: MemoryMode = MemoryMode.MEMORY_BANK
 
     @property
-    def chat_model(self):
+    def chat_model(self) -> "ChatModel":
         """获取聊天模型，延迟初始化."""
         if self._chat_model is None:
             from app.models.settings import get_chat_model

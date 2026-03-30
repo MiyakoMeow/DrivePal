@@ -9,4 +9,4 @@ class MemoryMode(StrEnum):
     KEYWORD = "keyword"
     LLM_ONLY = "llm_only"
     EMBEDDINGS = "embeddings"
-    MEMORY_BANK = "memorybank"
+    MEMORY_BANK = "memory_bank"

@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
+from pathlib import Path
 from typing import Optional
 import os
 import logging
@@ -15,7 +16,8 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="知行车秘 - 车载AI智能体")
 
-DATA_DIR = os.getenv("DATA_DIR", "data")
+_data_dir_env = os.getenv("DATA_DIR", "data")
+DATA_DIR = Path(_data_dir_env)
 
 
 def _ensure_memory_module() -> MemoryModule:
@@ -53,7 +55,9 @@ class FeedbackRequest(BaseModel):
 
 
 @app.post("/api/query")
-async def query(request: QueryRequest, mm: MemoryModule = Depends(get_memory_module)):
+async def query(
+    request: QueryRequest, mm: MemoryModule = Depends(get_memory_module)
+) -> dict:
     """处理用户查询."""
     from app.agents.workflow import AgentWorkflow
 
@@ -73,7 +77,7 @@ async def query(request: QueryRequest, mm: MemoryModule = Depends(get_memory_mod
 @app.post("/api/feedback")
 async def feedback(
     request: FeedbackRequest, mm: MemoryModule = Depends(get_memory_module)
-):
+) -> dict:
     """提交用户反馈."""
     try:
         from app.memory.schemas import FeedbackData
@@ -90,13 +94,15 @@ async def feedback(
 
 
 @app.get("/api/experiment/report")
-async def experiment_report():
+async def experiment_report() -> dict:
     """获取实验报告."""
     return {"report": "Experiment runner migrated to CLI pipeline"}
 
 
 @app.get("/api/history")
-async def history(limit: int = 10, mm: MemoryModule = Depends(get_memory_module)):
+async def history(
+    limit: int = 10, mm: MemoryModule = Depends(get_memory_module)
+) -> dict:
     """获取历史记录."""
     try:
         events = mm.get_history(limit=limit)

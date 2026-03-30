@@ -1,4 +1,4 @@
-"""Shared test configuration and fixtures."""
+"""共享测试配置和 fixtures."""
 
 from functools import lru_cache
 
@@ -9,7 +9,7 @@ from app.models.settings import LLMSettings
 
 @lru_cache(maxsize=1)
 def is_llm_available() -> bool:
-    """Check whether an external LLM is configured and responding."""
+    """检查外部 LLM 是否已配置并可响应."""
     try:
         settings = LLMSettings.load()
     except RuntimeError:
@@ -40,5 +40,5 @@ def is_llm_available() -> bool:
 
 SKIP_IF_NO_LLM = pytest.mark.skipif(
     not is_llm_available(),
-    reason="LLM API not available",
+    reason="LLM API 不可用",
 )

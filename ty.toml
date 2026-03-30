@@ -1,0 +1,8 @@
+[src]
+exclude = ["vendor"]
+
+[analysis]
+allowed-unresolved-imports = ["evaluation.**"]
+
+[rules]
+all = "error"

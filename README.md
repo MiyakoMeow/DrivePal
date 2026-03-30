@@ -1,6 +1,6 @@
 # 知行车秘 - 车载AI智能体原型系统
 
-基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略的自动化对比实验（LLM-as-Judge 评估）。
+基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略的对比评估（基于 VehicleMemBench 基准测试框架）。
 
 ---
 
@@ -11,12 +11,12 @@
 - [核心功能](#核心功能)
   - [多Agent工作流](#1-多agent工作流)
   - [记忆检索系统](#2-记忆检索系统)
-  - [实验对比框架](#3-实验对比框架)
+  - [VehicleMemBench 基准测试](#3-vehiclemembench-基准测试)
   - [REST API](#4-rest-api)
   - [Web界面](#5-web界面)
 - [快速开始](#快速开始)
-- [实验流程](#实验流程)
 - [配置说明](#配置说明)
+- [数据存储](#数据存储)
 - [测试](#测试)
 - [技术栈](#技术栈)
 
@@ -58,28 +58,30 @@ thesis-cockpit-memo/
 │   │       ├── keyword_store.py  # 关键词检索
 │   │       ├── llm_store.py      # LLM语义检索
 │   │       └── memory_bank_store.py # MemoryBank后端
-│   ├── experiment/               # 实验对比模块
-│   │   ├── runners/              # 三阶段Pipeline运行器
-│   │   │   ├── prepare.py        # Prepare阶段：数据加载+预热
-│   │   │   ├── execute.py        # Run阶段：执行测试+规则评估
-│   │   │   ├── judge.py          # Judge阶段：LLM-as-Judge评分
-│   │   │   └── evaluate.py       # 规则评估函数
-│   │   └── loaders/              # 数据集加载器（Protocol + 注册表）
-│   │       ├── base.py           # DatasetLoader Protocol定义
-│   │       ├── sgd_calendar.py   # SGD-Calendar数据集
-│   │       └── scheduler.py      # Scheduler数据集
 │   ├── storage/                  # 存储模块
 │   │   └── json_store.py         # JSON文件存储
 │   └── api/                      # FastAPI接口
 │       └── main.py               # REST API
+├── adapters/                     # VehicleMemBench适配器层
+│   ├── __init__.py               # 适配器注册表
+│   ├── model_config.py           # 基准测试模型配置
+│   ├── runner.py                 # VehicleMemBench运行器
+│   └── memory_adapters/          # 记忆存储策略适配器
+│       ├── __init__.py           # 适配器注册表
+│       ├── common.py            # 通用工具函数
+│       ├── keyword_adapter.py    # 关键词检索适配器
+│       ├── llm_only_adapter.py  # LLM语义检索适配器
+│       ├── embeddings_adapter.py # 向量嵌入适配器
+│       └── memory_bank_adapter.py # MemoryBank适配器
 ├── config/                       # 配置文件
 │   ├── scenarios.json            # 驾驶场景模板
 │   ├── driver_states.json        # 驾驶员状态配置
-│   └── evaluation_config.json    # 评估配置
+│   └── llm.json                  # 模型配置（含benchmark）
 ├── data/                         # 数据目录（运行时生成）
+├── vendor/VehicleMemBench        # 基准测试子模块
 ├── tests/                        # 测试
 ├── webui/                        # Web界面
-├── run_experiment.py             # 实验Pipeline CLI
+├── run_benchmark.py              # VehicleMemBench CLI
 ├── main.py                       # Web服务入口
 └── pyproject.toml                # 项目配置
 ```
@@ -92,15 +94,12 @@ thesis-cockpit-memo/
 
 基于 LangGraph 构建的四阶段工作流，每个阶段由专门的Agent处理：
 
-```
-┌─────────────┐     ┌──────────────┐     ┌────────────────┐     ┌─────────────────┐
-│   用户输入    │ ──▶ │ Context Agent│ ──▶ │  Task Agent    │ ──▶ │ Strategy Agent  │
-└─────────────┘     └──────────────┘     └────────────────┘     └─────────────────┘
-                                                                           │
-                                                                           ▼
-                                                                     ┌─────────────────┐
-                                                                     │ Execution Agent  │
-                                                                     └─────────────────┘
+```mermaid
+flowchart LR
+    A[用户输入] --> B[Context Agent]
+    B --> C[Task Agent]
+    C --> D[Strategy Agent]
+    D --> E[Execution Agent]
 ```
 
 #### Agent职责
@@ -131,18 +130,18 @@ thesis-cockpit-memo/
 
 基于 MemoryBank 论文实现的三层记忆架构：
 
-```
-Interaction (原始交互)
-  ├── id, query, response, memory_strength
-        │
-        ▼ 聚合
-Event (语义摘要)
-  ├── content, interaction_ids, memory_strength, date_group
-        │
-        ▼ 聚合
-Summary (层级摘要)
-  ├── daily_summaries: {date → {content, memory_strength}}
-  └── overall_summary: str
+```mermaid
+flowchart TD
+    A[Interaction<br>原始交互] -->|聚合| B[Event<br>语义摘要]
+    B -->|聚合| C[Summary<br>层级摘要]
+    
+    A:::interact
+    B:::event
+    C:::summary
+    
+    classDef interact fill:#f9f,stroke:#333,stroke-width:2px
+    classDef event fill:#bbf,stroke:#333,stroke-width:2px
+    classDef summary fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 **核心机制：**
@@ -174,104 +173,77 @@ Summary (层级摘要)
 
 ---
 
-### 3. 实验对比框架
+### 3. VehicleMemBench 基准测试
 
-三阶段 Pipeline 架构：Prepare → Execute → Judge，每阶段可独立运行/重试。
+基于 [VehicleMemBench](https://github.com/isyuhaochen/VehicleMemBench) 的车载记忆基准评估框架。
 
-#### Pipeline 流程
+#### 系统架构
 
+```mermaid
+flowchart TD
+    CLI[run_benchmark.py<br>CLI 入口，分发命令]
+    Runner[adapters/runner.py<br>VehicleMemBench 评估运行器]
+    Adapters[adapters/memory_adapters<br>记忆存储适配器]
+    Stores[app/memory/stores<br>原生记忆存储后端实现]
+    
+    CLI --> Runner
+    Runner --> Adapters
+    Adapters --> Stores
+    
+    subgraph Adapters
+        K[keyword]
+        L[llm_only]
+        E[embeddings]
+        M[memory_bank]
+    end
 ```
-[数据集] → Prepare → data/exp/{run_id}/prepared.json
-                         ↓
-                       Execute → data/exp/{run_id}/results/{method}_raw.json
-                         ↓
-                       Judge → data/exp/{run_id}/judged/final_report.json
-```
 
-#### 四种记忆后端
+#### 适配器模式
 
-各后端通过组合 `components.py` 中的可复用组件实现，满足 `MemoryStore` Protocol（结构化子类型）。
+`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用：
 
-| 后端 | 实现类 | 核心组件 | 适用场景 |
-|------|--------|----------|----------|
-| `keyword` | `KeywordMemoryStore` | `EventStorage` + `KeywordSearch` + `FeedbackManager` | 快速、简单查询 |
-| `llm_only` | `LLMOnlyMemoryStore` | `EventStorage` + `FeedbackManager` + LLM语义判断 | 复杂语义理解 |
-| `embeddings` | `EmbeddingMemoryStore` | `EventStorage` + `FeedbackManager` + BGE向量检索 + keyword fallback | 语义模糊查询 |
-| `memorybank` | `MemoryBankStore` | `MemoryBankEngine`（遗忘曲线 + 聚合 + 摘要） | 长期记忆管理 |
+| 适配器 | 封装 | 原理 |
+|--------|------|------|
+| `KeywordAdapter` | `KeywordMemoryStore` | 关键词大小写不敏感匹配 |
+| `LLMOnlyAdapter` | `LLMOnlyMemoryStore` | LLM 判断语义相关性 |
+| `EmbeddingsAdapter` | `EmbeddingMemoryStore` | BGE 向量余弦相似度 |
+| `MemoryBankAdapter` | `MemoryBankStore` | 遗忘曲线 + 分层记忆 |
 
-#### 运行实验
+#### 运行基准测试
 
 ```bash
-# 全流程（推荐）
-uv run python run_experiment.py all --datasets sgd_calendar scheduler --test-count 50
+# 全流程
+uv run python run_benchmark.py all --file-range 1-50
 
 # 分阶段运行
-uv run python run_experiment.py prepare --datasets sgd_calendar scheduler --test-count 50 --seed 42
-uv run python run_experiment.py run --run-id <run_id>
-uv run python run_experiment.py judge --run-id <run_id>
+uv run python run_benchmark.py prepare --file-range 1-50
+uv run python run_benchmark.py run --file-range 1-50
+
+# 生成报告
+uv run python run_benchmark.py report
 ```
 
 #### CLI 参数
 
-| 子命令 | 参数 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `prepare` | `--datasets` | `sgd_calendar scheduler` | 使用的数据集 |
-| `prepare` | `--test-count` | `50` | 每数据集测试用例数 |
-| `prepare` | `--warmup-ratio` | `0.7` | 预热数据占比 |
-| `prepare` | `--seed` | `42` | 随机种子 |
-| `run` | `--run-id` | 必填 | Prepare 生成的 run ID |
-| `judge` | `--run-id` | 必填 | 同上 |
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--file-range` | `1-50` | 评估文件范围（如 `1-10` 或 `1,3,5`） |
+| `--memory-types` | `gold,summary,kv,keyword,llm_only,embeddings,memory_bank` | 记忆类型 |
 
-#### LLM-as-Judge 评估
+#### 基准测试数据结构
 
-使用独立 Judge 模型对每个后端的输出做多维评分（1-5分）：
-
-| 维度 | 权重 | 说明 |
-|------|------|------|
-| `memory_recall` | 25% | 是否正确利用了历史记忆/上下文信息 |
-| `relevance` | 25% | 回复是否与用户意图相关 |
-| `task_quality` | 20% | 日程管理任务是否被正确处理 |
-| `coherence` | 15% | 驾驶场景下是否合理连贯 |
-| `helpfulness` | 15% | 对驾驶员的实际帮助程度 |
-
-Judge 配置在 `config/llm.json` 的 `judge` 字段，支持环境变量覆盖：`JUDGE_MODEL` / `JUDGE_BASE_URL` / `JUDGE_API_KEY`。
-
-#### 实验数据结构
-
-```
-data/exp/{run_id}/
-├── prepared.json              # 划分方案 + 测试用例 + 预热数据引用
-├── warmup/                    # 预热数据
-│   ├── sgd_calendar.json
-│   └── scheduler.json
-├── stores/                    # 各后端预热的记忆库
-│   ├── keyword/
-│   ├── llm_only/
-│   ├── embeddings/
-│   └── memorybank/
-├── results/                   # Execute 阶段原始结果
-│   ├── keyword_raw.json
-│   ├── llm_only_raw.json
-│   ├── embeddings_raw.json
-│   └── memorybank_raw.json
-└── judged/                    # Judge 阶段评分
-    ├── keyword_judged.json
-    ├── llm_only_judged.json
-    ├── embeddings_judged.json
-    ├── memorybank_judged.json
-    └── final_report.json      # 汇总报告
+```text
+data/benchmark/
+├── qa_{n}.json           # QA 测试用例
+├── history_{n}.txt       # 历史交互记录
+└── results/              # 运行结果
+    └── {memory_type}/
+        └── ...
 ```
 
-#### 数据集
+#### VehicleMemBench 子模块
 
-| 数据集 | 来源 | 样本量 | 说明 |
-|--------|------|--------|------|
-| **SGD-Calendar** | `vidhikatkoria/SGD_Calendar` (HuggingFace) | 60 条 | 日程管理对话 |
-| **Scheduler** | `shawnha/scheduler_dataset` (HuggingFace) | 1110 条 | 航班/酒店/日程查询 |
-
-#### 断点续评
-
-Judge 阶段支持断点续评：已成功评判的用例会被跳过，只重试失败的。重新运行 `judge` 即可继续。
+作为 `vendor/VehicleMemBench` 子模块引入，评估逻辑由供应商提供。
 
 ---
 
@@ -383,16 +355,18 @@ python main.py
 
 访问 http://localhost:8000
 
-### 5. 运行对比实验
+### 5. 运行基准测试
 
 ```bash
 # 全流程（推荐）
-uv run python run_experiment.py all --datasets sgd_calendar scheduler --test-count 50
+uv run python run_benchmark.py all --file-range 1-50
 
 # 分阶段运行
-uv run python run_experiment.py prepare --datasets sgd_calendar --test-count 30 --seed 42
-uv run python run_experiment.py run --run-id <run_id>
-uv run python run_experiment.py judge --run-id <run_id>
+uv run python run_benchmark.py prepare --file-range 1-50
+uv run python run_benchmark.py run --file-range 1-50
+
+# 生成报告
+uv run python run_benchmark.py report
 ```
 
 ---
@@ -401,25 +375,33 @@ uv run python run_experiment.py judge --run-id <run_id>
 
 ### 模型配置 (`config/llm.json`)
 
-所有 LLM、Embedding、Judge 模型配置统一在 `config/llm.json` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。配置采用组合模式：`ProviderConfig`（model/base_url/api_key）被各专用配置（`LLMProviderConfig`/`EmbeddingProviderConfig`/`JudgeProviderConfig`）组合引用。
+所有 LLM、Embedding 模型配置统一在 `config/llm.json` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。配置采用组合模式：`ProviderConfig`（model/base_url/api_key）被各专用配置（`LLMProviderConfig`/`EmbeddingProviderConfig`）组合引用。
+
+基准测试使用独立的 `benchmark` 配置：
 
 ```json
 {
   "llm": [
     {
       "model": "qwen3.5-2b",
-      "base_url": "http://localhost:50721/v1",
-      "api_key": "local",
+      "base_url": "http://127.0.0.1:50721/v1",
+      "api_key": "none",
       "temperature": 0.7
     }
   ],
-  "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
-  "judge": {
-    "model": "qwen3.5-2b",
-    "base_url": "http://localhost:50721/v1",
-    "api_key": "local",
-    "temperature": 0.1
-  }
+  "benchmark": {
+    "model": "MiniMax-M2.7",
+    "base_url": "https://api.minimaxi.com/v1",
+    "api_key_env": "MINIMAX_API_KEY",
+    "temperature": 0.0,
+    "max_tokens": 8192
+  },
+  "embedding": [
+    {
+      "model": "BAAI/bge-small-zh-v1.5",
+      "device": "cpu"
+    }
+  ]
 }
 ```
 
@@ -428,10 +410,8 @@ uv run python run_experiment.py judge --run-id <run_id>
 | 变量 | 说明 |
 |------|------|
 | `VLLM_BASE_URL` | 默认 LLM provider 的 base_url |
-| `JUDGE_MODEL` | Judge 模型名称（优先于 llm.json 中的 judge 字段） |
-| `JUDGE_BASE_URL` | Judge 模型的 base_url |
-| `JUDGE_API_KEY` | Judge 模型的 API key |
 | `OPENAI_MODEL` / `DEEPSEEK_MODEL` | 自动注册为额外 LLM provider |
+| `MINIMAX_API_KEY` | 基准测试 API Key（用于 `benchmark.api_key_env`） |
 
 ### 驾驶场景配置 (`config/scenarios.json`)
 
@@ -497,12 +477,10 @@ uv run pytest tests/ -v
 
 | 文件 | 说明 |
 |------|------|
-| `test_prepare.py` | Prepare 阶段：数据划分、预热、seed 可复现 |
-| `test_execute.py` | Execute 阶段：多后端执行、raw 输出保留 |
-| `test_judge.py` | Judge 阶段：LLM-as-Judge 评分、断点续评 |
-| `test_evaluate.py` | 规则评估函数 |
-| `test_e2e_pipeline.py` | 端到端 Pipeline 集成测试 |
-| `test_experiment_runner.py` | Workflow 集成：数据隔离、评估指标 |
+| `tests/test_adapters/test_adapters.py` | 适配器注册与基础功能 |
+| `tests/test_adapters/test_common.py` | 适配器通用工具函数 |
+| `tests/test_adapters/test_model_config.py` | 模型配置加载 |
+| `tests/test_adapters/test_runner.py` | VehicleMemBench 运行器 |
 | `stores/test_keyword_store.py` | Keyword 记忆后端 |
 | `stores/test_embedding_store.py` | Embedding 记忆后端 |
 | `stores/test_llm_store.py` | LLM 记忆后端 |
@@ -513,11 +491,8 @@ uv run pytest tests/ -v
 | `test_memory_bank.py` | 遗忘曲线、层级摘要、交互聚合 |
 | `test_storage.py` | 跨实例持久化、反馈策略更新 |
 | `test_settings.py` | 模型配置加载与环境变量覆盖 |
-| `test_schemas.py` | 数据模型定义 |
-| `test_memory_types.py` | MemoryMode 枚举 |
-| `test_components.py` | 可组合组件（forgetting_curve, EventStorage, KeywordSearch, FeedbackManager, SimpleInteractionWriter, MemoryBankEngine） |
+| `test_components.py` | 可组合组件 |
 | `test_memory_module_facade.py` | MemoryModule 调度层 |
-| `test_memory_store_contract.py` | 记忆后端契约测试 |
 
 ---
 
@@ -533,6 +508,7 @@ uv run pytest tests/ -v
 | **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线 + 分层摘要) |
 | **数据存储** | JSON文件 (标准库json) |
 | **数据集** | HuggingFace Datasets |
+| **基准测试** | VehicleMemBench (vendor 子模块) |
 | **开发工具** | uv (包管理), pytest (测试), ruff (lint), ty (类型检查) |
 
 ---

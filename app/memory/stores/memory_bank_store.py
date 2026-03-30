@@ -1,25 +1,30 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
+from pathlib import Path
+from typing import Optional
+
 from app.memory.components import EventStorage, FeedbackManager, MemoryBankEngine
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 from app.storage.json_store import JSONStore
 
 
 class MemoryBankStore:
     """记忆库后端，支持遗忘曲线、记忆强化与自动摘要."""
 
-    store_name = "memorybank"
+    store_name = "memory_bank"
     requires_embedding = True
     requires_chat = True
     supports_interaction = True
 
     def __init__(
         self,
-        data_dir: str,
-        embedding_model=None,
-        chat_model=None,
-        **kwargs,
-    ):
+        data_dir: Path,
+        embedding_model: Optional["EmbeddingModel"] = None,
+        chat_model: Optional["ChatModel"] = None,
+        **kwargs: dict,
+    ) -> None:
         """初始化记忆库存储."""
         self._storage = EventStorage(data_dir)
         self._engine = MemoryBankEngine(
