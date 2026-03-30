@@ -25,11 +25,3 @@ class LLMOnlyAdapter:
     def get_search_client(self, store) -> StoreClient:
         """获取存储的搜索客户端."""
         return StoreClient(store)
-
-    def init_state(self):
-        """初始化状态（此适配器无需操作）."""
-        return None
-
-    def close_state(self, state):
-        """关闭状态（此适配器无需操作）."""
-        pass

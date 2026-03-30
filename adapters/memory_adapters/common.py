@@ -59,6 +59,6 @@ class StoreClient:
         """使用存储实例初始化."""
         self.store = store
 
-    def search(self, query, user_id=None, top_k=5):
+    def search(self, query, top_k=5):
         """在存储中搜索相关结果."""
         return self.store.search(query=query, top_k=top_k)

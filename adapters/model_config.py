@@ -2,6 +2,7 @@
 
 import json
 import os
+from functools import lru_cache
 from pathlib import Path
 
 from openai import OpenAI
@@ -9,8 +10,9 @@ from openai import OpenAI
 CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "llm.json")
 
 
+@lru_cache(maxsize=1)
 def _load_config() -> dict:
-    """从 JSON 文件加载配置."""
+    """从 JSON 文件加载配置（已缓存）."""
     with open(CONFIG_PATH) as f:
         return json.load(f)
 

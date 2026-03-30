@@ -36,5 +36,3 @@ def test_all_adapters_have_required_methods():
         adapter = cls.__new__(cls)
         assert callable(getattr(adapter, "add", None))
         assert callable(getattr(adapter, "get_search_client", None))
-        assert callable(getattr(adapter, "init_state", None))
-        assert callable(getattr(adapter, "close_state", None))
