@@ -25,6 +25,10 @@ def get_benchmark_client() -> OpenAI:
             base_url=bc["base_url"],
             api_key=api_key,
         )
+    if not config.get("llm"):
+        raise ValueError(
+            "Configuration must contain at least one LLM provider in 'llm' array"
+        )
     llm = config["llm"][0]
     return OpenAI(
         base_url=llm.get("base_url"),

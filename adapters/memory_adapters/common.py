@@ -10,7 +10,10 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
         return []
     pattern = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
     records = []
-    for i, line in enumerate(history_text.strip().splitlines()):
+    for i, raw_line in enumerate(history_text.strip().splitlines()):
+        line = raw_line.strip()
+        if not line:
+            continue
         m = pattern.match(line)
         if m:
             date_group = m.group(1)

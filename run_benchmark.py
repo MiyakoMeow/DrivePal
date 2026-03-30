@@ -15,9 +15,6 @@ def main():
             "--memory-types",
             default="gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
         )
-        p.add_argument("--max-workers", type=int, default=1)
-        p.add_argument("--output-dir", default=None)
-
     rp = subparsers.add_parser("report")
     rp.add_argument("--output", default=None)
 
