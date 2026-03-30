@@ -1,0 +1,10 @@
+[lint]
+extend-select = ["D"]
+ignore = ["D211", "D213", "D203"]
+
+[lint.per-file-ignores]
+"vendor/**" = ["ALL"]
+"adapters/runner.py" = ["E402"]
+
+[format]
+exclude = ["vendor/**"]

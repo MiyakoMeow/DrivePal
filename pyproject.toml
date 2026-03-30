@@ -32,26 +32,3 @@ dev = [
     "ty>=0.0.26",
 ]
 
-[tool.ruff.lint]
-extend-select = ["D"]
-ignore = ["D211", "D213", "D203"]
-
-[tool.ruff.lint.per-file-ignores]
-"vendor/**" = ["ALL"]
-"adapters/runner.py" = ["E402"]
-
-[tool.ruff.format]
-exclude = ["vendor/**"]
-
-[tool.ty.src]
-exclude = ["vendor"]
-
-[tool.ty.analysis]
-allowed-unresolved-imports = ["evaluation.**"]
-
-[tool.ty.rules]
-all = "error"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
