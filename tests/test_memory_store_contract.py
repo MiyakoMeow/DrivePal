@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -38,7 +39,8 @@ class TestMemoryStoreContract:
     def test_write_then_search_returns_same_event(self, store: "MemoryStore") -> None:
         """验证写入后能在事件存储中找到同一事件."""
         event_id = store.write(MemoryEvent(content="测试事件"))
-        events = store.events_store.read()  # type: ignore[attr-defined]
+        events_store = cast(Any, store).events_store
+        events = events_store.read()
         assert any(e["id"] == event_id for e in events)
 
     def test_search_returns_list_of_search_result(self, store: "MemoryStore") -> None:
@@ -68,5 +70,6 @@ class TestMemoryStoreContract:
         """验证 update_feedback 正确更新策略存储."""
         event_id = store.write(MemoryEvent(content="事件"))
         store.update_feedback(event_id, FeedbackData(action="accept", type="meeting"))
-        strategies = store.strategies_store.read()  # type: ignore[attr-defined]
+        strategies_store = cast(Any, store).strategies_store
+        strategies = strategies_store.read()
         assert "reminder_weights" in strategies

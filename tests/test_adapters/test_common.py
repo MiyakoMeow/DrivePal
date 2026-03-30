@@ -53,7 +53,7 @@ def test_format_search_results_with_events() -> None:
 
 def test_store_client_delegates_to_store() -> None:
     """测试 StoreClient 将搜索委托给 store."""
-    from app.memory.schemas import SearchResult
+    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 
     class FakeStore:
         store_name = "fake"
@@ -61,9 +61,23 @@ def test_store_client_delegates_to_store() -> None:
         requires_chat = False
         supports_interaction = False
 
+        def write(self, event: MemoryEvent) -> str:
+            return "fake_id"
+
         def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
             return [SearchResult(event={"content": f"result for {query}"}, score=1.0)]
 
-    client = StoreClient(FakeStore())  # type: ignore[arg-type]
+        def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+            return []
+
+        def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+            pass
+
+        def write_interaction(
+            self, query: str, response: str, event_type: str = "reminder"
+        ) -> str:
+            return "fake_interaction_id"
+
+    client = StoreClient(FakeStore())
     results = client.search(query="test", top_k=5)
     assert len(results) == 1
