@@ -1,14 +1,12 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from app.memory.components import EventStorage, FeedbackManager, MemoryBankEngine
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 from app.storage.json_store import JSONStore
-
-if TYPE_CHECKING:
-    from app.models.embedding import EmbeddingModel
-    from app.models.chat import ChatModel
 
 
 class MemoryBankStore:

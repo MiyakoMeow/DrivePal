@@ -1,15 +1,13 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
-
-if TYPE_CHECKING:
-    from app.models.chat import ChatModel
-    from app.models.embedding import EmbeddingModel
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 

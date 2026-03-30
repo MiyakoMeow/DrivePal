@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from app.memory.components import (
     EventStorage,
@@ -12,11 +12,9 @@ from app.memory.components import (
     SimpleInteractionWriter,
 )
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 from app.storage.json_store import JSONStore
-
-if TYPE_CHECKING:
-    from app.models.chat import ChatModel
-    from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 

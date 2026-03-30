@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
+from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from tests.conftest import is_llm_available
-
-if TYPE_CHECKING:
-    from app.memory.interfaces import MemoryStore
 
 
 def _get_store_params() -> list[str]:

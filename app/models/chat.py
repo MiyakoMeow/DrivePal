@@ -1,12 +1,11 @@
 """LLM对话模型封装，基于LangChain OpenAI兼容接口，支持多provider自动fallback."""
 
-from typing import Optional, cast, TYPE_CHECKING
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.utils.utils import SecretStr
+from typing import Optional, cast
 
-if TYPE_CHECKING:
-    from langchain_core.runnable import RunnableConfig  # type: ignore[attr-defined]
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
+from langchain_core.utils.utils import SecretStr
+from langchain_openai import ChatOpenAI
 
 from app.models.settings import LLMProviderConfig, LLMSettings
 

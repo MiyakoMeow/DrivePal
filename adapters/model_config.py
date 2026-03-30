@@ -4,13 +4,11 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from openai import OpenAI
 
-if TYPE_CHECKING:
-    from app.models.chat import ChatModel
-    from app.models.embedding import EmbeddingModel
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
 
 CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "llm.json")
 

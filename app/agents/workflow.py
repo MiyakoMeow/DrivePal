@@ -5,11 +5,10 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Optional, cast, TYPE_CHECKING
+from typing import Any, Optional, cast
 
-if TYPE_CHECKING:
-    from langgraph.graph import CompiledGraph  # type: ignore[attr-defined]
 from langgraph.graph import StateGraph, END
+from langgraph.graph.state import CompiledStateGraph
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
@@ -45,7 +44,7 @@ class AgentWorkflow:
 
         self.graph = self._build_graph()
 
-    def _build_graph(self) -> "CompiledGraph":
+    def _build_graph(self) -> CompiledStateGraph:
         """构建LangGraph工作流."""
         workflow = StateGraph(cast(Any, AgentState))
 
