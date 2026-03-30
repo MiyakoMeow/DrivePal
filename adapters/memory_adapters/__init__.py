@@ -1,4 +1,4 @@
-"""Memory adapter implementations for different storage strategies."""
+"""不同存储策略的记忆适配器实现."""
 
 from adapters.memory_adapters.keyword_adapter import KeywordAdapter
 from adapters.memory_adapters.llm_only_adapter import LLMOnlyAdapter

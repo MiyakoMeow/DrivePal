@@ -1,1 +1,1 @@
-"""Tests for adapters module."""
+"""适配器模块测试."""

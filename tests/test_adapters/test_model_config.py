@@ -4,7 +4,7 @@ import json
 
 
 def test_get_benchmark_client_returns_openai_instance(tmp_path, monkeypatch):
-    """Test get_benchmark_client returns an OpenAI instance."""
+    """测试 get_benchmark_client 返回 OpenAI 实例."""
     config = {
         "llm": [
             {
@@ -26,7 +26,7 @@ def test_get_benchmark_client_returns_openai_instance(tmp_path, monkeypatch):
 
 
 def test_get_benchmark_client_uses_llm_config_when_no_benchmark(tmp_path, monkeypatch):
-    """Test get_benchmark_client uses LLM config when no benchmark config exists."""
+    """测试无 benchmark 配置时 get_benchmark_client 使用 LLM 配置."""
     config = {
         "llm": [
             {
@@ -47,7 +47,7 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(tmp_path, monkey
 
 
 def test_get_benchmark_client_uses_benchmark_config_with_env(tmp_path, monkeypatch):
-    """Test get_benchmark_client uses benchmark config with environment variable."""
+    """测试 get_benchmark_client 使用带环境变量的 benchmark 配置."""
     monkeypatch.setenv("TEST_API_KEY", "sk-test123")
     config = {
         "llm": [
@@ -76,7 +76,7 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(tmp_path, monkeypat
 
 
 def test_get_store_chat_model(tmp_path, monkeypatch):
-    """Test get_store_chat_model returns a chat model."""
+    """测试 get_store_chat_model 返回聊天模型."""
     config = {
         "llm": [
             {

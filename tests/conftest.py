@@ -40,5 +40,5 @@ def is_llm_available() -> bool:
 
 SKIP_IF_NO_LLM = pytest.mark.skipif(
     not is_llm_available(),
-    reason="LLM API not available",
+    reason="LLM API 不可用",
 )

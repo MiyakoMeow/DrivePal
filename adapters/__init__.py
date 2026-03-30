@@ -1,1 +1,1 @@
-"""Adapters for memory store implementations."""
+"""记忆存储实现的适配器."""

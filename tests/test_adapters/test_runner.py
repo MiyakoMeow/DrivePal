@@ -2,7 +2,7 @@
 
 
 def test_setup_vehiclemembench_path():
-    """Test that setup_vehiclemembench_path adds vendor to sys.path."""
+    """测试 setup_vehiclemembench_path 将 vendor 添加到 sys.path."""
     from adapters.runner import setup_vehiclemembench_path
 
     setup_vehiclemembench_path()
@@ -13,7 +13,7 @@ def test_setup_vehiclemembench_path():
 
 
 def test_parse_file_range():
-    """Test parsing file range strings."""
+    """测试解析文件范围字符串."""
     from adapters.runner import parse_file_range
 
     assert parse_file_range("1-5") == [1, 2, 3, 4, 5]
@@ -22,7 +22,7 @@ def test_parse_file_range():
 
 
 def test_parse_file_range_dedup_and_sort():
-    """Test that parse_file_range deduplicates and sorts results."""
+    """测试 parse_file_range 去重和排序结果."""
     from adapters.runner import parse_file_range
 
     assert parse_file_range("5,3,3,1") == [1, 3, 5]
@@ -30,7 +30,7 @@ def test_parse_file_range_dedup_and_sort():
 
 
 def test_paths_exist():
-    """Test that vendor paths exist."""
+    """测试 vendor 路径存在."""
     from adapters.runner import VENDOR_DIR, BENCHMARK_DIR, OUTPUT_DIR
 
     assert VENDOR_DIR.exists()
@@ -39,5 +39,5 @@ def test_paths_exist():
 
 
 def test_imports_available():
-    """Test that vendor imports are available."""
+    """测试 vendor 导入可用."""
     pass

@@ -8,12 +8,12 @@ SAMPLE_HISTORY = "[2025-03-03 08:30] Gary Allen: I like the seat heating on leve
 
 
 def test_adapters_registry_has_all_four():
-    """Test that ADAPTERS registry contains all four adapter types."""
+    """测试 ADAPTERS 注册表包含所有四种适配器类型."""
     assert set(ADAPTERS.keys()) == {"keyword", "llm_only", "embeddings", "memory_bank"}
 
 
 def test_all_adapters_have_tag():
-    """Test that all adapters have a TAG attribute."""
+    """测试所有适配器都有 TAG 属性."""
     for name, cls in ADAPTERS.items():
         adapter = cls.__new__(cls)
         assert hasattr(adapter, "TAG")
@@ -21,7 +21,7 @@ def test_all_adapters_have_tag():
 
 
 def test_keyword_adapter_add_and_search(tmp_path):
-    """Test KeywordAdapter can add history and search."""
+    """测试 KeywordAdapter 可以添加历史记录和搜索."""
     adapter = KeywordAdapter(data_dir=str(tmp_path / "keyword"))
     store = adapter.add(SAMPLE_HISTORY)
     assert store is not None
@@ -31,7 +31,7 @@ def test_keyword_adapter_add_and_search(tmp_path):
 
 
 def test_all_adapters_have_required_methods():
-    """Test that all adapters have the required methods."""
+    """测试所有适配器都有必需的方法."""
     for name, cls in ADAPTERS.items():
         adapter = cls.__new__(cls)
         assert callable(getattr(adapter, "add", None))

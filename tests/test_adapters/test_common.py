@@ -11,7 +11,7 @@ SAMPLE_HISTORY = "[2025-03-03 08:30] Gary Allen: I like the seat heating on leve
 
 
 def test_history_to_interaction_records():
-    """Test converting history text to interaction records."""
+    """测试将历史文本转换为交互记录."""
     records = history_to_interaction_records(SAMPLE_HISTORY)
     assert len(records) == 3
     assert records[0].content == "Gary Allen: I like the seat heating on level 3"
@@ -21,20 +21,20 @@ def test_history_to_interaction_records():
 
 
 def test_history_to_interaction_records_empty():
-    """Test empty history returns empty list."""
+    """测试空历史返回空列表."""
     records = history_to_interaction_records("")
     assert records == []
 
 
 def test_format_search_results_empty():
-    """Test formatting empty results."""
+    """测试格式化空结果."""
     text, count = format_search_results([])
     assert text == ""
     assert count == 0
 
 
 def test_format_search_results_with_events():
-    """Test formatting search results with events."""
+    """测试格式化带事件搜索结果."""
     from app.memory.schemas import SearchResult
 
     results = [
@@ -52,7 +52,7 @@ def test_format_search_results_with_events():
 
 
 def test_store_client_delegates_to_store():
-    """Test that StoreClient delegates search to store."""
+    """测试 StoreClient 将搜索委托给 store."""
 
     class FakeStore:
         def search(self, query, top_k=10):

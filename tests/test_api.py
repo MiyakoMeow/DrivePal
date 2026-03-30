@@ -9,7 +9,7 @@ from tests.conftest import SKIP_IF_NO_LLM
 
 @pytest.fixture
 def client():
-    """Provide a FastAPI test client."""
+    """提供 FastAPI 测试客户端."""
     from app.api.main import app
 
     return TestClient(app)
@@ -17,7 +17,7 @@ def client():
 
 @SKIP_IF_NO_LLM
 def test_query_endpoint(client):
-    """Verify the /api/query endpoint returns a valid response."""
+    """验证 /api/query 端点返回有效响应."""
     response = client.post(
         "/api/query", json={"query": "测试查询", "memory_mode": "keyword"}
     )
@@ -29,7 +29,7 @@ def test_query_endpoint(client):
 
 @SKIP_IF_NO_LLM
 def test_feedback_endpoint(client):
-    """Verify the /api/feedback endpoint accepts feedback actions."""
+    """验证 /api/feedback 端点接受反馈操作."""
     response = client.post(
         "/api/feedback", json={"event_id": "test123", "action": "accept"}
     )
@@ -39,7 +39,7 @@ def test_feedback_endpoint(client):
 
 @SKIP_IF_NO_LLM
 def test_history_endpoint(client):
-    """Verify the /api/history endpoint returns history records."""
+    """验证 /api/history 端点返回历史记录."""
     response = client.get("/api/history?limit=5")
     assert response.status_code == 200
     assert "history" in response.json()

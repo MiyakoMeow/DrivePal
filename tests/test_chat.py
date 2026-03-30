@@ -9,7 +9,7 @@ from tests.conftest import SKIP_IF_NO_LLM
 
 @SKIP_IF_NO_LLM
 def test_chat_drives_llm_memory_search(tmp_path):
-    """Verify that chat-driven LLM memory search retrieves relevant events."""
+    """验证聊天驱动的 LLM 记忆搜索能检索到相关事件."""
     chat_model = ChatModel()
     memory = MemoryModule(str(tmp_path), chat_model=chat_model)
     memory.write(MemoryEvent(content="明天下午三点项目会议", type="meeting"))
@@ -20,7 +20,7 @@ def test_chat_drives_llm_memory_search(tmp_path):
 
 @SKIP_IF_NO_LLM
 def test_chat_feeds_workflow_context(tmp_path):
-    """Verify that memory context is injected into the agent workflow state."""
+    """验证记忆上下文被注入到代理工作流状态中."""
     from app.agents.workflow import AgentWorkflow
     from langchain_core.messages import HumanMessage
 
