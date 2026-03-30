@@ -39,7 +39,7 @@ class JSONStore:
         """写入数据到JSON文件."""
         self._write(data)
 
-    def append(self, item: Any) -> None:
+    def append(self, item: Any) -> None:  # noqa: ANN401
         """向列表类型存储追加一个元素."""
         data = self.read()
         if not isinstance(data, list):
@@ -49,7 +49,7 @@ class JSONStore:
         data.append(item)
         self._write(data)
 
-    def update(self, key: str, value: Any) -> None:
+    def update(self, key: str, value: Any) -> None:  # noqa: ANN401
         """更新字典类型存储中指定键的值."""
         data = self.read()
         if not isinstance(data, dict):

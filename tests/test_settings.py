@@ -1,6 +1,7 @@
 """模型设置加载器测试."""
 
 import json
+from pathlib import Path
 
 import pytest
 from unittest.mock import patch, MagicMock
@@ -16,7 +17,7 @@ from app.models.settings import (
 class TestLLMProviderConfig:
     """LLMProviderConfig 测试."""
 
-    def test_from_dict_full(self):
+    def test_from_dict_full(self) -> None:
         """验证包含所有字段的完整字典解析."""
         cfg = LLMProviderConfig.from_dict(
             {
@@ -31,7 +32,7 @@ class TestLLMProviderConfig:
         assert cfg.provider.api_key == "sk-test"
         assert cfg.temperature == 0.5
 
-    def test_from_dict_defaults(self):
+    def test_from_dict_defaults(self) -> None:
         """验证可选字段缺失时的默认值."""
         cfg = LLMProviderConfig.from_dict({"model": "test"})
         assert cfg.provider.model == "test"
@@ -43,7 +44,7 @@ class TestLLMProviderConfig:
 class TestEmbeddingProviderConfig:
     """EmbeddingProviderConfig 测试."""
 
-    def test_from_dict_local(self):
+    def test_from_dict_local(self) -> None:
         """验证本地 HuggingFace 提供者解析."""
         cfg = EmbeddingProviderConfig.from_dict(
             {
@@ -56,7 +57,7 @@ class TestEmbeddingProviderConfig:
         assert cfg.provider.base_url is None
         assert cfg.provider.api_key is None
 
-    def test_from_dict_remote(self):
+    def test_from_dict_remote(self) -> None:
         """验证远程 OpenAI 兼容提供者解析."""
         cfg = EmbeddingProviderConfig.from_dict(
             {
@@ -72,7 +73,9 @@ class TestEmbeddingProviderConfig:
 class TestLLMSettingsLoad:
     """LLMSettings.load 配置加载测试."""
 
-    def test_load_from_config_file(self, tmp_path, monkeypatch):
+    def test_load_from_config_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """验证从 config/llm.json 加载提供者."""
         config_file = tmp_path / "config" / "llm.json"
         config_file.parent.mkdir(parents=True)
@@ -97,7 +100,9 @@ class TestLLMSettingsLoad:
         assert len(settings.embedding_providers) == 1
         assert settings.embedding_providers[0].provider.model == "bge-test"
 
-    def test_load_fallback_to_env_vars(self, tmp_path, monkeypatch):
+    def test_load_fallback_to_env_vars(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """验证配置文件不存在时使用 OPENAI_XXX 环境变量."""
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
@@ -107,7 +112,9 @@ class TestLLMSettingsLoad:
         assert len(settings.llm_providers) >= 1
         assert any(p.provider.model == "gpt-4" for p in settings.llm_providers)
 
-    def test_load_deepseek_env_as_final_fallback(self, tmp_path, monkeypatch):
+    def test_load_deepseek_env_as_final_fallback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """验证 OPENAI_XXX 不存在时使用 DEEPSEEK_XXX 环境变量."""
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
@@ -116,13 +123,17 @@ class TestLLMSettingsLoad:
         settings = LLMSettings.load()
         assert any(p.provider.model == "deepseek-chat" for p in settings.llm_providers)
 
-    def test_load_no_config_raises(self, tmp_path, monkeypatch):
+    def test_load_no_config_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
         monkeypatch.chdir(tmp_path)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
 
-    def test_config_file_plus_env_merging(self, tmp_path, monkeypatch):
+    def test_config_file_plus_env_merging(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """验证配置文件提供者优先于环境变量提供者."""
         config_file = tmp_path / "config" / "llm.json"
         config_file.parent.mkdir(parents=True)
@@ -152,7 +163,9 @@ class TestLLMSettingsLoad:
         assert any(p.provider.model == "model-b" for p in settings.llm_providers)
         assert any(p.provider.model == "model-c" for p in settings.llm_providers)
 
-    def test_dedup_providers(self, tmp_path, monkeypatch):
+    def test_dedup_providers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """验证重复提供者按 model+base_url 去重."""
         config_file = tmp_path / "config" / "llm.json"
         config_file.parent.mkdir(parents=True)
@@ -186,7 +199,7 @@ class TestLLMSettingsLoad:
 class TestChatModelFallback:
     """ChatModel 多提供者回退行为测试."""
 
-    def test_generate_with_single_provider(self):
+    def test_generate_with_single_provider(self) -> None:
         """验证单个提供者成功生成."""
         from app.models.chat import ChatModel
         from app.models.settings import LLMProviderConfig
@@ -205,7 +218,7 @@ class TestChatModelFallback:
             result = chat.generate("hello")
         assert result == "response"
 
-    def test_generate_falls_back_on_error(self):
+    def test_generate_falls_back_on_error(self) -> None:
         """验证第一个失败时回退到下一个提供者."""
         from app.models.chat import ChatModel
         from app.models.settings import LLMProviderConfig
@@ -227,7 +240,7 @@ class TestChatModelFallback:
         chat = ChatModel(providers=providers)
         call_count = 0
 
-        def mock_invoke(provider, messages, **kwargs):
+        def mock_invoke(provider: str, messages: list, **kwargs: object) -> str:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -239,7 +252,7 @@ class TestChatModelFallback:
         assert result == "fallback response"
         assert call_count == 2
 
-    def test_generate_all_providers_fail_raises(self):
+    def test_generate_all_providers_fail_raises(self) -> None:
         """验证所有提供者失败时抛出 RuntimeError."""
         from app.models.chat import ChatModel
         from app.models.settings import LLMProviderConfig
@@ -266,7 +279,7 @@ class TestChatModelFallback:
 class TestEmbeddingModelFallback:
     """EmbeddingModel 多提供者回退行为测试."""
 
-    def test_local_provider_creates_huggingface(self):
+    def test_local_provider_creates_huggingface(self) -> None:
         """验证本地提供者使用 HuggingFaceEmbeddings."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
@@ -286,7 +299,7 @@ class TestEmbeddingModelFallback:
             encode_kwargs={"normalize_embeddings": True},
         )
 
-    def test_remote_provider_creates_openai(self):
+    def test_remote_provider_creates_openai(self) -> None:
         """验证远程提供者使用 OpenAIEmbeddings."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
@@ -306,7 +319,7 @@ class TestEmbeddingModelFallback:
             _ = emb.client
         mock_cls.assert_called_once()
 
-    def test_fallback_to_next_provider(self):
+    def test_fallback_to_next_provider(self) -> None:
         """验证第一个嵌入提供者加载失败时回退."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
@@ -323,7 +336,7 @@ class TestEmbeddingModelFallback:
 
         call_count = 0
 
-        def mock_hf(model_name, **kwargs):
+        def mock_hf(model_name: str, **kwargs: object) -> MagicMock:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -334,7 +347,7 @@ class TestEmbeddingModelFallback:
             _ = emb.client
         assert call_count == 2
 
-    def test_encode_uses_client(self):
+    def test_encode_uses_client(self) -> None:
         """验证 encode 委托给缓存的客户端."""
         from app.models.embedding import EmbeddingModel
         from app.models.settings import EmbeddingProviderConfig
@@ -352,7 +365,7 @@ class TestEmbeddingModelFallback:
         assert result == [0.1, 0.2, 0.3]
 
 
-def test_judge_provider_config_from_dict():
+def test_judge_provider_config_from_dict() -> None:
     """测试 JudgeProviderConfig.from_dict 创建正确的配置."""
     from app.models.settings import JudgeProviderConfig
 
@@ -369,7 +382,7 @@ def test_judge_provider_config_from_dict():
     assert cfg.temperature == 0.1
 
 
-def test_judge_provider_config_defaults():
+def test_judge_provider_config_defaults() -> None:
     """测试 JudgeProviderConfig 默认值被正确应用."""
     from app.models.settings import JudgeProviderConfig
 
@@ -379,7 +392,9 @@ def test_judge_provider_config_defaults():
     assert cfg.temperature == 0.1
 
 
-def test_llm_settings_loads_judge(tmp_path, monkeypatch):
+def test_llm_settings_loads_judge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """测试 LLMSettings 从配置加载 judge 提供者."""
     from app.models.settings import LLMSettings
     import json

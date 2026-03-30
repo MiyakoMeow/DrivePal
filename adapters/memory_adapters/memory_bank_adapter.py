@@ -2,6 +2,7 @@
 
 from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
 from adapters.model_config import get_store_chat_model, get_store_embedding_model
+from app.memory.interfaces import MemoryStore
 from app.memory.stores.memory_bank_store import MemoryBankStore
 
 
@@ -10,7 +11,7 @@ class MemoryBankAdapter:
 
     TAG = "memory_bank"
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str) -> None:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
@@ -27,6 +28,6 @@ class MemoryBankAdapter:
             store.write(record)
         return store
 
-    def get_search_client(self, store) -> StoreClient:
+    def get_search_client(self, store: MemoryStore) -> StoreClient:
         """获取存储的搜索客户端."""
         return StoreClient(store)

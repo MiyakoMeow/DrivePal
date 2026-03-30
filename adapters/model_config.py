@@ -4,8 +4,13 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from openai import OpenAI
+
+if TYPE_CHECKING:
+    from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
 CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "llm.json")
 
@@ -62,14 +67,14 @@ def get_benchmark_max_tokens() -> int:
     return 8192
 
 
-def get_store_chat_model():
+def get_store_chat_model() -> "ChatModel":
     """获取用于记忆存储操作的聊天模型."""
     from app.models.settings import get_chat_model
 
     return get_chat_model()
 
 
-def get_store_embedding_model():
+def get_store_embedding_model() -> "EmbeddingModel":
     """获取用于记忆存储操作的嵌入模型."""
     from app.models.settings import get_embedding_model
 

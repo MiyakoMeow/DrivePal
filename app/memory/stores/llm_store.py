@@ -3,7 +3,7 @@
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
 
 from app.memory.components import (
@@ -16,6 +16,7 @@ from app.storage.json_store import JSONStore
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +44,9 @@ class LLMOnlyMemoryStore:
     def __init__(
         self,
         data_dir: str,
-        embedding_model=None,
+        embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
-        **kwargs,
+        **kwargs: dict,
     ) -> None:
         """初始化 LLM 存储."""
         self._storage = EventStorage(data_dir)
@@ -76,7 +77,7 @@ class LLMOnlyMemoryStore:
         if not events:
             return []
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         results = []
         for event in events:
             event_text = event.get("content", "") or event.get("description", "")

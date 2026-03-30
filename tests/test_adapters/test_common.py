@@ -10,7 +10,7 @@ from adapters.memory_adapters.common import (
 SAMPLE_HISTORY = "[2025-03-03 08:30] Gary Allen: I like the seat heating on level 3\n[2025-03-03 08:31] Justin Martinez: That sounds comfortable\n[2025-03-05 07:45] Gary Allen: When driving at night, I prefer the dashboard dim\n"
 
 
-def test_history_to_interaction_records():
+def test_history_to_interaction_records() -> None:
     """测试将历史文本转换为交互记录."""
     records = history_to_interaction_records(SAMPLE_HISTORY)
     assert len(records) == 3
@@ -20,20 +20,20 @@ def test_history_to_interaction_records():
     assert records[2].date_group == "2025-03-05"
 
 
-def test_history_to_interaction_records_empty():
+def test_history_to_interaction_records_empty() -> None:
     """测试空历史返回空列表."""
     records = history_to_interaction_records("")
     assert records == []
 
 
-def test_format_search_results_empty():
+def test_format_search_results_empty() -> None:
     """测试格式化空结果."""
     text, count = format_search_results([])
     assert text == ""
     assert count == 0
 
 
-def test_format_search_results_with_events():
+def test_format_search_results_with_events() -> None:
     """测试格式化带事件搜索结果."""
     from app.memory.schemas import SearchResult
 
@@ -51,17 +51,19 @@ def test_format_search_results_with_events():
     assert "dashboard dim" in text
 
 
-def test_store_client_delegates_to_store():
+def test_store_client_delegates_to_store() -> None:
     """测试 StoreClient 将搜索委托给 store."""
+    from app.memory.schemas import SearchResult
 
     class FakeStore:
-        def search(self, query, top_k=10):
-            return [
-                type(
-                    "R", (), {"event": {"content": f"result for {query}"}, "score": 1.0}
-                )
-            ]
+        store_name = "fake"
+        requires_embedding = False
+        requires_chat = False
+        supports_interaction = False
 
-    client = StoreClient(FakeStore())
+        def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+            return [SearchResult(event={"content": f"result for {query}"}, score=1.0)]
+
+    client = StoreClient(FakeStore())  # type: ignore[arg-type]
     results = client.search(query="test", top_k=5)
     assert len(results) == 1

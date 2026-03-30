@@ -18,7 +18,7 @@ class KeywordMemoryStore:
     requires_chat = False
     supports_interaction = True
 
-    def __init__(self, data_dir: str, **kwargs) -> None:
+    def __init__(self, data_dir: str, **kwargs: dict) -> None:
         """初始化关键词存储."""
         self._storage = EventStorage(data_dir)
         self._search = KeywordSearch()

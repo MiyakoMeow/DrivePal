@@ -1,7 +1,8 @@
 """记忆适配器通用工具函数."""
 
 import re
-from app.memory.schemas import MemoryEvent
+from app.memory.interfaces import MemoryStore
+from app.memory.schemas import MemoryEvent, SearchResult
 
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
@@ -34,7 +35,7 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
     return records
 
 
-def format_search_results(results) -> tuple[str, int]:
+def format_search_results(results: list[SearchResult]) -> tuple[str, int]:
     """将搜索结果格式化为文本和数量."""
     if not results:
         return ("", 0)
@@ -55,10 +56,10 @@ def format_search_results(results) -> tuple[str, int]:
 class StoreClient:
     """用于在记忆存储中搜索的客户端."""
 
-    def __init__(self, store):
+    def __init__(self, store: MemoryStore) -> None:
         """使用存储实例初始化."""
         self.store = store
 
-    def search(self, query, top_k=5):
+    def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """在存储中搜索相关结果."""
         return self.store.search(query=query, top_k=top_k)

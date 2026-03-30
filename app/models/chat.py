@@ -1,9 +1,12 @@
 """LLM对话模型封装，基于LangChain OpenAI兼容接口，支持多provider自动fallback."""
 
-from typing import Optional
+from typing import Optional, cast, TYPE_CHECKING
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.utils.utils import SecretStr
+
+if TYPE_CHECKING:
+    from langchain_core.runnable import RunnableConfig  # type: ignore[attr-defined]
 
 from app.models.settings import LLMProviderConfig, LLMSettings
 
@@ -15,7 +18,7 @@ class ChatModel:
         self,
         providers: list[LLMProviderConfig] | None = None,
         temperature: float | None = None,
-    ):
+    ) -> None:
         """初始化对话模型."""
         if providers is None:
             settings = LLMSettings.load()
@@ -42,14 +45,14 @@ class ChatModel:
         return ChatOpenAI(**kwargs)
 
     def _invoke_provider(
-        self, provider: LLMProviderConfig, messages: list, **kwargs
+        self, provider: LLMProviderConfig, messages: list, **kwargs: dict
     ) -> str:
         client = self._create_client(provider)
-        response = client.invoke(messages, **kwargs)
+        response = client.invoke(messages, cast("RunnableConfig | None", kwargs))
         return str(response.content)
 
     def generate(
-        self, prompt: str, system_prompt: Optional[str] = None, **kwargs
+        self, prompt: str, system_prompt: Optional[str] = None, **kwargs: dict
     ) -> str:
         """生成回复，按 provider 顺序尝试，失败自动 fallback."""
         messages = []

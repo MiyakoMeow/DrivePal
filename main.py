@@ -11,7 +11,7 @@ webui_path = Path(__file__).parent / "webui"
 
 
 @app.get("/")
-async def root():
+async def root() -> FileResponse:
     """返回前端 WebUI 入口页面."""
     return FileResponse(webui_path / "index.html")
 

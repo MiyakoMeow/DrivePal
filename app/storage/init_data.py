@@ -10,7 +10,7 @@ def get_data_dir() -> str:
     return str(Path(__file__).parent.parent.parent / "data")
 
 
-def init_storage(data_dir: Optional[str] = None):
+def init_storage(data_dir: Optional[str] = None) -> None:
     """初始化存储目录和数据文件."""
     if data_dir is None:
         data_dir = get_data_dir()

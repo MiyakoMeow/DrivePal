@@ -8,7 +8,7 @@ from tests.conftest import SKIP_IF_NO_LLM
 
 
 @SKIP_IF_NO_LLM
-def test_chat_drives_llm_memory_search(tmp_path):
+def test_chat_drives_llm_memory_search(tmp_path: str) -> None:
     """验证聊天驱动的 LLM 记忆搜索能检索到相关事件."""
     chat_model = ChatModel()
     memory = MemoryModule(str(tmp_path), chat_model=chat_model)
@@ -19,7 +19,7 @@ def test_chat_drives_llm_memory_search(tmp_path):
 
 
 @SKIP_IF_NO_LLM
-def test_chat_feeds_workflow_context(tmp_path):
+def test_chat_feeds_workflow_context(tmp_path: str) -> None:
     """验证记忆上下文被注入到代理工作流状态中."""
     from app.agents.workflow import AgentWorkflow
     from langchain_core.messages import HumanMessage

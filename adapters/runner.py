@@ -21,7 +21,7 @@ BENCHMARK_DIR = VENDOR_DIR / "benchmark"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"
 
 
-def setup_vehiclemembench_path():
+def setup_vehiclemembench_path() -> None:
     """将 VehicleMemBench 路径添加到 sys.path."""
     for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
         d_str = str(d)
@@ -92,7 +92,7 @@ def _get_output_dir() -> Path:
 def prepare(
     file_range: str = "1-50",
     memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
-):
+) -> None:
     """为指定文件范围和记忆类型准备基准测试数据."""
     file_nums = parse_file_range(file_range)
     types = [t.strip() for t in memory_types.split(",")]
@@ -118,7 +118,9 @@ def prepare(
                 continue
 
 
-def _prepare_single(agent_client, history_text, file_num, memory_type):
+def _prepare_single(
+    agent_client: AgentClient, history_text: str, file_num: int, memory_type: str
+) -> dict | None:
     if memory_type == "gold":
         return {"type": "gold"}
     if memory_type == "summary":
@@ -142,7 +144,7 @@ def run(
     file_range: str = "1-50",
     memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
     reflect_num: int = 10,
-):
+) -> None:
     """为指定文件范围和记忆类型运行基准评估."""
     file_nums = parse_file_range(file_range)
     types = [t.strip() for t in memory_types.split(",")]
@@ -182,15 +184,25 @@ def run(
 
 
 def _run_single(
-    agent_client, events, history_text, prep_data, file_num, memory_type, reflect_num
-):
+    agent_client: AgentClient,
+    events: list[dict],
+    history_text: str,
+    prep_data: dict,
+    file_num: int,
+    memory_type: str,
+    reflect_num: int,
+) -> list[dict]:
     results = []
     for i, event in enumerate(events):
         query = event.get("query", "")
         reasoning_type = event.get("reasoning_type", "")
         ref_calls = parse_answer_to_tools(event.get("new_answer", []))
         gold_memory = event.get("gold_memory", "")
-        task = {"query": query, "tools": ref_calls, "reasoning_type": reasoning_type}
+        task: dict = {
+            "query": query,
+            "tools": ref_calls,
+            "reasoning_type": reasoning_type,
+        }
 
         try:
             if memory_type == "gold":
@@ -227,8 +239,13 @@ def _run_single(
 
 
 def _run_custom_adapter(
-    agent_client, task, task_id, prep_data, memory_type, reflect_num
-):
+    agent_client: AgentClient,
+    task: dict,
+    task_id: int,
+    prep_data: dict,
+    memory_type: str,
+    reflect_num: int,
+) -> dict | None:
     adapter_cls = ADAPTERS[memory_type]
     data_dir = prep_data["data_dir"]
     adapter = adapter_cls(data_dir=data_dir)
@@ -269,7 +286,7 @@ def _run_custom_adapter(
         },
     ]
 
-    def _memory_search(query, top_k=5):
+    def _memory_search(query: str, top_k: int = 5) -> dict:
         results = client.search(query=query, top_k=top_k)
         text, count = format_search_results(results)
         return {"success": True, "results": text, "count": count}
@@ -290,7 +307,7 @@ def _run_custom_adapter(
     )
 
 
-def report(output_path: Optional[str] = None):
+def report(output_path: Optional[str] = None) -> None:
     """从结果生成并打印基准测试报告."""
     output_dir = _get_output_dir()
     all_results = {}

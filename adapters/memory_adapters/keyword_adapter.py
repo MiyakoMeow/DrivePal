@@ -1,6 +1,7 @@
 """基于关键词的记忆适配器."""
 
 from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
+from app.memory.interfaces import MemoryStore
 from app.memory.stores.keyword_store import KeywordMemoryStore
 
 
@@ -9,7 +10,7 @@ class KeywordAdapter:
 
     TAG = "keyword"
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str) -> None:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
@@ -20,6 +21,6 @@ class KeywordAdapter:
             store.write(record)
         return store
 
-    def get_search_client(self, store) -> StoreClient:
+    def get_search_client(self, store: MemoryStore) -> StoreClient:
         """获取存储的搜索客户端."""
         return StoreClient(store)

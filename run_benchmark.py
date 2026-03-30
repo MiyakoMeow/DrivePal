@@ -3,7 +3,7 @@
 import argparse
 
 
-def main():
+def main() -> None:
     """Entry point for benchmark CLI."""
     parser = argparse.ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")

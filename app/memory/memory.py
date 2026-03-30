@@ -55,7 +55,7 @@ class MemoryModule:
         self._default_mode: MemoryMode = MemoryMode.MEMORY_BANK
 
     @property
-    def chat_model(self):
+    def chat_model(self) -> "ChatModel":
         """获取聊天模型，延迟初始化."""
         if self._chat_model is None:
             from app.models.settings import get_chat_model

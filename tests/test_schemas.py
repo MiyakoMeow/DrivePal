@@ -11,20 +11,20 @@ from app.memory.schemas import (
 class TestMemoryEvent:
     """MemoryEvent 模型测试."""
 
-    def test_default_fields(self):
+    def test_default_fields(self) -> None:
         """验证默认字段值."""
         event = MemoryEvent(content="hello")
         assert event.content == "hello"
         assert event.id == ""
         assert event.type == "reminder"
 
-    def test_extra_fields_allowed(self):
+    def test_extra_fields_allowed(self) -> None:
         """验证 extra='allow' 允许未知字段."""
         event = MemoryEvent(content="hello")
         setattr(event, "custom_field", "value")
         assert getattr(event, "custom_field") == "value"
 
-    def test_model_dump(self):
+    def test_model_dump(self) -> None:
         """验证 model_dump 序列化输出."""
         event = MemoryEvent(id="abc", content="hello", type="reminder")
         d = event.model_dump()
@@ -41,7 +41,7 @@ class TestMemoryEvent:
             "updated_at": "",
         }
 
-    def test_from_dict(self):
+    def test_from_dict(self) -> None:
         """验证从字典构造."""
         event = MemoryEvent(id="x", content="y", created_at="2026-01-01")
         assert event.id == "x"
@@ -50,14 +50,14 @@ class TestMemoryEvent:
 class TestSearchResult:
     """SearchResult 模型测试."""
 
-    def test_default_fields(self):
+    def test_default_fields(self) -> None:
         """验证默认字段值."""
         sr = SearchResult(event={"content": "hello"})
         assert sr.score == 0.0
         assert sr.source == "event"
         assert sr.interactions == []
 
-    def test_to_public_excludes_internal(self):
+    def test_to_public_excludes_internal(self) -> None:
         """验证 to_public 不含 score/source."""
         sr = SearchResult(
             event={"content": "hello"},
@@ -70,13 +70,13 @@ class TestSearchResult:
         assert "score" not in pub
         assert "source" not in pub
 
-    def test_to_public_includes_interactions(self):
+    def test_to_public_includes_interactions(self) -> None:
         """验证 to_public 含 interactions."""
         sr = SearchResult(event={"content": "hello"}, interactions=[{"q": "x"}])
         pub = sr.to_public()
         assert pub["interactions"] == [{"q": "x"}]
 
-    def test_to_public_no_interactions(self):
+    def test_to_public_no_interactions(self) -> None:
         """验证无 interactions 时 to_public 不含该字段."""
         sr = SearchResult(event={"content": "hello"})
         pub = sr.to_public()
@@ -86,12 +86,12 @@ class TestSearchResult:
 class TestFeedbackData:
     """FeedbackData 模型测试."""
 
-    def test_extra_fields(self):
+    def test_extra_fields(self) -> None:
         """验证 modified_content 字段."""
         fb = FeedbackData(action="accept", modified_content="new")
         assert fb.modified_content == "new"
 
-    def test_model_dump(self):
+    def test_model_dump(self) -> None:
         """验证 model_dump 序列化输出."""
         fb = FeedbackData(event_id="x", action="accept")
         d = fb.model_dump()
@@ -101,7 +101,7 @@ class TestFeedbackData:
 class TestInteractionRecord:
     """InteractionRecord 模型测试."""
 
-    def test_default_fields(self):
+    def test_default_fields(self) -> None:
         """验证默认字段值."""
         ir = InteractionRecord(id="x", query="q", response="r")
         assert ir.event_id == ""

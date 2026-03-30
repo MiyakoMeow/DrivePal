@@ -1,5 +1,5 @@
 [lint]
-extend-select = ["D"]
+extend-select = ["ANN", "D", "DTZ"]
 ignore = ["D211", "D213", "D203"]
 
 [lint.per-file-ignores]

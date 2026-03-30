@@ -4,8 +4,11 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime
-from typing import Any, Optional, cast
+from datetime import datetime, timezone
+from typing import Any, Optional, cast, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langgraph.graph import CompiledGraph  # type: ignore[attr-defined]
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
@@ -25,7 +28,7 @@ class AgentWorkflow:
         data_dir: str = "data",
         memory_mode: MemoryMode = MemoryMode.KEYWORD,
         memory_module: Optional[MemoryModule] = None,
-    ):
+    ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
         self.memory_mode = memory_mode
@@ -42,7 +45,7 @@ class AgentWorkflow:
 
         self.graph = self._build_graph()
 
-    def _build_graph(self) -> Any:
+    def _build_graph(self) -> "CompiledGraph":
         """构建LangGraph工作流."""
         workflow = StateGraph(cast(Any, AgentState))
 
@@ -111,7 +114,7 @@ class AgentWorkflow:
                 [e.to_public() for e in related_events] if related_events else []
             )
 
-        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_datetime = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         system_prompt = SYSTEM_PROMPTS["context"].format(
             current_datetime=current_datetime
         )

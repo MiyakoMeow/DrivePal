@@ -53,7 +53,9 @@ class FeedbackRequest(BaseModel):
 
 
 @app.post("/api/query")
-async def query(request: QueryRequest, mm: MemoryModule = Depends(get_memory_module)):
+async def query(
+    request: QueryRequest, mm: MemoryModule = Depends(get_memory_module)
+) -> dict:
     """处理用户查询."""
     from app.agents.workflow import AgentWorkflow
 
@@ -73,7 +75,7 @@ async def query(request: QueryRequest, mm: MemoryModule = Depends(get_memory_mod
 @app.post("/api/feedback")
 async def feedback(
     request: FeedbackRequest, mm: MemoryModule = Depends(get_memory_module)
-):
+) -> dict:
     """提交用户反馈."""
     try:
         from app.memory.schemas import FeedbackData
@@ -90,13 +92,15 @@ async def feedback(
 
 
 @app.get("/api/experiment/report")
-async def experiment_report():
+async def experiment_report() -> dict:
     """获取实验报告."""
     return {"report": "Experiment runner migrated to CLI pipeline"}
 
 
 @app.get("/api/history")
-async def history(limit: int = 10, mm: MemoryModule = Depends(get_memory_module)):
+async def history(
+    limit: int = 10, mm: MemoryModule = Depends(get_memory_module)
+) -> dict:
     """获取历史记录."""
     try:
         events = mm.get_history(limit=limit)
