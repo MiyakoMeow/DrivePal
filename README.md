@@ -94,15 +94,12 @@ thesis-cockpit-memo/
 
 基于 LangGraph 构建的四阶段工作流，每个阶段由专门的Agent处理：
 
-```
-┌─────────────┐     ┌──────────────┐     ┌────────────────┐     ┌─────────────────┐
-│   用户输入    │ ──▶ │ Context Agent│ ──▶ │  Task Agent    │ ──▶ │ Strategy Agent  │
-└─────────────┘     └──────────────┘     └────────────────┘     └─────────────────┘
-                                                                           │
-                                                                           ▼
-                                                                     ┌─────────────────┐
-                                                                     │ Execution Agent  │
-                                                                     └─────────────────┘
+```mermaid
+flowchart LR
+    A[用户输入] --> B[Context Agent]
+    B --> C[Task Agent]
+    C --> D[Strategy Agent]
+    D --> E[Execution Agent]
 ```
 
 #### Agent职责
@@ -133,18 +130,18 @@ thesis-cockpit-memo/
 
 基于 MemoryBank 论文实现的三层记忆架构：
 
-```
-Interaction (原始交互)
-  ├── id, query, response, memory_strength
-        │
-        ▼ 聚合
-Event (语义摘要)
-  ├── content, interaction_ids, memory_strength, date_group
-        │
-        ▼ 聚合
-Summary (层级摘要)
-  ├── daily_summaries: {date → {content, memory_strength}}
-  └── overall_summary: str
+```mermaid
+flowchart TD
+    A[Interaction<br>原始交互] -->|聚合| B[Event<br>语义摘要]
+    B -->|聚合| C[Summary<br>层级摘要]
+    
+    A:::interact
+    B:::event
+    C:::summary
+    
+    classDef interact fill:#f9f,stroke:#333,stroke-width:2px
+    classDef event fill:#bbf,stroke:#333,stroke-width:2px
+    classDef summary fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 **核心机制：**
@@ -182,39 +179,23 @@ Summary (层级摘要)
 
 #### 系统架构
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      run_benchmark.py                       │
-│                    (CLI 入口，分发命令)                       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      adapters/runner.py                    │
-│              (VehicleMemBench 评估运行器，333行)             │
-├─────────────────────────────────────────────────────────────┤
-│  prepare: 加载历史数据，构建各记忆后端                         │
-│  run:     执行 QA 评估，返回结果                             │
-│  report: 生成汇总报告                                       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   adapters/memory_adapters/                │
-│                      (记忆存储适配器)                         │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
-│  │   keyword    │ │   llm_only   │ │  embeddings  │        │
-│  └──────────────┘ └──────────────┘ └──────────────┘        │
-│  ┌──────────────┐                                          │
-│  │  memory_bank │                                          │
-│  └──────────────┘                                          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      app/memory/stores/                     │
-│                    (原生记忆存储后端实现)                     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    CLI[run_benchmark.py<br>CLI 入口，分发命令]
+    Runner[adapters/runner.py<br>VehicleMemBench 评估运行器]
+    Adapters[adapters/memory_adapters<br>记忆存储适配器]
+    Stores[app/memory/stores<br>原生记忆存储后端实现]
+    
+    CLI --> Runner
+    Runner --> Adapters
+    Adapters --> Stores
+    
+    subgraph Adapters
+        K[keyword]
+        L[llm_only]
+        E[embeddings]
+        M[memory_bank]
+    end
 ```
 
 #### 适配器模式
@@ -251,7 +232,7 @@ uv run python run_benchmark.py report
 
 #### 基准测试数据结构
 
-```
+```text
 data/benchmark/
 ├── qa_{n}.json           # QA 测试用例
 ├── history_{n}.txt       # 历史交互记录
@@ -430,7 +411,7 @@ uv run python run_benchmark.py report
 |------|------|
 | `VLLM_BASE_URL` | 默认 LLM provider 的 base_url |
 | `OPENAI_MODEL` / `DEEPSEEK_MODEL` | 自动注册为额外 LLM provider |
-| `MINIMAX_API_KEY` |基准测试 API Key（用于 `benchmark.api_key_env`） |
+| `MINIMAX_API_KEY` | 基准测试 API Key（用于 `benchmark.api_key_env`） |
 
 ### 驾驶场景配置 (`config/scenarios.json`)
 

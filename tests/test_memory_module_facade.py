@@ -19,9 +19,9 @@ def mm(tmp_path: Path) -> MemoryModule:
 class TestMemoryModuleFacade:
     """MemoryModule Facade 接口测试."""
 
-    def test_default_mode_is_memorybank(self, mm: MemoryModule) -> None:
-        """验证默认模式为 memorybank."""
-        assert mm._default_mode == "memorybank"
+    def test_default_mode_is_memory_bank(self, mm: MemoryModule) -> None:
+        """验证默认模式为 memory_bank."""
+        assert mm._default_mode == "memory_bank"
 
     def test_write_uses_default_mode(self, mm: MemoryModule) -> None:
         """验证 write 使用默认模式存储."""
@@ -42,13 +42,13 @@ class TestMemoryModuleFacade:
         mm.set_default_mode(MemoryMode.KEYWORD)
         assert mm._default_mode == "keyword"
 
-    def test_write_interaction_calls_memorybank(self, mm: MemoryModule) -> None:
-        """验证 write_interaction 在 memorybank 模式下返回字符串 ID."""
+    def test_write_interaction_calls_memory_bank(self, mm: MemoryModule) -> None:
+        """验证 write_interaction 在 memory_bank 模式下返回字符串 ID."""
         interaction_id = mm.write_interaction("提醒我开会", "好的")
         assert isinstance(interaction_id, str)
 
-    def test_write_interaction_for_non_memorybank(self, mm: MemoryModule) -> None:
-        """验证非 memorybank 模式下 write_interaction 正确回退."""
+    def test_write_interaction_for_non_memory_bank(self, mm: MemoryModule) -> None:
+        """验证非 memory_bank 模式下 write_interaction 正确回退."""
         mm.set_default_mode(MemoryMode.KEYWORD)
         interaction_id = mm.write_interaction("查询内容", "响应内容")
         assert isinstance(interaction_id, str)

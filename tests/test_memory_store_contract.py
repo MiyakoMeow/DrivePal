@@ -13,7 +13,7 @@ from tests.conftest import is_llm_available
 
 def _get_store_params() -> list[str]:
     if is_llm_available():
-        return ["keyword", "llm_only", "embeddings", "memorybank"]
+        return ["keyword", "llm_only", "embeddings", "memory_bank"]
     return ["keyword", "embeddings"]
 
 

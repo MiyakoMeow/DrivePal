@@ -12,7 +12,7 @@ from app.storage.json_store import JSONStore
 class MemoryBankStore:
     """记忆库后端，支持遗忘曲线、记忆强化与自动摘要."""
 
-    store_name = "memorybank"
+    store_name = "memory_bank"
     requires_embedding = True
     requires_chat = True
     supports_interaction = True
