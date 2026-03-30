@@ -376,6 +376,7 @@ class MemoryBankEngine:
         }
 
         append_event_id = self._should_append_to_event(interaction)
+        event = None
         if append_event_id:
             interaction["event_id"] = append_event_id
         else:

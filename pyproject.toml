@@ -49,6 +49,9 @@ exclude = ["vendor"]
 [tool.ty.analysis]
 allowed-unresolved-imports = ["evaluation.**"]
 
+[tool.ty.rules]
+all = "error"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

@@ -8,19 +8,15 @@ def main():
     parser = argparse.ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
 
+    _default_memory_types = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank"
+
     for cmd in ["prepare", "run"]:
         p = subparsers.add_parser(cmd)
         p.add_argument("--file-range", default="1-50")
-        p.add_argument(
-            "--memory-types",
-            default="gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
-        )
+        p.add_argument("--memory-types", default=_default_memory_types)
     p_all = subparsers.add_parser("all")
     p_all.add_argument("--file-range", default="1-50")
-    p_all.add_argument(
-        "--memory-types",
-        default="gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
-    )
+    p_all.add_argument("--memory-types", default=_default_memory_types)
     p_all.add_argument(
         "--allow-partial",
         action="store_true",
@@ -32,12 +28,13 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command in ("prepare", "run", "all"):
-        from adapters.runner import prepare as do_prepare, run as do_run
-
     if args.command == "prepare":
+        from adapters.runner import prepare as do_prepare
+
         do_prepare(args.file_range, args.memory_types)
     elif args.command == "run":
+        from adapters.runner import run as do_run
+
         do_run(args.file_range, args.memory_types)
     elif args.command == "report":
         from adapters.runner import report as do_report
@@ -46,11 +43,15 @@ def main():
     elif args.command == "all":
         failed = False
         try:
+            from adapters.runner import prepare as do_prepare
+
             do_prepare(args.file_range, args.memory_types)
         except Exception as e:
             print(f"[prepare] failed: {e}")
             failed = True
         try:
+            from adapters.runner import run as do_run
+
             do_run(args.file_range, args.memory_types)
         except Exception as e:
             print(f"[run] failed: {e}")
