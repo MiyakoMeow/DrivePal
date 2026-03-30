@@ -1,5 +1,7 @@
 """关键词匹配检索 store."""
 
+from pathlib import Path
+
 from app.memory.components import (
     EventStorage,
     FeedbackManager,
@@ -18,7 +20,7 @@ class KeywordMemoryStore:
     requires_chat = False
     supports_interaction = True
 
-    def __init__(self, data_dir: str, **kwargs: dict) -> None:
+    def __init__(self, data_dir: Path, **kwargs: dict) -> None:
         """初始化关键词存储."""
         self._storage = EventStorage(data_dir)
         self._search = KeywordSearch()

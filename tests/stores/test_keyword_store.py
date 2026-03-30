@@ -1,14 +1,16 @@
 """KeywordMemoryStore 测试."""
 
+from pathlib import Path
+
 import pytest
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.stores.keyword_store import KeywordMemoryStore
 
 
 @pytest.fixture
-def store(tmp_path: str) -> KeywordMemoryStore:
+def store(tmp_path: Path) -> KeywordMemoryStore:
     """Create a KeywordMemoryStore for testing."""
-    return KeywordMemoryStore(str(tmp_path))
+    return KeywordMemoryStore(tmp_path)
 
 
 class TestKeywordMemoryStore:

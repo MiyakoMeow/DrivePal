@@ -24,7 +24,7 @@ def test_all_adapters_have_tag() -> None:
 
 def test_keyword_adapter_add_and_search(tmp_path: Path) -> None:
     """测试 KeywordAdapter 可以添加历史记录和搜索."""
-    adapter = KeywordAdapter(data_dir=str(tmp_path / "keyword"))
+    adapter = KeywordAdapter(data_dir=tmp_path / "keyword")
     store = adapter.add(SAMPLE_HISTORY)
     assert store is not None
     client = adapter.get_search_client(store)

@@ -133,10 +133,10 @@ def _prepare_single(
         return {"type": "kv", "store": store.to_dict()}
     if memory_type in ADAPTERS:
         adapter_cls = ADAPTERS[memory_type]
-        data_dir = str(_get_output_dir() / f"store_{memory_type}_{file_num}")
+        data_dir = _get_output_dir() / f"store_{memory_type}_{file_num}"
         adapter = adapter_cls(data_dir=data_dir)
         adapter.add(history_text)
-        return {"type": memory_type, "data_dir": data_dir}
+        return {"type": memory_type, "data_dir": str(data_dir)}
     return None
 
 
@@ -247,7 +247,7 @@ def _run_custom_adapter(
     reflect_num: int,
 ) -> dict | None:
     adapter_cls = ADAPTERS[memory_type]
-    data_dir = prep_data["data_dir"]
+    data_dir = Path(prep_data["data_dir"])
     adapter = adapter_cls(data_dir=data_dir)
 
     store = adapter.add("")
@@ -307,7 +307,7 @@ def _run_custom_adapter(
     )
 
 
-def report(output_path: Optional[str] = None) -> None:
+def report(output_path: Optional[Path] = None) -> None:
     """从结果生成并打印基准测试报告."""
     output_dir = _get_output_dir()
     all_results = {}
@@ -336,7 +336,7 @@ def report(output_path: Optional[str] = None) -> None:
                     auto_esm / gold_esm if gold_esm > 0 else 0.0
                 )
 
-    out = output_path or str(output_dir / "report.json")
+    out = output_path if output_path is not None else output_dir / "report.json"
     with open(out, "w") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
     print(f"Report written to {out}")

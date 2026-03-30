@@ -27,7 +27,7 @@ class TestMemoryStoreContract:
         from app.memory.memory import MemoryModule
         from app.memory.types import MemoryMode
 
-        mm = MemoryModule(str(tmp_path))
+        mm = MemoryModule(tmp_path)
         return mm._get_store(MemoryMode(request.param))
 
     def test_write_returns_string_id(self, store: "MemoryStore") -> None:

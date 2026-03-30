@@ -1,5 +1,6 @@
 """向量相似度检索 store."""
 
+from pathlib import Path
 from typing import Optional
 
 from app.memory.components import (
@@ -25,7 +26,7 @@ class EmbeddingMemoryStore:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
         **kwargs: dict,

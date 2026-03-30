@@ -1,5 +1,7 @@
 """聊天模型集成测试."""
 
+from pathlib import Path
+
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
@@ -8,10 +10,10 @@ from tests.conftest import SKIP_IF_NO_LLM
 
 
 @SKIP_IF_NO_LLM
-def test_chat_drives_llm_memory_search(tmp_path: str) -> None:
+def test_chat_drives_llm_memory_search(tmp_path: Path) -> None:
     """验证聊天驱动的 LLM 记忆搜索能检索到相关事件."""
     chat_model = ChatModel()
-    memory = MemoryModule(str(tmp_path), chat_model=chat_model)
+    memory = MemoryModule(tmp_path, chat_model=chat_model)
     memory.write(MemoryEvent(content="明天下午三点项目会议", type="meeting"))
     results = memory.search("有什么会议安排", mode=MemoryMode.LLM_ONLY)
     assert len(results) > 0
@@ -19,12 +21,12 @@ def test_chat_drives_llm_memory_search(tmp_path: str) -> None:
 
 
 @SKIP_IF_NO_LLM
-def test_chat_feeds_workflow_context(tmp_path: str) -> None:
+def test_chat_feeds_workflow_context(tmp_path: Path) -> None:
     """验证记忆上下文被注入到代理工作流状态中."""
     from app.agents.workflow import AgentWorkflow
     from langchain_core.messages import HumanMessage
 
-    memory = MemoryModule(str(tmp_path), chat_model=ChatModel())
+    memory = MemoryModule(tmp_path, chat_model=ChatModel())
     memory.write(MemoryEvent(content="下午三点开会", type="meeting"))
     workflow = AgentWorkflow(memory_module=memory)
     from app.agents.state import AgentState

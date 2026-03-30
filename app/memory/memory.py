@@ -1,6 +1,7 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
 import logging
+from pathlib import Path
 from typing import Any, Optional
 
 from app.memory.interfaces import MemoryStore
@@ -41,7 +42,7 @@ class MemoryModule:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
     ) -> None:

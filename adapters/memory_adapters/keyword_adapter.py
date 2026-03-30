@@ -1,5 +1,7 @@
 """基于关键词的记忆适配器."""
 
+from pathlib import Path
+
 from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
 from app.memory.interfaces import MemoryStore
 from app.memory.stores.keyword_store import KeywordMemoryStore
@@ -10,7 +12,7 @@ class KeywordAdapter:
 
     TAG = "keyword"
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: Path) -> None:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 

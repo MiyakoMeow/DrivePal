@@ -1,5 +1,6 @@
 """EmbeddingMemoryStore 测试."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,15 +18,15 @@ def mock_embedding_model() -> MagicMock:
 
 
 @pytest.fixture
-def store(tmp_path: str, mock_embedding_model: MagicMock) -> EmbeddingMemoryStore:
+def store(tmp_path: Path, mock_embedding_model: MagicMock) -> EmbeddingMemoryStore:
     """Create an EmbeddingMemoryStore with mock embedding model."""
-    return EmbeddingMemoryStore(str(tmp_path), embedding_model=mock_embedding_model)
+    return EmbeddingMemoryStore(tmp_path, embedding_model=mock_embedding_model)
 
 
 @pytest.fixture
-def store_without_embedding(tmp_path: str) -> EmbeddingMemoryStore:
+def store_without_embedding(tmp_path: Path) -> EmbeddingMemoryStore:
     """Create an EmbeddingMemoryStore without embedding model."""
-    return EmbeddingMemoryStore(str(tmp_path), embedding_model=None)
+    return EmbeddingMemoryStore(tmp_path, embedding_model=None)
 
 
 class TestEmbeddingMemoryStore:

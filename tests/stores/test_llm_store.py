@@ -1,5 +1,6 @@
 """LLMOnlyMemoryStore 测试."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,15 +17,15 @@ def mock_chat_model() -> MagicMock:
 
 
 @pytest.fixture
-def store(tmp_path: str, mock_chat_model: MagicMock) -> LLMOnlyMemoryStore:
+def store(tmp_path: Path, mock_chat_model: MagicMock) -> LLMOnlyMemoryStore:
     """Create an LLMOnlyMemoryStore with mock chat model."""
-    return LLMOnlyMemoryStore(str(tmp_path), chat_model=mock_chat_model)
+    return LLMOnlyMemoryStore(tmp_path, chat_model=mock_chat_model)
 
 
 @pytest.fixture
-def store_without_llm(tmp_path: str) -> LLMOnlyMemoryStore:
+def store_without_llm(tmp_path: Path) -> LLMOnlyMemoryStore:
     """Create an LLMOnlyMemoryStore without chat model."""
-    return LLMOnlyMemoryStore(str(tmp_path), chat_model=None)
+    return LLMOnlyMemoryStore(tmp_path, chat_model=None)
 
 
 class TestLLMOnlyMemoryStore:

@@ -5,16 +5,16 @@ from pathlib import Path
 from typing import Optional
 
 
-def get_data_dir() -> str:
+def get_data_dir() -> Path:
     """获取数据目录路径."""
-    return str(Path(__file__).parent.parent.parent / "data")
+    return Path(__file__).parent.parent.parent / "data"
 
 
-def init_storage(data_dir: Optional[str] = None) -> None:
+def init_storage(data_dir: Optional[Path] = None) -> None:
     """初始化存储目录和数据文件."""
     if data_dir is None:
         data_dir = get_data_dir()
-    Path(data_dir).mkdir(exist_ok=True)
+    data_dir.mkdir(exist_ok=True)
 
     files = {
         "events.json": [],
@@ -35,7 +35,7 @@ def init_storage(data_dir: Optional[str] = None) -> None:
     }
 
     for filename, default_data in files.items():
-        filepath = Path(data_dir) / filename
+        filepath = data_dir / filename
         if not filepath.exists():
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(default_data, f, ensure_ascii=False, indent=2)

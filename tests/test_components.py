@@ -1,6 +1,7 @@
 """app.memory.components 可组合组件测试."""
 
 import math
+from pathlib import Path
 
 import pytest
 
@@ -51,9 +52,9 @@ class TestEventStorage:
     """EventStorage 组件测试."""
 
     @pytest.fixture
-    def storage(self, tmp_path: str) -> EventStorage:
+    def storage(self, tmp_path: Path) -> EventStorage:
         """提供由临时目录支持的 EventStorage."""
-        return EventStorage(str(tmp_path))
+        return EventStorage(tmp_path)
 
     def test_generate_id_format(self, storage: EventStorage) -> None:
         """验证生成的 ID 遵循 timestamp_uuid 格式."""
@@ -147,32 +148,32 @@ class TestFeedbackManager:
     """FeedbackManager 组件测试."""
 
     @pytest.fixture
-    def manager(self, tmp_path: str) -> FeedbackManager:
+    def manager(self, tmp_path: Path) -> FeedbackManager:
         """提供由临时目录支持的 FeedbackManager."""
-        return FeedbackManager(str(tmp_path))
+        return FeedbackManager(tmp_path)
 
     def test_accept_increases_weight(
-        self, manager: FeedbackManager, tmp_path: str
+        self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证接受反馈增加策略权重."""
         from app.storage.json_store import JSONStore
 
         manager.update_feedback("eid1", FeedbackData(action="accept", type="meeting"))
-        strategies = JSONStore(str(tmp_path), "strategies.json", dict).read()
+        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
     def test_ignore_decreases_weight(
-        self, manager: FeedbackManager, tmp_path: str
+        self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证忽略反馈降低策略权重."""
         from app.storage.json_store import JSONStore
 
         manager.update_feedback("eid2", FeedbackData(action="ignore", type="general"))
-        strategies = JSONStore(str(tmp_path), "strategies.json", dict).read()
+        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["general"] == pytest.approx(0.4)
 
     def test_accept_capped_at_one(
-        self, manager: FeedbackManager, tmp_path: str
+        self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证接受权重上限为 1.0."""
         from app.storage.json_store import JSONStore
@@ -181,11 +182,11 @@ class TestFeedbackManager:
             manager.update_feedback(
                 "eid", FeedbackData(action="accept", type="meeting")
             )
-        strategies = JSONStore(str(tmp_path), "strategies.json", dict).read()
+        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["meeting"] <= 1.0
 
     def test_ignore_floored_at_zero_point_one(
-        self, manager: FeedbackManager, tmp_path: str
+        self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证忽略权重下限为 0.1."""
         from app.storage.json_store import JSONStore
@@ -194,18 +195,18 @@ class TestFeedbackManager:
             manager.update_feedback(
                 "eid", FeedbackData(action="ignore", type="general")
             )
-        strategies = JSONStore(str(tmp_path), "strategies.json", dict).read()
+        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["general"] >= 0.1
 
     def test_feedback_appended_to_history(
-        self, manager: FeedbackManager, tmp_path: str
+        self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证每条反馈记录都追加到历史记录中."""
         from app.storage.json_store import JSONStore
 
         manager.update_feedback("eid1", FeedbackData(action="accept", type="meeting"))
         manager.update_feedback("eid2", FeedbackData(action="ignore", type="general"))
-        feedback = JSONStore(str(tmp_path), "feedback.json", list).read()
+        feedback = JSONStore(tmp_path, Path("feedback.json"), list).read()
         assert len(feedback) == 2
 
 
@@ -213,9 +214,9 @@ class TestSimpleInteractionWriter:
     """SimpleInteractionWriter 组件测试."""
 
     @pytest.fixture
-    def writer(self, tmp_path: str) -> SimpleInteractionWriter:
+    def writer(self, tmp_path: Path) -> SimpleInteractionWriter:
         """提供由临时 EventStorage 支持的 SimpleInteractionWriter."""
-        storage = EventStorage(str(tmp_path))
+        storage = EventStorage(tmp_path)
         return SimpleInteractionWriter(storage)
 
     def test_write_returns_id(self, writer: SimpleInteractionWriter) -> None:
@@ -225,21 +226,21 @@ class TestSimpleInteractionWriter:
         assert len(iid) > 0
 
     def test_write_stores_content_and_description(
-        self, writer: SimpleInteractionWriter, tmp_path: str
+        self, writer: SimpleInteractionWriter, tmp_path: Path
     ) -> None:
         """验证查询和响应存储为 content 和 description."""
         writer.write_interaction("查询内容", "响应内容")
-        events = EventStorage(str(tmp_path)).read_events()
+        events = EventStorage(tmp_path).read_events()
         assert len(events) == 1
         assert events[0]["content"] == "查询内容"
         assert events[0]["description"] == "响应内容"
 
     def test_write_custom_event_type(
-        self, writer: SimpleInteractionWriter, tmp_path: str
+        self, writer: SimpleInteractionWriter, tmp_path: Path
     ) -> None:
         """验证自定义 event_type 被正确存储."""
         writer.write_interaction("查询", "响应", event_type="meeting")
-        events = EventStorage(str(tmp_path)).read_events()
+        events = EventStorage(tmp_path).read_events()
         assert events[0]["type"] == "meeting"
 
 
@@ -247,14 +248,14 @@ class TestMemoryBankEngineWrite:
     """MemoryBankEngine.write 和 search 测试."""
 
     @pytest.fixture
-    def storage(self, tmp_path: str) -> EventStorage:
+    def storage(self, tmp_path: Path) -> EventStorage:
         """提供由临时目录支持的 EventStorage."""
-        return EventStorage(str(tmp_path))
+        return EventStorage(tmp_path)
 
     @pytest.fixture
-    def engine(self, tmp_path: str, storage: EventStorage) -> MemoryBankEngine:
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
         """提供不带嵌入或聊天模型的 MemoryBankEngine."""
-        return MemoryBankEngine(str(tmp_path), storage)
+        return MemoryBankEngine(tmp_path, storage)
 
     def test_write_returns_id(self, engine: MemoryBankEngine) -> None:
         """验证 write 返回非空事件 ID."""
@@ -302,14 +303,14 @@ class TestMemoryBankEngineWriteInteraction:
     """MemoryBankEngine.write_interaction 测试."""
 
     @pytest.fixture
-    def storage(self, tmp_path: str) -> EventStorage:
+    def storage(self, tmp_path: Path) -> EventStorage:
         """提供由临时目录支持的 EventStorage."""
-        return EventStorage(str(tmp_path))
+        return EventStorage(tmp_path)
 
     @pytest.fixture
-    def engine(self, tmp_path: str, storage: EventStorage) -> MemoryBankEngine:
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
         """提供不带嵌入或聊天模型的 MemoryBankEngine."""
-        return MemoryBankEngine(str(tmp_path), storage)
+        return MemoryBankEngine(tmp_path, storage)
 
     def test_write_interaction_returns_id(self, engine: MemoryBankEngine) -> None:
         """验证 write_interaction 返回非空交互 ID."""

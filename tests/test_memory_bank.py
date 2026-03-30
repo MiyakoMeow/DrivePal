@@ -1,5 +1,6 @@
 """记忆库后端和集成测试."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,9 +15,9 @@ from tests.conftest import SKIP_IF_NO_LLM
 
 
 @pytest.fixture
-def backend(tmp_path: str) -> MemoryBankStore:
+def backend(tmp_path: Path) -> MemoryBankStore:
     """提供由临时目录支持的 MemoryBankStore 实例."""
-    return MemoryBankStore(str(tmp_path))
+    return MemoryBankStore(tmp_path)
 
 
 @pytest.fixture
@@ -77,7 +78,7 @@ class TestHierarchicalSummarization:
     """层次化每日和总体摘要测试."""
 
     def test_summarize_trigger_threshold(
-        self, tmp_path: str, mock_chat_model: MagicMock
+        self, tmp_path: Path, mock_chat_model: MagicMock
     ) -> None:
         """验证每日摘要在天数达到阈值时触发."""
         backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
@@ -89,7 +90,7 @@ class TestHierarchicalSummarization:
         assert mock_chat_model.generate.called
 
     def test_no_summary_below_threshold(
-        self, tmp_path: str, mock_chat_model: MagicMock
+        self, tmp_path: Path, mock_chat_model: MagicMock
     ) -> None:
         """验证低于事件阈值时不创建每日摘要."""
         backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
@@ -99,7 +100,7 @@ class TestHierarchicalSummarization:
         assert len(summaries["daily_summaries"]) == 0
 
     def test_overall_summary_trigger(
-        self, tmp_path: str, mock_chat_model: MagicMock
+        self, tmp_path: Path, mock_chat_model: MagicMock
     ) -> None:
         """验证当每日摘要达到阈值时触发总体摘要."""
         mock_chat_model.generate.return_value = "总体摘要"
@@ -118,7 +119,7 @@ class TestHierarchicalSummarization:
         assert updated["overall_summary"] == "总体摘要"
 
     def test_summaries_included_in_search(
-        self, tmp_path: str, mock_chat_model: MagicMock
+        self, tmp_path: Path, mock_chat_model: MagicMock
     ) -> None:
         """验证每日摘要包含在搜索结果中."""
         mock_chat_model.generate.return_value = "今天讨论了项目进度"
@@ -134,7 +135,7 @@ class TestUpdateEventSummary:
     """基于 LLM 的事件摘要更新测试."""
 
     def test_llm_updates_event_content(
-        self, tmp_path: str, mock_chat_model: MagicMock
+        self, tmp_path: Path, mock_chat_model: MagicMock
     ) -> None:
         """验证 LLM 在聚合时生成更新后的事件摘要."""
         mock_chat_model.generate.return_value = "用户修改了会议时间"
@@ -157,9 +158,9 @@ class TestUpdateEventSummary:
 class TestMemoryModuleIntegration:
     """MemoryModule 与记忆库的完整集成测试."""
 
-    def test_write_interaction_flow(self, tmp_path: str) -> None:
+    def test_write_interaction_flow(self, tmp_path: Path) -> None:
         """验证端到端的写入交互和搜索流程."""
-        memory = MemoryModule(str(tmp_path))
+        memory = MemoryModule(tmp_path)
         memory.write_interaction("测试查询", "测试回复")
         results = memory.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) > 0

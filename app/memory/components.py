@@ -3,6 +3,7 @@
 import math
 import uuid
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -30,9 +31,9 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
 class EventStorage:
     """事件 JSON 文件 CRUD + ID 生成."""
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: Path) -> None:
         """初始化事件存储."""
-        self._store = JSONStore(data_dir, "events.json", list)
+        self._store = JSONStore(data_dir, Path("events.json"), list)
         self.data_dir = data_dir
 
     def generate_id(self) -> str:
@@ -76,16 +77,16 @@ class KeywordSearch:
 class FeedbackManager:
     """反馈更新 + 策略权重管理."""
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: Path) -> None:
         """初始化反馈管理器."""
-        self._strategies_store = JSONStore(data_dir, "strategies.json", dict)
+        self._strategies_store = JSONStore(data_dir, Path("strategies.json"), dict)
         self.data_dir = data_dir
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
-        feedback_store = JSONStore(self.data_dir, "feedback.json", list)
+        feedback_store = JSONStore(self.data_dir, Path("feedback.json"), list)
         feedback_store.append(feedback.model_dump())
         self._update_strategy(event_id, feedback.model_dump())
 
@@ -135,7 +136,7 @@ class MemoryBankEngine:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         storage: EventStorage,
         embedding_model: Optional[EmbeddingModel] = None,
         chat_model: Optional[ChatModel] = None,
@@ -145,11 +146,11 @@ class MemoryBankEngine:
         self._storage = storage
         self.embedding_model = embedding_model
         self.chat_model = chat_model
-        self._interactions_store = JSONStore(data_dir, "interactions.json", list)
+        self._interactions_store = JSONStore(data_dir, Path("interactions.json"), list)
         self._default_summaries = {"daily_summaries": {}, "overall_summary": ""}
         self._summaries_store = JSONStore(
             data_dir,
-            "memorybank_summaries.json",
+            Path("memorybank_summaries.json"),
             lambda: dict(self._default_summaries),
         )
 

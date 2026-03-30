@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
+from pathlib import Path
 from typing import Optional
 import os
 import logging
@@ -15,7 +16,8 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="知行车秘 - 车载AI智能体")
 
-DATA_DIR = os.getenv("DATA_DIR", "data")
+_data_dir_env = os.getenv("DATA_DIR", "data")
+DATA_DIR = Path(_data_dir_env)
 
 
 def _ensure_memory_module() -> MemoryModule:

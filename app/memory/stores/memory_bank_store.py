@@ -1,5 +1,6 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
+from pathlib import Path
 from typing import Optional
 
 from app.memory.components import EventStorage, FeedbackManager, MemoryBankEngine
@@ -19,7 +20,7 @@ class MemoryBankStore:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
         **kwargs: dict,

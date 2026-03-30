@@ -17,5 +17,5 @@ async def root() -> FileResponse:
 
 
 if __name__ == "__main__":
-    init_storage(os.getenv("DATA_DIR", "data"))
+    init_storage(Path(os.getenv("DATA_DIR", "data")))
     uvicorn.run(app, host="0.0.0.0", port=8000)

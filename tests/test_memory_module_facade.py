@@ -12,7 +12,7 @@ from tests.conftest import SKIP_IF_NO_LLM
 @pytest.fixture
 def mm(tmp_path: Path) -> MemoryModule:
     """提供一个 MemoryModule 实例用于测试."""
-    return MemoryModule(str(tmp_path))
+    return MemoryModule(tmp_path)
 
 
 @SKIP_IF_NO_LLM

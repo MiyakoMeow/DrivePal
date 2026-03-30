@@ -1,5 +1,7 @@
 """结合嵌入向量和LLM的记忆库适配器."""
 
+from pathlib import Path
+
 from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
 from adapters.model_config import get_store_chat_model, get_store_embedding_model
 from app.memory.interfaces import MemoryStore
@@ -11,7 +13,7 @@ class MemoryBankAdapter:
 
     TAG = "memory_bank"
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: Path) -> None:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 

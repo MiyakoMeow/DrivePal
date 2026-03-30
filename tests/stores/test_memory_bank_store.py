@@ -1,5 +1,6 @@
 """MemoryBankStore 测试 - 仅存储级别测试."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,15 +17,15 @@ def mock_chat_model() -> MagicMock:
 
 
 @pytest.fixture
-def store(tmp_path: str) -> MemoryBankStore:
+def store(tmp_path: Path) -> MemoryBankStore:
     """Create a MemoryBankStore for testing."""
-    return MemoryBankStore(str(tmp_path))
+    return MemoryBankStore(tmp_path)
 
 
 @pytest.fixture
-def store_with_llm(tmp_path: str, mock_chat_model: MagicMock) -> MemoryBankStore:
+def store_with_llm(tmp_path: Path, mock_chat_model: MagicMock) -> MemoryBankStore:
     """Create a MemoryBankStore with chat model."""
-    return MemoryBankStore(str(tmp_path), chat_model=mock_chat_model)
+    return MemoryBankStore(tmp_path, chat_model=mock_chat_model)
 
 
 class TestWriteInteraction:

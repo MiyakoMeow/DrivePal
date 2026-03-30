@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from app.memory.components import (
@@ -41,7 +42,7 @@ class LLMOnlyMemoryStore:
 
     def __init__(
         self,
-        data_dir: str,
+        data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
         chat_model: Optional["ChatModel"] = None,
         **kwargs: dict,
@@ -85,11 +86,16 @@ class LLMOnlyMemoryStore:
 
             try:
                 response = self.chat_model.generate(prompt)
-                json_match = re.search(r"\{.*?\}", response, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group())
-                    if data.get("relevant"):
-                        results.append(SearchResult(event=dict(event)))
+                json_match = re.search(r"\{.*\}", response, re.DOTALL)
+                if not json_match:
+                    continue
+                json_str = json_match.group()
+                json_str = re.sub(r"```json\s*|\s*```", "", json_str)
+                json_str = json_str.replace("\\'", "'")
+                json_str = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", json_str)
+                data = json.loads(json_str)
+                if data.get("relevant"):
+                    results.append(SearchResult(event=dict(event)))
             except Exception as e:
                 logger.warning("LLM relevance check failed: %s", e, exc_info=True)
                 continue

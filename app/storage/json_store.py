@@ -12,12 +12,12 @@ class JSONStore:
 
     def __init__(
         self,
-        data_dir: str,
-        filename: str,
+        data_dir: Path,
+        filename: Path,
         default_factory: Callable[[], T] = lambda: dict(),
     ) -> None:
         """初始化JSON存储，指定数据目录和文件名."""
-        self.filepath = Path(data_dir) / filename
+        self.filepath = filename if filename.is_absolute() else data_dir / filename
         self.default_factory: Callable[[], T] = default_factory
         self._ensure_file()
 

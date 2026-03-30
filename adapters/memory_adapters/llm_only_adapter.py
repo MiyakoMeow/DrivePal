@@ -1,5 +1,7 @@
 """仅使用LLM的记忆适配器."""
 
+from pathlib import Path
+
 from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
 from adapters.model_config import get_store_chat_model
 from app.memory.interfaces import MemoryStore
@@ -11,7 +13,7 @@ class LLMOnlyAdapter:
 
     TAG = "llm_only"
 
-    def __init__(self, data_dir: str) -> None:
+    def __init__(self, data_dir: Path) -> None:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
