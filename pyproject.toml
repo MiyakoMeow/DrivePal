@@ -40,6 +40,9 @@ ignore = ["D211", "D213", "D203"]
 "vendor/**" = ["ALL"]
 "adapters/runner.py" = ["E402"]
 
+[tool.ruff.format]
+exclude = ["vendor/**"]
+
 [tool.ty.src]
 exclude = ["vendor"]
 
