@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Union
 
 import openai
@@ -135,16 +136,24 @@ class EmbeddingModel:
             return self._active_provider
         raise RuntimeError("No embedding providers configured")
 
-    def encode(self, text: str) -> list[float]:
+    async def encode(self, text: str) -> list[float]:
         """编码文本为向量."""
+        return await asyncio.to_thread(self._sync_encode, text)
+
+    async def batch_encode(self, texts: list[str]) -> list[list[float]]:
+        """批量编码文本为向量."""
+        return await asyncio.to_thread(self._sync_batch_encode, texts)
+
+    def _sync_encode(self, text: str) -> list[float]:
+        """同步编码文本为向量."""
         cl = self.client
         provider = self._active_provider_or_raise()
         if isinstance(cl, openai.OpenAI):
             return self._encode_with_openai(cl, provider.provider.model, text)
         return self._encode_with_local(cl, text)
 
-    def batch_encode(self, texts: list[str]) -> list[list[float]]:
-        """批量编码文本为向量."""
+    def _sync_batch_encode(self, texts: list[str]) -> list[list[float]]:
+        """同步批量编码文本为向量."""
         cl = self.client
         provider = self._active_provider_or_raise()
         if isinstance(cl, openai.OpenAI):
