@@ -1,11 +1,21 @@
 """记忆适配器通用工具函数."""
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Protocol
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import MemoryEvent, SearchResult
+
+
+class AdapterKwargs(Protocol):
+    """记忆适配器方法接收的kwargs协议."""
+
+    def get(self, key: str, default: object = None) -> object:
+        """获取kwargs中的值."""
+        ...
 
 
 class VMBMode(StrEnum):

@@ -34,7 +34,7 @@ def test_search_finds_kv_entry(tmp_path: Path) -> None:
     state["kv_data"] = {"Gary_seat_position": "forward", "Patricia_temp": "22"}
     store._write_state(state)
     results = store.search("Gary_seat")
-    assert len(results) >= 1
+    assert len(results) == 1
     assert "Gary_seat_position" in results[0].event["content"]
 
 
@@ -45,7 +45,7 @@ def test_search_fuzzy_match(tmp_path: Path) -> None:
     state["kv_data"] = {"Gary_instrument_panel_color": "green"}
     store._write_state(state)
     results = store.search("panel")
-    assert len(results) >= 1
+    assert len(results) == 1
 
 
 def test_search_no_match(tmp_path: Path) -> None:
@@ -79,3 +79,27 @@ def test_update_feedback_does_not_crash(tmp_path: Path) -> None:
     store = KVStore(tmp_path)
     event_id = store.write(MemoryEvent(content="event"))
     store.update_feedback(event_id, MagicMock(event_id=event_id, action="ignore"))
+
+
+def test_search_empty_string_query(tmp_path: Path) -> None:
+    """Test search with empty string returns fuzzy matches."""
+    store = KVStore(tmp_path)
+    state = store._read_state()
+    state["kv_data"] = {"Gary_temp": "22"}
+    store._write_state(state)
+    results = store.search("")
+    assert len(results) == 1
+
+
+def test_get_history_limit_zero(tmp_path: Path) -> None:
+    """Test get_history with limit=0 returns empty list."""
+    store = KVStore(tmp_path)
+    store.write(MemoryEvent(content="event1"))
+    assert store.get_history(limit=0) == []
+
+
+def test_get_history_limit_negative(tmp_path: Path) -> None:
+    """Test get_history with negative limit returns empty list."""
+    store = KVStore(tmp_path)
+    store.write(MemoryEvent(content="event1"))
+    assert store.get_history(limit=-1) == []

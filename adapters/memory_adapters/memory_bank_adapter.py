@@ -1,9 +1,9 @@
 """结合嵌入向量和LLM的记忆库适配器."""
 
 from pathlib import Path
-from typing import Any
 
 from adapters.memory_adapters.common import (
+    AdapterKwargs,
     VMBMode,
     StoreClient,
     history_to_interaction_records,
@@ -22,7 +22,7 @@ class MemoryBankAdapter:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def add(self, history_text: str, **kwargs: Any) -> MemoryBankStore:
+    def add(self, history_text: str, **kwargs: AdapterKwargs) -> MemoryBankStore:
         """将历史文本添加到记忆库存储."""
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()

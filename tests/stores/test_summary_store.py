@@ -79,3 +79,17 @@ def test_update_feedback_does_not_crash(tmp_path: Path) -> None:
     store = SummaryStore(tmp_path)
     event_id = store.write(MemoryEvent(content="event"))
     store.update_feedback(event_id, MagicMock(event_id=event_id, action="accept"))
+
+
+def test_get_history_limit_zero(tmp_path: Path) -> None:
+    """Test get_history with limit=0 returns empty list."""
+    store = SummaryStore(tmp_path)
+    store.write(MemoryEvent(content="event1"))
+    assert store.get_history(limit=0) == []
+
+
+def test_get_history_limit_negative(tmp_path: Path) -> None:
+    """Test get_history with negative limit returns empty list."""
+    store = SummaryStore(tmp_path)
+    store.write(MemoryEvent(content="event1"))
+    assert store.get_history(limit=-1) == []

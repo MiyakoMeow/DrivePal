@@ -50,14 +50,14 @@ class ChatModel:
         return ChatOpenAI(**kwargs)
 
     def _invoke_provider(
-        self, provider: LLMProviderConfig, messages: list, **kwargs: dict
+        self, provider: LLMProviderConfig, messages: list[BaseMessage], **kwargs: object
     ) -> str:
         client = self._create_client(provider)
         response = client.invoke(messages, cast("RunnableConfig | None", kwargs))
         return str(response.content)
 
     def generate(
-        self, prompt: str, system_prompt: Optional[str] = None, **kwargs: dict
+        self, prompt: str, system_prompt: Optional[str] = None, **kwargs: RunnableConfig
     ) -> str:
         """生成回复，按 provider 顺序尝试，失败自动 fallback."""
         messages = []
@@ -84,7 +84,7 @@ class ChatModel:
     def generate_with_tools(
         self,
         prompt: str,
-        tools: list[dict],
+        tools: list[dict[str, Any]],
         system_prompt: Optional[str] = None,
         *,
         max_rounds: int = 10,
@@ -106,6 +106,10 @@ class ChatModel:
                 while ai_response.tool_calls and rounds < max_rounds:
                     messages.append(ai_response)
                     for tc in ai_response.tool_calls:
+                        if tc.get("id") is None:
+                            raise RuntimeError(
+                                f"Tool call {tc['name']} returned null id"
+                            )
                         result = tool_executor(tc["name"], tc["args"])
                         messages.append(
                             ToolMessage(content=str(result), tool_call_id=tc["id"])
@@ -118,9 +122,13 @@ class ChatModel:
                     for block in content:
                         if isinstance(block, dict):
                             if block.get("type") == "text":
-                                text_parts.append(block.get("text", ""))
+                                text = block.get("text")
+                                if text:
+                                    text_parts.append(text)
+                        elif isinstance(block, str):
+                            text_parts.append(block)
                         elif hasattr(block, "text"):
-                            text_parts.append(block.text)
+                            text_parts.append(str(block.text))
                     return "\n".join(text_parts) if text_parts else ""
                 return content if isinstance(content, str) else str(content)
             except Exception as e:

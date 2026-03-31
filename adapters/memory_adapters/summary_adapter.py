@@ -1,9 +1,8 @@
 """递归摘要基线适配器."""
 
 from pathlib import Path
-from typing import Any
 
-from adapters.memory_adapters.common import BaselineMemory, VMBMode
+from adapters.memory_adapters.common import AdapterKwargs, BaselineMemory, VMBMode
 
 
 class SummaryAdapter:
@@ -15,7 +14,7 @@ class SummaryAdapter:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def add(self, history_text: str, **kwargs: Any) -> BaselineMemory:
+    def add(self, history_text: str, **kwargs: AdapterKwargs) -> BaselineMemory:
         """构建递归摘要记忆."""
         agent_client = kwargs.get("agent_client")
         if not agent_client:

@@ -1,10 +1,13 @@
 """VehicleMemBench 评估基准的测试运行器."""
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, cast
+
+logger = logging.getLogger(__name__)
 
 from adapters.memory_adapters import ADAPTERS
 from adapters.memory_adapters.common import (
@@ -132,7 +135,7 @@ def prepare(
                     with open(result_path, "w") as f:
                         json.dump(result, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"[error] {mtype} file {fnum}: {e}")
+                logger.exception("[error] %s file %s: %s", mtype.value, fnum, e)
                 continue
 
 
@@ -194,7 +197,7 @@ def run(
                 with open(result_path, "w") as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"[error] {mtype.value} file {fnum}: {e}")
+                logger.exception("[error] %s file %s: %s", mtype.value, fnum, e)
                 continue
 
 
@@ -249,7 +252,13 @@ def _run_single(
                 result["memory_type"] = memory_type.value
                 results.append(result)
         except Exception as e:
-            print(f"  [error] query {i}: {e}")
+            logger.exception(
+                "  [error] query %s in %s file %s: %s",
+                i,
+                memory_type.value,
+                file_num,
+                e,
+            )
             continue
 
     return results

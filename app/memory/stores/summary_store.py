@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -9,6 +11,8 @@ from app.memory.components import EventStorage
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.models.chat import ChatModel
 from app.storage.json_store import JSONStore
+
+logger = logging.getLogger(__name__)
 
 SUMMARY_UPDATE_THRESHOLD = 2
 MAX_MEMORY_LENGTH = 8192
@@ -95,6 +99,9 @@ class SummaryStore:
 
     def _maybe_update_summary(self) -> None:
         if not self.chat_model:
+            warnings.warn(
+                f"{self.__class__.__name__}: chat_model not provided, skipping summary update"
+            )
             return
         state = self._read_state()
         if state.get("pending_count", 0) < SUMMARY_UPDATE_THRESHOLD:

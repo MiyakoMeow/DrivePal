@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -10,6 +12,8 @@ from app.memory.components import EventStorage
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.models.chat import ChatModel
 from app.storage.json_store import JSONStore
+
+logger = logging.getLogger(__name__)
 
 KV_UPDATE_THRESHOLD = 2
 
@@ -145,6 +149,9 @@ class KVStore:
 
     def _maybe_extract_kv(self) -> None:
         if not self.chat_model:
+            warnings.warn(
+                f"{self.__class__.__name__}: chat_model not provided, skipping KV extraction"
+            )
             return
         state = self._read_state()
         if state.get("pending_count", 0) < KV_UPDATE_THRESHOLD:
