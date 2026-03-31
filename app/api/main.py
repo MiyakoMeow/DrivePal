@@ -67,7 +67,7 @@ async def query(
             memory_mode=request.memory_mode,
             memory_module=mm,
         )
-        result, event_id = workflow.run(request.query)
+        result, event_id = await workflow.run(request.query)
         return {"result": result, "event_id": event_id}
     except Exception as e:
         logger.error(f"Query failed: {e}", exc_info=True)
@@ -86,7 +86,7 @@ async def feedback(
             action=request.action,
             modified_content=request.modified_content,
         )
-        mm.update_feedback(request.event_id, feedback)
+        await mm.update_feedback(request.event_id, feedback)
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Feedback failed: {e}", exc_info=True)
@@ -105,7 +105,7 @@ async def history(
 ) -> dict:
     """获取历史记录."""
     try:
-        events = mm.get_history(limit=limit)
+        events = await mm.get_history(limit=limit)
         return {"history": [e.model_dump() for e in events]}
     except Exception as e:
         logger.error(f"History retrieval failed: {e}", exc_info=True)
