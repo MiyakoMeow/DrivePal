@@ -21,4 +21,5 @@ class GoldAdapter:
 
     def get_search_client(self, store: BaselineMemory) -> None:
         """不支持搜索客户端."""
-        raise NotImplementedError("GoldAdapter does not support search client")
+        msg = "GoldAdapter does not support search client"
+        raise NotImplementedError(msg)

@@ -21,4 +21,5 @@ class NoneAdapter:
 
     def get_search_client(self, store: BaselineMemory) -> None:
         """不支持搜索客户端."""
-        raise NotImplementedError("NoneAdapter does not support search client")
+        msg = "NoneAdapter does not support search client"
+        raise NotImplementedError(msg)

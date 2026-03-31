@@ -55,14 +55,14 @@ SUPPORTED_MEMORY_TYPES: set[MemoryType] = set(MemoryType)
 
 
 def _parse_memory_types(memory_types: str) -> list[MemoryType]:
-    types = [t.strip() for t in memory_types.split(",") if t.strip()]
-    invalid = [t for t in types if t not in SUPPORTED_MEMORY_TYPES]
+    type_strs = [t.strip() for t in memory_types.split(",") if t.strip()]
+    invalid = [t for t in type_strs if MemoryType(t) not in SUPPORTED_MEMORY_TYPES]
     if invalid:
         raise ValueError(
             f"Unsupported memory_types: {invalid}. "
             f"Supported: {sorted(m.value for m in SUPPORTED_MEMORY_TYPES)}"
         )
-    return [MemoryType(t) for t in types]
+    return [MemoryType(t) for t in type_strs]
 
 
 def parse_file_range(range_str: str) -> list[int]:
@@ -120,12 +120,12 @@ def prepare(
     for fnum in file_nums:
         history_text = _load_history(fnum)
         for mtype in types:
-            result_path = output_dir / f"{mtype}_file_{fnum}.json"
+            result_path = output_dir / f"{mtype.value}_file_{fnum}.json"
             if result_path.exists():
-                print(f"[skip] {mtype} file {fnum} already prepared")
+                print(f"[skip] {mtype.value} file {fnum} already prepared")
                 continue
 
-            print(f"[prepare] {mtype} file {fnum}...")
+            print(f"[prepare] {mtype.value} file {fnum}...")
             try:
                 result = _prepare_single(agent_client, history_text, fnum, mtype)
                 if result is not None:
@@ -143,12 +143,12 @@ def _prepare_single(
         return None
     adapter_cls = ADAPTERS[memory_type]
     adapter = adapter_cls(
-        data_dir=_get_output_dir() / f"store_{memory_type}_{file_num}"
+        data_dir=_get_output_dir() / f"store_{memory_type.value}_{file_num}"
     )
     store = adapter.add(history_text, agent_client=agent_client)
     if isinstance(store, BaselineMemory):
         return {
-            "type": store.memory_type,
+            "type": store.memory_type.value,
             "memory_text": store.memory_text,
             "kv_store": store.kv_store,
         }
@@ -171,16 +171,16 @@ def run(
         history_text = _load_history(fnum)
         events = qa_data.get("related_to_vehicle_preference", [])
         for mtype in types:
-            result_path = output_dir / f"{mtype}_file_{fnum}_results.json"
-            prep_path = output_dir / f"{mtype}_file_{fnum}.json"
+            result_path = output_dir / f"{mtype.value}_file_{fnum}_results.json"
+            prep_path = output_dir / f"{mtype.value}_file_{fnum}.json"
             if not prep_path.exists():
-                print(f"[skip] {mtype} file {fnum} not prepared")
+                print(f"[skip] {mtype.value} file {fnum} not prepared")
                 continue
 
             with open(prep_path) as f:
                 prep_data = json.load(f)
 
-            print(f"[run] {mtype} file {fnum}: {len(events)} queries...")
+            print(f"[run] {mtype.value} file {fnum}: {len(events)} queries...")
             try:
                 results = _run_single(
                     agent_client,
@@ -194,7 +194,7 @@ def run(
                 with open(result_path, "w") as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"[error] {mtype} file {fnum}: {e}")
+                print(f"[error] {mtype.value} file {fnum}: {e}")
                 continue
 
 
@@ -322,7 +322,7 @@ def _run_custom_adapter(
         agent_client=agent_client,
         reflect_num=reflect_num,
         system_instruction=system_instruction,
-        request_context=f"{memory_type} file task {task_id}",
+        request_context=f"{memory_type.value} file task {task_id}",
         initial_tools=initial_tools,
         memory_funcs=memory_funcs,
     )
@@ -348,10 +348,11 @@ def report(output_path: Optional[Path] = None) -> None:
         )
         report_data[mtype] = metric
 
-    if "gold" in report_data:
-        gold_esm = report_data["gold"].get("exact_match_rate", 0)
+    gold_key = MemoryType.GOLD.value
+    if gold_key in report_data:
+        gold_esm = report_data[gold_key].get("exact_match_rate", 0)
         for mtype in report_data:
-            if mtype != "gold":
+            if mtype != gold_key:
                 auto_esm = report_data[mtype].get("exact_match_rate", 0)
                 report_data[mtype]["memory_score"] = (
                     auto_esm / gold_esm if gold_esm > 0 else 0.0

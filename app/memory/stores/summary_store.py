@@ -77,7 +77,7 @@ class SummaryStore:
         self,
         data_dir: Path,
         chat_model: Optional[ChatModel] = None,
-        **kwargs: dict,
+        **kwargs: object,
     ) -> None:
         """初始化摘要存储."""
         self._storage = EventStorage(data_dir)
@@ -103,7 +103,13 @@ class SummaryStore:
         if not events:
             return
         pending = events[-state["pending_count"] :]
-        content = "\n".join(e.get("content", "") for e in pending if e.get("content"))
+        parts = []
+        for e in pending:
+            if c := e.get("content"):
+                parts.append(c)
+            if d := e.get("description"):
+                parts.append(d)
+        content = "\n".join(parts)
         if not content.strip():
             return
         current_summary = state.get("summary", "")
@@ -116,12 +122,15 @@ class SummaryStore:
                 new_summary = args.get("new_memory", current_summary)
             return '{"success": true}'
 
-        self.chat_model.generate_with_tools(
-            prompt=prompt,
-            tools=_MEMORY_UPDATE_TOOL,
-            system_prompt=_SUMMARY_SYSTEM_PROMPT,
-            tool_executor=_tool_executor,
-        )
+        try:
+            self.chat_model.generate_with_tools(
+                prompt=prompt,
+                tools=_MEMORY_UPDATE_TOOL,
+                system_prompt=_SUMMARY_SYSTEM_PROMPT,
+                tool_executor=_tool_executor,
+            )
+        except Exception:
+            raise
         if len(new_summary) > MAX_MEMORY_LENGTH:
             pos = new_summary.rfind("\n-", 0, MAX_MEMORY_LENGTH)
             if pos > MAX_MEMORY_LENGTH // 2:

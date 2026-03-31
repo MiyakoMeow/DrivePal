@@ -127,7 +127,7 @@ class KVStore:
         self,
         data_dir: Path,
         chat_model: Optional[ChatModel] = None,
-        **kwargs: dict,
+        **kwargs: object,
     ) -> None:
         """初始化KV存储."""
         self._storage = EventStorage(data_dir)
@@ -153,7 +153,13 @@ class KVStore:
         if not events:
             return
         pending = events[-state["pending_count"] :]
-        content = "\n".join(e.get("content", "") for e in pending if e.get("content"))
+        parts = []
+        for e in pending:
+            if c := e.get("content"):
+                parts.append(c)
+            if d := e.get("description"):
+                parts.append(d)
+        content = "\n".join(parts)
         if not content.strip():
             return
         kv_data: dict[str, str] = dict(state.get("kv_data", {}))
@@ -180,12 +186,15 @@ class KVStore:
                 return json.dumps({"success": True, "results": results})
             return json.dumps({"success": False, "error": f"Unknown function: {name}"})
 
-        self.chat_model.generate_with_tools(
-            prompt=prompt,
-            tools=_KV_TOOLS,
-            system_prompt=_KV_SYSTEM_PROMPT,
-            tool_executor=_tool_executor,
-        )
+        try:
+            self.chat_model.generate_with_tools(
+                prompt=prompt,
+                tools=_KV_TOOLS,
+                system_prompt=_KV_SYSTEM_PROMPT,
+                tool_executor=_tool_executor,
+            )
+        except Exception:
+            raise
         state["kv_data"] = kv_data
         state["pending_count"] = 0
         self._write_state(state)

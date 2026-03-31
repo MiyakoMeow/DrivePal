@@ -35,4 +35,5 @@ class KVAdapter:
 
     def get_search_client(self, store: BaselineMemory) -> None:
         """不支持搜索客户端."""
-        raise NotImplementedError("KVAdapter does not support search client")
+        msg = "KVAdapter does not support search client"
+        raise NotImplementedError(msg)
