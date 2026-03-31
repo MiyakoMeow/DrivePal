@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage
 
 from app.models.chat import ChatModel
 from app.models.settings import LLMProviderConfig

@@ -10,5 +10,9 @@ def test_str_enum_compat() -> None:
 
 
 def test_all_values() -> None:
-    """验证枚举只包含 memory_bank 模式."""
-    assert set(MemoryMode) == {MemoryMode.MEMORY_BANK}
+    """验证枚举包含所有记忆模式."""
+    assert set(MemoryMode) == {
+        MemoryMode.MEMORY_BANK,
+        MemoryMode.SUMMARY,
+        MemoryMode.KEY_VALUE,
+    }
