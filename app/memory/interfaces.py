@@ -13,23 +13,23 @@ class MemoryStore(Protocol):
     requires_chat: bool
     supports_interaction: bool
 
-    def write(self, event: MemoryEvent) -> str:
+    async def write(self, event: MemoryEvent) -> str:
         """写入事件."""
         ...
 
-    def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆."""
         ...
 
-    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+    async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         """获取历史事件."""
         ...
 
-    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈."""
         ...
 
-    def write_interaction(
+    async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录."""
