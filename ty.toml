@@ -1,5 +1,5 @@
 [src]
-exclude = ["vendor"]
+exclude = [".agents", "vendor"]
 
 [analysis]
 allowed-unresolved-imports = ["evaluation.**"]
