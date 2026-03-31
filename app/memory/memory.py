@@ -23,14 +23,8 @@ def register_store(name: MemoryMode, store_cls: type) -> None:
 
 
 def _import_all_stores() -> None:
-    from app.memory.stores.keyword_store import KeywordMemoryStore
-    from app.memory.stores.llm_store import LLMOnlyMemoryStore
-    from app.memory.stores.embedding_store import EmbeddingMemoryStore
     from app.memory.stores.memory_bank_store import MemoryBankStore
 
-    register_store(MemoryMode.KEYWORD, KeywordMemoryStore)
-    register_store(MemoryMode.LLM_ONLY, LLMOnlyMemoryStore)
-    register_store(MemoryMode.EMBEDDINGS, EmbeddingMemoryStore)
     register_store(MemoryMode.MEMORY_BANK, MemoryBankStore)
 
 

@@ -9,13 +9,10 @@ import pytest
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
-from tests.conftest import is_llm_available
 
 
 def _get_store_params() -> list[str]:
-    if is_llm_available():
-        return ["keyword", "llm_only", "embeddings", "memory_bank"]
-    return ["keyword", "embeddings"]
+    return ["memory_bank"]
 
 
 class TestMemoryStoreContract:

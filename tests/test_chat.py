@@ -15,7 +15,7 @@ def test_chat_drives_llm_memory_search(tmp_path: Path) -> None:
     chat_model = ChatModel()
     memory = MemoryModule(tmp_path, chat_model=chat_model)
     memory.write(MemoryEvent(content="明天下午三点项目会议", type="meeting"))
-    results = memory.search("有什么会议安排", mode=MemoryMode.LLM_ONLY)
+    results = memory.search("有什么会议安排", mode=MemoryMode.MEMORY_BANK)
     assert len(results) > 0
     assert "会议" in results[0].event["content"]
 
@@ -36,7 +36,7 @@ def test_chat_feeds_workflow_context(tmp_path: Path) -> None:
         "context": {},
         "task": None,
         "decision": None,
-        "memory_mode": "keyword",
+        "memory_mode": MemoryMode.MEMORY_BANK,
         "result": None,
         "event_id": None,
     }

@@ -38,7 +38,7 @@ class TestEmbeddingForMemorySearch:
         """验证语义相似的查询检索到正确的记忆."""
         memory = MemoryModule(tmp_path, embedding_model=embedding)
         memory.write(MemoryEvent(content="明天下午三点项目评审会议"))
-        results = memory.search("项目评审下午三点", mode=MemoryMode.EMBEDDINGS)
+        results = memory.search("项目评审下午三点", mode=MemoryMode.MEMORY_BANK)
         assert len(results) == 1
 
     def test_semantic_miss_skips(
@@ -47,7 +47,7 @@ class TestEmbeddingForMemorySearch:
         """验证语义无关的查询返回低分结果."""
         memory = MemoryModule(tmp_path, embedding_model=embedding)
         memory.write(MemoryEvent(content="明天下午三点项目评审会议"))
-        results = memory.search("天气预报查询", mode=MemoryMode.EMBEDDINGS)
+        results = memory.search("天气预报查询", mode=MemoryMode.MEMORY_BANK)
         if results:
             assert results[0].score < 0.5
 

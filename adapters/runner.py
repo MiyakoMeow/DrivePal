@@ -47,6 +47,20 @@ from evaluation.model_evaluation import (
 from evaluation.agent_client import AgentClient
 
 
+SUPPORTED_MEMORY_TYPES = {"gold", "summary", "kv", "memory_bank"}
+
+
+def _parse_memory_types(memory_types: str) -> list[str]:
+    types = [t.strip() for t in memory_types.split(",") if t.strip()]
+    invalid = [t for t in types if t not in SUPPORTED_MEMORY_TYPES]
+    if invalid:
+        raise ValueError(
+            f"Unsupported memory_types: {invalid}. "
+            f"Supported: {sorted(SUPPORTED_MEMORY_TYPES)}"
+        )
+    return types
+
+
 def parse_file_range(range_str: str) -> list[int]:
     """将形如 '1-5' 或 '1,3,5' 的文件范围字符串解析为整数列表."""
     result = []
@@ -91,11 +105,11 @@ def _get_output_dir() -> Path:
 
 def prepare(
     file_range: str = "1-50",
-    memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
+    memory_types: str = "gold,summary,kv,memory_bank",
 ) -> None:
     """为指定文件范围和记忆类型准备基准测试数据."""
     file_nums = parse_file_range(file_range)
-    types = [t.strip() for t in memory_types.split(",")]
+    types = _parse_memory_types(memory_types)
     agent_client = _get_agent_client()
     output_dir = _get_output_dir()
 
@@ -142,12 +156,12 @@ def _prepare_single(
 
 def run(
     file_range: str = "1-50",
-    memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
+    memory_types: str = "gold,summary,kv,memory_bank",
     reflect_num: int = 10,
 ) -> None:
     """为指定文件范围和记忆类型运行基准评估."""
     file_nums = parse_file_range(file_range)
-    types = [t.strip() for t in memory_types.split(",")]
+    types = _parse_memory_types(memory_types)
     agent_client = _get_agent_client()
     output_dir = _get_output_dir()
 
