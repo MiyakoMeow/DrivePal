@@ -49,11 +49,11 @@ class AgentWorkflow:
             self._execution_node,
         ]
 
-    def _call_llm_json(self, user_prompt: str) -> dict:
+    async def _call_llm_json(self, user_prompt: str) -> dict:
         """构建prompt、调LLM并解析JSON返回dict."""
         if not self.memory_module.chat_model:
             raise RuntimeError("ChatModel not available")
-        result = self.memory_module.chat_model.generate(user_prompt)
+        result = await self.memory_module.chat_model.generate(user_prompt)
         cleaned = re.sub(r"^```(?:json)?\s*", "", result.strip())
         cleaned = re.sub(r"\s*```$", "", cleaned)
         try:
@@ -65,7 +65,7 @@ class AgentWorkflow:
         parsed["raw"] = result
         return parsed
 
-    def _context_node(self, state: AgentState) -> dict:
+    async def _context_node(self, state: AgentState) -> dict:
         """Context Agent节点."""
         messages = state.get("messages", [])
         if not messages:
@@ -75,7 +75,7 @@ class AgentWorkflow:
 
         try:
             related_events = (
-                self.memory_module.search(user_input, mode=self.memory_mode)
+                await self.memory_module.search(user_input, mode=self.memory_mode)
                 if user_input
                 else []
             )
@@ -88,7 +88,7 @@ class AgentWorkflow:
                 relevant_memories = [e.to_public() for e in related_events]
             else:
                 relevant_memories = [
-                    e.model_dump() for e in self.memory_module.get_history()
+                    e.model_dump() for e in await self.memory_module.get_history()
                 ]
         except Exception as e:
             logger.warning(f"Memory get_history failed: {e}")
@@ -108,7 +108,7 @@ class AgentWorkflow:
 
 请输出JSON格式的上下文对象. """
 
-        context = self._call_llm_json(prompt)
+        context = await self._call_llm_json(prompt)
         context["related_events"] = relevant_memories
         context["relevant_memories"] = relevant_memories
 
@@ -118,7 +118,7 @@ class AgentWorkflow:
             + [{"role": "user", "content": f"Context: {json.dumps(context)}"}],
         }
 
-    def _task_node(self, state: AgentState) -> dict:
+    async def _task_node(self, state: AgentState) -> dict:
         """Task Agent节点."""
         messages = state.get("messages", [])
         user_input = messages[-1].get("content", "") if messages else ""
@@ -131,14 +131,14 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象. """
 
-        task = self._call_llm_json(prompt)
+        task = await self._call_llm_json(prompt)
         return {
             "task": task,
             "messages": state["messages"]
             + [{"role": "user", "content": f"Task: {json.dumps(task)}"}],
         }
 
-    def _strategy_node(self, state: AgentState) -> dict:
+    async def _strategy_node(self, state: AgentState) -> dict:
         """Strategy Agent节点."""
         context = state.get("context", {})
         task = state.get("task", {})
@@ -153,14 +153,14 @@ class AgentWorkflow:
 
 请输出JSON格式的决策结果. """
 
-        decision = self._call_llm_json(prompt)
+        decision = await self._call_llm_json(prompt)
         return {
             "decision": decision,
             "messages": state["messages"]
             + [{"role": "user", "content": f"Decision: {json.dumps(decision)}"}],
         }
 
-    def _execution_node(self, state: AgentState) -> dict:
+    async def _execution_node(self, state: AgentState) -> dict:
         """执行提醒动作的Agent节点."""
         decision = state.get("decision") or {}
         messages = state.get("messages", [])
@@ -177,7 +177,7 @@ class AgentWorkflow:
             content = remind_content
         else:
             content = decision.get("content") or "无提醒内容"
-        event_id = self.memory_module.write_interaction(user_input, content)
+        event_id = await self.memory_module.write_interaction(user_input, content)
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
             event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
@@ -189,7 +189,7 @@ class AgentWorkflow:
             "messages": state["messages"] + [{"role": "user", "content": result}],
         }
 
-    def run(self, user_input: str) -> tuple[str, Optional[str]]:
+    async def run(self, user_input: str) -> tuple[str, Optional[str]]:
         """运行完整工作流并返回结果和事件ID."""
         state: AgentState = {
             "messages": [{"role": "user", "content": user_input}],
@@ -202,7 +202,7 @@ class AgentWorkflow:
         }
 
         for node_fn in self._nodes:
-            updates = node_fn(state)
+            updates = await node_fn(state)
             state.update(updates)
 
         result = state.get("result") or "处理完成"
