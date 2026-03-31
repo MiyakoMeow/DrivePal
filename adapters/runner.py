@@ -4,10 +4,14 @@ import sys
 import os
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 from adapters.memory_adapters import ADAPTERS
-from adapters.memory_adapters.common import BaselineMemory, format_search_results
+from adapters.memory_adapters.common import (
+    BaselineMemory,
+    MemoryType,
+    format_search_results,
+)
 from adapters.model_config import (
     get_benchmark_client,
     get_benchmark_model_name,
@@ -47,14 +51,7 @@ from evaluation.model_evaluation import (
 from evaluation.agent_client import AgentClient
 
 
-MemoryType = Literal["none", "gold", "summary", "kv", "memory_bank"]
-SUPPORTED_MEMORY_TYPES: set[MemoryType] = {
-    "none",
-    "gold",
-    "summary",
-    "kv",
-    "memory_bank",
-}
+SUPPORTED_MEMORY_TYPES: set[MemoryType] = set(MemoryType)
 
 
 def _parse_memory_types(memory_types: str) -> list[MemoryType]:
@@ -63,9 +60,9 @@ def _parse_memory_types(memory_types: str) -> list[MemoryType]:
     if invalid:
         raise ValueError(
             f"Unsupported memory_types: {invalid}. "
-            f"Supported: {sorted(SUPPORTED_MEMORY_TYPES)}"
+            f"Supported: {sorted(m.value for m in SUPPORTED_MEMORY_TYPES)}"
         )
-    return cast("list[MemoryType]", types)
+    return [MemoryType(t) for t in types]
 
 
 def parse_file_range(range_str: str) -> list[int]:
@@ -155,7 +152,7 @@ def _prepare_single(
             "memory_text": store.memory_text,
             "kv_store": store.kv_store,
         }
-    return {"type": memory_type, "data_dir": str(adapter.data_dir)}
+    return {"type": memory_type.value, "data_dir": str(adapter.data_dir)}
 
 
 def run(
@@ -223,17 +220,17 @@ def _run_single(
         }
 
         try:
-            if memory_type == "none":
+            if memory_type == MemoryType.NONE:
                 result = process_task_direct(task, i, agent_client, reflect_num)
-            elif memory_type == "gold":
+            elif memory_type == MemoryType.GOLD:
                 task["history_text"] = gold_memory
                 result = process_task_direct(task, i, agent_client, reflect_num)
-            elif memory_type == "summary":
+            elif memory_type == MemoryType.SUMMARY:
                 memory_text = prep_data.get("memory_text", "")
                 result = process_task_with_memory(
                     task, i, memory_text, agent_client, reflect_num
                 )
-            elif memory_type == "kv":
+            elif memory_type == MemoryType.KV:
                 vmb_store = VMBMemoryStore()
                 vmb_store.store = prep_data.get("kv_store", {})
                 result = process_task_with_kv_memory(
@@ -249,7 +246,7 @@ def _run_single(
             if result:
                 result["source_file"] = file_num
                 result["event_index"] = i
-                result["memory_type"] = memory_type
+                result["memory_type"] = memory_type.value
                 results.append(result)
         except Exception as e:
             print(f"  [error] query {i}: {e}")
@@ -266,6 +263,10 @@ def _run_custom_adapter(
     memory_type: MemoryType,
     reflect_num: int,
 ) -> dict | None:
+    if memory_type != MemoryType.MEMORY_BANK:
+        raise ValueError(
+            f"_run_custom_adapter only supports memory_bank, got {memory_type}"
+        )
     adapter_cls = ADAPTERS[memory_type]
     data_dir = Path(prep_data["data_dir"])
     adapter = cast("MemoryBankAdapter", adapter_cls(data_dir=data_dir))
@@ -307,7 +308,6 @@ def _run_custom_adapter(
     ]
 
     def _memory_search(query: str, top_k: int = 5) -> dict:
-        assert client is not None
         results = client.search(query=query, top_k=top_k)
         text, count = format_search_results(results)
         return {"success": True, "results": text, "count": count}

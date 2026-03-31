@@ -3,7 +3,11 @@
 from pathlib import Path
 from typing import Any
 
-from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
+from adapters.memory_adapters.common import (
+    MemoryType,
+    StoreClient,
+    history_to_interaction_records,
+)
 from adapters.model_config import get_store_chat_model, get_store_embedding_model
 from app.memory.interfaces import MemoryStore
 from app.memory.stores.memory_bank_store import MemoryBankStore
@@ -12,7 +16,7 @@ from app.memory.stores.memory_bank_store import MemoryBankStore
 class MemoryBankAdapter:
     """结合嵌入向量和LLM进行记忆搜索的适配器."""
 
-    TAG = "memory_bank"
+    TAG = MemoryType.MEMORY_BANK
 
     def __init__(self, data_dir: Path) -> None:
         """使用数据目录初始化."""

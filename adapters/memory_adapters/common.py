@@ -1,13 +1,21 @@
 """记忆适配器通用工具函数."""
 
 import re
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from enum import StrEnum
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import MemoryEvent, SearchResult
 
-MemoryType = Literal["none", "gold", "summary", "kv", "memory_bank"]
+
+class MemoryType(StrEnum):
+    """记忆类型枚举."""
+
+    NONE = "none"
+    GOLD = "gold"
+    SUMMARY = "summary"
+    KV = "kv"
+    MEMORY_BANK = "memory_bank"
 
 
 @dataclass
@@ -16,12 +24,7 @@ class BaselineMemory:
 
     memory_type: MemoryType
     memory_text: str = ""
-    kv_store: dict[str, str] | None = None
-
-    def __post_init__(self) -> None:
-        """初始化默认 kv_store."""
-        if self.kv_store is None:
-            self.kv_store = {}
+    kv_store: dict[str, str] = field(default_factory=dict)
 
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
