@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from adapters.memory_adapters import ADAPTERS
-from adapters.memory_adapters.common import format_search_results
+from adapters.memory_adapters.common import BaselineMemory, format_search_results
 from adapters.model_config import (
     get_benchmark_client,
     get_benchmark_model_name,
@@ -34,9 +34,6 @@ setup_vehiclemembench_path()
 from evaluation.model_evaluation import (
     parse_answer_to_tools,
     get_list_module_tools_schema,
-    split_history_by_day,
-    build_memory_recursive_summary,
-    build_memory_key_value,
     process_task_direct,
     process_task_with_memory,
     process_task_with_kv_memory,
@@ -47,7 +44,7 @@ from evaluation.model_evaluation import (
 from evaluation.agent_client import AgentClient
 
 
-SUPPORTED_MEMORY_TYPES = {"gold", "summary", "kv", "memory_bank"}
+SUPPORTED_MEMORY_TYPES = {"none", "gold", "summary", "kv", "memory_bank"}
 
 
 def _parse_memory_types(memory_types: str) -> list[str]:
@@ -135,23 +132,20 @@ def prepare(
 def _prepare_single(
     agent_client: AgentClient, history_text: str, file_num: int, memory_type: str
 ) -> dict | None:
-    if memory_type == "gold":
-        return {"type": "gold"}
-    if memory_type == "summary":
-        daily = split_history_by_day(history_text)
-        mem_text, _, _ = build_memory_recursive_summary(agent_client, daily)
-        return {"type": "summary", "memory_text": mem_text}
-    if memory_type == "kv":
-        daily = split_history_by_day(history_text)
-        store, _, _ = build_memory_key_value(agent_client, daily)
-        return {"type": "kv", "store": store.to_dict()}
-    if memory_type in ADAPTERS:
-        adapter_cls = ADAPTERS[memory_type]
-        data_dir = _get_output_dir() / f"store_{memory_type}_{file_num}"
-        adapter = adapter_cls(data_dir=data_dir)
-        adapter.add(history_text)
-        return {"type": memory_type, "data_dir": str(data_dir)}
-    return None
+    if memory_type not in ADAPTERS:
+        return None
+    adapter_cls = ADAPTERS[memory_type]
+    adapter = adapter_cls(
+        data_dir=_get_output_dir() / f"store_{memory_type}_{file_num}"
+    )
+    store = adapter.add(history_text, agent_client=agent_client)
+    if isinstance(store, BaselineMemory):
+        return {
+            "type": store.memory_type,
+            "memory_text": store.memory_text,
+            "kv_store": store.kv_store,
+        }
+    return {"type": memory_type, "data_dir": str(adapter.data_dir)}
 
 
 def run(
@@ -219,7 +213,9 @@ def _run_single(
         }
 
         try:
-            if memory_type == "gold":
+            if memory_type == "none":
+                result = process_task_direct(task, i, agent_client, reflect_num)
+            elif memory_type == "gold":
                 task["history_text"] = gold_memory
                 result = process_task_direct(task, i, agent_client, reflect_num)
             elif memory_type == "summary":
@@ -229,7 +225,7 @@ def _run_single(
                 )
             elif memory_type == "kv":
                 vmb_store = VMBMemoryStore()
-                vmb_store.store = prep_data.get("store", {})
+                vmb_store.store = prep_data.get("kv_store", {})
                 result = process_task_with_kv_memory(
                     task, i, vmb_store, agent_client, reflect_num
                 )
