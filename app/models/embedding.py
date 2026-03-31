@@ -116,7 +116,7 @@ class EmbeddingModel:
     ) -> list[list[float]]:
         """使用openai接口批量编码文本."""
         resp = client.embeddings.create(model=model, input=texts)
-        return [d.embedding for d in resp.data]
+        return [d.embedding for d in sorted(resp.data, key=lambda x: x.index)]
 
     def _batch_encode_with_local(
         self,
