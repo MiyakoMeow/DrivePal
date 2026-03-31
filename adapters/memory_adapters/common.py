@@ -9,11 +9,14 @@ from app.memory.schemas import MemoryEvent, SearchResult
 
 @dataclass
 class BaselineMemory:
+    """基线记忆的轻量容器."""
+
     memory_type: str
     memory_text: str = ""
     kv_store: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
+        """初始化默认 kv_store."""
         if self.kv_store is None:
             self.kv_store = {}
 

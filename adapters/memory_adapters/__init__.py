@@ -1,3 +1,5 @@
+"""不同存储策略的记忆适配器实现."""
+
 from adapters.memory_adapters.gold_adapter import GoldAdapter
 from adapters.memory_adapters.kv_adapter import KVAdapter
 from adapters.memory_adapters.memory_bank_adapter import MemoryBankAdapter
