@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from adapters.memory_adapters.common import (
-    MemoryType,
+    VMBMode,
     StoreClient,
     history_to_interaction_records,
 )
@@ -16,13 +16,13 @@ from app.memory.stores.memory_bank_store import MemoryBankStore
 class MemoryBankAdapter:
     """结合嵌入向量和LLM进行记忆搜索的适配器."""
 
-    TAG = MemoryType.MEMORY_BANK
+    TAG = VMBMode.MEMORY_BANK
 
     def __init__(self, data_dir: Path) -> None:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def add(self, history_text: str, **kwargs: dict[str, Any]) -> MemoryBankStore:
+    def add(self, history_text: str, **kwargs: Any) -> MemoryBankStore:
         """将历史文本添加到记忆库存储."""
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()

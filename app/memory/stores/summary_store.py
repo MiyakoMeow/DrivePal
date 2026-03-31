@@ -104,11 +104,11 @@ class SummaryStore:
             return
         pending = events[-state["pending_count"] :]
         parts = []
-        for e in pending:
-            if c := e.get("content"):
-                parts.append(c)
-            if d := e.get("description"):
-                parts.append(d)
+        for event in pending:
+            if content := event.get("content"):
+                parts.append(content)
+            if description := event.get("description"):
+                parts.append(description)
         content = "\n".join(parts)
         if not content.strip():
             return
@@ -116,21 +116,18 @@ class SummaryStore:
         prompt = f"**Current Memory:**\n{current_summary}\n\n**New Conversations:**\n{content}\n\nPlease review and update the memory if needed."
         new_summary = current_summary
 
-        def _tool_executor(name: str, args: dict) -> str:
+        def _tool_executor(name: str, args: dict[str, Any]) -> str:
             nonlocal new_summary
             if name == "memory_update":
                 new_summary = args.get("new_memory", current_summary)
             return '{"success": true}'
 
-        try:
-            self.chat_model.generate_with_tools(
-                prompt=prompt,
-                tools=_MEMORY_UPDATE_TOOL,
-                system_prompt=_SUMMARY_SYSTEM_PROMPT,
-                tool_executor=_tool_executor,
-            )
-        except Exception:
-            raise
+        self.chat_model.generate_with_tools(
+            prompt=prompt,
+            tools=_MEMORY_UPDATE_TOOL,
+            system_prompt=_SUMMARY_SYSTEM_PROMPT,
+            tool_executor=_tool_executor,
+        )
         if len(new_summary) > MAX_MEMORY_LENGTH:
             pos = new_summary.rfind("\n-", 0, MAX_MEMORY_LENGTH)
             if pos > MAX_MEMORY_LENGTH // 2:

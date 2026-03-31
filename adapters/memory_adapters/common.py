@@ -8,8 +8,8 @@ from app.memory.interfaces import MemoryStore
 from app.memory.schemas import MemoryEvent, SearchResult
 
 
-class MemoryType(StrEnum):
-    """记忆类型枚举."""
+class VMBMode(StrEnum):
+    """VMB基准测试用记忆类型枚举."""
 
     NONE = "none"
     GOLD = "gold"
@@ -22,7 +22,7 @@ class MemoryType(StrEnum):
 class BaselineMemory:
     """基线记忆的轻量容器."""
 
-    memory_type: MemoryType
+    memory_type: VMBMode
     memory_text: str = ""
     kv_store: dict[str, str] = field(default_factory=dict)
 
@@ -62,8 +62,8 @@ def format_search_results(results: list[SearchResult]) -> tuple[str, int]:
     if not results:
         return ("", 0)
     texts = []
-    for r in results:
-        event = r.event if hasattr(r, "event") else r
+    for result in results:
+        event = result.event if hasattr(result, "event") else result
         if isinstance(event, dict):
             content = event.get("content", "")
         elif hasattr(event, "content"):

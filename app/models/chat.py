@@ -1,6 +1,6 @@
 """LLM对话模型封装，基于LangChain OpenAI兼容接口，支持多provider自动fallback."""
 
-from typing import Callable, Optional, cast
+from typing import Any, Callable, Optional, cast
 
 from langchain_core.messages import (
     AIMessage,
@@ -37,7 +37,7 @@ class ChatModel:
         temp = (
             self.temperature if self.temperature is not None else provider.temperature
         )
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "model": provider.provider.model,
             "temperature": temp,
         }
@@ -88,7 +88,7 @@ class ChatModel:
         system_prompt: Optional[str] = None,
         *,
         max_rounds: int = 10,
-        tool_executor: Callable[[str, dict], str],
+        tool_executor: Callable[[str, dict[str, Any]], str],
     ) -> str:
         """带工具调用的生成，支持多轮tool calling和多provider fallback."""
         messages: list[BaseMessage] = []

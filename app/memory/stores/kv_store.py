@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from app.memory.components import EventStorage
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -154,11 +154,11 @@ class KVStore:
             return
         pending = events[-state["pending_count"] :]
         parts = []
-        for e in pending:
-            if c := e.get("content"):
-                parts.append(c)
-            if d := e.get("description"):
-                parts.append(d)
+        for event in pending:
+            if content := event.get("content"):
+                parts.append(content)
+            if description := event.get("description"):
+                parts.append(description)
         content = "\n".join(parts)
         if not content.strip():
             return
@@ -170,7 +170,7 @@ class KVStore:
         )
         prompt = f"**Current Memory Keys:**\n{current_keys}\n\n**New Conversations:**\n{content}\n\nPlease review the conversation and update the memory store with any VEHICLE-RELATED preferences found."
 
-        def _tool_executor(name: str, args: dict) -> str:
+        def _tool_executor(name: str, args: dict[str, Any]) -> str:
             if name == "memory_add":
                 kv_data[args["key"]] = args["value"]
                 return json.dumps(
@@ -186,15 +186,12 @@ class KVStore:
                 return json.dumps({"success": True, "results": results})
             return json.dumps({"success": False, "error": f"Unknown function: {name}"})
 
-        try:
-            self.chat_model.generate_with_tools(
-                prompt=prompt,
-                tools=_KV_TOOLS,
-                system_prompt=_KV_SYSTEM_PROMPT,
-                tool_executor=_tool_executor,
-            )
-        except Exception:
-            raise
+        self.chat_model.generate_with_tools(
+            prompt=prompt,
+            tools=_KV_TOOLS,
+            system_prompt=_KV_SYSTEM_PROMPT,
+            tool_executor=_tool_executor,
+        )
         state["kv_data"] = kv_data
         state["pending_count"] = 0
         self._write_state(state)

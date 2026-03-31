@@ -1,15 +1,15 @@
 """VehicleMemBench 评估基准的测试运行器."""
 
-import sys
-import os
 import json
+import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, cast
 
 from adapters.memory_adapters import ADAPTERS
 from adapters.memory_adapters.common import (
     BaselineMemory,
-    MemoryType,
+    VMBMode,
     format_search_results,
 )
 from adapters.model_config import (
@@ -51,18 +51,18 @@ from evaluation.model_evaluation import (
 from evaluation.agent_client import AgentClient
 
 
-SUPPORTED_MEMORY_TYPES: set[MemoryType] = set(MemoryType)
+SUPPORTED_MEMORY_TYPES: set[VMBMode] = set(VMBMode)
 
 
-def _parse_memory_types(memory_types: str) -> list[MemoryType]:
+def _parse_memory_types(memory_types: str) -> list[VMBMode]:
     type_strs = [t.strip() for t in memory_types.split(",") if t.strip()]
-    invalid = [t for t in type_strs if MemoryType(t) not in SUPPORTED_MEMORY_TYPES]
+    invalid = [t for t in type_strs if VMBMode(t) not in SUPPORTED_MEMORY_TYPES]
     if invalid:
         raise ValueError(
             f"Unsupported memory_types: {invalid}. "
             f"Supported: {sorted(m.value for m in SUPPORTED_MEMORY_TYPES)}"
         )
-    return [MemoryType(t) for t in type_strs]
+    return [VMBMode(t) for t in type_strs]
 
 
 def parse_file_range(range_str: str) -> list[int]:
@@ -71,9 +71,9 @@ def parse_file_range(range_str: str) -> list[int]:
     for part in range_str.split(","):
         part = part.strip()
         if "-" in part:
-            a, b = part.split("-", 1)
-            a, b = int(a), int(b)
-            result.extend(range(min(a, b), max(a, b) + 1))
+            start, end = part.split("-", 1)
+            start, end = int(start), int(end)
+            result.extend(range(min(start, end), max(start, end) + 1))
         else:
             result.append(int(part))
     return sorted(set(result))
@@ -137,7 +137,7 @@ def prepare(
 
 
 def _prepare_single(
-    agent_client: AgentClient, history_text: str, file_num: int, memory_type: MemoryType
+    agent_client: AgentClient, history_text: str, file_num: int, memory_type: VMBMode
 ) -> dict | None:
     if memory_type not in ADAPTERS:
         return None
@@ -204,7 +204,7 @@ def _run_single(
     history_text: str,
     prep_data: dict,
     file_num: int,
-    memory_type: MemoryType,
+    memory_type: VMBMode,
     reflect_num: int,
 ) -> list[dict]:
     results = []
@@ -220,17 +220,17 @@ def _run_single(
         }
 
         try:
-            if memory_type == MemoryType.NONE:
+            if memory_type == VMBMode.NONE:
                 result = process_task_direct(task, i, agent_client, reflect_num)
-            elif memory_type == MemoryType.GOLD:
+            elif memory_type == VMBMode.GOLD:
                 task["history_text"] = gold_memory
                 result = process_task_direct(task, i, agent_client, reflect_num)
-            elif memory_type == MemoryType.SUMMARY:
+            elif memory_type == VMBMode.SUMMARY:
                 memory_text = prep_data.get("memory_text", "")
                 result = process_task_with_memory(
                     task, i, memory_text, agent_client, reflect_num
                 )
-            elif memory_type == MemoryType.KV:
+            elif memory_type == VMBMode.KV:
                 vmb_store = VMBMemoryStore()
                 vmb_store.store = prep_data.get("kv_store", {})
                 result = process_task_with_kv_memory(
@@ -260,10 +260,10 @@ def _run_custom_adapter(
     task: dict,
     task_id: int,
     prep_data: dict,
-    memory_type: MemoryType,
+    memory_type: VMBMode,
     reflect_num: int,
 ) -> dict | None:
-    if memory_type != MemoryType.MEMORY_BANK:
+    if memory_type != VMBMode.MEMORY_BANK:
         raise ValueError(
             f"_run_custom_adapter only supports memory_bank, got {memory_type}"
         )
@@ -348,7 +348,7 @@ def report(output_path: Optional[Path] = None) -> None:
         )
         report_data[mtype] = metric
 
-    gold_key = MemoryType.GOLD.value
+    gold_key = VMBMode.GOLD.value
     if gold_key in report_data:
         gold_esm = report_data[gold_key].get("exact_match_rate", 0)
         for mtype in report_data:
