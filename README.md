@@ -24,12 +24,12 @@
 
 ## 项目概述
 
-知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于 LangGraph 构建多Agent协作工作流，支持四种记忆检索策略的对比实验。
+知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于 LangGraph 构建多Agent协作工作流，基于 MemoryBank 实现长期记忆管理。
 
 ### 设计目标
 
 1. **驾驶安全优先**：根据驾驶员状态（专注驾驶、交通拥堵、高速行驶等）智能调整提醒方式
-2. **多策略对比**：支持关键词、纯LLM、向量嵌入、MemoryBank 四种记忆检索方式的性能对比
+2. **遗忘曲线记忆**：基于 Ebbinghaus 遗忘曲线实现记忆衰减与强化，模拟人类记忆机制
 3. **可解释决策**：明确输出提醒决策的理由，支持用户反馈迭代优化
 
 ---
@@ -54,10 +54,7 @@ thesis-cockpit-memo/
 │   │   ├── types.py              # MemoryMode枚举
 │   │   ├── schemas.py            # 数据模型定义
 │   │   └── stores/               # 各记忆后端实现（组合components）
-│   │       ├── embedding_store.py # Embedding检索（混合检索）
-│   │       ├── keyword_store.py  # 关键词检索
-│   │       ├── llm_store.py      # LLM语义检索
-│   │       └── memory_bank_store.py # MemoryBank后端
+│   │       └── memory_bank_store.py # MemoryBank后端（唯一支持）
 │   ├── storage/                  # 存储模块
 │   │   └── json_store.py         # JSON文件存储
 │   └── api/                      # FastAPI接口
@@ -69,10 +66,7 @@ thesis-cockpit-memo/
 │   └── memory_adapters/          # 记忆存储策略适配器
 │       ├── __init__.py           # 适配器注册表
 │       ├── common.py            # 通用工具函数
-│       ├── keyword_adapter.py    # 关键词检索适配器
-│       ├── llm_only_adapter.py  # LLM语义检索适配器
-│       ├── embeddings_adapter.py # 向量嵌入适配器
-│       └── memory_bank_adapter.py # MemoryBank适配器
+│       └── memory_bank_adapter.py # MemoryBank适配器（唯一支持）
 ├── config/                       # 配置文件
 │   ├── scenarios.json            # 驾驶场景模板
 │   ├── driver_states.json        # 驾驶员状态配置
@@ -115,16 +109,7 @@ flowchart LR
 
 ### 2. 记忆检索系统
 
-支持四种检索模式，各 Store 通过组合 `app/memory/components.py` 中的可复用组件实现，无需继承公共基类。通过 `memory_mode` 参数切换：
-
-#### 检索模式对比
-
-| 模式 | 实现类 | 原理 | 适用场景 |
-|------|--------|------|----------|
-| `keyword` | `KeywordMemoryStore` | 关键词大小写不敏感匹配 | 快速、简单查询 |
-| `llm_only` | `LLMOnlyMemoryStore` | LLM判断语义相关性 | 复杂语义理解 |
-| `embeddings` | `EmbeddingMemoryStore` | BGE向量余弦相似度 + keyword fallback | 语义模糊查询 |
-| `memorybank` | `MemoryBankStore` | Ebbinghaus遗忘曲线 + 分层记忆 + 混合检索 | 长期记忆管理 |
+基于 MemoryBank 实现长期记忆管理，各 Store 通过组合 `app/memory/components.py` 中的可复用组件实现。通过 `memory_mode` 参数切换（当前仅支持 `memory_bank`）：
 
 #### MemoryBank 分层记忆结构
 
@@ -191,23 +176,17 @@ flowchart TD
     Adapters --> Stores
     
     subgraph Adapters
-        K[keyword]
-        L[llm_only]
-        E[embeddings]
         M[memory_bank]
     end
 ```
 
 #### 适配器模式
 
-`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用：
+`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用（当前仅支持 MemoryBank）：
 
 | 适配器 | 封装 | 原理 |
 |--------|------|------|
-| `KeywordAdapter` | `KeywordMemoryStore` | 关键词大小写不敏感匹配 |
-| `LLMOnlyAdapter` | `LLMOnlyMemoryStore` | LLM 判断语义相关性 |
-| `EmbeddingsAdapter` | `EmbeddingMemoryStore` | BGE 向量余弦相似度 |
-| `MemoryBankAdapter` | `MemoryBankStore` | 遗忘曲线 + 分层记忆 |
+| `MemoryBankAdapter` | `MemoryBankStore` | 遗忘曲线 + 分层记忆（唯一支持） |
 
 #### 运行基准测试
 
@@ -228,7 +207,7 @@ uv run python run_benchmark.py report
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--file-range` | `1-50` | 评估文件范围（如 `1-10` 或 `1,3,5`） |
-| `--memory-types` | `gold,summary,kv,keyword,llm_only,embeddings,memory_bank` | 记忆类型 |
+| `--memory-types` | `memory_bank` | 记忆类型 |
 
 #### 基准测试数据结构
 
@@ -264,7 +243,7 @@ data/benchmark/
 ```json
 {
   "query": "明天上午9点有个会议",
-  "memory_mode": "keyword"   // 可选: keyword | llm_only | embeddings | memorybank
+  "memory_mode": "memory_bank"
 }
 ```
 
@@ -477,14 +456,10 @@ uv run pytest tests/ -v
 
 | 文件 | 说明 |
 |------|------|
-| `tests/test_adapters/test_adapters.py` | 适配器注册与基础功能 |
 | `tests/test_adapters/test_common.py` | 适配器通用工具函数 |
 | `tests/test_adapters/test_model_config.py` | 模型配置加载 |
 | `tests/test_adapters/test_runner.py` | VehicleMemBench 运行器 |
-| `stores/test_keyword_store.py` | Keyword 记忆后端 |
-| `stores/test_embedding_store.py` | Embedding 记忆后端 |
-| `stores/test_llm_store.py` | LLM 记忆后端 |
-| `stores/test_memory_bank_store.py` | MemoryBank 后端 |
+| `tests/stores/test_memory_bank_store.py` | MemoryBank 后端 |
 | `test_api.py` | API 端点集成测试 |
 | `test_chat.py` | Chat 驱动 LLM 记忆搜索、Workflow 上下文注入 |
 | `test_embedding.py` | Embedding 语义检索与聚合 |
