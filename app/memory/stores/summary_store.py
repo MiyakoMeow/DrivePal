@@ -179,7 +179,7 @@ class SummaryStore:
         events = self._storage.read_events()
         if limit <= 0:
             return []
-        return [MemoryEvent(**e) for e in events[-limit:]] if limit > 0 else []
+        return [MemoryEvent(**e) for e in events[-min(limit, 1000) :]]
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈（当前为空实现）."""

@@ -68,10 +68,13 @@ def test_get_history_respects_limit(tmp_path: Path) -> None:
 def test_write_interaction_records_event(tmp_path: Path) -> None:
     """Test write_interaction records an event."""
     store = SummaryStore(tmp_path, chat_model=_mock_chat_model())
-    event_id = store.write_interaction("query", "response")
+    event_id = store.write_interaction("query", "response", event_type="custom_type")
     assert isinstance(event_id, str) and len(event_id) > 0
     history = store.get_history(limit=10)
     assert len(history) == 1
+    assert history[0].content == "query"
+    assert history[0].type == "custom_type"
+    assert history[0].description == "response"
 
 
 def test_update_feedback_does_not_crash(tmp_path: Path) -> None:

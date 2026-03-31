@@ -70,8 +70,13 @@ def test_get_history_returns_events(tmp_path: Path) -> None:
 def test_write_interaction_records_event(tmp_path: Path) -> None:
     """Test write_interaction records an event."""
     store = KVStore(tmp_path, chat_model=_mock_chat_model())
-    event_id = store.write_interaction("query", "response")
+    event_id = store.write_interaction("query", "response", event_type="custom_type")
     assert isinstance(event_id, str) and len(event_id) > 0
+    history = store.get_history(limit=1)
+    assert len(history) == 1
+    assert history[0].content == "query"
+    assert history[0].type == "custom_type"
+    assert history[0].description == "response"
 
 
 def test_update_feedback_does_not_crash(tmp_path: Path) -> None:
@@ -82,13 +87,13 @@ def test_update_feedback_does_not_crash(tmp_path: Path) -> None:
 
 
 def test_search_empty_string_query(tmp_path: Path) -> None:
-    """Test search with empty string returns fuzzy matches."""
+    """Test search with empty string returns empty results."""
     store = KVStore(tmp_path)
     state = store._read_state()
     state["kv_data"] = {"Gary_temp": "22"}
     store._write_state(state)
     results = store.search("")
-    assert len(results) == 1
+    assert len(results) == 0
 
 
 def test_get_history_limit_zero(tmp_path: Path) -> None:
@@ -103,3 +108,17 @@ def test_get_history_limit_negative(tmp_path: Path) -> None:
     store = KVStore(tmp_path)
     store.write(MemoryEvent(content="event1"))
     assert store.get_history(limit=-1) == []
+
+
+def test_search_respects_top_k(tmp_path: Path) -> None:
+    """Test search respects top_k parameter."""
+    store = KVStore(tmp_path)
+    state = store._read_state()
+    state["kv_data"] = {
+        "Gary_temp": "22",
+        "Patricia_temp": "25",
+        "Gary_panel": "green",
+    }
+    store._write_state(state)
+    results = store.search("Gary", top_k=2)
+    assert len(results) == 2

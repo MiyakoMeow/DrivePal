@@ -110,14 +110,21 @@ class ChatModel:
                     for tc in ai_response.tool_calls:
                         if tc.get("id") is None:
                             raise RuntimeError(
-                                f"Tool call {tc['name']} returned null id"
+                                f"Tool call {tc.get('name', 'unknown')} returned null id"
                             )
-                        result = tool_executor(tc["name"], tc["args"])
+                        tc_name = tc.get("name")
+                        if tc_name is None:
+                            raise RuntimeError("Tool call missing name")
+                        result = tool_executor(tc_name, tc.get("args", {}))
                         messages.append(
                             ToolMessage(content=str(result), tool_call_id=tc["id"])
                         )
                     ai_response = bound.invoke(messages)
                     rounds += 1
+                if ai_response.tool_calls:
+                    raise RuntimeError(
+                        f"Max rounds ({max_rounds}) exceeded with pending tool calls"
+                    )
                 content = ai_response.content
                 if isinstance(content, list):
                     text_parts = []

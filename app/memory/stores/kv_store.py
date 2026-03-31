@@ -108,14 +108,14 @@ _KV_TOOLS = [
 ]
 
 
-def _kv_search(kv_data: dict[str, str], key: str) -> dict[str, str]:
-    if key in kv_data:
-        return {key: kv_data[key]}
-    key_lower = key.lower()
+def _kv_search(kv_data: dict[str, str], query: str) -> dict[str, str]:
+    if not query:
+        return {}
+    query_lower = query.lower()
     return {
         k: v
         for k, v in kv_data.items()
-        if key_lower in k.lower() or key_lower in v.lower()
+        if query_lower in k.lower() or query_lower in v.lower()
     }
 
 
@@ -241,7 +241,7 @@ class KVStore:
         events = self._storage.read_events()
         if limit <= 0:
             return []
-        return [MemoryEvent(**e) for e in events[-limit:]] if limit > 0 else []
+        return [MemoryEvent(**e) for e in events[-min(limit, 1000) :]]
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈（暂不支持）."""

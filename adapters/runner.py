@@ -59,13 +59,23 @@ SUPPORTED_MEMORY_TYPES: set[VMBMode] = set(VMBMode)
 
 def _parse_memory_types(memory_types: str) -> list[VMBMode]:
     type_strs = [t.strip() for t in memory_types.split(",") if t.strip()]
-    invalid = [t for t in type_strs if VMBMode(t) not in SUPPORTED_MEMORY_TYPES]
+    invalid = []
+    parsed = []
+    for t in type_strs:
+        try:
+            mode = VMBMode(t)
+            if mode in SUPPORTED_MEMORY_TYPES:
+                parsed.append(mode)
+            else:
+                invalid.append(t)
+        except ValueError:
+            invalid.append(t)
     if invalid:
         raise ValueError(
             f"Unsupported memory_types: {invalid}. "
             f"Supported: {sorted(m.value for m in SUPPORTED_MEMORY_TYPES)}"
         )
-    return [VMBMode(t) for t in type_strs]
+    return parsed
 
 
 def parse_file_range(range_str: str) -> list[int]:
