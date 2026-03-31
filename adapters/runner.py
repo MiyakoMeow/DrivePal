@@ -91,7 +91,7 @@ def _get_output_dir() -> Path:
 
 def prepare(
     file_range: str = "1-50",
-    memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
+    memory_types: str = "gold,summary,kv,memory_bank",
 ) -> None:
     """为指定文件范围和记忆类型准备基准测试数据."""
     file_nums = parse_file_range(file_range)
@@ -142,7 +142,7 @@ def _prepare_single(
 
 def run(
     file_range: str = "1-50",
-    memory_types: str = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank",
+    memory_types: str = "gold,summary,kv,memory_bank",
     reflect_num: int = 10,
 ) -> None:
     """为指定文件范围和记忆类型运行基准评估."""

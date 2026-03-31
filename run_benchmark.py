@@ -8,7 +8,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
 
-    _default_memory_types = "gold,summary,kv,keyword,llm_only,embeddings,memory_bank"
+    _default_memory_types = "gold,summary,kv,memory_bank"
 
     for cmd in ["prepare", "run"]:
         p = subparsers.add_parser(cmd)
