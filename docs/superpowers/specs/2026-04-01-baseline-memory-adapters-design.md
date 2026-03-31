@@ -57,7 +57,7 @@ class XxxAdapter:
 
 ### runner.py 改造
 
-**prepare 阶段**：所有类型统一走 `ADAPTERS` 路径，消除 `if/elif`。
+**prepare 阶段**：所有类型统一走 `ADAPTERS` 路径，消除 `if/elif`。统一调用 `adapter.add(history_text, agent_client=agent_client)`，NoneAdapter/GoldAdapter/MemoryBankAdapter 忽略 `agent_client`。
 
 **run 阶段**：保持按类型分发（VMB 对不同基线使用不同评估函数，这是本质差异）：
 - none → `process_task_direct()`（无 history_text）
@@ -116,7 +116,7 @@ class MemoryMode(StrEnum):
 - `store_name = "summary"`
 - `requires_embedding = False`
 - `requires_chat = True`
-- `supports_interaction = False`
+- `supports_interaction = True`
 
 **内部状态**（持久化到 JSON 文件）：
 - `summary: str` — 当前累积摘要文本
@@ -172,7 +172,7 @@ class MemoryMode(StrEnum):
 4. 持久化更新后的 kv_data
 
 **search(query, top_k)**：
-- 复用 VMB `MemoryStore.memory_search()` 的模糊匹配逻辑（精确匹配 + 子串匹配）
+- 实现精确匹配 + 子串模糊匹配逻辑（与 VMB `MemoryStore.memory_search()` 相同算法），在 KVStore 内部重新实现以降低对 vendor 子模块的耦合。
 - 每个匹配的 KV 对转化为 `SearchResult(event={"content": f"{key}: {value}", "type": "kv_entry"}, score=score, source="kv_store")`
 
 **get_history(limit)**：
