@@ -26,7 +26,7 @@ class AgentWorkflow:
     def __init__(
         self,
         data_dir: Path = Path("data"),
-        memory_mode: MemoryMode = MemoryMode.KEYWORD,
+        memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
         memory_module: Optional[MemoryModule] = None,
     ) -> None:
         """初始化工作流实例."""

@@ -19,7 +19,7 @@ def client() -> TestClient:
 def test_query_endpoint(client: TestClient) -> None:
     """验证 /api/query 端点返回有效响应."""
     response = client.post(
-        "/api/query", json={"query": "测试查询", "memory_mode": "keyword"}
+        "/api/query", json={"query": "测试查询", "memory_mode": "memory_bank"}
     )
     assert response.status_code == 200
     data = response.json()
