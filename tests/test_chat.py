@@ -24,15 +24,14 @@ def test_chat_drives_llm_memory_search(tmp_path: Path) -> None:
 def test_chat_feeds_workflow_context(tmp_path: Path) -> None:
     """验证记忆上下文被注入到代理工作流状态中."""
     from app.agents.workflow import AgentWorkflow
-    from langchain_core.messages import HumanMessage
+    from app.agents.state import AgentState
 
     memory = MemoryModule(tmp_path, chat_model=ChatModel())
     memory.write(MemoryEvent(content="下午三点开会", type="meeting"))
     workflow = AgentWorkflow(memory_module=memory)
-    from app.agents.state import AgentState
 
     state: AgentState = {
-        "messages": [HumanMessage(content="查一下会议")],
+        "messages": [{"role": "user", "content": "查一下会议"}],
         "context": {},
         "task": None,
         "decision": None,

@@ -202,7 +202,6 @@ class TestChatModelFallback:
     def test_generate_with_single_provider(self) -> None:
         """验证单个提供者成功生成."""
         from app.models.chat import ChatModel
-        from app.models.settings import LLMProviderConfig
 
         providers = [
             LLMProviderConfig(
@@ -214,14 +213,19 @@ class TestChatModelFallback:
             )
         ]
         chat = ChatModel(providers=providers)
-        with patch.object(chat, "_invoke_provider", return_value="response"):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "response"
+        with patch.object(chat, "_create_client") as mock_create:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = mock_response
+            mock_create.return_value = mock_client
             result = chat.generate("hello")
         assert result == "response"
 
     def test_generate_falls_back_on_error(self) -> None:
         """验证第一个失败时回退到下一个提供者."""
         from app.models.chat import ChatModel
-        from app.models.settings import LLMProviderConfig
 
         providers = [
             LLMProviderConfig(
@@ -240,14 +244,21 @@ class TestChatModelFallback:
         chat = ChatModel(providers=providers)
         call_count = 0
 
-        def mock_invoke(provider: str, messages: list, **kwargs: object) -> str:
+        def mock_create(provider: object) -> MagicMock:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise RuntimeError("API error")
-            return "fallback response"
+                client = MagicMock()
+                client.chat.completions.create.side_effect = RuntimeError("API error")
+                return client
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = "fallback response"
+            client = MagicMock()
+            client.chat.completions.create.return_value = mock_response
+            return client
 
-        with patch.object(chat, "_invoke_provider", side_effect=mock_invoke):
+        with patch.object(chat, "_create_client", side_effect=mock_create):
             result = chat.generate("hello")
         assert result == "fallback response"
         assert call_count == 2
@@ -255,7 +266,6 @@ class TestChatModelFallback:
     def test_generate_all_providers_fail_raises(self) -> None:
         """验证所有提供者失败时抛出 RuntimeError."""
         from app.models.chat import ChatModel
-        from app.models.settings import LLMProviderConfig
 
         providers = [
             LLMProviderConfig(
@@ -270,8 +280,10 @@ class TestChatModelFallback:
             ),
         ]
         chat = ChatModel(providers=providers)
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("fail")
 
-        with patch.object(chat, "_invoke_provider", side_effect=RuntimeError("fail")):
+        with patch.object(chat, "_create_client", return_value=mock_client):
             with pytest.raises(RuntimeError, match="All LLM providers failed"):
                 chat.generate("hello")
 
@@ -279,10 +291,9 @@ class TestChatModelFallback:
 class TestEmbeddingModelFallback:
     """EmbeddingModel 多提供者回退行为测试."""
 
-    def test_local_provider_creates_huggingface(self) -> None:
-        """验证本地提供者使用 HuggingFaceEmbeddings."""
+    def test_local_provider_creates_sentence_transformer(self) -> None:
+        """验证本地提供者使用 SentenceTransformer."""
         from app.models.embedding import EmbeddingModel
-        from app.models.settings import EmbeddingProviderConfig
 
         providers = [
             EmbeddingProviderConfig(
@@ -290,19 +301,16 @@ class TestEmbeddingModelFallback:
             )
         ]
         emb = EmbeddingModel(providers=providers)
-        with patch("app.models.embedding.HuggingFaceEmbeddings") as mock_cls:
-            mock_cls.return_value = MagicMock()
+        mock_st = MagicMock()
+        with patch(
+            "sentence_transformers.SentenceTransformer", return_value=mock_st
+        ) as mock_cls:
             _ = emb.client
-        mock_cls.assert_called_once_with(
-            model_name="fake-model",
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True},
-        )
+        mock_cls.assert_called_once_with("fake-model", device="cpu")
 
     def test_remote_provider_creates_openai(self) -> None:
-        """验证远程提供者使用 OpenAIEmbeddings."""
+        """验证远程提供者使用 openai.OpenAI."""
         from app.models.embedding import EmbeddingModel
-        from app.models.settings import EmbeddingProviderConfig
 
         providers = [
             EmbeddingProviderConfig(
@@ -314,7 +322,7 @@ class TestEmbeddingModelFallback:
             )
         ]
         emb = EmbeddingModel(providers=providers)
-        with patch("app.models.embedding.OpenAIEmbeddings") as mock_cls:
+        with patch("app.models.embedding.openai.OpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             _ = emb.client
         mock_cls.assert_called_once()
@@ -322,7 +330,6 @@ class TestEmbeddingModelFallback:
     def test_fallback_to_next_provider(self) -> None:
         """验证第一个嵌入提供者加载失败时回退."""
         from app.models.embedding import EmbeddingModel
-        from app.models.settings import EmbeddingProviderConfig
 
         providers = [
             EmbeddingProviderConfig(
@@ -336,21 +343,20 @@ class TestEmbeddingModelFallback:
 
         call_count = 0
 
-        def mock_hf(model_name: str, **kwargs: object) -> MagicMock:
+        def mock_st(model_name: str, **kwargs: object) -> MagicMock:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("load failed")
             return MagicMock()
 
-        with patch("app.models.embedding.HuggingFaceEmbeddings", side_effect=mock_hf):
+        with patch("sentence_transformers.SentenceTransformer", side_effect=mock_st):
             _ = emb.client
         assert call_count == 2
 
     def test_encode_uses_client(self) -> None:
         """验证 encode 委托给缓存的客户端."""
         from app.models.embedding import EmbeddingModel
-        from app.models.settings import EmbeddingProviderConfig
 
         providers = [
             EmbeddingProviderConfig(
@@ -359,7 +365,9 @@ class TestEmbeddingModelFallback:
         ]
         emb = EmbeddingModel(providers=providers)
         mock_client = MagicMock()
-        mock_client.embed_query.return_value = [0.1, 0.2, 0.3]
+        mock_client.encode.return_value = MagicMock(
+            tolist=MagicMock(return_value=[0.1, 0.2, 0.3])
+        )
         emb._client = mock_client
         result = emb.encode("test")
         assert result == [0.1, 0.2, 0.3]
