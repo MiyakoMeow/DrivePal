@@ -54,7 +54,9 @@ thesis-cockpit-memo/
 │   │   ├── types.py              # MemoryMode枚举
 │   │   ├── schemas.py            # 数据模型定义
 │   │   └── stores/               # 各记忆后端实现（组合components）
-│   │       └── memory_bank_store.py # MemoryBank后端（唯一支持）
+│   │       ├── memory_bank_store.py # MemoryBank后端
+│   │       ├── summary_store.py     # 摘要记忆后端（LLM工具调用）
+│   │       └── kv_store.py          # 键值对后端（LLM工具调用）
 │   ├── storage/                  # 存储模块
 │   │   └── json_store.py         # JSON文件存储
 │   └── api/                      # FastAPI接口
@@ -64,9 +66,13 @@ thesis-cockpit-memo/
 │   ├── model_config.py           # 基准测试模型配置
 │   ├── runner.py                 # VehicleMemBench运行器
 │   └── memory_adapters/          # 记忆存储策略适配器
-│       ├── __init__.py           # 适配器注册表
-│       ├── common.py            # 通用工具函数
-│       └── memory_bank_adapter.py # MemoryBank适配器（唯一支持）
+│       ├── __init__.py           # 适配器注册表（VMBMode枚举）
+│       ├── common.py            # 通用工具函数、VMBMode枚举、BaselineMemory
+│       ├── memory_bank_adapter.py # MemoryBank适配器
+│       ├── none_adapter.py       # 无记忆基线适配器
+│       ├── gold_adapter.py       # Gold标准基线适配器
+│       ├── summary_adapter.py     # 摘要基线适配器
+│       └── kv_adapter.py          # 键值对基线适配器
 ├── config/                       # 配置文件
 │   ├── scenarios.json            # 驾驶场景模板
 │   ├── driver_states.json        # 驾驶员状态配置
@@ -109,7 +115,13 @@ flowchart LR
 
 ### 2. 记忆检索系统
 
-基于 MemoryBank 实现长期记忆管理，各 Store 通过组合 `app/memory/components.py` 中的可复用组件实现。通过 `memory_mode` 参数切换（当前仅支持 `memory_bank`）：
+基于 MemoryBank 等实现长期记忆管理，各 Store 通过组合 `app/memory/components.py` 中的可复用组件实现。通过 `memory_mode` 参数切换：
+
+| memory_mode | 说明 |
+|-------------|------|
+| `memory_bank` | MemoryBank 后端，遗忘曲线 + 分层摘要 |
+| `summary` | 摘要后端，LLM工具调用维护偏好摘要 |
+| `key_value` | KV后端，LLM工具调用提取车辆偏好键值对 |
 
 #### MemoryBank 分层记忆结构
 
@@ -182,11 +194,15 @@ flowchart TD
 
 #### 适配器模式
 
-`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用（当前仅支持 MemoryBank）：
+`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用：
 
 | 适配器 | 封装 | 原理 |
 |--------|------|------|
-| `MemoryBankAdapter` | `MemoryBankStore` | 遗忘曲线 + 分层记忆（唯一支持） |
+| `NoneAdapter` | - | 无记忆基线，不存储任何信息 |
+| `GoldAdapter` | - | Gold标准基线，使用标注数据 |
+| `SummaryAdapter` | - | 递归摘要基线，调用VMB的build_memory_recursive_summary |
+| `KVAdapter` | - | 键值对基线，调用VMB的build_memory_key_value |
+| `MemoryBankAdapter` | `MemoryBankStore` | 遗忘曲线 + 分层记忆 |
 
 #### 运行基准测试
 
@@ -460,6 +476,8 @@ uv run pytest tests/ -v
 | `tests/test_adapters/test_model_config.py` | 模型配置加载 |
 | `tests/test_adapters/test_runner.py` | VehicleMemBench 运行器 |
 | `tests/stores/test_memory_bank_store.py` | MemoryBank 后端 |
+| `tests/stores/test_summary_store.py` | SummaryStore 后端 |
+| `tests/stores/test_kv_store.py` | KVStore 后端 |
 | `test_api.py` | API 端点集成测试 |
 | `test_chat.py` | Chat 驱动 LLM 记忆搜索、Workflow 上下文注入 |
 | `test_embedding.py` | Embedding 语义检索与聚合 |
