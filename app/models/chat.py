@@ -1,8 +1,8 @@
 """LLM对话模型封装，基于LangChain OpenAI兼容接口，支持多provider自动fallback."""
 
-from typing import Optional, cast
+from typing import Callable, Optional, cast
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.utils.utils import SecretStr
 from langchain_openai import ChatOpenAI
@@ -74,3 +74,41 @@ class ChatModel:
     ) -> list[str]:
         """批量生成."""
         return [self.generate(p, system_prompt) for p in prompts]
+
+    def generate_with_tools(
+        self,
+        prompt: str,
+        tools: list[dict],
+        system_prompt: Optional[str] = None,
+        *,
+        max_rounds: int = 10,
+        tool_executor: Callable[[str, dict], str],
+    ) -> str:
+        """带工具调用的生成，支持多轮tool calling和多provider fallback."""
+        messages: list = []
+        if system_prompt:
+            messages.append(SystemMessage(content=system_prompt))
+        messages.append(HumanMessage(content=prompt))
+
+        errors: list[str] = []
+        for provider in self.providers:
+            try:
+                client = self._create_client(provider)
+                bound = client.bind_tools(tools)
+                ai_response: AIMessage = bound.invoke(messages)
+                rounds = 0
+                while ai_response.tool_calls and rounds < max_rounds:
+                    messages.append(ai_response)
+                    for tc in ai_response.tool_calls:
+                        result = tool_executor(tc["name"], tc["args"])
+                        messages.append(
+                            ToolMessage(content=str(result), tool_call_id=tc["id"])
+                        )
+                    ai_response = bound.invoke(messages)
+                    rounds += 1
+                return str(ai_response.content)
+            except Exception as e:
+                errors.append(f"{provider.provider.model}: {e}")
+                continue
+
+        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
