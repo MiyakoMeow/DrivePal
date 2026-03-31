@@ -1,21 +1,20 @@
 """Agent工作流编排模块."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Optional
 
-from langgraph.graph import StateGraph, END
-from langgraph.graph.state import CompiledStateGraph
 from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
 from app.storage.json_store import JSONStore
-from langchain_core.messages import HumanMessage
 
 logger = logging.getLogger(__name__)
 
@@ -43,27 +42,15 @@ class AgentWorkflow:
 
         self.memory_module.set_default_mode(memory_mode)
 
-        self.graph = self._build_graph()
-
-    def _build_graph(self) -> CompiledStateGraph:
-        """构建LangGraph工作流."""
-        workflow = StateGraph(cast(Any, AgentState))
-
-        workflow.add_node("context_agent", self._context_node)
-        workflow.add_node("task_agent", self._task_node)
-        workflow.add_node("strategy_agent", self._strategy_node)
-        workflow.add_node("execution_agent", self._execution_node)
-
-        workflow.set_entry_point("context_agent")
-        workflow.add_edge("context_agent", "task_agent")
-        workflow.add_edge("task_agent", "strategy_agent")
-        workflow.add_edge("strategy_agent", "execution_agent")
-        workflow.add_edge("execution_agent", END)
-
-        return workflow.compile()
+        self._nodes = [
+            self._context_node,
+            self._task_node,
+            self._strategy_node,
+            self._execution_node,
+        ]
 
     def _call_llm_json(self, user_prompt: str) -> dict:
-        """构建 prompt、调 LLM 并解析 JSON 返回 dict."""
+        """构建prompt、调LLM并解析JSON返回dict."""
         if not self.memory_module.chat_model:
             raise RuntimeError("ChatModel not available")
         result = self.memory_module.chat_model.generate(user_prompt)
@@ -84,7 +71,7 @@ class AgentWorkflow:
         if not messages:
             user_input = ""
         else:
-            user_input = str(messages[-1].content)
+            user_input = str(messages[-1].get("content", ""))
 
         try:
             related_events = (
@@ -133,13 +120,13 @@ class AgentWorkflow:
         return {
             "context": context,
             "messages": state["messages"]
-            + [HumanMessage(content=f"Context: {json.dumps(context)}")],
+            + [{"role": "user", "content": f"Context: {json.dumps(context)}"}],
         }
 
     def _task_node(self, state: AgentState) -> dict:
         """Task Agent节点."""
         messages = state.get("messages", [])
-        user_input = messages[-1].content if messages else ""
+        user_input = messages[-1].get("content", "") if messages else ""
         context = state.get("context", {})
 
         prompt = f"""{SYSTEM_PROMPTS["task"]}
@@ -153,7 +140,7 @@ class AgentWorkflow:
         return {
             "task": task,
             "messages": state["messages"]
-            + [HumanMessage(content=f"Task: {json.dumps(task)}")],
+            + [{"role": "user", "content": f"Task: {json.dumps(task)}"}],
         }
 
     def _strategy_node(self, state: AgentState) -> dict:
@@ -175,14 +162,14 @@ class AgentWorkflow:
         return {
             "decision": decision,
             "messages": state["messages"]
-            + [HumanMessage(content=f"Decision: {json.dumps(decision)}")],
+            + [{"role": "user", "content": f"Decision: {json.dumps(decision)}"}],
         }
 
     def _execution_node(self, state: AgentState) -> dict:
         """执行提醒动作的Agent节点."""
         decision = state.get("decision") or {}
         messages = state.get("messages", [])
-        user_input = str(messages[0].content) if messages else ""
+        user_input = str(messages[0].get("content", "")) if messages else ""
 
         remind_content = decision.get("reminder_content") or decision.get(
             "remind_content"
@@ -204,13 +191,13 @@ class AgentWorkflow:
         return {
             "result": result,
             "event_id": event_id,
-            "messages": state["messages"] + [HumanMessage(content=result)],
+            "messages": state["messages"] + [{"role": "user", "content": result}],
         }
 
     def run(self, user_input: str) -> tuple[str, Optional[str]]:
         """运行完整工作流并返回结果和事件ID."""
-        initial_state = {
-            "messages": [HumanMessage(content=user_input)],
+        state: AgentState = {
+            "messages": [{"role": "user", "content": user_input}],
             "context": {},
             "task": {},
             "decision": {},
@@ -219,14 +206,18 @@ class AgentWorkflow:
             "event_id": None,
         }
 
-        final_state = self.graph.invoke(initial_state)
-        result = final_state.get("result") or "处理完成"
-        event_id = final_state.get("event_id")
+        for node_fn in self._nodes:
+            updates = node_fn(state)
+            state.update(updates)
+
+        result = state.get("result") or "处理完成"
+        event_id = state.get("event_id")
         return result, event_id
 
 
 def create_workflow(
-    data_dir: Path = Path("data"), memory_mode: MemoryMode = MemoryMode.MEMORY_BANK
+    data_dir: Path = Path("data"),
+    memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
 ) -> AgentWorkflow:
     """创建工作流实例."""
     return AgentWorkflow(data_dir, memory_mode)

@@ -1,18 +1,19 @@
 """Agent状态定义模块."""
 
+from __future__ import annotations
+
 from typing import Optional, TypedDict
 
-from langchain_core.messages import BaseMessage
 from app.memory.types import MemoryMode
 
 
 class AgentState(TypedDict):
-    """LangGraph Agent状态定义."""
+    """Agent状态定义."""
 
-    messages: list[BaseMessage]
+    messages: list[dict]
     context: dict
     task: Optional[dict]
     decision: Optional[dict]
-    memory_mode: "MemoryMode"
+    memory_mode: MemoryMode
     result: Optional[str]
     event_id: Optional[str]
