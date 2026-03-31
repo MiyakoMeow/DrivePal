@@ -50,6 +50,7 @@ class EmbeddingModel:
         self.providers = providers
         self.device = device
         self._client: Union[openai.OpenAI, SentenceTransformer, None] = None
+        self._active_provider: EmbeddingProviderConfig | None = None
 
     @property
     def client(self) -> Union[openai.OpenAI, SentenceTransformer]:
@@ -64,6 +65,7 @@ class EmbeddingModel:
         for provider in self.providers:
             try:
                 self._client = self._create_client(provider)
+                self._active_provider = provider
                 return self._client
             except Exception as e:
                 errors.append(f"{provider.provider.model}: {e}")
@@ -125,16 +127,18 @@ class EmbeddingModel:
         embeddings = model.encode(texts, normalize_embeddings=True)
         return [emb.tolist() for emb in embeddings]
 
-    def _find_provider(self) -> EmbeddingProviderConfig:
-        """查找可用的provider."""
-        if not self.providers:
-            raise RuntimeError("No embedding providers configured")
-        return self.providers[0]
+    def _active_provider_or_raise(self) -> EmbeddingProviderConfig:
+        if self._active_provider is not None:
+            return self._active_provider
+        if self.providers:
+            self._active_provider = self.providers[0]
+            return self._active_provider
+        raise RuntimeError("No embedding providers configured")
 
     def encode(self, text: str) -> list[float]:
         """编码文本为向量."""
         cl = self.client
-        provider = self._find_provider()
+        provider = self._active_provider_or_raise()
         if isinstance(cl, openai.OpenAI):
             return self._encode_with_openai(cl, provider.provider.model, text)
         return self._encode_with_local(cl, text)
@@ -142,7 +146,7 @@ class EmbeddingModel:
     def batch_encode(self, texts: list[str]) -> list[list[float]]:
         """批量编码文本为向量."""
         cl = self.client
-        provider = self._find_provider()
+        provider = self._active_provider_or_raise()
         if isinstance(cl, openai.OpenAI):
             return self._batch_encode_with_openai(cl, provider.provider.model, texts)
         return self._batch_encode_with_local(cl, texts)

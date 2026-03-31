@@ -90,11 +90,6 @@ class AgentWorkflow:
                 relevant_memories = [
                     e.model_dump() for e in self.memory_module.get_history()
                 ]
-        except ValueError as e:
-            logger.warning(f"Memory get_history failed: {e}")
-            relevant_memories = (
-                [e.to_public() for e in related_events] if related_events else []
-            )
         except Exception as e:
             logger.warning(f"Memory get_history failed: {e}")
             relevant_memories = (
