@@ -24,8 +24,12 @@ def register_store(name: MemoryMode, store_cls: type) -> None:
 
 def _import_all_stores() -> None:
     from app.memory.stores.memory_bank_store import MemoryBankStore
+    from app.memory.stores.summary_store import SummaryStore
+    from app.memory.stores.kv_store import KVStore
 
     register_store(MemoryMode.MEMORY_BANK, MemoryBankStore)
+    register_store(MemoryMode.SUMMARY, SummaryStore)
+    register_store(MemoryMode.KEY_VALUE, KVStore)
 
 
 _import_all_stores()
