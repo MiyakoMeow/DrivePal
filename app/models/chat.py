@@ -92,6 +92,29 @@ class ChatModel:
 
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
+    async def generate(  # noqa: F811 - intentionally redefines sync generate, removed in Task 12
+        self,
+        prompt: str,
+        system_prompt: Optional[str] | None = None,
+        **_kwargs: object,
+    ) -> str:
+        """异步生成回复."""
+        messages = self._build_messages(prompt, system_prompt)
+        errors = []
+        for provider in self.providers:
+            try:
+                client = self._create_async_client(provider)
+                response = await client.chat.completions.create(
+                    model=provider.provider.model,
+                    messages=messages,
+                    temperature=self._get_temperature(provider),
+                )
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                errors.append(f"{provider.provider.model}: {e}")
+                continue
+        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
+
     async def generate_stream(
         self,
         prompt: str,
