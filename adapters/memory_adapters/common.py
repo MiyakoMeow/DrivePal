@@ -2,16 +2,19 @@
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import MemoryEvent, SearchResult
+
+MemoryType = Literal["none", "gold", "summary", "kv", "memory_bank"]
 
 
 @dataclass
 class BaselineMemory:
     """基线记忆的轻量容器."""
 
-    memory_type: str
+    memory_type: MemoryType
     memory_text: str = ""
     kv_store: dict[str, str] | None = None
 

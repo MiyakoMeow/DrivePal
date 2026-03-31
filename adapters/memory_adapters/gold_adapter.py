@@ -1,6 +1,7 @@
 """Gold 标准基线适配器."""
 
 from pathlib import Path
+from typing import Any
 
 from adapters.memory_adapters.common import BaselineMemory
 
@@ -14,7 +15,7 @@ class GoldAdapter:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def add(self, history_text: str, **kwargs: dict) -> BaselineMemory:
+    def add(self, history_text: str, **kwargs: dict[str, Any]) -> BaselineMemory:
         """返回空 BaselineMemory, gold memory 在 run 阶段从 event 获取."""
         return BaselineMemory(memory_type="gold")
 

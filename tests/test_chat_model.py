@@ -1,3 +1,5 @@
+"""Tests for ChatModel."""
+
 from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage
@@ -7,6 +9,7 @@ from app.models.settings import LLMProviderConfig
 
 
 def _make_provider() -> LLMProviderConfig:
+    """Create a mock LLM provider for testing."""
     return LLMProviderConfig(
         provider=MagicMock(
             model="test-model",
@@ -17,7 +20,8 @@ def _make_provider() -> LLMProviderConfig:
     )
 
 
-def test_generate_with_tools_single_round():
+def test_generate_with_tools_single_round() -> None:
+    """Test generate_with_tools handles single round tool calling."""
     provider = _make_provider()
     model = ChatModel(providers=[provider])
 
@@ -49,7 +53,8 @@ def test_generate_with_tools_single_round():
     assert result == "done"
 
 
-def test_generate_with_tools_no_tool_call():
+def test_generate_with_tools_no_tool_call() -> None:
+    """Test generate_with_tools when no tool call is made."""
     provider = _make_provider()
     model = ChatModel(providers=[provider])
 

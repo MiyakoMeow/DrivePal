@@ -1,6 +1,7 @@
 """键值对基线适配器."""
 
 from pathlib import Path
+from typing import Any
 
 from adapters.memory_adapters.common import BaselineMemory
 
@@ -14,7 +15,7 @@ class KVAdapter:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def add(self, history_text: str, **kwargs: dict) -> BaselineMemory:
+    def add(self, history_text: str, **kwargs: dict[str, Any]) -> BaselineMemory:
         """构建键值对记忆."""
         agent_client = kwargs.get("agent_client")
         if not agent_client:

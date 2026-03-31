@@ -2,7 +2,13 @@
 
 from typing import Callable, Optional, cast
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.runnables import RunnableConfig
 from langchain_core.utils.utils import SecretStr
 from langchain_openai import ChatOpenAI
@@ -85,7 +91,7 @@ class ChatModel:
         tool_executor: Callable[[str, dict], str],
     ) -> str:
         """带工具调用的生成，支持多轮tool calling和多provider fallback."""
-        messages: list = []
+        messages: list[BaseMessage] = []
         if system_prompt:
             messages.append(SystemMessage(content=system_prompt))
         messages.append(HumanMessage(content=prompt))
@@ -106,7 +112,17 @@ class ChatModel:
                         )
                     ai_response = bound.invoke(messages)
                     rounds += 1
-                return str(ai_response.content)
+                content = ai_response.content
+                if isinstance(content, list):
+                    text_parts = []
+                    for block in content:
+                        if isinstance(block, dict):
+                            if block.get("type") == "text":
+                                text_parts.append(block.get("text", ""))
+                        elif hasattr(block, "text"):
+                            text_parts.append(block.text)
+                    return "\n".join(text_parts) if text_parts else ""
+                return content if isinstance(content, str) else str(content)
             except Exception as e:
                 errors.append(f"{provider.provider.model}: {e}")
                 continue

@@ -129,6 +129,7 @@ class KVStore:
         chat_model: Optional[ChatModel] = None,
         **kwargs: dict,
     ) -> None:
+        """初始化KV存储."""
         self._storage = EventStorage(data_dir)
         self._state_store = JSONStore(data_dir, Path("kv_state.json"), dict)
         self.chat_model = chat_model
@@ -190,6 +191,7 @@ class KVStore:
         self._write_state(state)
 
     def write(self, event: MemoryEvent) -> str:
+        """写入事件并触发KV提取."""
         event_id = self._storage.append_event(event)
         state = self._read_state()
         state["pending_count"] = state.get("pending_count", 0) + 1
@@ -198,6 +200,7 @@ class KVStore:
         return event_id
 
     def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """搜索KV条目."""
         state = self._read_state()
         kv_data: dict[str, str] = state.get("kv_data", {})
         if not kv_data:
@@ -220,16 +223,19 @@ class KVStore:
         return results[:top_k]
 
     def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        """获取历史事件."""
         events = self._storage.read_events()
         if limit <= 0:
             return []
         return [MemoryEvent(**e) for e in events[-limit:]]
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """更新反馈（暂不支持）."""
         pass
 
     def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """写入交互记录."""
         event = MemoryEvent(content=query, type=event_type, description=response)
         return self.write(event)

@@ -4,7 +4,7 @@ import sys
 import os
 import json
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Literal, Optional, cast
 
 from adapters.memory_adapters import ADAPTERS
 from adapters.memory_adapters.common import BaselineMemory, format_search_results
@@ -14,6 +14,9 @@ from adapters.model_config import (
     get_benchmark_temperature,
     get_benchmark_max_tokens,
 )
+
+if TYPE_CHECKING:
+    from adapters.memory_adapters.memory_bank_adapter import MemoryBankAdapter
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENDOR_DIR = PROJECT_ROOT / "vendor" / "VehicleMemBench"
@@ -44,10 +47,17 @@ from evaluation.model_evaluation import (
 from evaluation.agent_client import AgentClient
 
 
-SUPPORTED_MEMORY_TYPES = {"none", "gold", "summary", "kv", "memory_bank"}
+MemoryType = Literal["none", "gold", "summary", "kv", "memory_bank"]
+SUPPORTED_MEMORY_TYPES: set[MemoryType] = {
+    "none",
+    "gold",
+    "summary",
+    "kv",
+    "memory_bank",
+}
 
 
-def _parse_memory_types(memory_types: str) -> list[str]:
+def _parse_memory_types(memory_types: str) -> list[MemoryType]:
     types = [t.strip() for t in memory_types.split(",") if t.strip()]
     invalid = [t for t in types if t not in SUPPORTED_MEMORY_TYPES]
     if invalid:
@@ -55,7 +65,7 @@ def _parse_memory_types(memory_types: str) -> list[str]:
             f"Unsupported memory_types: {invalid}. "
             f"Supported: {sorted(SUPPORTED_MEMORY_TYPES)}"
         )
-    return types
+    return cast("list[MemoryType]", types)
 
 
 def parse_file_range(range_str: str) -> list[int]:
@@ -130,7 +140,7 @@ def prepare(
 
 
 def _prepare_single(
-    agent_client: AgentClient, history_text: str, file_num: int, memory_type: str
+    agent_client: AgentClient, history_text: str, file_num: int, memory_type: MemoryType
 ) -> dict | None:
     if memory_type not in ADAPTERS:
         return None
@@ -197,7 +207,7 @@ def _run_single(
     history_text: str,
     prep_data: dict,
     file_num: int,
-    memory_type: str,
+    memory_type: MemoryType,
     reflect_num: int,
 ) -> list[dict]:
     results = []
@@ -253,12 +263,12 @@ def _run_custom_adapter(
     task: dict,
     task_id: int,
     prep_data: dict,
-    memory_type: str,
+    memory_type: MemoryType,
     reflect_num: int,
 ) -> dict | None:
     adapter_cls = ADAPTERS[memory_type]
     data_dir = Path(prep_data["data_dir"])
-    adapter = adapter_cls(data_dir=data_dir)
+    adapter = cast("MemoryBankAdapter", adapter_cls(data_dir=data_dir))
 
     store = adapter.add("")
     client = adapter.get_search_client(store)
@@ -297,6 +307,7 @@ def _run_custom_adapter(
     ]
 
     def _memory_search(query: str, top_k: int = 5) -> dict:
+        assert client is not None
         results = client.search(query=query, top_k=top_k)
         text, count = format_search_results(results)
         return {"success": True, "results": text, "count": count}
