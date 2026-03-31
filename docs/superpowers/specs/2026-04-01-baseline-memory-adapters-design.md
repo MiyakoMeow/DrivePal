@@ -196,6 +196,10 @@ prepare 阶段产出的 JSON：
 
 run 阶段直接从 `prep_data` 读取字段，无需反序列化为 `BaselineMemory` 对象。`BaselineMemory` 仅在 prepare 阶段作为 adapter 的返回值使用。
 
+### 兼容性注意
+
+kv 类型的 prepared data JSON key 从 `"store"` 改为 `"kv_store"`。已有的 `kv_file_*.json` 文件需要删除后重新 prepare。
+
 ## 文件变更清单
 
 | 文件 | 操作 |
