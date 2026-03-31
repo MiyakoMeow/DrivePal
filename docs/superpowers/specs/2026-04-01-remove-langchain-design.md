@@ -71,6 +71,7 @@ class ChatModel:
 - `api_key` 为 None 时传 `"not-needed"`（兼容本地模型如 Ollama）
 - 对外接口 `generate()` 签名不变
 - 新增 `generate_stream()` 支持流式
+- 流式方法同样支持多 provider fallback：第一个 provider 连接/认证失败时尝试下一个；已开始 yield 后的 provider 失败则直接抛出异常（部分数据已发送，无法回滚）
 
 ### 2. EmbeddingModel（`app/models/embedding.py`）
 
@@ -110,8 +111,8 @@ class EmbeddingModel:
 
 关键点：
 - 移除 `HuggingFaceEmbeddings`, `OpenAIEmbeddings`, `SecretStr` 全部导入
-- 缓存机制保留（`_EMBEDDING_MODEL_CACHE`）
-- fallback 逻辑保留
+- **保留类级别 `self._client` 懒初始化 + fallback 模式**：首次成功创建的客户端（openai.OpenAI 或 SentenceTransformer）被缓存到 `self._client`，后续调用复用。避免每次 encode() 重新加载本地模型
+- 模块级 `_EMBEDDING_MODEL_CACHE` 保留（缓存 EmbeddingModel 实例）
 - `encode()` / `batch_encode()` 签名不变
 
 ### 3. AgentState（`app/agents/state.py`）
@@ -137,7 +138,7 @@ class AgentState(TypedDict):
 
 ```python
 class AgentWorkflow:
-    def __init__(self, ...): ...  # 不变
+    def __init__(self, ...): ...  # 参数不变，内部调用 _build_pipeline()
 
     def _build_pipeline(self) -> None:
         self._nodes = [
