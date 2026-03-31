@@ -1,8 +1,21 @@
 """记忆适配器通用工具函数."""
 
 import re
+from dataclasses import dataclass
+
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import MemoryEvent, SearchResult
+
+
+@dataclass
+class BaselineMemory:
+    memory_type: str
+    memory_text: str = ""
+    kv_store: dict[str, str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.kv_store is None:
+            self.kv_store = {}
 
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:

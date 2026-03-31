@@ -17,7 +17,7 @@ class MemoryBankAdapter:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def add(self, history_text: str) -> MemoryBankStore:
+    def add(self, history_text: str, **kwargs) -> MemoryBankStore:
         """将历史文本添加到记忆库存储."""
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()
