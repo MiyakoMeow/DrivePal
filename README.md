@@ -11,10 +11,10 @@
 - [核心功能](#核心功能)
   - [多Agent工作流](#1-多agent工作流)
   - [记忆检索系统](#2-记忆检索系统)
-  - [VehicleMemBench 基准测试](#3-vehiclemembench-基准测试)
-  - [REST API](#4-rest-api)
-  - [Web界面](#5-web界面)
+  - [REST API](#3-rest-api)
+  - [Web界面](#4-web界面)
 - [快速开始](#快速开始)
+- [对比实验](#对比实验)
 - [配置说明](#配置说明)
 - [数据存储](#数据存储)
 - [测试](#测试)
@@ -170,79 +170,7 @@ flowchart TD
 
 ---
 
-### 3. VehicleMemBench 基准测试
-
-基于 [VehicleMemBench](https://github.com/isyuhaochen/VehicleMemBench) 的车载记忆基准评估框架。
-
-#### 系统架构
-
-```mermaid
-flowchart TD
-    CLI[run_benchmark.py<br>CLI 入口，分发命令]
-    Runner[adapters/runner.py<br>VehicleMemBench 评估运行器]
-    Adapters[adapters/memory_adapters<br>记忆存储适配器]
-    Stores[app/memory/stores<br>原生记忆存储后端实现]
-    
-    CLI --> Runner
-    Runner --> Adapters
-    Adapters --> Stores
-    
-    subgraph Adapters
-        M[memory_bank]
-    end
-```
-
-#### 适配器模式
-
-`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用：
-
-| 适配器 | 封装 | 原理 |
-|--------|------|------|
-| `NoneAdapter` | - | 无记忆基线，不存储任何信息 |
-| `GoldAdapter` | - | Gold标准基线，使用标注数据 |
-| `SummaryAdapter` | - | 递归摘要基线，调用VMB的build_memory_recursive_summary |
-| `KVAdapter` | - | 键值对基线，调用VMB的build_memory_key_value |
-| `MemoryBankAdapter` | `MemoryBankStore` | 遗忘曲线 + 分层记忆 |
-
-#### 运行基准测试
-
-```bash
-# 全流程
-uv run python run_benchmark.py all --file-range 1-50
-
-# 分阶段运行
-uv run python run_benchmark.py prepare --file-range 1-50
-uv run python run_benchmark.py run --file-range 1-50
-
-# 生成报告
-uv run python run_benchmark.py report
-```
-
-#### CLI 参数
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--file-range` | `1-50` | 评估文件范围（如 `1-10` 或 `1,3,5`） |
-| `--memory-types` | `gold,summary,kv,memory_bank` | 记忆类型 |
-
-#### 基准测试数据结构
-
-```text
-data/benchmark/
-├── qa_{n}.json           # QA 测试用例
-├── history_{n}.txt       # 历史交互记录
-└── results/              # 运行结果
-    └── {memory_type}/
-        └── ...
-```
-
-#### VehicleMemBench 子模块
-
-作为 `vendor/VehicleMemBench` 子模块引入，评估逻辑由供应商提供。
-
----
-
-### 4. REST API
+### 3. REST API
 
 #### 基础信息
 
@@ -302,7 +230,7 @@ data/benchmark/
 
 ---
 
-### 5. Web界面
+### 4. Web界面
 
 基于纯HTML/CSS/JavaScript的单页应用，提供：
 
@@ -350,19 +278,11 @@ python main.py
 
 访问 http://localhost:8000
 
-### 5. 运行基准测试
+---
 
-```bash
-# 全流程（推荐）
-uv run python run_benchmark.py all --file-range 1-50
+## 对比实验
 
-# 分阶段运行
-uv run python run_benchmark.py prepare --file-range 1-50
-uv run python run_benchmark.py run --file-range 1-50
-
-# 生成报告
-uv run python run_benchmark.py report
-```
+详见 [EXPERIMENT.md](./EXPERIMENT.md)。
 
 ---
 
@@ -372,33 +292,7 @@ uv run python run_benchmark.py report
 
 所有 LLM、Embedding 模型配置统一在 `config/llm.json` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。配置采用组合模式：`ProviderConfig`（model/base_url/api_key）被各专用配置（`LLMProviderConfig`/`EmbeddingProviderConfig`）组合引用。
 
-基准测试使用独立的 `benchmark` 配置：
-
-```json
-{
-  "llm": [
-    {
-      "model": "qwen3.5-2b",
-      "base_url": "http://127.0.0.1:50721/v1",
-      "api_key": "none",
-      "temperature": 0.7
-    }
-  ],
-  "benchmark": {
-    "model": "MiniMax-M2.7",
-    "base_url": "https://api.minimaxi.com/v1",
-    "api_key_env": "MINIMAX_API_KEY",
-    "temperature": 0.0,
-    "max_tokens": 8192
-  },
-  "embedding": [
-    {
-      "model": "BAAI/bge-small-zh-v1.5",
-      "device": "cpu"
-    }
-  ]
-}
-```
+基准测试模型配置详见 [EXPERIMENT.md](./EXPERIMENT.md#模型配置)。
 
 **环境变量覆盖：**
 
@@ -406,7 +300,7 @@ uv run python run_benchmark.py report
 |------|------|
 | `VLLM_BASE_URL` | 默认 LLM provider 的 base_url |
 | `OPENAI_MODEL` / `DEEPSEEK_MODEL` | 自动注册为额外 LLM provider |
-| `MINIMAX_API_KEY` | 基准测试 API Key（用于 `benchmark.api_key_env`） |
+| `MINIMAX_API_KEY` | 基准测试 API Key |
 
 ### 驾驶场景配置 (`config/scenarios.json`)
 
@@ -501,8 +395,9 @@ uv run pytest tests/ -v
 | **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线 + 分层摘要) |
 | **数据存储** | JSON文件 (标准库json) |
 | **数据集** | HuggingFace Datasets |
-| **基准测试** | VehicleMemBench (vendor 子模块) |
 | **开发工具** | uv (包管理), pytest (测试), ruff (lint), ty (类型检查) |
+
+对比实验详见 [EXPERIMENT.md](./EXPERIMENT.md)。
 
 ---
 
