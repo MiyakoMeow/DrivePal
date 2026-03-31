@@ -43,7 +43,7 @@ class QueryRequest(BaseModel):
     """用户查询请求."""
 
     query: str
-    memory_mode: MemoryMode = MemoryMode.KEYWORD
+    memory_mode: MemoryMode = MemoryMode.MEMORY_BANK
 
 
 class FeedbackRequest(BaseModel):
