@@ -1,8 +1,11 @@
 """JSON文件存储后端，支持列表和字典类型的读写操作."""
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, Callable, TypeVar
+
+import aiofiles
 
 T = TypeVar("T")
 
@@ -24,37 +27,38 @@ class JSONStore:
     def _ensure_file(self) -> None:
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         if not self.filepath.exists():
-            self._write(self.default_factory())
+            asyncio.run(self._async_write(self.default_factory()))
 
-    def _write(self, data: T) -> None:
-        with open(self.filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+    async def _async_write(self, data: T) -> None:
+        async with aiofiles.open(self.filepath, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(data, ensure_ascii=False, indent=2))
 
-    def read(self) -> T:
+    async def read(self) -> T:
         """读取JSON文件中的全部数据."""
-        with open(self.filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
+        async with aiofiles.open(self.filepath, "r", encoding="utf-8") as f:
+            content = await f.read()
+        return json.loads(content)
 
-    def write(self, data: T) -> None:
+    async def write(self, data: T) -> None:
         """写入数据到JSON文件."""
-        self._write(data)
+        await self._async_write(data)
 
-    def append(self, item: Any) -> None:  # noqa: ANN401
+    async def append(self, item: Any) -> None:  # noqa: ANN401
         """向列表类型存储追加一个元素."""
-        data = self.read()
+        data = await self.read()
         if not isinstance(data, list):
             raise TypeError(
                 f"append() requires list factory, got {type(data).__name__}"
             )
         data.append(item)
-        self._write(data)
+        await self._async_write(data)
 
-    def update(self, key: str, value: Any) -> None:  # noqa: ANN401
+    async def update(self, key: str, value: Any) -> None:  # noqa: ANN401
         """更新字典类型存储中指定键的值."""
-        data = self.read()
+        data = await self.read()
         if not isinstance(data, dict):
             raise TypeError(
                 f"update() requires dict factory, got {type(data).__name__}"
             )
         data[key] = value
-        self._write(data)
+        await self._async_write(data)
