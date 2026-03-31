@@ -47,10 +47,6 @@ class TestMemoryModuleFacade:
         interaction_id = mm.write_interaction("提醒我开会", "好的")
         assert isinstance(interaction_id, str)
 
-    def test_write_interaction_for_non_memory_bank(self, mm: MemoryModule) -> None:
-        """验证非 memory_bank 模式下 write_interaction 正确回退."""
-        pass
-
     def test_search_returns_search_result_objects(self, mm: MemoryModule) -> None:
         """验证 search 返回 SearchResult 对象列表."""
         mm.write(MemoryEvent(content="特殊关键词事件"))

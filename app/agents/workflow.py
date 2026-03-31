@@ -226,7 +226,7 @@ class AgentWorkflow:
 
 
 def create_workflow(
-    data_dir: Path = Path("data"), memory_mode: str = "keyword"
+    data_dir: Path = Path("data"), memory_mode: str = "memory_bank"
 ) -> AgentWorkflow:
     """创建工作流实例."""
     return AgentWorkflow(data_dir, MemoryMode(memory_mode))
