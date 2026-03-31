@@ -86,7 +86,7 @@ class EmbeddingModel:
     def _sync_batch_encode(self, texts: list[str]) -> list[list[float]]: ...
 ```
 
-**说明**: sentence-transformers 无原生 async，通过 `asyncio.to_thread` 封装到线程池，避免阻塞事件循环。
+**说明**: sentence-transformers 无原生 async，通过 `asyncio.to_thread` 封装到默认线程池，避免阻塞事件循环。后续如需控制线程池大小，可在 plan 阶段配置 `loop.run_in_executor(ThreadPoolExecutor(), self._sync_encode, text)`。
 
 ### 3.3 模型层 — `app/models/chat.py`
 
@@ -115,7 +115,7 @@ class ChatModel:
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 ```
 
-**说明**: 新增 `async generate` 方法，替换原同步方法。调用方全部改为 await。
+**说明**: Phase 2 新增 `async generate`，原同步 `generate` 保留。Phase 4 工作流改造完成后，删除同步版本。所有调用方迁移完成前不删除原方法。
 
 ### 3.4 接口层 — `app/memory/interfaces.py`
 
@@ -142,7 +142,7 @@ class MemoryStore(Protocol):
 
 **现状**: EventStorage, FeedbackManager, MemoryBankEngine 全部同步
 
-**改造方案**: 所有公开方法和内部调用存储/模型的方法均改为 async
+**改造方案**: 公开方法全部改为 async。私有方法（如 `_strengthen_events`, `_search_by_keyword`, `_maybe_summarize` 等）保持同步，因为它们仅做内存计算，无 IO 操作。
 
 关键变更:
 ```python
@@ -161,6 +161,8 @@ class MemoryBankEngine:
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str: ...
 ```
+
+**说明**: 私有纯计算方法（无 IO）无需改 async，避免不必要的 await 调用开销。
 
 ### 3.6 业务层 — `app/memory/stores/memory_bank_store.py`
 
@@ -212,16 +214,15 @@ class AgentWorkflow:
     async def _context_node(self, state: AgentState) -> dict:
         # 内部调用 memory_module.search 改为 await
         related_events = await self.memory_module.search(...)
-        context = await self._call_llm_json_async(prompt)
+        context = await self._call_llm_json(prompt)  # 复用原方法，已支持 await
         ...
 
-    async def _call_llm_json_async(self, prompt: str) -> dict:
-        """新增 async 版本"""
-        if not self.memory_module.chat_model:
-            raise RuntimeError("ChatModel not available")
-        result = await self.memory_module.chat_model.generate(prompt)
-        # ... JSON 解析逻辑
+    async def _task_node(self, state: AgentState) -> dict: ...
+    async def _strategy_node(self, state: AgentState) -> dict: ...
+    async def _execution_node(self, state: AgentState) -> dict: ...
 ```
+
+**说明**: `_call_llm_json` 保持同步实现（JSON 解析无 IO），但改用 `await self.memory_module.chat_model.generate()` 调用异步 LLM。Phase 2 中 ChatModel 的 `generate` 改为 async 后，此处自然支持 await。无需新增独立 async 方法，原方法签名不变。
 
 ### 3.9 API 层 — `app/api/main.py`
 
