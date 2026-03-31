@@ -1,10 +1,10 @@
 [lint]
 extend-select = ["ANN", "D", "DTZ"]
 ignore = ["D211", "D213", "D203"]
+exclude = [".agents/**", "vendor/**"]
 
 [lint.per-file-ignores]
-"vendor/**" = ["ALL"]
 "adapters/runner.py" = ["E402"]
 
 [format]
-exclude = ["vendor/**"]
+exclude = ["vendor/**", ".agents/**"]
