@@ -207,7 +207,7 @@ uv run python run_benchmark.py report
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--file-range` | `1-50` | 评估文件范围（如 `1-10` 或 `1,3,5`） |
-| `--memory-types` | `memory_bank` | 记忆类型 |
+| `--memory-types` | `gold,summary,kv,memory_bank` | 记忆类型 |
 
 #### 基准测试数据结构
 
