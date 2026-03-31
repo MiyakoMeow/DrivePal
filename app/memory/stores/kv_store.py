@@ -138,13 +138,13 @@ class KVStore:
         self._state_store = JSONStore(data_dir, Path("kv_state.json"), dict)
         self.chat_model = chat_model
 
-    def _read_state(self) -> dict:
+    def _read_state(self) -> dict[str, Any]:
         state = self._state_store.read()
         if not state:
             return {"kv_data": {}, "pending_count": 0}
         return state
 
-    def _write_state(self, state: dict) -> None:
+    def _write_state(self, state: dict[str, Any]) -> None:
         self._state_store.write(state)
 
     def _maybe_extract_kv(self) -> None:
@@ -154,12 +154,13 @@ class KVStore:
             )
             return
         state = self._read_state()
-        if state.get("pending_count", 0) < KV_UPDATE_THRESHOLD:
+        pending_count = state.get("pending_count", 0)
+        if pending_count < KV_UPDATE_THRESHOLD:
             return
         events = self._storage.read_events()
         if not events:
             return
-        pending = events[-state["pending_count"] :]
+        pending = events[-pending_count:] if pending_count > 0 else []
         parts = []
         for event in pending:
             if content := event.get("content"):
@@ -240,7 +241,7 @@ class KVStore:
         events = self._storage.read_events()
         if limit <= 0:
             return []
-        return [MemoryEvent(**e) for e in events[-limit:]]
+        return [MemoryEvent(**e) for e in events[-limit:]] if limit > 0 else []
 
     def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈（暂不支持）."""

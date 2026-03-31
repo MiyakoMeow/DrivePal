@@ -1,7 +1,6 @@
 """记忆适配器通用工具函数."""
 
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
@@ -14,7 +13,16 @@ class AdapterKwargs(Protocol):
     """记忆适配器方法接收的kwargs协议."""
 
     def get(self, key: str, default: object = None) -> object:
-        """获取kwargs中的值."""
+        """获取kwargs中的值.
+
+        Args:
+            key: 要获取的键名
+            default: 键不存在时返回的默认值
+
+        Returns:
+            键对应的值，如果键不存在则返回默认值
+
+        """
         ...
 
 

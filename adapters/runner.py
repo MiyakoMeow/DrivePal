@@ -239,7 +239,7 @@ def _run_single(
                 result = process_task_with_kv_memory(
                     task, i, vmb_store, agent_client, reflect_num
                 )
-            elif memory_type in ADAPTERS:
+            elif memory_type == VMBMode.MEMORY_BANK:
                 result = _run_custom_adapter(
                     agent_client, task, i, prep_data, memory_type, reflect_num
                 )
@@ -272,10 +272,6 @@ def _run_custom_adapter(
     memory_type: VMBMode,
     reflect_num: int,
 ) -> dict | None:
-    if memory_type != VMBMode.MEMORY_BANK:
-        raise ValueError(
-            f"_run_custom_adapter only supports memory_bank, got {memory_type}"
-        )
     adapter_cls = ADAPTERS[memory_type]
     data_dir = Path(prep_data["data_dir"])
     adapter = cast("MemoryBankAdapter", adapter_cls(data_dir=data_dir))

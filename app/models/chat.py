@@ -57,7 +57,7 @@ class ChatModel:
         return str(response.content)
 
     def generate(
-        self, prompt: str, system_prompt: Optional[str] = None, **kwargs: RunnableConfig
+        self, prompt: str, system_prompt: Optional[str] = None, **kwargs: object
     ) -> str:
         """生成回复，按 provider 顺序尝试，失败自动 fallback."""
         messages = []
@@ -103,7 +103,9 @@ class ChatModel:
                 bound = client.bind_tools(tools)
                 ai_response: AIMessage = bound.invoke(messages)
                 rounds = 0
-                while ai_response.tool_calls and rounds < max_rounds:
+                while rounds < max_rounds:
+                    if not ai_response.tool_calls:
+                        break
                     messages.append(ai_response)
                     for tc in ai_response.tool_calls:
                         if tc.get("id") is None:
