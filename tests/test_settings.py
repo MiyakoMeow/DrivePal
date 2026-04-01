@@ -82,120 +82,64 @@ class TestLLMSettingsLoad:
         config_file.write_text(
             tomli_w.dumps(
                 {
-                    "llm": [
-                        {
-                            "model": "gpt-4",
+                    "model_groups": {
+                        "default": {"models": ["openai/gpt-4"]},
+                    },
+                    "model_providers": {
+                        "openai": {
                             "base_url": "https://api.openai.com/v1",
                             "api_key": "sk-a",
-                        }
-                    ],
+                        },
+                    },
                     "embedding": [{"model": "bge-test", "device": "cpu"}],
                 }
             )
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         settings = LLMSettings.load()
-        assert len(settings.llm_providers) == 1
-        assert settings.llm_providers[0].provider.model == "gpt-4"
+        assert "default" in settings.model_groups
         assert len(settings.embedding_providers) == 1
         assert settings.embedding_providers[0].provider.model == "bge-test"
-
-    def test_load_fallback_to_env_vars(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """验证配置文件不存在时使用 OPENAI_XXX 环境变量."""
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-        monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        monkeypatch.setenv("OPENAI_MODEL", "gpt-4")
-        settings = LLMSettings.load()
-        assert len(settings.llm_providers) >= 1
-        assert any(p.provider.model == "gpt-4" for p in settings.llm_providers)
-
-    def test_load_deepseek_env_as_final_fallback(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """验证 OPENAI_XXX 不存在时使用 DEEPSEEK_XXX 环境变量."""
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
-        monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-        monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
-        settings = LLMSettings.load()
-        assert any(p.provider.model == "deepseek-chat" for p in settings.llm_providers)
 
     def test_load_no_config_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
         monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
 
-    def test_config_file_plus_env_merging(
+    def test_load_with_model_groups(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """验证配置文件提供者优先于环境变量提供者."""
+        """验证从 model_groups 加载配置."""
         config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
             tomli_w.dumps(
                 {
-                    "llm": [
-                        {
-                            "model": "model-a",
-                            "base_url": "https://a.com/v1",
+                    "model_groups": {
+                        "default": {"models": ["openai/gpt-4"]},
+                    },
+                    "model_providers": {
+                        "openai": {
+                            "base_url": "https://api.openai.com/v1",
                             "api_key": "sk-a",
-                        }
-                    ],
-                    "embedding": [{"model": "bge-test"}],
+                        },
+                    },
                 }
             )
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-        monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.com/v1")
-        monkeypatch.setenv("OPENAI_MODEL", "model-b")
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
-        monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.com/v1")
-        monkeypatch.setenv("DEEPSEEK_MODEL", "model-c")
-        settings = LLMSettings.load()
-        assert settings.llm_providers[0].provider.model == "model-a"
-        assert any(p.provider.model == "model-b" for p in settings.llm_providers)
-        assert any(p.provider.model == "model-c" for p in settings.llm_providers)
+        from adapters.model_config import _load_config
 
-    def test_dedup_providers(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """验证重复提供者按 model+base_url 去重."""
-        config_file = tmp_path / "config" / "llm.toml"
-        config_file.parent.mkdir(parents=True)
-        config_file.write_text(
-            tomli_w.dumps(
-                {
-                    "llm": [
-                        {
-                            "model": "gpt-4",
-                            "base_url": "https://api.openai.com/v1",
-                            "api_key": "sk-a",
-                        },
-                        {
-                            "model": "gpt-4",
-                            "base_url": "https://api.openai.com/v1",
-                            "api_key": "sk-b",
-                        },
-                    ],
-                    "embedding": [],
-                }
-            )
-        )
-        monkeypatch.chdir(tmp_path)
+        _load_config.cache_clear()
         settings = LLMSettings.load()
-        llm_models = [
-            (p.provider.model, p.provider.base_url) for p in settings.llm_providers
-        ]
-        assert len(llm_models) == len(set(llm_models))
+        assert "default" in settings.model_groups
+        providers = settings.get_model_group_providers("default")
+        assert len(providers) == 1
+        assert providers[0].provider.model == "gpt-4"
+        _load_config.cache_clear()
 
 
 class TestChatModelFallback:
@@ -415,7 +359,12 @@ def test_llm_settings_loads_judge(
     from app.models.settings import LLMSettings
 
     config = {
-        "llm": [{"model": "qwen", "base_url": "http://localhost:8000/v1"}],
+        "model_groups": {
+            "default": {"models": ["local/qwen"]},
+        },
+        "model_providers": {
+            "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+        },
         "judge": {"model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
     }
     config_file = tmp_path / "llm.toml"

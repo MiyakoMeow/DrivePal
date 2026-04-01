@@ -96,13 +96,15 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
 def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """测试 get_store_chat_model 返回聊天模型."""
     config = {
-        "llm": [
-            {
-                "model": "qwen3.5-2b",
-                "base_url": "http://127.0.0.1:50721/v1",
+        "model_groups": {
+            "default": {"models": ["local/qwen3.5-2b"]},
+        },
+        "model_providers": {
+            "local": {
+                "base_url": "http://127.0.0.1:50721",
                 "api_key": "none",
-            }
-        ],
+            },
+        },
         "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
     config_file = tmp_path / "llm.toml"

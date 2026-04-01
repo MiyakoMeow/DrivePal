@@ -114,27 +114,12 @@ class LLMSettings:
             with config_path.open("rb") as f:
                 config_data = tomllib.load(f)
 
-        llm_data = config_data.get("llm", [])
-        if isinstance(llm_data, dict):
-            llm_data = [llm_data]
-        elif not isinstance(llm_data, list):
-            llm_data = []
-        llm_providers: list[LLMProviderConfig] = [
-            LLMProviderConfig.from_dict(item) for item in llm_data
-        ]
+        model_groups = dict(config_data.get("model_groups", {}))
 
-        for prefix in ("OPENAI", "DEEPSEEK"):
-            env_provider = _build_env_provider(prefix)
-            if env_provider is not None:
-                llm_providers.append(env_provider)
-
-        seen = set()
-        deduped = []
-        for p in llm_providers:
-            key = (p.provider.model, p.provider.base_url)
-            if key not in seen:
-                seen.add(key)
-                deduped.append(p)
+        if not model_groups:
+            raise RuntimeError(
+                "No LLM configuration found. Add [model_groups.default] to config/llm.toml"
+            )
 
         embedding_providers = [
             EmbeddingProviderConfig.from_dict(item)
@@ -143,15 +128,8 @@ class LLMSettings:
 
         judge_provider = _build_judge_provider(config_data)
 
-        model_groups = dict(config_data.get("model_groups", {}))
-
-        if not llm_providers:
-            raise RuntimeError(
-                "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.toml"
-            )
-
         return cls(
-            llm_providers=deduped,
+            llm_providers=[],
             embedding_providers=embedding_providers,
             judge_provider=judge_provider,
             model_groups=model_groups,
@@ -170,12 +148,34 @@ class LLMSettings:
             KeyError: 模型组不存在时
 
         """
+        if name not in self.model_groups:
+            raise KeyError(f"Model group '{name}' not found")
+
         from adapters.model_config import (
-            get_model_group_providers as _get_group_providers,
+            _resolve_provider,
+            resolve_model_string,
         )
 
-        configs = _get_group_providers(name)
-        return [LLMProviderConfig.from_dict(c) for c in configs]
+        model_refs = self.model_groups[name].get("models", [])
+        if not model_refs:
+            return []
+
+        result = []
+        for ref in model_refs:
+            resolved = resolve_model_string(ref)
+            provider_config = _resolve_provider(resolved.provider_name)
+            api_key = os.environ.get(provider_config.get("api_key_env", ""), "")
+            result.append(
+                LLMProviderConfig(
+                    provider=ProviderConfig(
+                        model=resolved.model_name,
+                        base_url=provider_config.get("base_url"),
+                        api_key=api_key,
+                    ),
+                    temperature=resolved.params.get("temperature", 0.7),
+                )
+            )
+        return result
 
 
 def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
@@ -197,7 +197,10 @@ def get_chat_model(temperature: float | None = None) -> "ChatModel":
     from app.models.chat import ChatModel
 
     settings = LLMSettings.load()
-    return ChatModel(providers=settings.llm_providers, temperature=temperature)
+    if "default" not in settings.model_groups:
+        raise RuntimeError("No default model group configured")
+    providers = settings.get_model_group_providers("default")
+    return ChatModel(providers=providers, temperature=temperature)
 
 
 def get_embedding_model(device: str | None = None) -> "EmbeddingModel":

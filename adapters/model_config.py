@@ -107,7 +107,6 @@ def get_store_chat_model() -> "ChatModel":
     return get_chat_model()
 
 
-@lru_cache(maxsize=1)
 def _resolve_provider(provider_name: str) -> dict:
     """根据 provider 名称解析 provider 配置.
 
