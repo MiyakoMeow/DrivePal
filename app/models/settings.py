@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import os
+
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -100,8 +101,8 @@ class LLMSettings:
         else:
             config_path = Path(__file__).resolve().parents[2] / config_path_env
         if config_path.is_file():
-            with config_path.open() as f:
-                config_data = json.load(f)
+            with config_path.open("rb") as f:
+                config_data = tomllib.load(f)
 
         llm_providers: list[LLMProviderConfig] = [
             LLMProviderConfig.from_dict(item) for item in config_data.get("llm", [])

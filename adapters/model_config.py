@@ -1,7 +1,8 @@
 """基准测试模型客户端配置."""
 
-import json
 import os
+
+import tomllib
 from functools import lru_cache
 from pathlib import Path
 
@@ -26,8 +27,8 @@ def _get_config_path() -> Path:
 def _load_config() -> dict:
     """从 JSON 文件加载配置（已缓存）."""
     config_path = _get_config_path()
-    with config_path.open() as f:
-        return json.load(f)
+    with config_path.open("rb") as f:
+        return tomllib.load(f)
 
 
 def get_benchmark_client() -> OpenAI:
