@@ -11,7 +11,7 @@ from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.utils import cosine_similarity
 from app.models.chat import ChatModel
 from app.models.embedding import EmbeddingModel
-from app.storage.json_store import JSONStore
+from app.storage.toml_store import TOMLStore
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
 DAILY_SUMMARY_THRESHOLD = 2
@@ -34,7 +34,7 @@ class EventStorage:
 
     def __init__(self, data_dir: Path) -> None:
         """初始化事件存储."""
-        self._store = JSONStore(data_dir, Path("events.json"), list)
+        self._store = TOMLStore(data_dir, Path("events.toml"), list)
         self.data_dir = data_dir
 
     def generate_id(self) -> str:
@@ -84,7 +84,7 @@ class FeedbackManager:
 
     def __init__(self, data_dir: Path) -> None:
         """初始化反馈管理器."""
-        self._strategies_store = JSONStore(data_dir, Path("strategies.json"), dict)
+        self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
         self.data_dir = data_dir
 
     async def _get_lock(self) -> asyncio.Lock:
@@ -97,7 +97,7 @@ class FeedbackManager:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
-        feedback_store = JSONStore(self.data_dir, Path("feedback.json"), list)
+        feedback_store = TOMLStore(self.data_dir, Path("feedback.toml"), list)
         await feedback_store.append(feedback.model_dump())
         await self._update_strategy(event_id, feedback.model_dump())
 
@@ -159,12 +159,12 @@ class MemoryBankEngine:
         self._storage = storage
         self.embedding_model = embedding_model
         self.chat_model = chat_model
-        self._interactions_store = JSONStore(data_dir, Path("interactions.json"), list)
+        self._interactions_store = TOMLStore(data_dir, Path("interactions.toml"), list)
         self._lock = asyncio.Lock()
         self._default_summaries = {"daily_summaries": {}, "overall_summary": ""}
-        self._summaries_store = JSONStore(
+        self._summaries_store = TOMLStore(
             data_dir,
-            Path("memorybank_summaries.json"),
+            Path("memorybank_summaries.toml"),
             lambda: dict(self._default_summaries),
         )
 
