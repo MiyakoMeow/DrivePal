@@ -1,5 +1,5 @@
 [lint]
-extend-select = ["ANN", "D", "DTZ", "ASYNC"]
+extend-select = ["ANN", "D", "DTZ", "ASYNC", "FAST"]
 ignore = ["D211", "D213", "D203"]
 exclude = [".agents/**", "vendor/**"]
 
