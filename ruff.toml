@@ -19,11 +19,13 @@ extend-select = [
 ]
 # 忽略的规则：
 # D211/D213/D203: docstring空行规则互相冲突
+# D400: docstring首行句号
 # E501: 行长度限制由formatter处理
 ignore = [
     "D203",  # pydoclint - docstring前应有1个空行(与D211冲突)
     "D211",  # pydoclint - docstring前不应有空行(与D203冲突)
     "D213",  # pydoclint - 多行docstring应在第二行开始
+    "D400",  # pydoclint - docstring首行应以句号结尾
     "E501",  # pycodestyle - 行长度限制
 ]
 exclude = [".agents/**", "vendor/**"]

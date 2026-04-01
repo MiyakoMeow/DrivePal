@@ -48,6 +48,7 @@ class AgentWorkflow:
             self._strategy_node,
             self._execution_node,
         ]
+        self._strategies_store = JSONStore(data_dir, Path("strategies.json"), dict)
 
     async def _call_llm_json(self, user_prompt: str) -> dict:
         """构建prompt、调LLM并解析JSON返回dict."""
@@ -143,9 +144,7 @@ class AgentWorkflow:
         context = state.get("context", {})
         task = state.get("task", {})
 
-        strategies = await JSONStore(
-            self.data_dir, Path("strategies.json"), dict
-        ).read()
+        strategies = await self._strategies_store.read()
 
         prompt = f"""{SYSTEM_PROMPTS["strategy"]}
 

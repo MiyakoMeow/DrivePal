@@ -35,13 +35,18 @@ class JSONStore:
         async with aiofiles.open(self.filepath, "w", encoding="utf-8") as f:
             await f.write(json.dumps(data, ensure_ascii=False, indent=2))
 
-    async def read(self) -> T:
-        """读取JSON文件中的全部数据."""
-        if not self.filepath.exists():
-            self._ensure_file()
+    async def _read_unsafe(self) -> T:
+        """读操作，不获取锁（调用方必须持有锁）."""
+        if not await asyncio.to_thread(self.filepath.exists):
+            await asyncio.to_thread(self._ensure_file)
         async with aiofiles.open(self.filepath, "r", encoding="utf-8") as f:
             content = await f.read()
         return json.loads(content)
+
+    async def read(self) -> T:
+        """读取JSON文件中的全部数据."""
+        async with self._lock:
+            return await self._read_unsafe()
 
     async def write(self, data: T) -> None:
         """写入数据到JSON文件."""
@@ -51,7 +56,7 @@ class JSONStore:
     async def append(self, item: Any) -> None:  # noqa: ANN401
         """向列表类型存储追加一个元素."""
         async with self._lock:
-            data = await self.read()
+            data = await self._read_unsafe()
             if not isinstance(data, list):
                 raise TypeError(
                     f"append() requires list factory, got {type(data).__name__}"
@@ -62,7 +67,7 @@ class JSONStore:
     async def update(self, key: str, value: Any) -> None:  # noqa: ANN401
         """更新字典类型存储中指定键的值."""
         async with self._lock:
-            data = await self.read()
+            data = await self._read_unsafe()
             if not isinstance(data, dict):
                 raise TypeError(
                     f"update() requires dict factory, got {type(data).__name__}"

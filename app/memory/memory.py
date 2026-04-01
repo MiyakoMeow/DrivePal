@@ -62,6 +62,10 @@ class MemoryModule:
             self._stores[mode] = self._create_store(mode)
         return self._stores[mode]
 
+    def _resolve_mode(self, mode: MemoryMode | None) -> MemoryMode:
+        """解析 mode 参数，默认 MEMORY_BANK."""
+        return mode or MemoryMode.MEMORY_BANK
+
     def _create_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in _STORES_REGISTRY:
             raise ValueError(
@@ -85,8 +89,7 @@ class MemoryModule:
 
     async def write(self, event: MemoryEvent, mode: MemoryMode | None = None) -> str:
         """写入记忆事件."""
-        target_mode = mode or MemoryMode.MEMORY_BANK
-        return await self._get_store(target_mode).write(event)
+        return await self._get_store(self._resolve_mode(mode)).write(event)
 
     async def write_interaction(
         self,
@@ -96,8 +99,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
     ) -> str:
         """写入交互记录."""
-        target_mode = mode or MemoryMode.MEMORY_BANK
-        store = self._get_store(target_mode)
+        store = self._get_store(self._resolve_mode(mode))
         if not getattr(store, "supports_interaction", False):
             raise NotImplementedError(
                 f"Store '{store.store_name}' does not support write_interaction"
@@ -108,19 +110,20 @@ class MemoryModule:
         self, query: str, mode: MemoryMode | None = None, top_k: int = 10
     ) -> list[SearchResult]:
         """搜索记忆内容."""
-        target_mode = mode or MemoryMode.MEMORY_BANK
-        return await self._get_store(target_mode).search(query, top_k=top_k)
+        return await self._get_store(self._resolve_mode(mode)).search(
+            query, top_k=top_k
+        )
 
     async def get_history(
         self, limit: int = 10, mode: MemoryMode | None = None
     ) -> list[MemoryEvent]:
         """获取历史记忆事件."""
-        target_mode = mode or MemoryMode.MEMORY_BANK
-        return await self._get_store(target_mode).get_history(limit)
+        return await self._get_store(self._resolve_mode(mode)).get_history(limit)
 
     async def update_feedback(
         self, event_id: str, feedback: FeedbackData, mode: MemoryMode | None = None
     ) -> None:
         """更新记忆反馈."""
-        target_mode = mode or MemoryMode.MEMORY_BANK
-        await self._get_store(target_mode).update_feedback(event_id, feedback)
+        await self._get_store(self._resolve_mode(mode)).update_feedback(
+            event_id, feedback
+        )
