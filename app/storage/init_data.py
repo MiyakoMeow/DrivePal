@@ -1,8 +1,10 @@
 """数据目录初始化与默认数据填充."""
 
-import json
 from pathlib import Path
-from typing import Optional
+
+import tomli_w
+
+from app.storage.toml_store import _LIST_WRAPPER_KEY
 
 
 def get_data_dir() -> Path:
@@ -10,19 +12,29 @@ def get_data_dir() -> Path:
     return Path(__file__).parent.parent.parent / "data"
 
 
-def init_storage(data_dir: Optional[Path] = None) -> None:
+def _write_toml_data(filepath: Path, data: dict) -> None:
+    """写入 TOML 数据到文件."""
+    with filepath.open("wb") as f:
+        tomli_w.dump(data, f)
+
+
+def init_storage(data_dir: Path | None = None) -> None:
     """初始化存储目录和数据文件."""
     if data_dir is None:
         data_dir = get_data_dir()
     data_dir.mkdir(exist_ok=True)
 
-    files = {
-        "events.json": [],
-        "interactions.json": [],
-        "contexts.json": {},
-        "preferences.json": {"language": "zh-CN"},
-        "feedback.json": [],
-        "strategies.json": {
+    list_files = {
+        "events.toml": [],
+        "interactions.toml": [],
+        "feedback.toml": [],
+        "experiment_results.toml": [],
+    }
+
+    dict_files = {
+        "contexts.toml": {},
+        "preferences.toml": {"language": "zh-CN"},
+        "strategies.toml": {
             "preferred_time_offset": 15,
             "preferred_method": "visual",
             "reminder_weights": {},
@@ -30,15 +42,18 @@ def init_storage(data_dir: Optional[Path] = None) -> None:
             "modified_keywords": [],
             "cooldown_periods": {},
         },
-        "experiment_results.json": [],
-        "memorybank_summaries.json": {"daily_summaries": {}, "overall_summary": ""},
+        "memorybank_summaries.toml": {"daily_summaries": {}, "overall_summary": ""},
     }
 
-    for filename, default_data in files.items():
+    for filename, default_data in list_files.items():
         filepath = data_dir / filename
         if not filepath.exists():
-            with filepath.open("w", encoding="utf-8") as f:
-                json.dump(default_data, f, ensure_ascii=False, indent=2)
+            _write_toml_data(filepath, {_LIST_WRAPPER_KEY: default_data})
+
+    for filename, default_data in dict_files.items():
+        filepath = data_dir / filename
+        if not filepath.exists():
+            _write_toml_data(filepath, default_data)
 
 
 if __name__ == "__main__":

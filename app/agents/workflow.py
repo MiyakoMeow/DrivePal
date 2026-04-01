@@ -13,7 +13,7 @@ from typing import Optional, TYPE_CHECKING
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
-from app.storage.json_store import JSONStore
+from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
     from app.agents.state import AgentState
@@ -48,7 +48,7 @@ class AgentWorkflow:
             self._strategy_node,
             self._execution_node,
         ]
-        self._strategies_store = JSONStore(data_dir, Path("strategies.json"), dict)
+        self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
 
     async def _call_llm_json(self, user_prompt: str) -> dict:
         """构建prompt、调LLM并解析JSON返回dict."""

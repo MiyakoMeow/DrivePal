@@ -1,9 +1,9 @@
 """模型设置加载器测试."""
 
-import json
 from pathlib import Path
 
 import pytest
+import tomli_w
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from app.models.settings import (
@@ -76,11 +76,11 @@ class TestLLMSettingsLoad:
     def test_load_from_config_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """验证从 config/llm.json 加载提供者."""
-        config_file = tmp_path / "config" / "llm.json"
+        """验证从 config/llm.toml 加载提供者."""
+        config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
-            json.dumps(
+            tomli_w.dumps(
                 {
                     "llm": [
                         {
@@ -127,7 +127,7 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
-        monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.json"))
+        monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
@@ -137,10 +137,10 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证配置文件提供者优先于环境变量提供者."""
-        config_file = tmp_path / "config" / "llm.json"
+        config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
-            json.dumps(
+            tomli_w.dumps(
                 {
                     "llm": [
                         {
@@ -169,10 +169,10 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证重复提供者按 model+base_url 去重."""
-        config_file = tmp_path / "config" / "llm.json"
+        config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
-            json.dumps(
+            tomli_w.dumps(
                 {
                     "llm": [
                         {
@@ -413,14 +413,13 @@ def test_llm_settings_loads_judge(
 ) -> None:
     """测试 LLMSettings 从配置加载 judge 提供者."""
     from app.models.settings import LLMSettings
-    import json
 
     config = {
         "llm": [{"model": "qwen", "base_url": "http://localhost:8000/v1"}],
         "judge": {"model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
     }
-    config_file = tmp_path / "llm.json"
-    config_file.write_text(json.dumps(config), encoding="utf-8")
+    config_file = tmp_path / "llm.toml"
+    config_file.write_text(tomli_w.dumps(config))
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
 
     settings = LLMSettings.load()

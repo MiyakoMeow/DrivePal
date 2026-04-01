@@ -66,9 +66,9 @@ thesis-cockpit-memo/
 │       ├── common.py            # 通用工具函数
 │       └── memory_bank_adapter.py # MemoryBank适配器（唯一支持）
 ├── config/                       # 配置文件
-│   ├── scenarios.json            # 驾驶场景模板
-│   ├── driver_states.json        # 驾驶员状态配置
-│   └── llm.json                  # 模型配置（含benchmark）
+│   ├── scenarios.toml            # 驾驶场景模板
+│   ├── driver_states.toml        # 驾驶员状态配置
+│   └── llm.toml                  # 模型配置（含benchmark）
 ├── data/                         # 数据目录（运行时生成）
 ├── vendor/VehicleMemBench        # 基准测试子模块
 ├── tests/                        # 测试

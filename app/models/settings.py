@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import os
+
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -94,17 +95,22 @@ class LLMSettings:
     def load(cls) -> "LLMSettings":
         """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
         config_data: dict = {}
-        config_path_env = os.environ.get("CONFIG_PATH", "config/llm.json")
+        config_path_env = os.environ.get("CONFIG_PATH", "config/llm.toml")
         if Path(config_path_env).is_absolute():
             config_path = Path(config_path_env)
         else:
             config_path = Path(__file__).resolve().parents[2] / config_path_env
         if config_path.is_file():
-            with config_path.open() as f:
-                config_data = json.load(f)
+            with config_path.open("rb") as f:
+                config_data = tomllib.load(f)
 
+        llm_data = config_data.get("llm", [])
+        if isinstance(llm_data, dict):
+            llm_data = [llm_data]
+        elif not isinstance(llm_data, list):
+            llm_data = []
         llm_providers: list[LLMProviderConfig] = [
-            LLMProviderConfig.from_dict(item) for item in config_data.get("llm", [])
+            LLMProviderConfig.from_dict(item) for item in llm_data
         ]
 
         for prefix in ("OPENAI", "DEEPSEEK"):
@@ -114,7 +120,7 @@ class LLMSettings:
 
         if not llm_providers:
             raise RuntimeError(
-                "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.json"
+                "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.toml"
             )
 
         seen = set()
@@ -193,7 +199,7 @@ def get_judge_model() -> "ChatModel":
     settings = LLMSettings.load()
     if settings.judge_provider is None:
         raise RuntimeError(
-            "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.json"
+            "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.toml"
         )
     provider = LLMProviderConfig(
         provider=ProviderConfig(
