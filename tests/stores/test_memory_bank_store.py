@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.memory.stores.memory_bank_store import MemoryBankStore
+from app.memory.stores.memory_bank import MemoryBankStore
 
 
 @pytest.fixture

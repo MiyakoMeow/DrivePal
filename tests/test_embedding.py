@@ -9,7 +9,7 @@ import pytest
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
-from app.memory.stores.memory_bank_store import MemoryBankStore
+from app.memory.stores.memory_bank import MemoryBankStore
 from app.models.embedding import EmbeddingModel
 from tests.conftest import SKIP_IF_NO_LLM
 

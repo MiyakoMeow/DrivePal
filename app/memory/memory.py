@@ -26,7 +26,7 @@ def register_store(name: MemoryMode, store_cls: type) -> None:
 
 
 def _import_all_stores() -> None:
-    from app.memory.stores.memory_bank_store import MemoryBankStore
+    from app.memory.stores.memory_bank import MemoryBankStore
 
     register_store(MemoryMode.MEMORY_BANK, MemoryBankStore)
 

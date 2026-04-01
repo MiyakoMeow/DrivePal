@@ -10,9 +10,11 @@ from app.memory.components import (
     EventStorage,
     FeedbackManager,
     KeywordSearch,
-    MemoryBankEngine,
     SimpleInteractionWriter,
     forgetting_curve,
+)
+from app.memory.stores.memory_bank.engine import (
+    MemoryBankEngine,
     SOFT_FORGET_STRENGTH,
     SOFT_FORGET_THRESHOLD,
 )
@@ -371,8 +373,8 @@ class TestPersonalitySummary:
     ) -> None:
         """验证无 chat_model 时跳过人格摘要."""
         today = datetime.now(timezone.utc).date().isoformat()
-        await engine._maybe_summarize_personality(today)
-        personality_data = await engine._personality_store.read()
+        await engine._personality_mgr.maybe_summarize(today, [], [], None)
+        personality_data = await engine._personality_mgr._personality_store.read()
         assert personality_data["daily_personality"] == {}
 
     async def test_search_personality_returns_matching_summaries(
@@ -389,8 +391,8 @@ class TestPersonalitySummary:
             },
             "overall_personality": "",
         }
-        await engine._personality_store.write(personality_data)
-        results = await engine._search_personality("天气", top_k=1)
+        await engine._personality_mgr._personality_store.write(personality_data)
+        results = await engine._personality_mgr.search("天气", top_k=1)
         assert len(results) == 1
         assert results[0].source == "personality"
         assert "天气" in results[0].event["content"]
@@ -409,8 +411,8 @@ class TestPersonalitySummary:
             },
             "overall_personality": "",
         }
-        await engine._personality_store.write(personality_data)
-        results = await engine._search_personality("音乐", top_k=1)
+        await engine._personality_mgr._personality_store.write(personality_data)
+        results = await engine._personality_mgr.search("音乐", top_k=1)
         assert len(results) == 0
 
     async def test_search_personality_via_public_interface(
@@ -427,7 +429,7 @@ class TestPersonalitySummary:
             },
             "overall_personality": "",
         }
-        await engine._personality_store.write(personality_data)
+        await engine._personality_mgr._personality_store.write(personality_data)
         results = await engine.search("天气", top_k=5)
         personality_results = [r for r in results if r.source == "personality"]
         assert len(personality_results) == 1
