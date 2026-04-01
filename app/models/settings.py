@@ -166,9 +166,9 @@ class LLMSettings:
             provider_config = _resolve_provider(resolved.provider_name)
             api_key_env = provider_config.get("api_key_env")
             if api_key_env:
-                api_key = os.environ.get(api_key_env, "")
+                api_key: str | None = os.environ.get(api_key_env, "")
             else:
-                api_key = provider_config.get("api_key", "")
+                api_key = provider_config.get("api_key")
             result.append(
                 LLMProviderConfig(
                     provider=ProviderConfig(
