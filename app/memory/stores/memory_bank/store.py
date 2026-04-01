@@ -3,8 +3,9 @@
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
-from app.memory.components import EventStorage, FeedbackManager, MemoryBankEngine
+from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.memory.stores.memory_bank.engine import MemoryBankEngine
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ class MemoryBankStore:
     @property
     def summaries_store(self) -> TOMLStore:
         """摘要存储."""
-        return self._engine._summaries_store
+        return self._engine.summaries_store
 
     @property
     def interactions_store(self) -> TOMLStore:

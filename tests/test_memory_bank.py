@@ -6,8 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.memory.schemas import MemoryEvent
-from app.memory.components import DAILY_SUMMARY_THRESHOLD, OVERALL_SUMMARY_THRESHOLD
-from app.memory.stores.memory_bank_store import MemoryBankStore
+from app.memory.stores.memory_bank import MemoryBankStore
+from app.memory.stores.memory_bank.summarization import (
+    DAILY_SUMMARY_THRESHOLD,
+    OVERALL_SUMMARY_THRESHOLD,
+)
 
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
@@ -118,9 +121,7 @@ class TestHierarchicalSummarization:
                 "last_recall_date": date_group,
             }
         await backend.summaries_store.write(summaries)
-        await backend._engine._update_overall_summary(
-            summaries["daily_summaries"], summaries
-        )
+        await backend._engine._summary_mgr.update_overall_summary(mock_chat_model)
         updated = await backend.summaries_store.read()
         assert updated["overall_summary"] == "总体摘要"
 

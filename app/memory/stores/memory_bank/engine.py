@@ -1,0 +1,348 @@
+"""MemoryBankEngine: 记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
+
+import asyncio
+import uuid
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from app.memory.components import EventStorage, forgetting_curve
+from app.memory.schemas import MemoryEvent, SearchResult
+from app.memory.stores.memory_bank.personality import PersonalityManager
+from app.memory.stores.memory_bank.summarization import SummaryManager
+from app.memory.utils import cosine_similarity
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
+from app.storage.toml_store import TOMLStore
+
+AGGREGATION_SIMILARITY_THRESHOLD = 0.8
+TOP_K = 3
+SOFT_FORGET_THRESHOLD = 0.15
+SOFT_FORGET_STRENGTH = 0
+
+
+class MemoryBankEngine:
+    """记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
+
+    EMBEDDING_MIN_SIMILARITY = 0.3
+
+    def __init__(
+        self,
+        data_dir: Path,
+        storage: EventStorage,
+        embedding_model: Optional[EmbeddingModel] = None,
+        chat_model: Optional[ChatModel] = None,
+    ) -> None:
+        """初始化记忆库引擎."""
+        self.data_dir = data_dir
+        self._storage = storage
+        self.embedding_model = embedding_model
+        self.chat_model = chat_model
+        self._interactions_store = TOMLStore(data_dir, Path("interactions.toml"), list)
+        self._lock = asyncio.Lock()
+        self._personality_mgr = PersonalityManager(data_dir)
+        self._summary_mgr = SummaryManager(data_dir)
+
+    @property
+    def summaries_store(self) -> TOMLStore:
+        """摘要存储."""
+        return self._summary_mgr.summaries_store
+
+    @property
+    def personality_store(self) -> TOMLStore:
+        """人格存储."""
+        return self._personality_mgr.personality_store
+
+    async def write(self, event: MemoryEvent) -> str:
+        """写入事件并触发摘要."""
+        event = event.model_copy(deep=True)
+        event.id = self._storage.generate_id()
+        event.created_at = datetime.now(timezone.utc).isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
+        event.memory_strength = 1
+        event.last_recall_date = today
+        event.date_group = today
+        await self._storage.append_raw(event.model_dump())
+        events = await self._storage.read_events()
+        group_events = [e for e in events if e.get("date_group") == today]
+        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
+        return event.id
+
+    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """搜索记忆事件与摘要."""
+        if not query.strip():
+            return []
+        events = await self._storage.read_events()
+        summaries = await self.summaries_store.read()
+        daily_summaries = summaries.get("daily_summaries", {})
+        personality_data = await self.personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        if not events and not daily_summaries and not daily_personality:
+            return []
+        if self.embedding_model is None:
+            event_results = await self._search_by_keyword(query, events, top_k)
+        else:
+            event_results = await self._search_by_embedding(query, events, top_k)
+            if not event_results:
+                event_results = await self._search_by_keyword(query, events, top_k)
+        summary_results = await self._summary_mgr.search_summaries(
+            query, daily_summaries, top_k=1
+        )
+        personality_results = await self._personality_mgr.search(query, top_k=1)
+        all_results = event_results + summary_results + personality_results
+        all_results.sort(key=lambda x: x.score, reverse=True)
+        top_results = all_results[:top_k]
+
+        event_ids = {
+            r.event["id"]
+            for r in top_results
+            if r.source == "event" and "id" in r.event
+        }
+        summary_keys: list[str] = list(
+            {
+                r.event["date_group"]
+                for r in top_results
+                if r.source == "daily_summary" and "date_group" in r.event
+            }
+        )
+        personality_keys: list[str] = list(
+            {
+                r.event["date_group"]
+                for r in top_results
+                if r.source == "personality" and "date_group" in r.event
+            }
+        )
+
+        if event_ids:
+            await self._strengthen_and_forget(event_ids)
+        if summary_keys:
+            await self._summary_mgr.strengthen_summaries(summary_keys)
+        if personality_keys:
+            await self._personality_mgr.strengthen(personality_keys)
+
+        return await self._expand_event_interactions(top_results)
+
+    def _get_searchable_text(self, event: dict) -> str:
+        parts = [event.get("content", ""), event.get("description", "")]
+        return "\n".join(p for p in parts if p)
+
+    async def _search_by_keyword(
+        self, query: str, events: list[dict], top_k: int
+    ) -> list[SearchResult]:
+        query_lower = query.lower()
+        today = datetime.now(timezone.utc).date()
+        results = []
+        for event in events:
+            searchable_text = self._get_searchable_text(event).lower()
+            if query_lower not in searchable_text:
+                continue
+            strength = event.get("memory_strength", 1)
+            last_recall = event.get("last_recall_date", today.isoformat())
+            try:
+                last_date = date.fromisoformat(last_recall)
+                days_elapsed = (today - last_date).days
+            except (ValueError, TypeError):
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, strength)
+            if retention <= 0:
+                continue
+            results.append(
+                SearchResult(event=dict(event), score=retention, source="event")
+            )
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
+    async def _search_by_embedding(
+        self, query: str, events: list[dict], top_k: int
+    ) -> list[SearchResult]:
+        assert self.embedding_model is not None
+        query_vector = await self.embedding_model.encode(query)
+        event_texts = [self._get_searchable_text(event) for event in events]
+        all_event_vectors = await self.embedding_model.batch_encode(event_texts)
+        today = datetime.now(timezone.utc).date()
+        results = []
+        for event, event_vector in zip(events, all_event_vectors):
+            similarity = cosine_similarity(query_vector, event_vector)
+            strength = event.get("memory_strength", 1)
+            last_recall = event.get("last_recall_date", today.isoformat())
+            try:
+                last_date = date.fromisoformat(last_recall)
+                days_elapsed = (today - last_date).days
+            except (ValueError, TypeError):
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, strength)
+            score = similarity * retention
+            if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
+                results.append(
+                    SearchResult(event=dict(event), score=score, source="event")
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
+    async def _expand_event_interactions(
+        self, results: list[SearchResult]
+    ) -> list[SearchResult]:
+        interactions = await self._interactions_store.read()
+        interaction_by_event: dict[str, list[dict]] = {}
+        for i in interactions:
+            eid = i.get("event_id", "")
+            if eid:
+                interaction_by_event.setdefault(eid, []).append(i)
+        for result in results:
+            eid = result.event.get("id", "")
+            result.interactions = interaction_by_event.get(eid, [])
+        return results
+
+    async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
+        if not matched_ids:
+            return
+        today = datetime.now(timezone.utc).date().isoformat()
+        today_date = datetime.now(timezone.utc).date()
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            updated = False
+            for event in all_events:
+                if event.get("id") in matched_ids:
+                    event["memory_strength"] = event.get("memory_strength", 1) + 1
+                    event["last_recall_date"] = today
+                    updated = True
+                else:
+                    strength = event.get("memory_strength", 1)
+                    last_recall = event.get("last_recall_date", today_date.isoformat())
+                    try:
+                        last_date = date.fromisoformat(last_recall)
+                        days_elapsed = (today_date - last_date).days
+                    except (ValueError, TypeError):
+                        days_elapsed = 0
+                    retention = forgetting_curve(days_elapsed, strength)
+                    if retention < SOFT_FORGET_THRESHOLD:
+                        event["memory_strength"] = SOFT_FORGET_STRENGTH
+                        event["forgotten"] = True
+                        updated = True
+            if updated:
+                await self._storage.write_events(all_events)
+
+            all_interactions = await self._interactions_store.read()
+            updated = False
+            for interaction in all_interactions:
+                if interaction.get("event_id") in matched_ids:
+                    interaction["memory_strength"] = (
+                        interaction.get("memory_strength", 1) + 1
+                    )
+                    interaction["last_recall_date"] = today
+                    updated = True
+            if updated:
+                await self._interactions_store.write(all_interactions)
+
+    async def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        """写入交互记录并关联事件."""
+        interaction_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        today = datetime.now(timezone.utc).date().isoformat()
+        interaction = {
+            "id": interaction_id,
+            "event_id": "",
+            "query": query,
+            "response": response,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "memory_strength": 1,
+            "last_recall_date": today,
+        }
+
+        async with self._lock:
+            append_event_id = await self._should_append_to_event(interaction)
+            event = None
+            if append_event_id:
+                interaction["event_id"] = append_event_id
+            else:
+                event_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                now_iso = datetime.now(timezone.utc).isoformat()
+                event = {
+                    "id": event_id,
+                    "content": query,
+                    "type": event_type,
+                    "interaction_ids": [interaction_id],
+                    "created_at": now_iso,
+                    "updated_at": now_iso,
+                    "memory_strength": 1,
+                    "last_recall_date": today,
+                    "date_group": today,
+                }
+                interaction["event_id"] = event_id
+
+            await self._interactions_store.append(interaction)
+
+            if append_event_id:
+                all_events = await self._storage.read_events()
+                for ev in all_events:
+                    if ev.get("id") == append_event_id:
+                        ev.setdefault("interaction_ids", []).append(interaction_id)
+                        ev["updated_at"] = datetime.now(timezone.utc).isoformat()
+                        break
+                await self._storage.write_events(all_events)
+            else:
+                assert event is not None
+                await self._storage.append_raw(event)
+
+        if append_event_id:
+            await self._update_event_summary(append_event_id)
+
+        events = await self._storage.read_events()
+        group_events = [e for e in events if e.get("date_group") == today]
+        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
+        interactions = await self._interactions_store.read()
+        await self._personality_mgr.maybe_summarize(
+            today, events, interactions, self.chat_model
+        )
+        return interaction_id
+
+    async def _should_append_to_event(self, interaction: dict) -> Optional[str]:
+        events = await self._storage.read_events()
+        if not events:
+            return None
+        today = datetime.now(timezone.utc).date().isoformat()
+        recent = events[-1]
+        if recent.get("date_group") != today:
+            return None
+        if self.embedding_model:
+            query_vec = await self.embedding_model.encode(interaction["query"])
+            event_vec = await self.embedding_model.encode(recent.get("content", ""))
+            similarity = cosine_similarity(query_vec, event_vec)
+            if similarity >= AGGREGATION_SIMILARITY_THRESHOLD:
+                return recent["id"]
+            return None
+        content_lower = recent.get("content", "").lower()
+        query_lower = interaction["query"].lower()
+        query_chars = list(set(query_lower))
+        if not query_chars:
+            return None
+        overlap = sum(1 for c in query_chars if c in content_lower)
+        if overlap / len(query_chars) >= 0.5:
+            return recent["id"]
+        return None
+
+    async def _update_event_summary(self, event_id: str) -> None:
+        if not self.chat_model:
+            return
+        interactions = await self._interactions_store.read()
+        child_interactions = [i for i in interactions if i.get("event_id") == event_id]
+        if not child_interactions:
+            return
+        combined = "\n".join(
+            f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
+            for i in child_interactions
+        )
+        prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
+        try:
+            summary_text = await self.chat_model.generate(prompt)
+        except Exception:
+            return
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            for event in all_events:
+                if event.get("id") == event_id:
+                    event["content"] = summary_text
+                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    break
+            await self._storage.write_events(all_events)
