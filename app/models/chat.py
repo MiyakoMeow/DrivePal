@@ -67,32 +67,7 @@ class ChatModel:
             self.temperature if self.temperature is not None else provider.temperature
         )
 
-    def generate(
-        self,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        **_kwargs: object,
-    ) -> str:
-        """生成回复，按provider顺序尝试，失败自动fallback."""
-        messages = self._build_messages(prompt, system_prompt)
-
-        errors = []
-        for provider in self.providers:
-            try:
-                client = self._create_client(provider)
-                response = client.chat.completions.create(
-                    model=provider.provider.model,
-                    messages=messages,
-                    temperature=self._get_temperature(provider),
-                )
-                return response.choices[0].message.content or ""
-            except Exception as e:
-                errors.append(f"{provider.provider.model}: {e}")
-                continue
-
-        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
-
-    async def generate(  # noqa: F811 - intentionally redefines sync generate, removed in Task 12
+    async def generate(
         self,
         prompt: str,
         system_prompt: Optional[str] | None = None,
