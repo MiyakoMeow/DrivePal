@@ -2,9 +2,9 @@
 
 ## 配置说明
 
-### 模型配置 (`config/llm.json`)
+### 模型配置 (`config/llm.toml`)
 
-所有 LLM、Embedding 模型配置统一在 `config/llm.json` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。配置采用组合模式：`ProviderConfig`（model/base_url/api_key）被各专用配置（`LLMProviderConfig`/`EmbeddingProviderConfig`）组合引用。
+所有 LLM、Embedding 模型配置统一在 `config/llm.toml` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。配置采用组合模式：`ProviderConfig`（model/base_url/api_key）被各专用配置（`LLMProviderConfig`/`EmbeddingProviderConfig`）组合引用。
 
 基准测试使用独立的 `benchmark` 配置：
 

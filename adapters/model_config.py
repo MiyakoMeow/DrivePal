@@ -23,6 +23,16 @@ def _get_config_path() -> Path:
     return Path(__file__).resolve().parent.parent / env_path
 
 
+def _normalize_llm_config(config: dict) -> list[dict]:
+    """规范化 LLM 配置，支持 dict 或 list 格式."""
+    llm_data = config.get("llm", [])
+    if isinstance(llm_data, dict):
+        return [llm_data]
+    if isinstance(llm_data, list):
+        return llm_data
+    return []
+
+
 @lru_cache(maxsize=1)
 def _load_config() -> dict:
     """从 TOML 文件加载配置（已缓存）."""
@@ -41,11 +51,12 @@ def get_benchmark_client() -> OpenAI:
             base_url=bc["base_url"],
             api_key=api_key,
         )
-    if not config.get("llm"):
+    llm_providers = _normalize_llm_config(config)
+    if not llm_providers:
         raise ValueError(
             "Configuration must contain at least one LLM provider in 'llm' array"
         )
-    llm = config["llm"][0]
+    llm = llm_providers[0]
     return OpenAI(
         base_url=llm.get("base_url"),
         api_key=llm.get("api_key", ""),
@@ -57,7 +68,10 @@ def get_benchmark_model_name() -> str:
     config = _load_config()
     if "benchmark" in config:
         return config["benchmark"]["model"]
-    return config["llm"][0]["model"]
+    llm_providers = _normalize_llm_config(config)
+    if not llm_providers:
+        raise ValueError("No LLM provider configured")
+    return llm_providers[0]["model"]
 
 
 def get_benchmark_temperature() -> float:
@@ -65,7 +79,10 @@ def get_benchmark_temperature() -> float:
     config = _load_config()
     if "benchmark" in config:
         return config["benchmark"].get("temperature", 0.0)
-    return config["llm"][0].get("temperature", 0.7)
+    llm_providers = _normalize_llm_config(config)
+    if not llm_providers:
+        return 0.7
+    return llm_providers[0].get("temperature", 0.7)
 
 
 def get_benchmark_max_tokens() -> int:
