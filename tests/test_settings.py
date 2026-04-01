@@ -339,18 +339,16 @@ class TestChatModelFallback:
 
 
 class TestEmbeddingModelFallback:
-    """EmbeddingModel 多提供者回退行为测试."""
+    """EmbeddingModel 单提供者测试."""
 
     def test_local_provider_creates_sentence_transformer(self) -> None:
         """验证本地提供者使用 SentenceTransformer."""
         from app.models.embedding import EmbeddingModel
 
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="fake-model"), device="cpu"
-            )
-        ]
-        emb = EmbeddingModel(providers=providers)
+        provider = EmbeddingProviderConfig(
+            provider=ProviderConfig(model="fake-model"), device="cpu"
+        )
+        emb = EmbeddingModel(provider=provider)
         mock_st = MagicMock()
         with patch(
             "sentence_transformers.SentenceTransformer", return_value=mock_st
@@ -362,58 +360,27 @@ class TestEmbeddingModelFallback:
         """验证远程提供者使用 openai.AsyncOpenAI."""
         from app.models.embedding import EmbeddingModel
 
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(
-                    model="text-embedding-3-small",
-                    base_url="https://api.openai.com/v1",
-                    api_key="sk-test",
-                ),
-            )
-        ]
-        emb = EmbeddingModel(providers=providers)
+        provider = EmbeddingProviderConfig(
+            provider=ProviderConfig(
+                model="text-embedding-3-small",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+            ),
+        )
+        emb = EmbeddingModel(provider=provider)
         with patch("app.models.embedding.openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             _ = emb.client
         mock_cls.assert_called_once()
 
-    def test_fallback_to_next_provider(self) -> None:
-        """验证第一个嵌入提供者加载失败时回退."""
-        from app.models.embedding import EmbeddingModel
-
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="bad-model"), device="cpu"
-            ),
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="good-model"), device="cpu"
-            ),
-        ]
-        emb = EmbeddingModel(providers=providers)
-
-        call_count = 0
-
-        def mock_st(model_name: str, **kwargs: object) -> MagicMock:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("load failed")
-            return MagicMock()
-
-        with patch("sentence_transformers.SentenceTransformer", side_effect=mock_st):
-            _ = emb.client
-        assert call_count == 2
-
     async def test_encode_uses_client(self) -> None:
         """验证 encode 委托给缓存的客户端."""
         from app.models.embedding import EmbeddingModel
 
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="fake-model"), device="cpu"
-            )
-        ]
-        emb = EmbeddingModel(providers=providers)
+        provider = EmbeddingProviderConfig(
+            provider=ProviderConfig(model="fake-model"), device="cpu"
+        )
+        emb = EmbeddingModel(provider=provider)
         mock_client = MagicMock()
         mock_client.encode.return_value = MagicMock(
             tolist=MagicMock(return_value=[0.1, 0.2, 0.3])

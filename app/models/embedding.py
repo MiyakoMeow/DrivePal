@@ -14,11 +14,26 @@ if TYPE_CHECKING:
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
 
 
-def get_cached_embedding_model(device: str | None = None) -> EmbeddingModel:
+def _auto_detect_device() -> str:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "cuda"
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+    except ImportError:
+        pass
+    return "cpu"
+
+
+def get_cached_embedding_model() -> EmbeddingModel:
     """获取缓存的embedding模型实例，避免重复加载."""
-    cache_key = f"device={device or 'default'}"
+    settings = LLMSettings.load()
+    provider = settings.get_embedding_provider()
+    cache_key = f"{provider.provider.model}" if provider else "default"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
-        _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(device=device)
+        _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel()
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
@@ -28,57 +43,41 @@ def clear_embedding_model_cache() -> None:
 
 
 class EmbeddingModel:
-    """文本嵌入模型封装，支持多provider自动fallback."""
+    """文本嵌入模型封装，支持单provider."""
 
     def __init__(
         self,
-        providers: list[EmbeddingProviderConfig] | None = None,
-        device: str | None = None,
+        provider: EmbeddingProviderConfig | None = None,
     ) -> None:
         """初始化嵌入模型."""
-        if providers is None:
+        if provider is None:
             try:
                 settings = LLMSettings.load()
-                providers = settings.embedding_providers
+                provider = settings.get_embedding_provider()
             except RuntimeError:
-                providers = [
-                    EmbeddingProviderConfig(
-                        provider=ProviderConfig(model="BAAI/bge-small-zh-v1.5"),
-                        device=device or "cpu",
-                    )
-                ]
-        self.providers = providers
-        self.device = device
+                pass
+        if provider is None:
+            provider = EmbeddingProviderConfig(
+                provider=ProviderConfig(model="BAAI/bge-small-zh-v1.5"),
+                device=_auto_detect_device(),
+            )
+        self.provider = provider
         self._client: Union[openai.AsyncOpenAI, SentenceTransformer, None] = None
-        self._active_provider: EmbeddingProviderConfig | None = None
 
     @property
     def client(self) -> Union[openai.AsyncOpenAI, SentenceTransformer]:
-        """获取或延迟创建嵌入模型客户端，按provider顺序尝试."""
+        """获取或延迟创建嵌入模型客户端."""
         if self._client is not None:
             return self._client
-
-        if not self.providers:
-            raise RuntimeError("No embedding providers configured")
-
-        errors = []
-        for provider in self.providers:
-            try:
-                self._client = self._create_client(provider)
-                self._active_provider = provider
-                return self._client
-            except Exception as e:
-                errors.append(f"{provider.provider.model}: {e}")
-                continue
-
-        raise RuntimeError(f"All embedding providers failed: {'; '.join(errors)}")
+        self._client = self._create_client(self.provider)
+        return self._client
 
     def _create_client(
         self,
         provider: EmbeddingProviderConfig,
     ) -> Union[openai.AsyncOpenAI, SentenceTransformer]:
         """创建嵌入模型客户端."""
-        device = self.device or provider.device
+        device = provider.device or _auto_detect_device()
         if provider.provider.base_url:
             kwargs: dict = {"api_key": provider.provider.api_key or "not-needed"}
             kwargs["base_url"] = provider.provider.base_url
@@ -127,30 +126,20 @@ class EmbeddingModel:
         embeddings = model.encode(texts, normalize_embeddings=True)
         return [emb.tolist() for emb in embeddings]
 
-    def _active_provider_or_raise(self) -> EmbeddingProviderConfig:
-        if self._active_provider is not None:
-            return self._active_provider
-        if self.providers:
-            self._active_provider = self.providers[0]
-            return self._active_provider
-        raise RuntimeError("No embedding providers configured")
-
     async def encode(self, text: str) -> list[float]:
         """编码文本为向量."""
         cl = self.client
-        provider = self._active_provider_or_raise()
         if isinstance(cl, openai.AsyncOpenAI):
             return await self._async_encode_with_openai(
-                cl, provider.provider.model, text
+                cl, self.provider.provider.model, text
             )
         return self._encode_with_local(cl, text)
 
     async def batch_encode(self, texts: list[str]) -> list[list[float]]:
         """批量编码文本为向量."""
         cl = self.client
-        provider = self._active_provider_or_raise()
         if isinstance(cl, openai.AsyncOpenAI):
             return await self._async_batch_encode_with_openai(
-                cl, provider.provider.model, texts
+                cl, self.provider.provider.model, texts
             )
         return self._batch_encode_with_local(cl, texts)
