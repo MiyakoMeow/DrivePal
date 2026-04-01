@@ -44,7 +44,7 @@ class TOMLStore:
                 if isinstance(default_data, list):
                     tomli_w.dump({_LIST_WRAPPER_KEY: default_data}, f)
                 else:
-                    tomli_w.dump(default_data, f)  # type: ignore[arg-type]
+                    tomli_w.dump(default_data, f)  # type: ignore
 
     def _clean_for_toml(self, obj: object) -> object:
         """递归清理对象中的 None 值，转换为空字符串."""
@@ -63,7 +63,7 @@ class TOMLStore:
             if isinstance(cleaned, list):
                 await f.write(tomli_w.dumps({_LIST_WRAPPER_KEY: cleaned}).encode())
             else:
-                await f.write(tomli_w.dumps(cleaned).encode())  # type: ignore[arg-type]
+                await f.write(tomli_w.dumps(cleaned).encode())  # type: ignore
 
     async def _read_unsafe(self) -> T:
         """读操作，不获取锁（调用方必须持有锁）."""
@@ -74,7 +74,7 @@ class TOMLStore:
         raw = tomllib.loads(content.decode("utf-8"))
         if _LIST_WRAPPER_KEY in raw and len(raw) == 1:
             return raw[_LIST_WRAPPER_KEY]
-        return raw  # type: ignore[return-value]
+        return raw  # type: ignore
 
     async def read(self) -> T:
         """读取TOML文件中的全部数据."""
