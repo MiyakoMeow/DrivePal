@@ -76,8 +76,8 @@ class TestLLMSettingsLoad:
     def test_load_from_config_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """验证从 config/llm.json 加载提供者."""
-        config_file = tmp_path / "config" / "llm.json"
+        """验证从 config/llm.toml 加载提供者."""
+        config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
             json.dumps(
@@ -127,7 +127,7 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
-        monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.json"))
+        monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
@@ -137,7 +137,7 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证配置文件提供者优先于环境变量提供者."""
-        config_file = tmp_path / "config" / "llm.json"
+        config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
             json.dumps(
@@ -169,7 +169,7 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证重复提供者按 model+base_url 去重."""
-        config_file = tmp_path / "config" / "llm.json"
+        config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
             json.dumps(
@@ -419,7 +419,7 @@ def test_llm_settings_loads_judge(
         "llm": [{"model": "qwen", "base_url": "http://localhost:8000/v1"}],
         "judge": {"model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
     }
-    config_file = tmp_path / "llm.json"
+    config_file = tmp_path / "llm.toml"
     config_file.write_text(json.dumps(config), encoding="utf-8")
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
 

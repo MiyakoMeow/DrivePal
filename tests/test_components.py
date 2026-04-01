@@ -156,57 +156,57 @@ class TestFeedbackManager:
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证接受反馈增加策略权重."""
-        from app.storage.json_store import JSONStore
+        from app.storage.toml_store import TOMLStore
 
         await manager.update_feedback(
             "eid1", FeedbackData(action="accept", type="meeting")
         )
-        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
     async def test_ignore_decreases_weight(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证忽略反馈降低策略权重."""
-        from app.storage.json_store import JSONStore
+        from app.storage.toml_store import TOMLStore
 
         await manager.update_feedback(
             "eid2", FeedbackData(action="ignore", type="general")
         )
-        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["general"] == pytest.approx(0.4)
 
     async def test_accept_capped_at_one(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证接受权重上限为 1.0."""
-        from app.storage.json_store import JSONStore
+        from app.storage.toml_store import TOMLStore
 
         for _ in range(20):
             await manager.update_feedback(
                 "eid", FeedbackData(action="accept", type="meeting")
             )
-        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["meeting"] <= 1.0
 
     async def test_ignore_floored_at_zero_point_one(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证忽略权重下限为 0.1."""
-        from app.storage.json_store import JSONStore
+        from app.storage.toml_store import TOMLStore
 
         for _ in range(20):
             await manager.update_feedback(
                 "eid", FeedbackData(action="ignore", type="general")
             )
-        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["general"] >= 0.1
 
     async def test_feedback_appended_to_history(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证每条反馈记录都追加到历史记录中."""
-        from app.storage.json_store import JSONStore
+        from app.storage.toml_store import TOMLStore
 
         await manager.update_feedback(
             "eid1", FeedbackData(action="accept", type="meeting")
@@ -214,7 +214,7 @@ class TestFeedbackManager:
         await manager.update_feedback(
             "eid2", FeedbackData(action="ignore", type="general")
         )
-        feedback = await JSONStore(tmp_path, Path("feedback.json"), list).read()
+        feedback = await TOMLStore(tmp_path, Path("feedback.toml"), list).read()
         assert len(feedback) == 2
 
 
