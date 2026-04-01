@@ -410,6 +410,44 @@ class MemoryBankEngine:
             summaries["daily_summaries"] = daily_summaries
             await self._summaries_store.write(summaries)
 
+    async def _search_personality(self, query: str, top_k: int) -> list[SearchResult]:
+        """搜索人格摘要，使用关键词匹配，retention 权重为 SUMMARY_WEIGHT * 0.8"""
+        personality_data = await self._personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        if not daily_personality:
+            return []
+        query_lower = query.lower()
+        today = datetime.now(timezone.utc).date()
+        results = []
+        for date_group, data in daily_personality.items():
+            if not isinstance(data, dict):
+                continue
+            content = data.get("content", "")
+            if query_lower in content.lower():
+                strength = data.get("memory_strength", 1)
+                last_recall = data.get("last_recall_date", date_group)
+                try:
+                    last_date = date.fromisoformat(last_recall)
+                    days_elapsed = (today - last_date).days
+                except (ValueError, TypeError):
+                    days_elapsed = 0
+                retention = forgetting_curve(days_elapsed, strength)
+                score = retention * SUMMARY_WEIGHT * 0.8
+                results.append(
+                    SearchResult(
+                        event={
+                            "content": content,
+                            "date_group": date_group,
+                            "memory_strength": strength,
+                            "last_recall_date": last_recall,
+                        },
+                        score=score,
+                        source="personality",
+                    )
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
@@ -572,8 +610,7 @@ class MemoryBankEngine:
             return
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == date_group]
-        count = len(group_events)
-        if count < PERSONALITY_SUMMARY_THRESHOLD:
+        if len(group_events) < PERSONALITY_SUMMARY_THRESHOLD:
             return
         personality_data = await self._personality_store.read()
         daily_personality = personality_data.get("daily_personality", {})
