@@ -109,6 +109,104 @@ class TestLLMSettingsLoad:
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
 
+    def test_get_embedding_provider_local(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证 get_embedding_provider 解析本地 embedding 模型."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+                "huggingface": {},
+            },
+            "embedding": {"model": "huggingface/BAAI/bge-small-zh-v1.5"},
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        provider = settings.get_embedding_provider()
+        assert provider is not None
+        assert provider.provider.model == "BAAI/bge-small-zh-v1.5"
+        assert provider.provider.base_url is None
+        _load_config.cache_clear()
+
+    def test_get_embedding_provider_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证 get_embedding_provider 解析远程 embedding 模型."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+                "openai": {
+                    "base_url": "https://api.openai.com/v1",
+                    "api_key_env": "OPENAI_API_KEY",
+                },
+            },
+            "embedding": {"model": "openai/text-embedding-3-small"},
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        provider = settings.get_embedding_provider()
+        assert provider is not None
+        assert provider.provider.model == "text-embedding-3-small"
+        assert provider.provider.base_url == "https://api.openai.com/v1"
+        _load_config.cache_clear()
+
+    def test_get_embedding_provider_with_device_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证 get_embedding_provider 解析 device 参数."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+                "huggingface": {},
+            },
+            "embedding": {"model": "huggingface/BAAI/bge-small-zh-v1.5?device=cuda"},
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        provider = settings.get_embedding_provider()
+        assert provider is not None
+        assert provider.device == "cuda"
+        _load_config.cache_clear()
+
+    def test_get_embedding_provider_none_when_not_configured(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证无 embedding 配置时返回 None."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+            },
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        assert settings.get_embedding_provider() is None
+        _load_config.cache_clear()
+
     def test_load_with_model_groups(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

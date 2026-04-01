@@ -97,7 +97,7 @@ class LLMSettings:
     """模型配置集合，包含 LLM 和 Embedding 提供商列表."""
 
     llm_providers: list[LLMProviderConfig] = field(default_factory=list)
-    embedding_providers: list[EmbeddingProviderConfig] = field(default_factory=list)
+    embedding_model: str | None = None
     judge_provider: JudgeProviderConfig | None = None
     model_groups: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 
@@ -121,16 +121,18 @@ class LLMSettings:
                 "No LLM configuration found. Add [model_groups.default] to config/llm.toml"
             )
 
-        embedding_providers = [
-            EmbeddingProviderConfig.from_dict(item)
-            for item in config_data.get("embedding", [])
-        ]
+        embedding_section = config_data.get("embedding")
+        embedding_model = (
+            embedding_section.get("model")
+            if isinstance(embedding_section, dict)
+            else None
+        )
 
         judge_provider = _build_judge_provider(config_data)
 
         return cls(
             llm_providers=[],
-            embedding_providers=embedding_providers,
+            embedding_model=embedding_model,
             judge_provider=judge_provider,
             model_groups=model_groups,
         )
@@ -180,6 +182,31 @@ class LLMSettings:
                 )
             )
         return result
+
+    def get_embedding_provider(self) -> EmbeddingProviderConfig | None:
+        """解析 embedding_model 配置字符串，返回 EmbeddingProviderConfig."""
+        if not self.embedding_model:
+            return None
+        from adapters.model_config import (
+            _resolve_provider,
+            resolve_model_string,
+        )
+
+        resolved = resolve_model_string(self.embedding_model)
+        provider_config = _resolve_provider(resolved.provider_name)
+        api_key_env = provider_config.get("api_key_env")
+        if api_key_env:
+            api_key: str | None = os.environ.get(api_key_env, "")
+        else:
+            api_key = provider_config.get("api_key")
+        return EmbeddingProviderConfig(
+            provider=ProviderConfig(
+                model=resolved.model_name,
+                base_url=provider_config.get("base_url"),
+                api_key=api_key,
+            ),
+            device=resolved.params.get("device"),
+        )
 
 
 def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
