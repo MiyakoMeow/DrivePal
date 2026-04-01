@@ -84,7 +84,7 @@ thesis-cockpit-memo/
 
 ### 1. 多Agent工作流
 
-基于 LangGraph 构建的四阶段工作流，每个阶段由专门的Agent处理：
+基于 LangGraph 构建的四阶段工作流，每个阶段由专门的Agent处理。**所有工作流方法均为异步（async/await）。**
 
 ```mermaid
 flowchart LR
@@ -165,6 +165,8 @@ flowchart TD
 ### 4. REST API
 
 #### 基础信息
+
+**所有 API 端点均为异步（async/await）。**
 
 - 基础路径：`/api`
 - 服务启动：`python main.py`（默认 `0.0.0.0:8000`）

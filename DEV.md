@@ -134,4 +134,4 @@ uv run pytest tests/ -v
 | **数据存储** | JSON文件 (标准库json) |
 | **数据集** | HuggingFace Datasets |
 | **基准测试** | VehicleMemBench (vendor 子模块) |
-| **开发工具** | uv (包管理), pytest (测试), ruff (lint), ty (类型检查) |
+| **开发工具** | uv (包管理), pytest (测试, asyncio_mode=auto), ruff (lint, 扩展规则集), ty (类型检查) |
