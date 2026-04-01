@@ -375,6 +375,44 @@ class TestPersonalitySummary:
         personality_data = await engine._personality_store.read()
         assert personality_data["daily_personality"] == {}
 
+    async def test_search_personality_returns_matching_summaries(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证人格摘要搜索返回匹配结果."""
+        personality_data = {
+            "daily_personality": {
+                "2026-04-01": {
+                    "content": "用户喜欢讨论天气",
+                    "memory_strength": 1,
+                    "last_recall_date": "2026-04-01",
+                }
+            },
+            "overall_personality": "",
+        }
+        await engine._personality_store.write(personality_data)
+        results = await engine._search_personality("天气", top_k=1)
+        assert len(results) == 1
+        assert results[0].source == "personality"
+        assert "天气" in results[0].event["content"]
+
+    async def test_search_personality_returns_empty_when_no_match(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证无匹配时返回空结果."""
+        personality_data = {
+            "daily_personality": {
+                "2026-04-01": {
+                    "content": "用户喜欢讨论天气",
+                    "memory_strength": 1,
+                    "last_recall_date": "2026-04-01",
+                }
+            },
+            "overall_personality": "",
+        }
+        await engine._personality_store.write(personality_data)
+        results = await engine._search_personality("音乐", top_k=1)
+        assert len(results) == 0
+
 
 class TestSoftForgetConstants:
     """软遗忘常量测试."""

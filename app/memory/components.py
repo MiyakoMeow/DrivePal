@@ -1,6 +1,7 @@
 """MemoryStore 可组合组件."""
 
 import asyncio
+import logging
 import math
 import uuid
 from datetime import date, datetime, timezone
@@ -21,6 +22,8 @@ TOP_K = 3
 
 PERSONALITY_SUMMARY_THRESHOLD = 2
 OVERALL_PERSONALITY_THRESHOLD = 3
+
+logger = logging.getLogger(__name__)
 
 
 def forgetting_curve(days_elapsed: int, strength: int) -> float:
@@ -198,6 +201,7 @@ class MemoryBankEngine:
         if not query.strip():
             return []
         events = await self._storage.read_events()
+        await self._soft_forget_events(events, set())
         summaries = await self._summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
         if not events and not daily_summaries:
@@ -304,8 +308,6 @@ class MemoryBankEngine:
         if updated:
             await self._storage.write_events(all_events)
         await self._strengthen_interactions(matched_ids)
-        all_events = await self._storage.read_events()
-        await self._soft_forget_events(all_events, matched_ids)
 
     async def _strengthen_interactions(self, event_ids: set[str]) -> None:
         if not event_ids:
@@ -638,6 +640,9 @@ User's personality traits, emotions, and response strategy are:
         try:
             summary_text = await self.chat_model.generate(prompt)
         except Exception:
+            logger.exception(
+                "Failed to generate personality summary for date_group=%s", date_group
+            )
             return
         daily_personality[date_group] = {
             "content": summary_text,
@@ -670,6 +675,7 @@ response strategy for the AI lover, summarized as:
         try:
             overall = await self.chat_model.generate(prompt)
         except Exception:
+            logger.exception("Failed to generate overall personality summary")
             return
         personality_data["overall_personality"] = overall
         await self._personality_store.write(personality_data)
