@@ -182,6 +182,7 @@ class MemoryBankEngine:
             Path("memorybank_personality.toml"),
             lambda: {"daily_personality": {}, "overall_personality": ""},
         )
+        self._personality_lock = asyncio.Lock()
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件并触发摘要."""
@@ -332,6 +333,8 @@ class MemoryBankEngine:
         self, all_events: list[dict], matched_ids: set[str]
     ) -> None:
         """对 retention 过低的记忆执行软遗忘."""
+        if not matched_ids:
+            return
         today = datetime.now(timezone.utc).date()
         updated = False
         for event in all_events:
@@ -425,6 +428,7 @@ class MemoryBankEngine:
         query_lower = query.lower()
         today = datetime.now(timezone.utc).date()
         results = []
+        matched_date_groups = []
         for date_group, data in daily_personality.items():
             if not isinstance(data, dict):
                 continue
@@ -451,8 +455,30 @@ class MemoryBankEngine:
                         source="personality",
                     )
                 )
+                matched_date_groups.append(date_group)
         results.sort(key=lambda x: x.score, reverse=True)
+        await self._strengthen_personality(matched_date_groups, daily_personality)
         return results[:top_k]
+
+    async def _strengthen_personality(
+        self, matched_date_groups: list[str], daily_personality: dict
+    ) -> None:
+        """强化匹配到的人格摘要的 memory_strength 和 last_recall_date."""
+        if not matched_date_groups:
+            return
+        today = datetime.now(timezone.utc).date().isoformat()
+        updated = False
+        for date_group in matched_date_groups:
+            if date_group in daily_personality:
+                data = daily_personality[date_group]
+                if isinstance(data, dict):
+                    data["memory_strength"] = data.get("memory_strength", 1) + 1
+                    data["last_recall_date"] = today
+                    updated = True
+        if updated:
+            personality_data = await self._personality_store.read()
+            personality_data["daily_personality"] = daily_personality
+            await self._personality_store.write(personality_data)
 
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
@@ -625,23 +651,24 @@ class MemoryBankEngine:
         ]
         if len(group_interactions) < PERSONALITY_SUMMARY_THRESHOLD:
             return
-        personality_data = await self._personality_store.read()
-        daily_personality = personality_data.get("daily_personality", {})
         latest_source_ts = max(
             (e.get("updated_at") or e.get("created_at", "") for e in group_events),
             default="",
         )
-        if date_group in daily_personality:
-            existing = daily_personality[date_group]
-            if (
-                isinstance(existing, dict)
-                and existing.get("interaction_count", 0) >= len(group_interactions)
-                and existing.get("source_updated_at", "") >= latest_source_ts
-            ):
-                return
-        combined = "\n".join(
-            f"用户: {i['query']}\n系统: {i['response']}" for i in group_interactions
-        )
+        async with self._personality_lock:
+            personality_data = await self._personality_store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            if date_group in daily_personality:
+                existing = daily_personality[date_group]
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("interaction_count", 0) >= len(group_interactions)
+                    and existing.get("source_updated_at", "") >= latest_source_ts
+                ):
+                    return
+            combined = "\n".join(
+                f"用户: {i['query']}\n系统: {i['response']}" for i in group_interactions
+            )
         prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
         and devise response strategies based on your speculation. Dialogue content:
         {combined}
@@ -655,17 +682,18 @@ class MemoryBankEngine:
                 "Failed to generate personality summary for date_group=%s", date_group
             )
             return
-        daily_personality[date_group] = {
-            "content": summary_text,
-            "memory_strength": 1,
-            "last_recall_date": date_group,
-            "interaction_count": len(group_interactions),
-            "source_updated_at": latest_source_ts,
-        }
-        personality_data["daily_personality"] = daily_personality
-        await self._personality_store.write(personality_data)
-        if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
-            await self._update_overall_personality(personality_data)
+        async with self._personality_lock:
+            daily_personality[date_group] = {
+                "content": summary_text,
+                "memory_strength": 1,
+                "last_recall_date": date_group,
+                "interaction_count": len(group_interactions),
+                "source_updated_at": latest_source_ts,
+            }
+            personality_data["daily_personality"] = daily_personality
+            await self._personality_store.write(personality_data)
+            if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
+                await self._update_overall_personality(personality_data)
 
     async def _update_overall_personality(self, personality_data: dict) -> None:
         """汇总多条每日人格分析为整体人格档案."""

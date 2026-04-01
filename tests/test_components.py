@@ -413,6 +413,26 @@ class TestPersonalitySummary:
         results = await engine._search_personality("音乐", top_k=1)
         assert len(results) == 0
 
+    async def test_search_personality_via_public_interface(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证通过 search() 公共接口能返回人格摘要."""
+        personality_data = {
+            "daily_personality": {
+                "2026-04-01": {
+                    "content": "用户喜欢讨论天气",
+                    "memory_strength": 1,
+                    "last_recall_date": "2026-04-01",
+                }
+            },
+            "overall_personality": "",
+        }
+        await engine._personality_store.write(personality_data)
+        results = await engine.search("天气", top_k=5)
+        personality_results = [r for r in results if r.source == "personality"]
+        assert len(personality_results) == 1
+        assert "天气" in personality_results[0].event["content"]
+
 
 class TestSoftForgetConstants:
     """软遗忘常量测试."""
