@@ -164,7 +164,11 @@ class LLMSettings:
         for ref in model_refs:
             resolved = resolve_model_string(ref)
             provider_config = _resolve_provider(resolved.provider_name)
-            api_key = os.environ.get(provider_config.get("api_key_env", ""), "")
+            api_key_env = provider_config.get("api_key_env")
+            if api_key_env:
+                api_key = os.environ.get(api_key_env, "")
+            else:
+                api_key = provider_config.get("api_key", "")
             result.append(
                 LLMProviderConfig(
                     provider=ProviderConfig(
