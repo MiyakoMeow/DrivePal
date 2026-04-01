@@ -57,7 +57,7 @@ class EmbeddingProviderConfig:
     """单个 Embedding 服务提供商配置."""
 
     provider: ProviderConfig
-    device: str = "cpu"
+    device: str | None = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "EmbeddingProviderConfig":
