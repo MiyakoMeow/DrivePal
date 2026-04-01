@@ -13,12 +13,6 @@ if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
 
 
-_DEFAULT_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "config" / "llm.json"
-)
-CONFIG_PATH = os.environ.get("CONFIG_PATH", "config/llm.json")
-
-
 @dataclass
 class ProviderConfig:
     """LLM 提供商基础配置."""

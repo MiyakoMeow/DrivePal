@@ -91,7 +91,7 @@ class MemoryModule:
             kwargs["chat_model"] = self._chat_model
         return store_cls(**kwargs)
 
-    async def write(self, event: MemoryEvent, mode: MemoryMode | None = None) -> str:
+    async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
         """写入记忆事件."""
         store = await self._get_store(self._resolve_mode(mode))
         return await store.write(event)
@@ -101,6 +101,7 @@ class MemoryModule:
         query: str,
         response: str,
         event_type: str = "reminder",
+        *,
         mode: MemoryMode | None = None,
     ) -> str:
         """写入交互记录."""
@@ -119,14 +120,14 @@ class MemoryModule:
         return await store.search(query, top_k=top_k)
 
     async def get_history(
-        self, limit: int = 10, mode: MemoryMode | None = None
+        self, limit: int = 10, *, mode: MemoryMode | None = None
     ) -> list[MemoryEvent]:
         """获取历史记忆事件."""
         store = await self._get_store(self._resolve_mode(mode))
         return await store.get_history(limit)
 
     async def update_feedback(
-        self, event_id: str, feedback: FeedbackData, mode: MemoryMode | None = None
+        self, event_id: str, feedback: FeedbackData, *, mode: MemoryMode | None = None
     ) -> None:
         """更新记忆反馈."""
         store = await self._get_store(self._resolve_mode(mode))
