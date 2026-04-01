@@ -29,6 +29,9 @@ def _normalize_llm_config(config: dict) -> list[dict]:
     if isinstance(llm_data, dict):
         return [llm_data]
     if isinstance(llm_data, list):
+        if not all(isinstance(item, dict) for item in llm_data):
+            msg = "Each item in 'llm' must be a table/object"
+            raise ValueError(msg)
         return llm_data
     return []
 
@@ -37,6 +40,8 @@ def _normalize_llm_config(config: dict) -> list[dict]:
 def _load_config() -> dict:
     """从 TOML 文件加载配置（已缓存）."""
     config_path = _get_config_path()
+    if not config_path.is_file():
+        return {}
     with config_path.open("rb") as f:
         return tomllib.load(f)
 
