@@ -177,9 +177,9 @@ class MemoryBankEngine:
             Path("memorybank_summaries.toml"),
             lambda: dict(self._default_summaries),
         )
-        self._personality_store = JSONStore(
+        self._personality_store = TOMLStore(
             data_dir,
-            Path("memorybank_personality.json"),
+            Path("memorybank_personality.toml"),
             lambda: {"daily_personality": {}, "overall_personality": ""},
         )
 
