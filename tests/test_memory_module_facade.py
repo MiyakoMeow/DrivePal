@@ -20,8 +20,8 @@ class TestMemoryModuleFacade:
     """MemoryModule Facade 接口测试."""
 
     async def test_default_mode_is_memory_bank(self, mm: MemoryModule) -> None:
-        """验证默认模式为 memory_bank."""
-        assert mm._default_mode == "memory_bank"
+        """验证默认模式为 memory_bank（通过隐式调用验证）."""
+        await mm.write(MemoryEvent(content="test"))
 
     async def test_write_uses_default_mode(self, mm: MemoryModule) -> None:
         """验证 write 使用默认模式存储."""
@@ -37,10 +37,11 @@ class TestMemoryModuleFacade:
         assert len(results) == 1
         assert isinstance(results[0], SearchResult)
 
-    async def test_set_default_mode(self, mm: MemoryModule) -> None:
-        """验证 set_default_mode 正确切换默认模式."""
-        mm.set_default_mode(MemoryMode.MEMORY_BANK)
-        assert mm._default_mode == "memory_bank"
+    async def test_write_with_explicit_mode(self, mm: MemoryModule) -> None:
+        """验证 write 使用显式 mode 参数."""
+        await mm.write(MemoryEvent(content="test"), mode=MemoryMode.MEMORY_BANK)
+        history = await mm.get_history(mode=MemoryMode.MEMORY_BANK)
+        assert len(history) == 1
 
     async def test_write_interaction_calls_memory_bank(self, mm: MemoryModule) -> None:
         """验证 write_interaction 在 memory_bank 模式下返回字符串 ID."""

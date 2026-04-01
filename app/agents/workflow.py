@@ -32,7 +32,7 @@ class AgentWorkflow:
     ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
-        self.memory_mode = memory_mode
+        self._memory_mode = memory_mode
 
         if memory_module is not None:
             self.memory_module = memory_module
@@ -41,8 +41,6 @@ class AgentWorkflow:
 
             chat_model = get_chat_model()
             self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
-
-        self.memory_module.set_default_mode(memory_mode)
 
         self._nodes = [
             self._context_node,
@@ -74,7 +72,7 @@ class AgentWorkflow:
 
         try:
             related_events = (
-                await self.memory_module.search(user_input, mode=self.memory_mode)
+                await self.memory_module.search(user_input, mode=self._memory_mode)
                 if user_input
                 else []
             )
@@ -87,7 +85,10 @@ class AgentWorkflow:
                 relevant_memories = [e.to_public() for e in related_events]
             else:
                 relevant_memories = [
-                    e.model_dump() for e in await self.memory_module.get_history()
+                    e.model_dump()
+                    for e in await self.memory_module.get_history(
+                        mode=self._memory_mode
+                    )
                 ]
         except Exception as e:
             logger.warning("Memory get_history failed: %s", e)
@@ -178,7 +179,9 @@ class AgentWorkflow:
             content = remind_content
         else:
             content = decision.get("content") or "无提醒内容"
-        event_id = await self.memory_module.write_interaction(user_input, content)
+        event_id = await self.memory_module.write_interaction(
+            user_input, content, mode=self._memory_mode
+        )
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
             event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
@@ -197,7 +200,7 @@ class AgentWorkflow:
             "context": {},
             "task": {},
             "decision": {},
-            "memory_mode": self.memory_mode,
+            "memory_mode": self._memory_mode,
             "result": None,
             "event_id": None,
         }

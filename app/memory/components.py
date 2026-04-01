@@ -1,5 +1,6 @@
 """MemoryStore 可组合组件."""
 
+import asyncio
 import math
 import uuid
 from datetime import date, datetime, timezone
@@ -74,6 +75,10 @@ class KeywordSearch:
         return [SearchResult(event=e) for e in matched[:top_k]]
 
 
+_strategy_locks: dict[str, asyncio.Lock] = {}
+_strategy_locks_lock = asyncio.Lock()
+
+
 class FeedbackManager:
     """反馈更新 + 策略权重管理."""
 
@@ -81,6 +86,12 @@ class FeedbackManager:
         """初始化反馈管理器."""
         self._strategies_store = JSONStore(data_dir, Path("strategies.json"), dict)
         self.data_dir = data_dir
+
+    async def _get_lock(self) -> asyncio.Lock:
+        async with _strategy_locks_lock:
+            if str(self.data_dir) not in _strategy_locks:
+                _strategy_locks[str(self.data_dir)] = asyncio.Lock()
+            return _strategy_locks[str(self.data_dir)]
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
@@ -91,23 +102,25 @@ class FeedbackManager:
         await self._update_strategy(event_id, feedback.model_dump())
 
     async def _update_strategy(self, event_id: str, feedback: dict) -> None:
-        strategies = await self._strategies_store.read()
-        action = feedback.get("action")
-        event_type = feedback.get("type", "default")
+        lock = await self._get_lock()
+        async with lock:
+            strategies = await self._strategies_store.read()
+            action = feedback.get("action")
+            event_type = feedback.get("type", "default")
 
-        if "reminder_weights" not in strategies:
-            strategies["reminder_weights"] = {}
+            if "reminder_weights" not in strategies:
+                strategies["reminder_weights"] = {}
 
-        if action == "accept":
-            strategies["reminder_weights"][event_type] = min(
-                strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
-            )
-        elif action == "ignore":
-            strategies["reminder_weights"][event_type] = max(
-                strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
-            )
+            if action == "accept":
+                strategies["reminder_weights"][event_type] = min(
+                    strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
+                )
+            elif action == "ignore":
+                strategies["reminder_weights"][event_type] = max(
+                    strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
+                )
 
-        await self._strategies_store.write(strategies)
+            await self._strategies_store.write(strategies)
 
 
 class SimpleInteractionWriter:
