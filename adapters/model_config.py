@@ -25,7 +25,7 @@ def _get_config_path() -> Path:
 
 @lru_cache(maxsize=1)
 def _load_config() -> dict:
-    """从 JSON 文件加载配置（已缓存）."""
+    """从 TOML 文件加载配置（已缓存）."""
     config_path = _get_config_path()
     with config_path.open("rb") as f:
         return tomllib.load(f)

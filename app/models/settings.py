@@ -115,7 +115,7 @@ class LLMSettings:
 
         if not llm_providers:
             raise RuntimeError(
-                "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.json"
+                "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.toml"
             )
 
         seen = set()
@@ -194,7 +194,7 @@ def get_judge_model() -> "ChatModel":
     settings = LLMSettings.load()
     if settings.judge_provider is None:
         raise RuntimeError(
-            "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.json"
+            "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.toml"
         )
     provider = LLMProviderConfig(
         provider=ProviderConfig(
