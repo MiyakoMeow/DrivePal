@@ -99,7 +99,7 @@ class LLMSettings:
     llm_providers: list[LLMProviderConfig] = field(default_factory=list)
     embedding_providers: list[EmbeddingProviderConfig] = field(default_factory=list)
     judge_provider: JudgeProviderConfig | None = None
-    model_groups: dict[str, list[str]] = field(default_factory=dict)
+    model_groups: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "LLMSettings":
@@ -148,15 +148,15 @@ class LLMSettings:
 
         judge_provider = _build_judge_provider(config_data)
 
-        model_groups = config_data.get("model_groups", {})
+        model_groups = dict(config_data.get("model_groups", {}))
 
         if "llm" in config_data and "default" not in model_groups:
             llm_list = config_data["llm"]
             if isinstance(llm_list, dict):
                 llm_list = [llm_list]
-            model_groups["default"] = [
-                item["model"] for item in llm_list if "model" in item
-            ]
+            model_groups["default"] = {
+                "models": [item["model"] for item in llm_list if "model" in item]
+            }
 
         if "benchmark" in config_data and "benchmark" not in model_groups:
             benchmark_data = config_data["benchmark"]
@@ -165,7 +165,7 @@ class LLMSettings:
             else:
                 model_name = str(benchmark_data) if benchmark_data else ""
             if model_name:
-                model_groups["benchmark"] = [model_name]
+                model_groups["benchmark"] = {"models": [model_name]}
 
         return cls(
             llm_providers=deduped,
