@@ -94,7 +94,7 @@ class LLMSettings:
     def load(cls) -> "LLMSettings":
         """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
         config_data: dict = {}
-        config_path_env = os.environ.get("CONFIG_PATH", "config/llm.json")
+        config_path_env = os.environ.get("CONFIG_PATH", "config/llm.toml")
         if Path(config_path_env).is_absolute():
             config_path = Path(config_path_env)
         else:

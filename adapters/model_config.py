@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 def _get_config_path() -> Path:
     """获取配置文件路径，支持环境变量覆盖."""
-    env_path = os.environ.get("CONFIG_PATH", "config/llm.json")
+    env_path = os.environ.get("CONFIG_PATH", "config/llm.toml")
     if Path(env_path).is_absolute():
         return Path(env_path)
     return Path(__file__).resolve().parent.parent / env_path
