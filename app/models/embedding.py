@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Union
 
 import openai
@@ -50,11 +49,11 @@ class EmbeddingModel:
                 ]
         self.providers = providers
         self.device = device
-        self._client: Union[openai.OpenAI, SentenceTransformer, None] = None
+        self._client: Union[openai.AsyncOpenAI, SentenceTransformer, None] = None
         self._active_provider: EmbeddingProviderConfig | None = None
 
     @property
-    def client(self) -> Union[openai.OpenAI, SentenceTransformer]:
+    def client(self) -> Union[openai.AsyncOpenAI, SentenceTransformer]:
         """获取或延迟创建嵌入模型客户端，按provider顺序尝试."""
         if self._client is not None:
             return self._client
@@ -77,13 +76,13 @@ class EmbeddingModel:
     def _create_client(
         self,
         provider: EmbeddingProviderConfig,
-    ) -> Union[openai.OpenAI, SentenceTransformer]:
+    ) -> Union[openai.AsyncOpenAI, SentenceTransformer]:
         """创建嵌入模型客户端."""
         device = self.device or provider.device
         if provider.provider.base_url:
             kwargs: dict = {"api_key": provider.provider.api_key or "not-needed"}
             kwargs["base_url"] = provider.provider.base_url
-            return openai.OpenAI(**kwargs)
+            return openai.AsyncOpenAI(**kwargs)
         from sentence_transformers import SentenceTransformer
 
         return SentenceTransformer(
@@ -91,14 +90,14 @@ class EmbeddingModel:
             device=device,
         )
 
-    def _encode_with_openai(
+    async def _async_encode_with_openai(
         self,
-        client: openai.OpenAI,
+        client: openai.AsyncOpenAI,
         model: str,
         text: str,
     ) -> list[float]:
-        """使用openai接口编码文本."""
-        resp = client.embeddings.create(model=model, input=text)
+        """使用openai异步接口编码文本."""
+        resp = await client.embeddings.create(model=model, input=text)
         return resp.data[0].embedding
 
     def _encode_with_local(
@@ -109,14 +108,14 @@ class EmbeddingModel:
         """使用本地模型编码文本."""
         return model.encode(text, normalize_embeddings=True).tolist()
 
-    def _batch_encode_with_openai(
+    async def _async_batch_encode_with_openai(
         self,
-        client: openai.OpenAI,
+        client: openai.AsyncOpenAI,
         model: str,
         texts: list[str],
     ) -> list[list[float]]:
-        """使用openai接口批量编码文本."""
-        resp = client.embeddings.create(model=model, input=texts)
+        """使用openai异步接口批量编码文本."""
+        resp = await client.embeddings.create(model=model, input=texts)
         return [d.embedding for d in sorted(resp.data, key=lambda x: x.index)]
 
     def _batch_encode_with_local(
@@ -138,24 +137,20 @@ class EmbeddingModel:
 
     async def encode(self, text: str) -> list[float]:
         """编码文本为向量."""
-        return await asyncio.to_thread(self._sync_encode, text)
+        cl = self.client
+        provider = self._active_provider_or_raise()
+        if isinstance(cl, openai.AsyncOpenAI):
+            return await self._async_encode_with_openai(
+                cl, provider.provider.model, text
+            )
+        return self._encode_with_local(cl, text)
 
     async def batch_encode(self, texts: list[str]) -> list[list[float]]:
         """批量编码文本为向量."""
-        return await asyncio.to_thread(self._sync_batch_encode, texts)
-
-    def _sync_encode(self, text: str) -> list[float]:
-        """同步编码文本为向量."""
         cl = self.client
         provider = self._active_provider_or_raise()
-        if isinstance(cl, openai.OpenAI):
-            return self._encode_with_openai(cl, provider.provider.model, text)
-        return self._encode_with_local(cl, text)
-
-    def _sync_batch_encode(self, texts: list[str]) -> list[list[float]]:
-        """同步批量编码文本为向量."""
-        cl = self.client
-        provider = self._active_provider_or_raise()
-        if isinstance(cl, openai.OpenAI):
-            return self._batch_encode_with_openai(cl, provider.provider.model, texts)
+        if isinstance(cl, openai.AsyncOpenAI):
+            return await self._async_batch_encode_with_openai(
+                cl, provider.provider.model, texts
+            )
         return self._batch_encode_with_local(cl, texts)

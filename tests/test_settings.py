@@ -314,8 +314,8 @@ class TestEmbeddingModelFallback:
             _ = emb.client
         mock_cls.assert_called_once_with("fake-model", device="cpu")
 
-    def test_remote_provider_creates_openai(self) -> None:
-        """验证远程提供者使用 openai.OpenAI."""
+    def test_remote_provider_creates_async_openai(self) -> None:
+        """验证远程提供者使用 openai.AsyncOpenAI."""
         from app.models.embedding import EmbeddingModel
 
         providers = [
@@ -328,7 +328,7 @@ class TestEmbeddingModelFallback:
             )
         ]
         emb = EmbeddingModel(providers=providers)
-        with patch("app.models.embedding.openai.OpenAI") as mock_cls:
+        with patch("app.models.embedding.openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             _ = emb.client
         mock_cls.assert_called_once()
