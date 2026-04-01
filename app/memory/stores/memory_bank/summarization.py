@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -31,6 +32,7 @@ class SummaryManager:
             Path("memorybank_summaries.toml"),
             lambda: {"daily_summaries": {}, "overall_summary": ""},
         )
+        self._lock = asyncio.Lock()
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -88,20 +90,22 @@ class SummaryManager:
         if not matched_keys:
             return
         today = datetime.now(timezone.utc).date().isoformat()
-        updated = False
-        for key in matched_keys:
-            if key in daily_summaries:
-                summary_data = daily_summaries[key]
-                if isinstance(summary_data, dict):
-                    summary_data["memory_strength"] = (
-                        summary_data.get("memory_strength", 1) + 1
-                    )
-                    summary_data["last_recall_date"] = today
-                    updated = True
-        if updated:
+        async with self._lock:
             summaries = await self._summaries_store.read()
-            summaries["daily_summaries"] = daily_summaries
-            await self._summaries_store.write(summaries)
+            current_daily = summaries.get("daily_summaries", {})
+            updated = False
+            for key in matched_keys:
+                if key in current_daily:
+                    summary_data = current_daily[key]
+                    if isinstance(summary_data, dict):
+                        summary_data["memory_strength"] = (
+                            summary_data.get("memory_strength", 1) + 1
+                        )
+                        summary_data["last_recall_date"] = today
+                        updated = True
+            if updated:
+                summaries["daily_summaries"] = current_daily
+                await self._summaries_store.write(summaries)
 
     async def maybe_summarize(
         self, date_group: str, events: list[dict], chat_model: ChatModel | None
@@ -110,38 +114,51 @@ class SummaryManager:
         count = len(events)
         if count < DAILY_SUMMARY_THRESHOLD:
             return
-        summaries = await self._summaries_store.read()
-        daily_summaries = summaries.get("daily_summaries", {})
+        if not chat_model:
+            return
         latest_source_ts = max(
             (e.get("updated_at") or e.get("created_at", "") for e in events),
             default="",
         )
-        if date_group in daily_summaries:
-            existing = daily_summaries[date_group]
-            if (
-                isinstance(existing, dict)
-                and existing.get("event_count", 0) >= count
-                and existing.get("source_updated_at", "") >= latest_source_ts
-            ):
-                return
-        if not chat_model:
+        should_generate = False
+        async with self._lock:
+            summaries = await self._summaries_store.read()
+            daily_summaries = summaries.get("daily_summaries", {})
+            if date_group in daily_summaries:
+                existing = daily_summaries[date_group]
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("event_count", 0) >= count
+                    and existing.get("source_updated_at", "") >= latest_source_ts
+                ):
+                    return
+            should_generate = True
+            content = "\n".join(
+                e.get("content", "") for e in events if e.get("content")
+            )
+        if not should_generate:
             return
-        content = "\n".join(e.get("content", "") for e in events if e.get("content"))
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
         try:
             summary_text = await chat_model.generate(prompt)
         except Exception:
             return
-        daily_summaries[date_group] = {
-            "content": summary_text,
-            "memory_strength": 1,
-            "last_recall_date": date_group,
-            "event_count": count,
-            "source_updated_at": latest_source_ts,
-        }
-        summaries["daily_summaries"] = daily_summaries
-        await self._summaries_store.write(summaries)
-        if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
+        needs_overall_update = False
+        async with self._lock:
+            summaries = await self._summaries_store.read()
+            daily_summaries = summaries.get("daily_summaries", {})
+            daily_summaries[date_group] = {
+                "content": summary_text,
+                "memory_strength": 1,
+                "last_recall_date": date_group,
+                "event_count": count,
+                "source_updated_at": latest_source_ts,
+            }
+            summaries["daily_summaries"] = daily_summaries
+            await self._summaries_store.write(summaries)
+            if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
+                needs_overall_update = True
+        if needs_overall_update:
             await self.update_overall_summary(daily_summaries, summaries, chat_model)
 
     async def update_overall_summary(
@@ -150,7 +167,7 @@ class SummaryManager:
         """根据日常摘要更新总体摘要."""
         if not chat_model:
             return
-        all_summaries = []
+        all_summaries: list[str] = []
         for date_group, summary_data in daily_summaries.items():
             if isinstance(summary_data, dict):
                 all_summaries.append(
@@ -164,5 +181,7 @@ class SummaryManager:
             overall = await chat_model.generate(prompt)
         except Exception:
             return
-        summaries["overall_summary"] = overall
-        await self._summaries_store.write(summaries)
+        async with self._lock:
+            summaries = await self._summaries_store.read()
+            summaries["overall_summary"] = overall
+            await self._summaries_store.write(summaries)

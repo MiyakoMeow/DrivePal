@@ -169,6 +169,7 @@ class PersonalityManager:
             )
             if overall_text:
                 async with self._personality_lock:
+                    personality_data = await self._store.read()
                     personality_data["overall_personality"] = overall_text
                     await self._store.write(personality_data)
 

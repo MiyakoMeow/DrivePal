@@ -106,18 +106,21 @@ class MemoryBankEngine:
         results = []
         for event in events:
             searchable_text = self._get_searchable_text(event).lower()
-            if query_lower in searchable_text:
-                strength = event.get("memory_strength", 1)
-                last_recall = event.get("last_recall_date", today.isoformat())
-                try:
-                    last_date = date.fromisoformat(last_recall)
-                    days_elapsed = (today - last_date).days
-                except (ValueError, TypeError):
-                    days_elapsed = 0
-                retention = forgetting_curve(days_elapsed, strength)
-                results.append(
-                    SearchResult(event=dict(event), score=retention, source="event")
-                )
+            if query_lower not in searchable_text:
+                continue
+            strength = event.get("memory_strength", 1)
+            last_recall = event.get("last_recall_date", today.isoformat())
+            try:
+                last_date = date.fromisoformat(last_recall)
+                days_elapsed = (today - last_date).days
+            except (ValueError, TypeError):
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, strength)
+            if retention <= 0:
+                continue
+            results.append(
+                SearchResult(event=dict(event), score=retention, source="event")
+            )
         results.sort(key=lambda x: x.score, reverse=True)
         top_results = results[:top_k]
         await self._strengthen_events([r.event for r in top_results])
@@ -243,33 +246,42 @@ class MemoryBankEngine:
             "last_recall_date": today,
         }
 
-        append_event_id = await self._should_append_to_event(interaction)
-        event = None
-        if append_event_id:
-            interaction["event_id"] = append_event_id
-        else:
-            event_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-            now_iso = datetime.now(timezone.utc).isoformat()
-            event = {
-                "id": event_id,
-                "content": query,
-                "type": event_type,
-                "interaction_ids": [interaction_id],
-                "created_at": now_iso,
-                "updated_at": now_iso,
-                "memory_strength": 1,
-                "last_recall_date": today,
-                "date_group": today,
-            }
-            interaction["event_id"] = event_id
+        async with self._lock:
+            append_event_id = await self._should_append_to_event(interaction)
+            event = None
+            if append_event_id:
+                interaction["event_id"] = append_event_id
+            else:
+                event_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                now_iso = datetime.now(timezone.utc).isoformat()
+                event = {
+                    "id": event_id,
+                    "content": query,
+                    "type": event_type,
+                    "interaction_ids": [interaction_id],
+                    "created_at": now_iso,
+                    "updated_at": now_iso,
+                    "memory_strength": 1,
+                    "last_recall_date": today,
+                    "date_group": today,
+                }
+                interaction["event_id"] = event_id
 
-        await self._interactions_store.append(interaction)
+            await self._interactions_store.append(interaction)
+
+            if append_event_id:
+                all_events = await self._storage.read_events()
+                for ev in all_events:
+                    if ev.get("id") == append_event_id:
+                        ev.setdefault("interaction_ids", []).append(interaction_id)
+                        ev["updated_at"] = datetime.now(timezone.utc).isoformat()
+                        break
+                await self._storage.write_events(all_events)
+            else:
+                await self._storage._store.append(event)
 
         if append_event_id:
-            await self._append_interaction_to_event(append_event_id, interaction_id)
             await self._update_event_summary(append_event_id)
-        else:
-            await self._storage._store.append(event)
 
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
@@ -304,18 +316,6 @@ class MemoryBankEngine:
         if overlap / len(query_chars) >= 0.5:
             return recent["id"]
         return None
-
-    async def _append_interaction_to_event(
-        self, event_id: str, interaction_id: str
-    ) -> None:
-        async with self._lock:
-            all_events = await self._storage.read_events()
-            for event in all_events:
-                if event.get("id") == event_id:
-                    event.setdefault("interaction_ids", []).append(interaction_id)
-                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
-                    break
-            await self._storage.write_events(all_events)
 
     async def _update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:
