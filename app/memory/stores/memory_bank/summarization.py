@@ -48,7 +48,6 @@ class SummaryManager:
         query_lower = query.lower()
         today = datetime.now(timezone.utc).date()
         results = []
-        matched_keys = []
         for date_group, summary_data in daily_summaries.items():
             if isinstance(summary_data, dict):
                 content = summary_data.get("content", "")
@@ -78,14 +77,10 @@ class SummaryManager:
                         source="daily_summary",
                     )
                 )
-                matched_keys.append(date_group)
         results.sort(key=lambda x: x.score, reverse=True)
-        await self.strengthen_summaries(matched_keys, daily_summaries)
         return results[:top_k]
 
-    async def strengthen_summaries(
-        self, matched_keys: list[str], daily_summaries: dict
-    ) -> None:
+    async def strengthen_summaries(self, matched_keys: list[str]) -> None:
         """强化匹配到的摘要的记忆强度."""
         if not matched_keys:
             return

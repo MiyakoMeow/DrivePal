@@ -43,7 +43,6 @@ class PersonalityManager:
         query_lower = query.lower()
         today = datetime.now(timezone.utc).date()
         results = []
-        matched_date_groups = []
         for date_group, data in daily_personality.items():
             if not isinstance(data, dict):
                 continue
@@ -70,9 +69,7 @@ class PersonalityManager:
                         source="personality",
                     )
                 )
-                matched_date_groups.append(date_group)
         results.sort(key=lambda x: x.score, reverse=True)
-        await self.strengthen(matched_date_groups)
         return results[:top_k]
 
     async def strengthen(self, matched_date_groups: list[str]) -> None:

@@ -92,6 +92,34 @@ class MemoryBankEngine:
         all_results = event_results + summary_results + personality_results
         all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
+
+        event_ids = {
+            r.event["id"]
+            for r in top_results
+            if r.source == "event" and "id" in r.event
+        }
+        summary_keys: list[str] = list(
+            {
+                r.event["date_group"]
+                for r in top_results
+                if r.source == "daily_summary" and "date_group" in r.event
+            }
+        )
+        personality_keys: list[str] = list(
+            {
+                r.event["date_group"]
+                for r in top_results
+                if r.source == "personality" and "date_group" in r.event
+            }
+        )
+
+        if event_ids:
+            await self._strengthen_and_forget(event_ids)
+        if summary_keys:
+            await self._summary_mgr.strengthen_summaries(summary_keys)
+        if personality_keys:
+            await self._personality_mgr.strengthen(personality_keys)
+
         return await self._expand_event_interactions(top_results)
 
     def _get_searchable_text(self, event: dict) -> str:
@@ -122,9 +150,7 @@ class MemoryBankEngine:
                 SearchResult(event=dict(event), score=retention, source="event")
             )
         results.sort(key=lambda x: x.score, reverse=True)
-        top_results = results[:top_k]
-        await self._strengthen_events([r.event for r in top_results])
-        return top_results
+        return results[:top_k]
 
     async def _search_by_embedding(
         self, query: str, events: list[dict], top_k: int
@@ -151,9 +177,7 @@ class MemoryBankEngine:
                     SearchResult(event=dict(event), score=score, source="event")
                 )
         results.sort(key=lambda x: x.score, reverse=True)
-        top_results = results[:top_k]
-        await self._strengthen_events([r.event for r in top_results])
-        return top_results
+        return results[:top_k]
 
     async def _expand_event_interactions(
         self, results: list[SearchResult]
@@ -169,66 +193,53 @@ class MemoryBankEngine:
             result.interactions = interaction_by_event.get(eid, [])
         return results
 
-    async def _strengthen_events(self, matched_events: list[dict]) -> None:
-        if not matched_events:
-            return
-        matched_ids = {e["id"] for e in matched_events if "id" in e}
+    async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
         if not matched_ids:
             return
-        all_events = await self._storage.read_events()
         today = datetime.now(timezone.utc).date().isoformat()
-        updated = False
-        for event in all_events:
-            if event.get("id") in matched_ids:
-                event["memory_strength"] = event.get("memory_strength", 1) + 1
-                event["last_recall_date"] = today
-                updated = True
-        if updated:
-            await self._storage.write_events(all_events)
-        await self._strengthen_interactions(matched_ids)
-        all_events = await self._storage.read_events()
-        await self._soft_forget_events(all_events, matched_ids)
+        today_date = datetime.now(timezone.utc).date()
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            updated = False
+            for event in all_events:
+                if event.get("id") in matched_ids:
+                    event["memory_strength"] = event.get("memory_strength", 1) + 1
+                    event["last_recall_date"] = today
+                    updated = True
+            if updated:
+                await self._storage.write_events(all_events)
 
-    async def _strengthen_interactions(self, event_ids: set[str]) -> None:
-        if not event_ids:
-            return
-        all_interactions = await self._interactions_store.read()
-        today = datetime.now(timezone.utc).date().isoformat()
-        updated = False
-        for interaction in all_interactions:
-            if interaction.get("event_id") in event_ids:
-                interaction["memory_strength"] = (
-                    interaction.get("memory_strength", 1) + 1
-                )
-                interaction["last_recall_date"] = today
-                updated = True
-        if updated:
-            await self._interactions_store.write(all_interactions)
+            all_interactions = await self._interactions_store.read()
+            updated = False
+            for interaction in all_interactions:
+                if interaction.get("event_id") in matched_ids:
+                    interaction["memory_strength"] = (
+                        interaction.get("memory_strength", 1) + 1
+                    )
+                    interaction["last_recall_date"] = today
+                    updated = True
+            if updated:
+                await self._interactions_store.write(all_interactions)
 
-    async def _soft_forget_events(
-        self, all_events: list[dict], matched_ids: set[str]
-    ) -> None:
-        if not matched_ids:
-            return
-        today = datetime.now(timezone.utc).date()
-        updated = False
-        for event in all_events:
-            if event.get("id") in matched_ids:
-                continue
-            strength = event.get("memory_strength", 1)
-            last_recall = event.get("last_recall_date", today.isoformat())
-            try:
-                last_date = date.fromisoformat(last_recall)
-                days_elapsed = (today - last_date).days
-            except (ValueError, TypeError):
-                days_elapsed = 0
-            retention = forgetting_curve(days_elapsed, strength)
-            if retention < SOFT_FORGET_THRESHOLD:
-                event["memory_strength"] = SOFT_FORGET_STRENGTH
-                event["forgotten"] = True
-                updated = True
-        if updated:
-            await self._storage.write_events(all_events)
+            all_events = await self._storage.read_events()
+            updated = False
+            for event in all_events:
+                if event.get("id") in matched_ids:
+                    continue
+                strength = event.get("memory_strength", 1)
+                last_recall = event.get("last_recall_date", today_date.isoformat())
+                try:
+                    last_date = date.fromisoformat(last_recall)
+                    days_elapsed = (today_date - last_date).days
+                except (ValueError, TypeError):
+                    days_elapsed = 0
+                retention = forgetting_curve(days_elapsed, strength)
+                if retention < SOFT_FORGET_THRESHOLD:
+                    event["memory_strength"] = SOFT_FORGET_STRENGTH
+                    event["forgotten"] = True
+                    updated = True
+            if updated:
+                await self._storage.write_events(all_events)
 
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
@@ -332,9 +343,11 @@ class MemoryBankEngine:
             summary_text = await self.chat_model.generate(prompt)
         except Exception:
             return
-        all_events = await self._storage.read_events()
-        for event in all_events:
-            if event.get("id") == event_id:
-                event["content"] = summary_text
-                break
-        await self._storage.write_events(all_events)
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            for event in all_events:
+                if event.get("id") == event_id:
+                    event["content"] = summary_text
+                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    break
+            await self._storage.write_events(all_events)
