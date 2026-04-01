@@ -119,6 +119,7 @@ def _resolve_provider(provider_name: str) -> dict:
 
     Raises:
         ValueError: provider 未配置时
+
     """
     config = _load_config()
     providers = config.get("model_providers", {})
@@ -138,6 +139,7 @@ def get_model_group_providers(name: str) -> list[dict]:
 
     Raises:
         KeyError: 模型组不存在时
+
     """
     config = _load_config()
     model_groups = config.get("model_groups", {})
@@ -182,6 +184,7 @@ def resolve_model_string(model_str: str) -> ResolvedModel:
 
     Raises:
         ValueError: 格式无效时
+
     """
     params: dict[str, Any] = {}
     if "?" in model_str:
