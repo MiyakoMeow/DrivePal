@@ -145,24 +145,7 @@ class LLMSettings:
 
         model_groups = dict(config_data.get("model_groups", {}))
 
-        if "llm" in config_data and "default" not in model_groups:
-            llm_list = config_data["llm"]
-            if isinstance(llm_list, dict):
-                llm_list = [llm_list]
-            model_groups["default"] = {
-                "models": [item["model"] for item in llm_list if "model" in item]
-            }
-
-        if "benchmark" in config_data and "benchmark" not in model_groups:
-            benchmark_data = config_data["benchmark"]
-            if isinstance(benchmark_data, dict):
-                model_name = benchmark_data.get("model", "")
-            else:
-                model_name = str(benchmark_data) if benchmark_data else ""
-            if model_name:
-                model_groups["benchmark"] = {"models": [model_name]}
-
-        if not llm_providers and "benchmark" not in config_data:
+        if not llm_providers:
             raise RuntimeError(
                 "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.toml"
             )

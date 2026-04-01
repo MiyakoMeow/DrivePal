@@ -81,60 +81,6 @@ def test_model_groups_not_found(
         get_model_group_providers("nonexistent")
 
 
-def test_backward_compatibility_llm_to_default(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """测试向后兼容：[llm] 自动映射为 [model_groups.default]."""
-    config = {
-        "llm": [
-            {
-                "model": "qwen3.5-2b",
-                "base_url": "http://localhost:8000/v1",
-                "api_key": "test",
-            }
-        ],
-    }
-    config_file = tmp_path / "llm.toml"
-    config_file.write_bytes(tomli_w.dumps(config).encode())
-    monkeypatch.setenv("CONFIG_PATH", str(config_file))
-
-    from adapters.model_config import _load_config
-
-    _load_config.cache_clear()
-
-    from app.models.settings import LLMSettings
-
-    settings = LLMSettings.load()
-    assert "default" in settings.model_groups
-    assert "qwen3.5-2b" in settings.model_groups["default"]["models"]
-
-
-def test_backward_compatibility_benchmark_to_group(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """测试向后兼容：[benchmark] 自动映射为 [model_groups.benchmark]."""
-    config = {
-        "benchmark": {
-            "model": "MiniMax-M2.7",
-            "base_url": "https://api.minimaxi.com/v1",
-            "api_key_env": "MINIMAX_API_KEY",
-        },
-    }
-    config_file = tmp_path / "llm.toml"
-    config_file.write_bytes(tomli_w.dumps(config).encode())
-    monkeypatch.setenv("CONFIG_PATH", str(config_file))
-
-    from adapters.model_config import _load_config
-
-    _load_config.cache_clear()
-
-    from app.models.settings import LLMSettings
-
-    settings = LLMSettings.load()
-    assert "benchmark" in settings.model_groups
-    assert "MiniMax-M2.7" in settings.model_groups["benchmark"]["models"]
-
-
 def test_empty_model_group_returns_empty_list(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
