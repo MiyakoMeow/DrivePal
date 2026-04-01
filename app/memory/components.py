@@ -467,18 +467,20 @@ class MemoryBankEngine:
         if not matched_date_groups:
             return
         today = datetime.now(timezone.utc).date().isoformat()
-        updated = False
-        for date_group in matched_date_groups:
-            if date_group in daily_personality:
-                data = daily_personality[date_group]
-                if isinstance(data, dict):
-                    data["memory_strength"] = data.get("memory_strength", 1) + 1
-                    data["last_recall_date"] = today
-                    updated = True
-        if updated:
+        async with self._personality_lock:
             personality_data = await self._personality_store.read()
-            personality_data["daily_personality"] = daily_personality
-            await self._personality_store.write(personality_data)
+            current_daily = personality_data.get("daily_personality", {})
+            updated = False
+            for date_group in matched_date_groups:
+                if date_group in current_daily:
+                    data = current_daily[date_group]
+                    if isinstance(data, dict):
+                        data["memory_strength"] = data.get("memory_strength", 1) + 1
+                        data["last_recall_date"] = today
+                        updated = True
+            if updated:
+                personality_data["daily_personality"] = current_daily
+                await self._personality_store.write(personality_data)
 
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
@@ -655,6 +657,7 @@ class MemoryBankEngine:
             (e.get("updated_at") or e.get("created_at", "") for e in group_events),
             default="",
         )
+        should_generate = False
         async with self._personality_lock:
             personality_data = await self._personality_store.read()
             daily_personality = personality_data.get("daily_personality", {})
@@ -666,9 +669,12 @@ class MemoryBankEngine:
                     and existing.get("source_updated_at", "") >= latest_source_ts
                 ):
                     return
+            should_generate = True
             combined = "\n".join(
                 f"用户: {i['query']}\n系统: {i['response']}" for i in group_interactions
             )
+        if not should_generate:
+            return
         prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
         and devise response strategies based on your speculation. Dialogue content:
         {combined}
@@ -682,7 +688,10 @@ class MemoryBankEngine:
                 "Failed to generate personality summary for date_group=%s", date_group
             )
             return
+        needs_overall_update = False
         async with self._personality_lock:
+            personality_data = await self._personality_store.read()
+            daily_personality = personality_data.get("daily_personality", {})
             daily_personality[date_group] = {
                 "content": summary_text,
                 "memory_strength": 1,
@@ -693,12 +702,22 @@ class MemoryBankEngine:
             personality_data["daily_personality"] = daily_personality
             await self._personality_store.write(personality_data)
             if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
-                await self._update_overall_personality(personality_data)
+                needs_overall_update = True
+        if needs_overall_update:
+            overall_text = await self._generate_overall_personality_text(
+                personality_data
+            )
+            if overall_text:
+                async with self._personality_lock:
+                    personality_data["overall_personality"] = overall_text
+                    await self._personality_store.write(personality_data)
 
-    async def _update_overall_personality(self, personality_data: dict) -> None:
-        """汇总多条每日人格分析为整体人格档案."""
+    async def _generate_overall_personality_text(
+        self, personality_data: dict
+    ) -> Optional[str]:
+        """生成整体人格档案文本（不含锁，不写存储）."""
         if not self.chat_model:
-            return
+            return None
         daily_personality = personality_data.get("daily_personality", {})
         all_summaries = [
             f"[{date_group}] {data.get('content', '')}"
@@ -707,19 +726,17 @@ class MemoryBankEngine:
         ]
         combined = "\n".join(all_summaries)
         prompt = f"""The following are the user's exhibited personality traits and emotions throughout multiple dialogues,
-along with appropriate response strategies for the current situation:
-{combined}
+        along with appropriate response strategies for the current situation:
+        {combined}
 
-Please provide a highly concise and general summary of the user's personality and the most appropriate
-response strategy for the AI lover, summarized as:
-"""
+        Please provide a highly concise and general summary of the user's personality and the most appropriate
+        response strategy for the AI lover, summarized as:
+        """
         try:
-            overall = await self.chat_model.generate(prompt)
+            return await self.chat_model.generate(prompt)
         except Exception:
             logger.exception("Failed to generate overall personality summary")
-            return
-        personality_data["overall_personality"] = overall
-        await self._personality_store.write(personality_data)
+            return None
 
     async def _update_overall_summary(
         self, daily_summaries: dict, summaries: dict
