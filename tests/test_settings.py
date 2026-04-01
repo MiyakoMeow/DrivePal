@@ -93,7 +93,7 @@ class TestLLMSettingsLoad:
                 }
             )
         )
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
         settings = LLMSettings.load()
         assert len(settings.llm_providers) == 1
         assert settings.llm_providers[0].provider.model == "gpt-4"
@@ -127,7 +127,9 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.json"))
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
 
@@ -151,7 +153,7 @@ class TestLLMSettingsLoad:
                 }
             )
         )
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
         monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.com/v1")
         monkeypatch.setenv("OPENAI_MODEL", "model-b")
@@ -419,7 +421,7 @@ def test_llm_settings_loads_judge(
     }
     config_file = tmp_path / "llm.json"
     config_file.write_text(json.dumps(config), encoding="utf-8")
-    monkeypatch.setattr("app.models.settings.CONFIG_PATH", str(config_file))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
 
     settings = LLMSettings.load()
     assert settings.judge_provider is not None

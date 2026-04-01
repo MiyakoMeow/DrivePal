@@ -107,7 +107,7 @@ class MemoryModule:
         return await store.write_interaction(query, response, event_type)
 
     async def search(
-        self, query: str, mode: MemoryMode | None = None, top_k: int = 10
+        self, query: str, top_k: int = 10, *, mode: MemoryMode | None = None
     ) -> list[SearchResult]:
         """搜索记忆内容."""
         return await self._get_store(self._resolve_mode(mode)).search(

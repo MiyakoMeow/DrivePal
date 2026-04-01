@@ -199,7 +199,6 @@ class AgentWorkflow:
             "context": {},
             "task": {},
             "decision": {},
-            "memory_mode": self._memory_mode,
             "result": None,
             "event_id": None,
         }

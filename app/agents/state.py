@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, TypedDict, TYPE_CHECKING
-
-
-if TYPE_CHECKING:
-    from app.memory.types import MemoryMode
+from typing import Optional, TypedDict
 
 
 class AgentState(TypedDict):
@@ -16,6 +12,5 @@ class AgentState(TypedDict):
     context: dict
     task: Optional[dict]
     decision: Optional[dict]
-    memory_mode: MemoryMode
     result: Optional[str]
     event_id: Optional[str]

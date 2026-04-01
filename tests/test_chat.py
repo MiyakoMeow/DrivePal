@@ -38,7 +38,6 @@ async def test_chat_feeds_workflow_context(tmp_path: Path) -> None:
         "context": {},
         "task": None,
         "decision": None,
-        "memory_mode": MemoryMode.MEMORY_BANK,
         "result": None,
         "event_id": None,
     }
