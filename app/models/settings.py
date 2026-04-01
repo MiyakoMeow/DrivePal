@@ -100,6 +100,7 @@ class LLMSettings:
     embedding_model: str | None = None
     judge_provider: JudgeProviderConfig | None = None
     model_groups: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+    model_providers: dict[str, dict] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "LLMSettings":
@@ -115,6 +116,7 @@ class LLMSettings:
                 config_data = tomllib.load(f)
 
         model_groups = dict(config_data.get("model_groups", {}))
+        model_providers = dict(config_data.get("model_providers", {}))
 
         if not model_groups:
             raise RuntimeError(
@@ -135,6 +137,7 @@ class LLMSettings:
             embedding_model=embedding_model,
             judge_provider=judge_provider,
             model_groups=model_groups,
+            model_providers=model_providers,
         )
 
     def get_model_group_providers(self, name: str) -> list[LLMProviderConfig]:
@@ -153,10 +156,7 @@ class LLMSettings:
         if name not in self.model_groups:
             raise KeyError(f"Model group '{name}' not found")
 
-        from adapters.model_config import (
-            _resolve_provider,
-            resolve_model_string,
-        )
+        from adapters.model_config import resolve_model_string
 
         model_refs = self.model_groups[name].get("models", [])
         if not model_refs:
@@ -165,7 +165,11 @@ class LLMSettings:
         result = []
         for ref in model_refs:
             resolved = resolve_model_string(ref)
-            provider_config = _resolve_provider(resolved.provider_name)
+            if resolved.provider_name not in self.model_providers:
+                raise ValueError(
+                    f"Provider '{resolved.provider_name}' not found in model_providers"
+                )
+            provider_config = self.model_providers[resolved.provider_name]
             api_key_env = provider_config.get("api_key_env")
             if api_key_env:
                 api_key: str | None = os.environ.get(api_key_env, "")
@@ -187,13 +191,14 @@ class LLMSettings:
         """解析 embedding_model 配置字符串，返回 EmbeddingProviderConfig."""
         if not self.embedding_model:
             return None
-        from adapters.model_config import (
-            _resolve_provider,
-            resolve_model_string,
-        )
+        from adapters.model_config import resolve_model_string
 
         resolved = resolve_model_string(self.embedding_model)
-        provider_config = _resolve_provider(resolved.provider_name)
+        if resolved.provider_name not in self.model_providers:
+            raise ValueError(
+                f"Provider '{resolved.provider_name}' not found in model_providers"
+            )
+        provider_config = self.model_providers[resolved.provider_name]
         api_key_env = provider_config.get("api_key_env")
         if api_key_env:
             api_key: str | None = os.environ.get(api_key_env, "")
