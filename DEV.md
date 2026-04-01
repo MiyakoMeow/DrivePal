@@ -42,7 +42,7 @@
 | `OPENAI_MODEL` / `DEEPSEEK_MODEL` | 自动注册为额外 LLM provider |
 | `MINIMAX_API_KEY` | 基准测试 API Key（用于 `benchmark.api_key_env`） |
 
-### 驾驶场景配置 (`config/scenarios.json`)
+### 驾驶场景配置 (`config/scenarios.toml`)
 
 | 类型 | 说明 | 示例模板 |
 |------|------|----------|
@@ -51,7 +51,7 @@
 | `event_delete` | 删除事件 | "取消明天的会议" |
 | `general` | 通用对话 | "你好" |
 
-### 驾驶员状态配置 (`config/driver_states.json`)
+### 驾驶员状态配置 (`config/driver_states.toml`)
 
 | 状态 | 说明 | 容忍度 | 合适方式 |
 |------|------|--------|----------|
