@@ -7,11 +7,20 @@ import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+
+
+@dataclass
+class ResolvedModel:
+    """解析后的模型引用."""
+
+    provider_name: str
+    model_name: str
+    params: dict[str, Any]
 
 
 @dataclass
