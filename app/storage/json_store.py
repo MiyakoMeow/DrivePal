@@ -22,19 +22,35 @@ class JSONStore:
         """初始化JSON存储，指定数据目录和文件名."""
         self.filepath = filename if filename.is_absolute() else data_dir / filename
         self.default_factory: Callable[[], T] = default_factory
-        self._ensure_file()
+        self._initialized = False
 
     def _ensure_file(self) -> None:
+        if self._initialized:
+            return
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         if not self.filepath.exists():
-            asyncio.run(self._async_write(self.default_factory()))
+            try:
+                asyncio.run(self._async_write(self.default_factory()))
+            except RuntimeError:
+                raise
+        self._initialized = True
 
     async def _async_write(self, data: T) -> None:
         async with aiofiles.open(self.filepath, "w", encoding="utf-8") as f:
             await f.write(json.dumps(data, ensure_ascii=False, indent=2))
 
+    async def _async_ensure_file(self) -> None:
+        if self._initialized:
+            return
+        self.filepath.parent.mkdir(parents=True, exist_ok=True)
+        if not self.filepath.exists():
+            await self._async_write(self.default_factory())
+        self._initialized = True
+
     async def read(self) -> T:
         """读取JSON文件中的全部数据."""
+        if not self._initialized:
+            await self._async_ensure_file()
         async with aiofiles.open(self.filepath, "r", encoding="utf-8") as f:
             content = await f.read()
         return json.loads(content)

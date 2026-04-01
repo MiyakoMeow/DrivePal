@@ -143,7 +143,9 @@ class AgentWorkflow:
         context = state.get("context", {})
         task = state.get("task", {})
 
-        strategies = JSONStore(self.data_dir, Path("strategies.json"), dict).read()
+        strategies = await JSONStore(
+            self.data_dir, Path("strategies.json"), dict
+        ).read()
 
         prompt = f"""{SYSTEM_PROMPTS["strategy"]}
 
