@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 import os
 import logging
 
@@ -56,7 +56,7 @@ class FeedbackRequest(BaseModel):
 
 @app.post("/api/query")
 async def query(
-    request: QueryRequest, mm: MemoryModule = Depends(get_memory_module)
+    request: QueryRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
 ) -> dict:
     """处理用户查询."""
     from app.agents.workflow import AgentWorkflow
@@ -76,7 +76,7 @@ async def query(
 
 @app.post("/api/feedback")
 async def feedback(
-    request: FeedbackRequest, mm: MemoryModule = Depends(get_memory_module)
+    request: FeedbackRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
 ) -> dict:
     """提交用户反馈."""
     try:
@@ -101,7 +101,7 @@ async def experiment_report() -> dict:
 
 @app.get("/api/history")
 async def history(
-    limit: int = 10, mm: MemoryModule = Depends(get_memory_module)
+    mm: Annotated[MemoryModule, Depends(get_memory_module)], limit: int = 10
 ) -> dict:
     """获取历史记录."""
     try:
