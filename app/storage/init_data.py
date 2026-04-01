@@ -1,8 +1,9 @@
 """数据目录初始化与默认数据填充."""
 
-import json
 from pathlib import Path
 from typing import Optional
+
+import tomli_w
 
 
 def get_data_dir() -> Path:
@@ -17,12 +18,12 @@ def init_storage(data_dir: Optional[Path] = None) -> None:
     data_dir.mkdir(exist_ok=True)
 
     files = {
-        "events.json": [],
-        "interactions.json": [],
-        "contexts.json": {},
-        "preferences.json": {"language": "zh-CN"},
-        "feedback.json": [],
-        "strategies.json": {
+        "events.toml": [],
+        "interactions.toml": [],
+        "contexts.toml": {},
+        "preferences.toml": {"language": "zh-CN"},
+        "feedback.toml": [],
+        "strategies.toml": {
             "preferred_time_offset": 15,
             "preferred_method": "visual",
             "reminder_weights": {},
@@ -30,15 +31,15 @@ def init_storage(data_dir: Optional[Path] = None) -> None:
             "modified_keywords": [],
             "cooldown_periods": {},
         },
-        "experiment_results.json": [],
-        "memorybank_summaries.json": {"daily_summaries": {}, "overall_summary": ""},
+        "experiment_results.toml": [],
+        "memorybank_summaries.toml": {"daily_summaries": {}, "overall_summary": ""},
     }
 
     for filename, default_data in files.items():
         filepath = data_dir / filename
         if not filepath.exists():
-            with filepath.open("w", encoding="utf-8") as f:
-                json.dump(default_data, f, ensure_ascii=False, indent=2)
+            with filepath.open("wb") as f:
+                tomli_w.dump(default_data, f)  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":
