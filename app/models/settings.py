@@ -68,7 +68,7 @@ class EmbeddingProviderConfig:
                 base_url=d.get("base_url"),
                 api_key=d.get("api_key"),
             ),
-            device=d.get("device", "cpu"),
+            device=d.get("device"),
         )
 
 
