@@ -90,16 +90,16 @@ class TestLLMSettingsLoad:
                             "base_url": "https://api.openai.com/v1",
                             "api_key": "sk-a",
                         },
+                        "huggingface": {},
                     },
-                    "embedding": [{"model": "bge-test", "device": "cpu"}],
+                    "embedding": {"model": "huggingface/bge-test"},
                 }
             )
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         settings = LLMSettings.load()
         assert "default" in settings.model_groups
-        assert len(settings.embedding_providers) == 1
-        assert settings.embedding_providers[0].provider.model == "bge-test"
+        assert settings.embedding_model == "huggingface/bge-test"
 
     def test_load_no_config_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
