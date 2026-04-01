@@ -13,7 +13,10 @@ if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
 
 
-CONFIG_PATH = "config/llm.json"
+_DEFAULT_CONFIG_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "config" / "llm.json"
+)
+CONFIG_PATH = os.environ.get("CONFIG_PATH", "config/llm.json")
 
 
 @dataclass
@@ -97,7 +100,7 @@ class LLMSettings:
     def load(cls) -> "LLMSettings":
         """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
         config_data: dict = {}
-        config_path = Path.cwd() / CONFIG_PATH
+        config_path = Path(CONFIG_PATH)
         if config_path.is_file():
             with config_path.open() as f:
                 config_data = json.load(f)

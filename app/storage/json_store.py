@@ -22,59 +22,50 @@ class JSONStore:
         """初始化JSON存储，指定数据目录和文件名."""
         self.filepath = filename if filename.is_absolute() else data_dir / filename
         self.default_factory: Callable[[], T] = default_factory
-        self._initialized = False
+        self._lock = asyncio.Lock()
 
     def _ensure_file(self) -> None:
-        if self._initialized:
-            return
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         if not self.filepath.exists():
-            try:
-                asyncio.run(self._async_write(self.default_factory()))
-            except RuntimeError:
-                raise
-        self._initialized = True
+            with self.filepath.open("w", encoding="utf-8") as f:
+                json.dump(self.default_factory(), f, ensure_ascii=False, indent=2)
 
     async def _async_write(self, data: T) -> None:
+        self.filepath.parent.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(self.filepath, "w", encoding="utf-8") as f:
             await f.write(json.dumps(data, ensure_ascii=False, indent=2))
 
-    async def _async_ensure_file(self) -> None:
-        if self._initialized:
-            return
-        self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        if not self.filepath.exists():
-            await self._async_write(self.default_factory())
-        self._initialized = True
-
     async def read(self) -> T:
         """读取JSON文件中的全部数据."""
-        if not self._initialized:
-            await self._async_ensure_file()
+        if not self.filepath.exists():
+            self._ensure_file()
         async with aiofiles.open(self.filepath, "r", encoding="utf-8") as f:
             content = await f.read()
         return json.loads(content)
 
     async def write(self, data: T) -> None:
         """写入数据到JSON文件."""
-        await self._async_write(data)
+        async with self._lock:
+            await self._async_write(data)
 
     async def append(self, item: Any) -> None:  # noqa: ANN401
         """向列表类型存储追加一个元素."""
-        data = await self.read()
-        if not isinstance(data, list):
-            raise TypeError(
-                f"append() requires list factory, got {type(data).__name__}"
-            )
-        data.append(item)
-        await self._async_write(data)
+        async with self._lock:
+            data = await self.read()
+            if not isinstance(data, list):
+                raise TypeError(
+                    f"append() requires list factory, got {type(data).__name__}"
+                )
+            data.append(item)
+            await self._async_write(data)
 
     async def update(self, key: str, value: Any) -> None:  # noqa: ANN401
         """更新字典类型存储中指定键的值."""
-        data = await self.read()
-        if not isinstance(data, dict):
-            raise TypeError(
-                f"update() requires dict factory, got {type(data).__name__}"
-            )
-        data[key] = value
-        await self._async_write(data)
+        async with self._lock:
+            data = await self.read()
+            if not isinstance(data, dict):
+                raise TypeError(
+                    f"update() requires dict factory, got {type(data).__name__}"
+                )
+            data[key] = value
+            await self._async_write(data)

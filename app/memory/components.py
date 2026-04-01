@@ -160,6 +160,7 @@ class MemoryBankEngine:
         self.embedding_model = embedding_model
         self.chat_model = chat_model
         self._interactions_store = JSONStore(data_dir, Path("interactions.json"), list)
+        self._lock = asyncio.Lock()
         self._default_summaries = {"daily_summaries": {}, "overall_summary": ""}
         self._summaries_store = JSONStore(
             data_dir,
@@ -446,13 +447,14 @@ class MemoryBankEngine:
     async def _append_interaction_to_event(
         self, event_id: str, interaction_id: str
     ) -> None:
-        all_events = await self._storage.read_events()
-        for event in all_events:
-            if event.get("id") == event_id:
-                event.setdefault("interaction_ids", []).append(interaction_id)
-                event["updated_at"] = datetime.now(timezone.utc).isoformat()
-                break
-        await self._storage.write_events(all_events)
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            for event in all_events:
+                if event.get("id") == event_id:
+                    event.setdefault("interaction_ids", []).append(interaction_id)
+                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    break
+            await self._storage.write_events(all_events)
 
     async def _update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:
