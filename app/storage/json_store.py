@@ -9,6 +9,15 @@ import aiofiles
 
 T = TypeVar("T")
 
+_LOCK_REGISTRY: dict[str, asyncio.Lock] = {}
+_LOCK_REGISTRY_LOCK = asyncio.Lock()
+
+
+def _get_file_lock(filepath: Path) -> asyncio.Lock:
+    """获取文件路径对应的锁，实现跨实例共享."""
+    key = str(filepath.resolve())
+    return _LOCK_REGISTRY.setdefault(key, asyncio.Lock())
+
 
 class JSONStore:
     """基于JSON文件的通用存储引擎."""
@@ -22,7 +31,7 @@ class JSONStore:
         """初始化JSON存储，指定数据目录和文件名."""
         self.filepath = filename if filename.is_absolute() else data_dir / filename
         self.default_factory: Callable[[], T] = default_factory
-        self._lock = asyncio.Lock()
+        self._lock = _get_file_lock(self.filepath)
 
     def _ensure_file(self) -> None:
         self.filepath.parent.mkdir(parents=True, exist_ok=True)

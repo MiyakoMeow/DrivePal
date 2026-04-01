@@ -21,13 +21,15 @@ class TestMemoryStoreContract:
     """验证所有 MemoryStore 实现满足接口契约."""
 
     @pytest.fixture(params=_get_store_params())
-    def store(self, request: pytest.FixtureRequest, tmp_path: Path) -> "MemoryStore":
+    async def store(
+        self, request: pytest.FixtureRequest, tmp_path: Path
+    ) -> "MemoryStore":
         """提供参数化的 MemoryStore 实例."""
         from app.memory.memory import MemoryModule
         from app.memory.types import MemoryMode
 
         mm = MemoryModule(tmp_path)
-        return mm._get_store(MemoryMode(request.param))
+        return await mm._get_store(MemoryMode(request.param))
 
     async def test_write_returns_string_id(self, store: "MemoryStore") -> None:
         """验证 write 返回一个字符串 ID."""
