@@ -145,10 +145,10 @@ class ChatModel:
 
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
-    def batch_generate(
+    async def batch_generate(
         self,
         prompts: list[str],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] | None = None,
     ) -> list[str]:
         """批量生成回复."""
-        return [self.generate(p, system_prompt) for p in prompts]
+        return [await self.generate(p, system_prompt) for p in prompts]

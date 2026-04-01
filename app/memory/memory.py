@@ -89,11 +89,13 @@ class MemoryModule:
         self._default_mode = mode
 
     async def write(self, event: MemoryEvent) -> str:
+        """写入记忆事件."""
         return await self._get_store(self._default_mode).write(event)
 
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
+        """写入交互记录."""
         store = self._get_store(self._default_mode)
         if not getattr(store, "supports_interaction", False):
             raise NotImplementedError(
@@ -104,11 +106,14 @@ class MemoryModule:
     async def search(
         self, query: str, mode: MemoryMode | None = None, top_k: int = 10
     ) -> list[SearchResult]:
+        """搜索记忆内容."""
         target_mode = mode or self._default_mode
         return await self._get_store(target_mode).search(query, top_k=top_k)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        """获取历史记忆事件."""
         return await self._get_store(self._default_mode).get_history(limit)
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """更新记忆反馈."""
         await self._get_store(self._default_mode).update_feedback(event_id, feedback)

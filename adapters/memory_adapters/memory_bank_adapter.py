@@ -17,7 +17,7 @@ class MemoryBankAdapter:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def add(self, history_text: str) -> MemoryBankStore:
+    async def add(self, history_text: str) -> MemoryBankStore:
         """将历史文本添加到记忆库存储."""
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()
@@ -27,7 +27,7 @@ class MemoryBankAdapter:
             embedding_model=embedding_model,
         )
         for record in history_to_interaction_records(history_text):
-            store.write(record)
+            await store.write(record)
         return store
 
     def get_search_client(self, store: MemoryStore) -> StoreClient:
