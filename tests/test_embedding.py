@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import torch
-
 import pytest
 
 from app.memory.memory import MemoryModule
@@ -14,18 +12,10 @@ from app.models.embedding import EmbeddingModel
 from tests.conftest import SKIP_IF_NO_LLM
 
 
-def _pick_device() -> str:
-    if torch.cuda.is_available():
-        return "cuda"
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
-
-
 @pytest.fixture(scope="module")
 def embedding() -> EmbeddingModel:
     """为模块提供共享的 EmbeddingModel 实例."""
-    return EmbeddingModel(device=_pick_device())
+    return EmbeddingModel()
 
 
 @SKIP_IF_NO_LLM

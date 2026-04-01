@@ -234,11 +234,11 @@ def get_chat_model(temperature: float | None = None) -> "ChatModel":
     return ChatModel(providers=providers, temperature=temperature)
 
 
-def get_embedding_model(device: str | None = None) -> "EmbeddingModel":
+def get_embedding_model() -> "EmbeddingModel":
     """从配置创建 EmbeddingModel 实例（使用缓存避免重复加载）."""
     from app.models.embedding import get_cached_embedding_model
 
-    return get_cached_embedding_model(device=device)
+    return get_cached_embedding_model()
 
 
 def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
