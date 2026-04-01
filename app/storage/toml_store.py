@@ -13,6 +13,8 @@ T = TypeVar("T")
 _LOCK_REGISTRY: dict[str, asyncio.Lock] = {}
 _LOCK_REGISTRY_LOCK = asyncio.Lock()
 
+_LIST_WRAPPER_KEY = "_list"
+
 
 def _get_file_lock(filepath: Path) -> asyncio.Lock:
     """获取文件路径对应的锁，实现跨实例共享."""
@@ -37,13 +39,31 @@ class TOMLStore:
     def _ensure_file(self) -> None:
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         if not self.filepath.exists():
+            default_data = self.default_factory()
             with self.filepath.open("wb") as f:
-                tomli_w.dump(self.default_factory(), f)  # type: ignore[arg-type]
+                if isinstance(default_data, list):
+                    tomli_w.dump({_LIST_WRAPPER_KEY: default_data}, f)
+                else:
+                    tomli_w.dump(default_data, f)  # type: ignore[arg-type]
+
+    def _clean_for_toml(self, obj: object) -> object:
+        """递归清理对象中的 None 值，转换为空字符串."""
+        if isinstance(obj, dict):
+            return {k: self._clean_for_toml(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._clean_for_toml(item) for item in obj]
+        elif obj is None:
+            return ""
+        return obj
 
     async def _async_write(self, data: T) -> None:
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
+        cleaned = self._clean_for_toml(data)
         async with aiofiles.open(self.filepath, "wb") as f:
-            await f.write(tomli_w.dumps(data))  # type: ignore[arg-type]
+            if isinstance(cleaned, list):
+                await f.write(tomli_w.dumps({_LIST_WRAPPER_KEY: cleaned}).encode())
+            else:
+                await f.write(tomli_w.dumps(cleaned).encode())  # type: ignore[arg-type]
 
     async def _read_unsafe(self) -> T:
         """读操作，不获取锁（调用方必须持有锁）."""
@@ -51,7 +71,10 @@ class TOMLStore:
             await asyncio.to_thread(self._ensure_file)
         async with aiofiles.open(self.filepath, "rb") as f:
             content = await f.read()
-        return tomllib.loads(content.decode("utf-8"))  # type: ignore[return-value]
+        raw = tomllib.loads(content.decode("utf-8"))
+        if _LIST_WRAPPER_KEY in raw and len(raw) == 1:
+            return raw[_LIST_WRAPPER_KEY]
+        return raw  # type: ignore[return-value]
 
     async def read(self) -> T:
         """读取TOML文件中的全部数据."""

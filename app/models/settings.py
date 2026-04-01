@@ -104,8 +104,13 @@ class LLMSettings:
             with config_path.open("rb") as f:
                 config_data = tomllib.load(f)
 
+        llm_data = config_data.get("llm", [])
+        if isinstance(llm_data, dict):
+            llm_data = [llm_data]
+        elif not isinstance(llm_data, list):
+            llm_data = []
         llm_providers: list[LLMProviderConfig] = [
-            LLMProviderConfig.from_dict(item) for item in config_data.get("llm", [])
+            LLMProviderConfig.from_dict(item) for item in llm_data
         ]
 
         for prefix in ("OPENAI", "DEEPSEEK"):

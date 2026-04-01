@@ -1,4 +1,4 @@
-[[llm]]
+[llm]
 model = "qwen3.5-2b"
 base_url = "http://127.0.0.1:50721/v1"
 api_key = "none"

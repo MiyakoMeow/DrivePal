@@ -1,6 +1,6 @@
 """model_config 模块测试."""
 
-import json
+import tomli_w
 from pathlib import Path
 
 import pytest
@@ -20,8 +20,8 @@ def test_get_benchmark_client_returns_openai_instance(
         ],
         "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
-    config_file = tmp_path / "llm.json"
-    config_file.write_text(json.dumps(config))
+    config_file = tmp_path / "llm.toml"
+    config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     from adapters.model_config import _load_config
 
@@ -47,8 +47,8 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
         ],
         "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
-    config_file = tmp_path / "llm.json"
-    config_file.write_text(json.dumps(config))
+    config_file = tmp_path / "llm.toml"
+    config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     from adapters.model_config import _load_config
 
@@ -81,8 +81,8 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
         },
         "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
-    config_file = tmp_path / "llm.json"
-    config_file.write_text(json.dumps(config))
+    config_file = tmp_path / "llm.toml"
+    config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     from adapters.model_config import _load_config
 
@@ -105,8 +105,8 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         ],
         "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
-    config_file = tmp_path / "llm.json"
-    config_file.write_text(json.dumps(config))
+    config_file = tmp_path / "llm.toml"
+    config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     from adapters.model_config import _load_config
 
