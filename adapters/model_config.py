@@ -107,6 +107,63 @@ def get_store_chat_model() -> "ChatModel":
     return get_chat_model()
 
 
+@lru_cache(maxsize=1)
+def _resolve_provider(provider_name: str) -> dict:
+    """根据 provider 名称解析 provider 配置.
+
+    Args:
+        provider_name: provider 名称，对应 model_providers 中的表名
+
+    Returns:
+        provider 配置字典
+
+    Raises:
+        ValueError: provider 未配置时
+    """
+    config = _load_config()
+    providers = config.get("model_providers", {})
+    if provider_name not in providers:
+        raise ValueError(f"Provider '{provider_name}' not found in model_providers")
+    return providers[provider_name]
+
+
+def get_model_group_providers(name: str) -> list[dict]:
+    """按组名获取 LLMProviderConfig 字典列表（底层接口）.
+
+    Args:
+        name: 模型组名称
+
+    Returns:
+        LLMProviderConfig 字典列表
+
+    Raises:
+        KeyError: 模型组不存在时
+    """
+    config = _load_config()
+    model_groups = config.get("model_groups", {})
+    if name not in model_groups:
+        raise KeyError(f"Model group '{name}' not found")
+
+    model_refs = model_groups[name].get("models", [])
+    if not model_refs:
+        return []
+
+    result = []
+    for ref in model_refs:
+        resolved = resolve_model_string(ref)
+        provider_config = _resolve_provider(resolved.provider_name)
+        api_key = os.environ.get(provider_config.get("api_key_env", ""), "")
+        result.append(
+            {
+                "model": resolved.model_name,
+                "base_url": provider_config.get("base_url"),
+                "api_key": api_key,
+                "temperature": resolved.params.get("temperature", 0.7),
+            }
+        )
+    return result
+
+
 def get_store_embedding_model() -> "EmbeddingModel":
     """获取用于记忆存储操作的嵌入模型."""
     from app.models.settings import get_embedding_model
