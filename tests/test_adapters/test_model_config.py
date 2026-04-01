@@ -18,7 +18,6 @@ def test_get_benchmark_client_returns_openai_instance(
                 "api_key": "test",
             }
         ],
-        "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
@@ -45,7 +44,6 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
                 "api_key": "none",
             }
         ],
-        "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
@@ -79,7 +77,6 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
             "temperature": 0.0,
             "max_tokens": 8192,
         },
-        "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
@@ -105,7 +102,6 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
                 "api_key": "none",
             },
         },
-        "embedding": [{"model": "BAAI/bge-small-zh-v1.5", "device": "cpu"}],
     }
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
