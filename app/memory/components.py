@@ -566,6 +566,75 @@ class MemoryBankEngine:
         if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
             await self._update_overall_summary(daily_summaries, summaries)
 
+    async def _maybe_summarize_personality(self, date_group: str) -> None:
+        """每日对话达到阈值时，生成人格分析摘要."""
+        if not self.chat_model:
+            return
+        events = await self._storage.read_events()
+        group_events = [e for e in events if e.get("date_group") == date_group]
+        count = len(group_events)
+        if count < PERSONALITY_SUMMARY_THRESHOLD:
+            return
+        personality_data = await self._personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        if date_group in daily_personality:
+            return
+        interactions = await self._interactions_store.read()
+        group_interactions = [
+            i
+            for i in interactions
+            if i.get("event_id") in {e.get("id") for e in group_events}
+        ]
+        if len(group_interactions) < PERSONALITY_SUMMARY_THRESHOLD:
+            return
+        combined = "\n".join(
+            f"用户: {i['query']}\n系统: {i['response']}" for i in group_interactions
+        )
+        prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
+and devise response strategies based on your speculation. Dialogue content:
+{combined}
+
+User's personality traits, emotions, and response strategy are:
+"""
+        try:
+            summary_text = await self.chat_model.generate(prompt)
+        except Exception:
+            return
+        daily_personality[date_group] = {
+            "content": summary_text,
+            "memory_strength": 1,
+            "last_recall_date": date_group,
+        }
+        personality_data["daily_personality"] = daily_personality
+        await self._personality_store.write(personality_data)
+        if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
+            await self._update_overall_personality(personality_data)
+
+    async def _update_overall_personality(self, personality_data: dict) -> None:
+        """汇总多条每日人格分析为整体人格档案."""
+        if not self.chat_model:
+            return
+        daily_personality = personality_data.get("daily_personality", {})
+        all_summaries = [
+            f"[{date_group}] {data.get('content', '')}"
+            for date_group, data in daily_personality.items()
+            if isinstance(data, dict)
+        ]
+        combined = "\n".join(all_summaries)
+        prompt = f"""The following are the user's exhibited personality traits and emotions throughout multiple dialogues,
+along with appropriate response strategies for the current situation:
+{combined}
+
+Please provide a highly concise and general summary of the user's personality and the most appropriate
+response strategy for the AI lover, summarized as:
+"""
+        try:
+            overall = await self.chat_model.generate(prompt)
+        except Exception:
+            return
+        personality_data["overall_personality"] = overall
+        await self._personality_store.write(personality_data)
+
     async def _update_overall_summary(
         self, daily_summaries: dict, summaries: dict
     ) -> None:
