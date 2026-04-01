@@ -82,120 +82,162 @@ class TestLLMSettingsLoad:
         config_file.write_text(
             tomli_w.dumps(
                 {
-                    "llm": [
-                        {
-                            "model": "gpt-4",
+                    "model_groups": {
+                        "default": {"models": ["openai/gpt-4"]},
+                    },
+                    "model_providers": {
+                        "openai": {
                             "base_url": "https://api.openai.com/v1",
                             "api_key": "sk-a",
-                        }
-                    ],
-                    "embedding": [{"model": "bge-test", "device": "cpu"}],
+                        },
+                        "huggingface": {},
+                    },
+                    "embedding": {"model": "huggingface/bge-test"},
                 }
             )
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         settings = LLMSettings.load()
-        assert len(settings.llm_providers) == 1
-        assert settings.llm_providers[0].provider.model == "gpt-4"
-        assert len(settings.embedding_providers) == 1
-        assert settings.embedding_providers[0].provider.model == "bge-test"
-
-    def test_load_fallback_to_env_vars(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """验证配置文件不存在时使用 OPENAI_XXX 环境变量."""
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-        monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        monkeypatch.setenv("OPENAI_MODEL", "gpt-4")
-        settings = LLMSettings.load()
-        assert len(settings.llm_providers) >= 1
-        assert any(p.provider.model == "gpt-4" for p in settings.llm_providers)
-
-    def test_load_deepseek_env_as_final_fallback(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """验证 OPENAI_XXX 不存在时使用 DEEPSEEK_XXX 环境变量."""
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
-        monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-        monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
-        settings = LLMSettings.load()
-        assert any(p.provider.model == "deepseek-chat" for p in settings.llm_providers)
+        assert "default" in settings.model_groups
+        assert settings.embedding_model == "huggingface/bge-test"
 
     def test_load_no_config_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
         monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
 
-    def test_config_file_plus_env_merging(
+    def test_get_embedding_provider_local(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """验证配置文件提供者优先于环境变量提供者."""
+        """验证 get_embedding_provider 解析本地 embedding 模型."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+                "huggingface": {},
+            },
+            "embedding": {"model": "huggingface/BAAI/bge-small-zh-v1.5"},
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        provider = settings.get_embedding_provider()
+        assert provider is not None
+        assert provider.provider.model == "BAAI/bge-small-zh-v1.5"
+        assert provider.provider.base_url is None
+        _load_config.cache_clear()
+
+    def test_get_embedding_provider_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证 get_embedding_provider 解析远程 embedding 模型."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+                "openai": {
+                    "base_url": "https://api.openai.com/v1",
+                    "api_key_env": "OPENAI_API_KEY",
+                },
+            },
+            "embedding": {"model": "openai/text-embedding-3-small"},
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        provider = settings.get_embedding_provider()
+        assert provider is not None
+        assert provider.provider.model == "text-embedding-3-small"
+        assert provider.provider.base_url == "https://api.openai.com/v1"
+        _load_config.cache_clear()
+
+    def test_get_embedding_provider_with_device_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证 get_embedding_provider 解析 device 参数."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+                "huggingface": {},
+            },
+            "embedding": {"model": "huggingface/BAAI/bge-small-zh-v1.5?device=cuda"},
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        provider = settings.get_embedding_provider()
+        assert provider is not None
+        assert provider.device == "cuda"
+        _load_config.cache_clear()
+
+    def test_get_embedding_provider_none_when_not_configured(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证无 embedding 配置时返回 None."""
+        config = {
+            "model_groups": {"default": {"models": ["local/qwen"]}},
+            "model_providers": {
+                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+            },
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        assert settings.get_embedding_provider() is None
+        _load_config.cache_clear()
+
+    def test_load_with_model_groups(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证从 model_groups 加载配置."""
         config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
             tomli_w.dumps(
                 {
-                    "llm": [
-                        {
-                            "model": "model-a",
-                            "base_url": "https://a.com/v1",
+                    "model_groups": {
+                        "default": {"models": ["openai/gpt-4"]},
+                    },
+                    "model_providers": {
+                        "openai": {
+                            "base_url": "https://api.openai.com/v1",
                             "api_key": "sk-a",
-                        }
-                    ],
-                    "embedding": [{"model": "bge-test"}],
+                        },
+                    },
                 }
             )
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-        monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.com/v1")
-        monkeypatch.setenv("OPENAI_MODEL", "model-b")
-        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds")
-        monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.com/v1")
-        monkeypatch.setenv("DEEPSEEK_MODEL", "model-c")
-        settings = LLMSettings.load()
-        assert settings.llm_providers[0].provider.model == "model-a"
-        assert any(p.provider.model == "model-b" for p in settings.llm_providers)
-        assert any(p.provider.model == "model-c" for p in settings.llm_providers)
+        from adapters.model_config import _load_config
 
-    def test_dedup_providers(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """验证重复提供者按 model+base_url 去重."""
-        config_file = tmp_path / "config" / "llm.toml"
-        config_file.parent.mkdir(parents=True)
-        config_file.write_text(
-            tomli_w.dumps(
-                {
-                    "llm": [
-                        {
-                            "model": "gpt-4",
-                            "base_url": "https://api.openai.com/v1",
-                            "api_key": "sk-a",
-                        },
-                        {
-                            "model": "gpt-4",
-                            "base_url": "https://api.openai.com/v1",
-                            "api_key": "sk-b",
-                        },
-                    ],
-                    "embedding": [],
-                }
-            )
-        )
-        monkeypatch.chdir(tmp_path)
+        _load_config.cache_clear()
         settings = LLMSettings.load()
-        llm_models = [
-            (p.provider.model, p.provider.base_url) for p in settings.llm_providers
-        ]
-        assert len(llm_models) == len(set(llm_models))
+        assert "default" in settings.model_groups
+        providers = settings.get_model_group_providers("default")
+        assert len(providers) == 1
+        assert providers[0].provider.model == "gpt-4"
+        _load_config.cache_clear()
 
 
 class TestChatModelFallback:
@@ -297,18 +339,16 @@ class TestChatModelFallback:
 
 
 class TestEmbeddingModelFallback:
-    """EmbeddingModel 多提供者回退行为测试."""
+    """EmbeddingModel 单提供者测试."""
 
     def test_local_provider_creates_sentence_transformer(self) -> None:
         """验证本地提供者使用 SentenceTransformer."""
         from app.models.embedding import EmbeddingModel
 
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="fake-model"), device="cpu"
-            )
-        ]
-        emb = EmbeddingModel(providers=providers)
+        provider = EmbeddingProviderConfig(
+            provider=ProviderConfig(model="fake-model"), device="cpu"
+        )
+        emb = EmbeddingModel(provider=provider)
         mock_st = MagicMock()
         with patch(
             "sentence_transformers.SentenceTransformer", return_value=mock_st
@@ -320,58 +360,27 @@ class TestEmbeddingModelFallback:
         """验证远程提供者使用 openai.AsyncOpenAI."""
         from app.models.embedding import EmbeddingModel
 
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(
-                    model="text-embedding-3-small",
-                    base_url="https://api.openai.com/v1",
-                    api_key="sk-test",
-                ),
-            )
-        ]
-        emb = EmbeddingModel(providers=providers)
+        provider = EmbeddingProviderConfig(
+            provider=ProviderConfig(
+                model="text-embedding-3-small",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+            ),
+        )
+        emb = EmbeddingModel(provider=provider)
         with patch("app.models.embedding.openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             _ = emb.client
         mock_cls.assert_called_once()
 
-    def test_fallback_to_next_provider(self) -> None:
-        """验证第一个嵌入提供者加载失败时回退."""
-        from app.models.embedding import EmbeddingModel
-
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="bad-model"), device="cpu"
-            ),
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="good-model"), device="cpu"
-            ),
-        ]
-        emb = EmbeddingModel(providers=providers)
-
-        call_count = 0
-
-        def mock_st(model_name: str, **kwargs: object) -> MagicMock:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("load failed")
-            return MagicMock()
-
-        with patch("sentence_transformers.SentenceTransformer", side_effect=mock_st):
-            _ = emb.client
-        assert call_count == 2
-
     async def test_encode_uses_client(self) -> None:
         """验证 encode 委托给缓存的客户端."""
         from app.models.embedding import EmbeddingModel
 
-        providers = [
-            EmbeddingProviderConfig(
-                provider=ProviderConfig(model="fake-model"), device="cpu"
-            )
-        ]
-        emb = EmbeddingModel(providers=providers)
+        provider = EmbeddingProviderConfig(
+            provider=ProviderConfig(model="fake-model"), device="cpu"
+        )
+        emb = EmbeddingModel(provider=provider)
         mock_client = MagicMock()
         mock_client.encode.return_value = MagicMock(
             tolist=MagicMock(return_value=[0.1, 0.2, 0.3])
@@ -415,7 +424,12 @@ def test_llm_settings_loads_judge(
     from app.models.settings import LLMSettings
 
     config = {
-        "llm": [{"model": "qwen", "base_url": "http://localhost:8000/v1"}],
+        "model_groups": {
+            "default": {"models": ["local/qwen"]},
+        },
+        "model_providers": {
+            "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+        },
         "judge": {"model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
     }
     config_file = tmp_path / "llm.toml"
