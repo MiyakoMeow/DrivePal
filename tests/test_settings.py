@@ -1,9 +1,9 @@
 """模型设置加载器测试."""
 
-import json
 from pathlib import Path
 
 import pytest
+import tomli_w
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from app.models.settings import (
@@ -80,7 +80,7 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
-            json.dumps(
+            tomli_w.dumps(
                 {
                     "llm": [
                         {
@@ -140,7 +140,7 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
-            json.dumps(
+            tomli_w.dumps(
                 {
                     "llm": [
                         {
@@ -172,7 +172,7 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "config" / "llm.toml"
         config_file.parent.mkdir(parents=True)
         config_file.write_text(
-            json.dumps(
+            tomli_w.dumps(
                 {
                     "llm": [
                         {
@@ -413,14 +413,13 @@ def test_llm_settings_loads_judge(
 ) -> None:
     """测试 LLMSettings 从配置加载 judge 提供者."""
     from app.models.settings import LLMSettings
-    import json
 
     config = {
         "llm": [{"model": "qwen", "base_url": "http://localhost:8000/v1"}],
         "judge": {"model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
     }
     config_file = tmp_path / "llm.toml"
-    config_file.write_text(json.dumps(config), encoding="utf-8")
+    config_file.write_text(tomli_w.dumps(config))
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
 
     settings = LLMSettings.load()
