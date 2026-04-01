@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.memory.components import forgetting_curve
+from app.memory.components import SUMMARY_WEIGHT, forgetting_curve
 from app.memory.schemas import SearchResult
 from app.storage.toml_store import TOMLStore
 
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 DAILY_SUMMARY_THRESHOLD = 2
 OVERALL_SUMMARY_THRESHOLD = 3
-SUMMARY_WEIGHT = 0.8
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +31,11 @@ class SummaryManager:
             Path("memorybank_summaries.toml"),
             lambda: {"daily_summaries": {}, "overall_summary": ""},
         )
+
+    @property
+    def summaries_store(self) -> TOMLStore:
+        """摘要存储."""
+        return self._summaries_store
 
     async def search_summaries(
         self, query: str, daily_summaries: dict, top_k: int = 1

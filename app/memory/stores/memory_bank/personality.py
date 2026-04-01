@@ -22,16 +22,21 @@ class PersonalityManager:
 
     def __init__(self, data_dir: Path) -> None:
         """初始化人格存储."""
-        self._personality_store = TOMLStore(
+        self._store = TOMLStore(
             data_dir,
             Path("memorybank_personality.toml"),
             lambda: {"daily_personality": {}, "overall_personality": ""},
         )
         self._personality_lock = asyncio.Lock()
 
+    @property
+    def personality_store(self) -> TOMLStore:
+        """人格摘要存储."""
+        return self._store
+
     async def search(self, query: str, top_k: int) -> list[SearchResult]:
         """基于关键词匹配搜索人格摘要，retention权重为 SUMMARY_WEIGHT * 0.8."""
-        personality_data = await self._personality_store.read()
+        personality_data = await self._store.read()
         daily_personality = personality_data.get("daily_personality", {})
         if not daily_personality:
             return []
@@ -76,7 +81,7 @@ class PersonalityManager:
             return
         today = datetime.now(timezone.utc).date().isoformat()
         async with self._personality_lock:
-            personality_data = await self._personality_store.read()
+            personality_data = await self._store.read()
             current_daily = personality_data.get("daily_personality", {})
             updated = False
             for date_group in matched_date_groups:
@@ -88,7 +93,7 @@ class PersonalityManager:
                         updated = True
             if updated:
                 personality_data["daily_personality"] = current_daily
-                await self._personality_store.write(personality_data)
+                await self._store.write(personality_data)
 
     async def maybe_summarize(
         self,
@@ -114,7 +119,7 @@ class PersonalityManager:
         )
         should_generate = False
         async with self._personality_lock:
-            personality_data = await self._personality_store.read()
+            personality_data = await self._store.read()
             daily_personality = personality_data.get("daily_personality", {})
             if date_group in daily_personality:
                 existing = daily_personality[date_group]
@@ -145,7 +150,7 @@ class PersonalityManager:
             return
         needs_overall_update = False
         async with self._personality_lock:
-            personality_data = await self._personality_store.read()
+            personality_data = await self._store.read()
             daily_personality = personality_data.get("daily_personality", {})
             daily_personality[date_group] = {
                 "content": summary_text,
@@ -155,7 +160,7 @@ class PersonalityManager:
                 "source_updated_at": latest_source_ts,
             }
             personality_data["daily_personality"] = daily_personality
-            await self._personality_store.write(personality_data)
+            await self._store.write(personality_data)
             if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
                 needs_overall_update = True
         if needs_overall_update:
@@ -165,7 +170,7 @@ class PersonalityManager:
             if overall_text:
                 async with self._personality_lock:
                     personality_data["overall_personality"] = overall_text
-                    await self._personality_store.write(personality_data)
+                    await self._store.write(personality_data)
 
     async def generate_overall_text(
         self, personality_data: dict, chat_model: ChatModel | None

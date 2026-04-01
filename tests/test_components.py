@@ -374,7 +374,7 @@ class TestPersonalitySummary:
         """验证无 chat_model 时跳过人格摘要."""
         today = datetime.now(timezone.utc).date().isoformat()
         await engine._personality_mgr.maybe_summarize(today, [], [], None)
-        personality_data = await engine._personality_mgr._personality_store.read()
+        personality_data = await engine.personality_store.read()
         assert personality_data["daily_personality"] == {}
 
     async def test_search_personality_returns_matching_summaries(
@@ -391,7 +391,7 @@ class TestPersonalitySummary:
             },
             "overall_personality": "",
         }
-        await engine._personality_mgr._personality_store.write(personality_data)
+        await engine.personality_store.write(personality_data)
         results = await engine._personality_mgr.search("天气", top_k=1)
         assert len(results) == 1
         assert results[0].source == "personality"
@@ -411,7 +411,7 @@ class TestPersonalitySummary:
             },
             "overall_personality": "",
         }
-        await engine._personality_mgr._personality_store.write(personality_data)
+        await engine.personality_store.write(personality_data)
         results = await engine._personality_mgr.search("音乐", top_k=1)
         assert len(results) == 0
 
@@ -429,7 +429,7 @@ class TestPersonalitySummary:
             },
             "overall_personality": "",
         }
-        await engine._personality_mgr._personality_store.write(personality_data)
+        await engine.personality_store.write(personality_data)
         results = await engine.search("天气", top_k=5)
         personality_results = [r for r in results if r.source == "personality"]
         assert len(personality_results) == 1

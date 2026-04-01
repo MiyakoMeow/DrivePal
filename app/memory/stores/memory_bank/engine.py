@@ -43,6 +43,16 @@ class MemoryBankEngine:
         self._personality_mgr = PersonalityManager(data_dir)
         self._summary_mgr = SummaryManager(data_dir)
 
+    @property
+    def summaries_store(self) -> TOMLStore:
+        """摘要存储."""
+        return self._summary_mgr.summaries_store
+
+    @property
+    def personality_store(self) -> TOMLStore:
+        """人格存储."""
+        return self._personality_mgr.personality_store
+
     async def write(self, event: MemoryEvent) -> str:
         """写入事件并触发摘要."""
         event = event.model_copy(deep=True)
@@ -63,9 +73,9 @@ class MemoryBankEngine:
         if not query.strip():
             return []
         events = await self._storage.read_events()
-        summaries = await self._summary_mgr._summaries_store.read()
+        summaries = await self.summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
-        personality_data = await self._personality_mgr._personality_store.read()
+        personality_data = await self.personality_store.read()
         daily_personality = personality_data.get("daily_personality", {})
         if not events and not daily_summaries and not daily_personality:
             return []

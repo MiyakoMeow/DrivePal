@@ -50,7 +50,7 @@ class MemoryBankStore:
     @property
     def summaries_store(self) -> TOMLStore:
         """摘要存储."""
-        return self._engine._summary_mgr._summaries_store
+        return self._engine.summaries_store
 
     @property
     def interactions_store(self) -> TOMLStore:
