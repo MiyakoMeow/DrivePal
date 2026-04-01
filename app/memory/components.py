@@ -36,7 +36,7 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
 
 
 SOFT_FORGET_THRESHOLD = 0.15
-SOFT_FORGET_STRENGTH = 0.1
+SOFT_FORGET_STRENGTH = 0
 
 
 class EventStorage:
@@ -201,10 +201,11 @@ class MemoryBankEngine:
         if not query.strip():
             return []
         events = await self._storage.read_events()
-        await self._soft_forget_events(events, set())
         summaries = await self._summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
-        if not events and not daily_summaries:
+        personality_data = await self._personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        if not events and not daily_summaries and not daily_personality:
             return []
         if self.embedding_model is None:
             event_results = await self._search_by_keyword(query, events, top_k)
@@ -308,6 +309,8 @@ class MemoryBankEngine:
         if updated:
             await self._storage.write_events(all_events)
         await self._strengthen_interactions(matched_ids)
+        all_events = await self._storage.read_events()
+        await self._soft_forget_events(all_events, matched_ids)
 
     async def _strengthen_interactions(self, event_ids: set[str]) -> None:
         if not event_ids:
@@ -614,12 +617,6 @@ class MemoryBankEngine:
             return
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == date_group]
-        if len(group_events) < PERSONALITY_SUMMARY_THRESHOLD:
-            return
-        personality_data = await self._personality_store.read()
-        daily_personality = personality_data.get("daily_personality", {})
-        if date_group in daily_personality:
-            return
         interactions = await self._interactions_store.read()
         group_interactions = [
             i
@@ -628,15 +625,29 @@ class MemoryBankEngine:
         ]
         if len(group_interactions) < PERSONALITY_SUMMARY_THRESHOLD:
             return
+        personality_data = await self._personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        latest_source_ts = max(
+            (e.get("updated_at") or e.get("created_at", "") for e in group_events),
+            default="",
+        )
+        if date_group in daily_personality:
+            existing = daily_personality[date_group]
+            if (
+                isinstance(existing, dict)
+                and existing.get("interaction_count", 0) >= len(group_interactions)
+                and existing.get("source_updated_at", "") >= latest_source_ts
+            ):
+                return
         combined = "\n".join(
             f"用户: {i['query']}\n系统: {i['response']}" for i in group_interactions
         )
         prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
-and devise response strategies based on your speculation. Dialogue content:
-{combined}
+        and devise response strategies based on your speculation. Dialogue content:
+        {combined}
 
-User's personality traits, emotions, and response strategy are:
-"""
+        User's personality traits, emotions, and response strategy are:
+        """
         try:
             summary_text = await self.chat_model.generate(prompt)
         except Exception:
@@ -648,6 +659,8 @@ User's personality traits, emotions, and response strategy are:
             "content": summary_text,
             "memory_strength": 1,
             "last_recall_date": date_group,
+            "interaction_count": len(group_interactions),
+            "source_updated_at": latest_source_ts,
         }
         personality_data["daily_personality"] = daily_personality
         await self._personality_store.write(personality_data)

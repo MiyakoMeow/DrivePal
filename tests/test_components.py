@@ -422,8 +422,8 @@ class TestSoftForgetConstants:
         assert SOFT_FORGET_THRESHOLD == 0.15
 
     def test_strength_value(self) -> None:
-        """验证 SOFT_FORGET_STRENGTH 为 0.1."""
-        assert SOFT_FORGET_STRENGTH == 0.1
+        """验证 SOFT_FORGET_STRENGTH 为 0."""
+        assert SOFT_FORGET_STRENGTH == 0
 
 
 class TestSoftForgetMechanism:
@@ -472,11 +472,11 @@ class TestSoftForgetMechanism:
     ) -> None:
         """验证软遗忘只应用于未匹配的记忆."""
         await engine.write(MemoryEvent(content="匹配事件"))
-        await engine.write(MemoryEvent(content="未匹配事件"))
+        await engine.write(MemoryEvent(content="完全不相关事件"))
         await engine.search("匹配事件")
         events = await storage.read_events()
         matched = next(e for e in events if e["content"] == "匹配事件")
-        unmatched = next(e for e in events if e["content"] == "未匹配事件")
+        unmatched = next(e for e in events if e["content"] == "完全不相关事件")
         assert matched.get("forgotten") is not True
         if unmatched.get("forgotten"):
             assert matched["memory_strength"] > unmatched["memory_strength"]
