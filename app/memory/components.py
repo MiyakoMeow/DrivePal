@@ -209,7 +209,8 @@ class MemoryBankEngine:
             if not event_results:
                 event_results = await self._search_by_keyword(query, events, top_k)
         summary_results = await self._search_summaries(query, daily_summaries, top_k=1)
-        all_results = event_results + summary_results
+        personality_results = await self._search_personality(query, top_k=1)
+        all_results = event_results + summary_results + personality_results
         all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
         return await self._expand_event_interactions(top_results)
@@ -411,7 +412,7 @@ class MemoryBankEngine:
             await self._summaries_store.write(summaries)
 
     async def _search_personality(self, query: str, top_k: int) -> list[SearchResult]:
-        """搜索人格摘要，使用关键词匹配，retention 权重为 SUMMARY_WEIGHT * 0.8"""
+        """Search personality summaries using keyword matching, retention weight is SUMMARY_WEIGHT * 0.8."""
         personality_data = await self._personality_store.read()
         daily_personality = personality_data.get("daily_personality", {})
         if not daily_personality:
@@ -493,6 +494,7 @@ class MemoryBankEngine:
             await self._storage._store.append(event)
 
         await self._maybe_summarize(today)
+        await self._maybe_summarize_personality(today)
         return interaction_id
 
     async def _should_append_to_event(self, interaction: dict) -> Optional[str]:
