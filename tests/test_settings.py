@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from app.models.settings import (
     LLMSettings,
@@ -93,7 +93,7 @@ class TestLLMSettingsLoad:
                 }
             )
         )
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
         settings = LLMSettings.load()
         assert len(settings.llm_providers) == 1
         assert settings.llm_providers[0].provider.model == "gpt-4"
@@ -127,7 +127,9 @@ class TestLLMSettingsLoad:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.json"))
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
 
@@ -151,7 +153,7 @@ class TestLLMSettingsLoad:
                 }
             )
         )
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
         monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.com/v1")
         monkeypatch.setenv("OPENAI_MODEL", "model-b")
@@ -199,7 +201,7 @@ class TestLLMSettingsLoad:
 class TestChatModelFallback:
     """ChatModel 多提供者回退行为测试."""
 
-    def test_generate_with_single_provider(self) -> None:
+    async def test_generate_with_single_provider(self) -> None:
         """验证单个提供者成功生成."""
         from app.models.chat import ChatModel
 
@@ -216,14 +218,14 @@ class TestChatModelFallback:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "response"
-        with patch.object(chat, "_create_client") as mock_create:
+        with patch.object(chat, "_create_async_client") as mock_create:
             mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = mock_response
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
             mock_create.return_value = mock_client
-            result = chat.generate("hello")
+            result = await chat.generate("hello")
         assert result == "response"
 
-    def test_generate_falls_back_on_error(self) -> None:
+    async def test_generate_falls_back_on_error(self) -> None:
         """验证第一个失败时回退到下一个提供者."""
         from app.models.chat import ChatModel
 
@@ -249,21 +251,23 @@ class TestChatModelFallback:
             call_count += 1
             if call_count == 1:
                 client = MagicMock()
-                client.chat.completions.create.side_effect = RuntimeError("API error")
+                client.chat.completions.create = AsyncMock(
+                    side_effect=RuntimeError("API error")
+                )
                 return client
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
             mock_response.choices[0].message.content = "fallback response"
             client = MagicMock()
-            client.chat.completions.create.return_value = mock_response
+            client.chat.completions.create = AsyncMock(return_value=mock_response)
             return client
 
-        with patch.object(chat, "_create_client", side_effect=mock_create):
-            result = chat.generate("hello")
+        with patch.object(chat, "_create_async_client", side_effect=mock_create):
+            result = await chat.generate("hello")
         assert result == "fallback response"
         assert call_count == 2
 
-    def test_generate_all_providers_fail_raises(self) -> None:
+    async def test_generate_all_providers_fail_raises(self) -> None:
         """验证所有提供者失败时抛出 RuntimeError."""
         from app.models.chat import ChatModel
 
@@ -281,11 +285,15 @@ class TestChatModelFallback:
         ]
         chat = ChatModel(providers=providers)
         mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = RuntimeError("fail")
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=RuntimeError("fail")
+        )
 
-        with patch.object(chat, "_create_client", return_value=mock_client):
-            with pytest.raises(RuntimeError, match="All LLM providers failed"):
-                chat.generate("hello")
+        with (
+            patch.object(chat, "_create_async_client", return_value=mock_client),
+            pytest.raises(RuntimeError, match="All LLM providers failed"),
+        ):
+            await chat.generate("hello")
 
 
 class TestEmbeddingModelFallback:
@@ -308,8 +316,8 @@ class TestEmbeddingModelFallback:
             _ = emb.client
         mock_cls.assert_called_once_with("fake-model", device="cpu")
 
-    def test_remote_provider_creates_openai(self) -> None:
-        """验证远程提供者使用 openai.OpenAI."""
+    def test_remote_provider_creates_async_openai(self) -> None:
+        """验证远程提供者使用 openai.AsyncOpenAI."""
         from app.models.embedding import EmbeddingModel
 
         providers = [
@@ -322,7 +330,7 @@ class TestEmbeddingModelFallback:
             )
         ]
         emb = EmbeddingModel(providers=providers)
-        with patch("app.models.embedding.openai.OpenAI") as mock_cls:
+        with patch("app.models.embedding.openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             _ = emb.client
         mock_cls.assert_called_once()
@@ -354,7 +362,7 @@ class TestEmbeddingModelFallback:
             _ = emb.client
         assert call_count == 2
 
-    def test_encode_uses_client(self) -> None:
+    async def test_encode_uses_client(self) -> None:
         """验证 encode 委托给缓存的客户端."""
         from app.models.embedding import EmbeddingModel
 
@@ -369,7 +377,7 @@ class TestEmbeddingModelFallback:
             tolist=MagicMock(return_value=[0.1, 0.2, 0.3])
         )
         emb._client = mock_client
-        result = emb.encode("test")
+        result = await emb.encode("test")
         assert result == [0.1, 0.2, 0.3]
 
 
@@ -413,7 +421,7 @@ def test_llm_settings_loads_judge(
     }
     config_file = tmp_path / "llm.json"
     config_file.write_text(json.dumps(config), encoding="utf-8")
-    monkeypatch.setattr("app.models.settings.CONFIG_PATH", str(config_file))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
 
     settings = LLMSettings.load()
     assert settings.judge_provider is not None

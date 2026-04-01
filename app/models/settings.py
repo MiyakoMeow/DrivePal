@@ -5,14 +5,12 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
-
-
-CONFIG_PATH = "config/llm.json"
 
 
 @dataclass
@@ -96,14 +94,18 @@ class LLMSettings:
     def load(cls) -> "LLMSettings":
         """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
         config_data: dict = {}
-        config_path = os.path.join(os.getcwd(), CONFIG_PATH)
-        if os.path.isfile(config_path):
-            with open(config_path) as f:
+        config_path_env = os.environ.get("CONFIG_PATH", "config/llm.json")
+        if Path(config_path_env).is_absolute():
+            config_path = Path(config_path_env)
+        else:
+            config_path = Path(__file__).resolve().parents[2] / config_path_env
+        if config_path.is_file():
+            with config_path.open() as f:
                 config_data = json.load(f)
 
-        llm_providers: list[LLMProviderConfig] = []
-        for item in config_data.get("llm", []):
-            llm_providers.append(LLMProviderConfig.from_dict(item))
+        llm_providers: list[LLMProviderConfig] = [
+            LLMProviderConfig.from_dict(item) for item in config_data.get("llm", [])
+        ]
 
         for prefix in ("OPENAI", "DEEPSEEK"):
             env_provider = _build_env_provider(prefix)

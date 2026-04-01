@@ -1,6 +1,33 @@
 [lint]
-extend-select = ["ANN", "D", "DTZ"]
-ignore = ["D211", "D213", "D203"]
+extend-select = [
+    "ANN",    # flake8-annotations - 类型注解检查
+    "ASYNC",  # flake8-async - 异步代码检查
+    "DTZ",    # flake8-datetimez - 时区安全检查
+    "G",      # flake8-logging-format - 日志格式检查
+    "INP",    # flake8-no-pep420 - 命名空间包检查
+    "PIE",    # flake8-pie - Python最佳实践检查
+    "PT",     # flake8-pytest-style - pytest风格检查
+    "PTH",    # flake8-use-pathlib - pathlib替代检查
+    "SIM",    # flake8-simplify - 代码简化检查
+    "TC",     # flake8-type-checking - 类型检查优化
+    "E",      # pycodestyle error - 代码风格错误
+    "W",      # pycodestyle warning - 代码风格警告
+    "D",      # pydoclint - 文档字符串检查
+    "N",      # pep8-naming - 命名规范检查
+    "PERF",   # Perflint - 性能检查
+    "FAST",   # FastAPI - FastAPI特定检查
+]
+# 忽略的规则：
+# D211/D213/D203: docstring空行规则互相冲突
+# D400: docstring首行句号
+# E501: 行长度限制由formatter处理
+ignore = [
+    "D203",  # pydoclint - docstring前应有1个空行(与D211冲突)
+    "D211",  # pydoclint - docstring前不应有空行(与D203冲突)
+    "D213",  # pydoclint - 多行docstring应在第二行开始
+    "D400",  # pydoclint - docstring首行应以句号结尾
+    "E501",  # pycodestyle - 行长度限制
+]
 exclude = [".agents/**", "vendor/**"]
 
 [lint.per-file-ignores]

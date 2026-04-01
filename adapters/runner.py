@@ -1,10 +1,11 @@
 """VehicleMemBench 评估基准的测试运行器."""
 
 import sys
-import os
 import json
 from pathlib import Path
 from typing import Optional
+
+import aiofiles
 
 from adapters.memory_adapters import ADAPTERS
 from adapters.memory_adapters.common import format_search_results
@@ -25,7 +26,7 @@ def setup_vehiclemembench_path() -> None:
     """将 VehicleMemBench 路径添加到 sys.path."""
     for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
         d_str = str(d)
-        if not any(os.path.abspath(p) == os.path.abspath(d_str) for p in sys.path):
+        if not any(Path(p).resolve() == Path(d_str).resolve() for p in sys.path):
             sys.path.insert(0, d_str)
 
 
@@ -88,13 +89,13 @@ def _get_agent_client() -> AgentClient:
 
 def _load_qa(file_num: int) -> dict:
     path = BENCHMARK_DIR / "qa_data" / f"qa_{file_num}.json"
-    with open(path) as f:
+    with path.open() as f:
         return json.load(f)
 
 
 def _load_history(file_num: int) -> str:
     path = BENCHMARK_DIR / "history" / f"history_{file_num}.txt"
-    with open(path) as f:
+    with path.open() as f:
         return f.read()
 
 
@@ -103,7 +104,7 @@ def _get_output_dir() -> Path:
     return OUTPUT_DIR
 
 
-def prepare(
+async def prepare(
     file_range: str = "1-50",
     memory_types: str = "gold,summary,kv,memory_bank",
 ) -> None:
@@ -123,16 +124,16 @@ def prepare(
 
             print(f"[prepare] {mtype} file {fnum}...")
             try:
-                result = _prepare_single(agent_client, history_text, fnum, mtype)
+                result = await _prepare_single(agent_client, history_text, fnum, mtype)
                 if result is not None:
-                    with open(result_path, "w") as f:
-                        json.dump(result, f, ensure_ascii=False, indent=2)
+                    async with aiofiles.open(result_path, "w", encoding="utf-8") as f:
+                        await f.write(json.dumps(result, ensure_ascii=False, indent=2))
             except Exception as e:
                 print(f"[error] {mtype} file {fnum}: {e}")
                 continue
 
 
-def _prepare_single(
+async def _prepare_single(
     agent_client: AgentClient, history_text: str, file_num: int, memory_type: str
 ) -> dict | None:
     if memory_type == "gold":
@@ -149,12 +150,12 @@ def _prepare_single(
         adapter_cls = ADAPTERS[memory_type]
         data_dir = _get_output_dir() / f"store_{memory_type}_{file_num}"
         adapter = adapter_cls(data_dir=data_dir)
-        adapter.add(history_text)
+        await adapter.add(history_text)
         return {"type": memory_type, "data_dir": str(data_dir)}
     return None
 
 
-def run(
+async def run(
     file_range: str = "1-50",
     memory_types: str = "gold,summary,kv,memory_bank",
     reflect_num: int = 10,
@@ -176,12 +177,12 @@ def run(
                 print(f"[skip] {mtype} file {fnum} not prepared")
                 continue
 
-            with open(prep_path) as f:
-                prep_data = json.load(f)
+            async with aiofiles.open(prep_path, encoding="utf-8") as f:
+                prep_data = json.loads(await f.read())
 
             print(f"[run] {mtype} file {fnum}: {len(events)} queries...")
             try:
-                results = _run_single(
+                results = await _run_single(
                     agent_client,
                     events,
                     history_text,
@@ -190,14 +191,14 @@ def run(
                     mtype,
                     reflect_num,
                 )
-                with open(result_path, "w") as f:
-                    json.dump(results, f, ensure_ascii=False, indent=2)
+                async with aiofiles.open(result_path, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(results, ensure_ascii=False, indent=2))
             except Exception as e:
                 print(f"[error] {mtype} file {fnum}: {e}")
                 continue
 
 
-def _run_single(
+async def _run_single(
     agent_client: AgentClient,
     events: list[dict],
     history_text: str,
@@ -234,7 +235,7 @@ def _run_single(
                     task, i, vmb_store, agent_client, reflect_num
                 )
             elif memory_type in ADAPTERS:
-                result = _run_custom_adapter(
+                result = await _run_custom_adapter(
                     agent_client, task, i, prep_data, memory_type, reflect_num
                 )
             else:
@@ -252,7 +253,7 @@ def _run_single(
     return results
 
 
-def _run_custom_adapter(
+async def _run_custom_adapter(
     agent_client: AgentClient,
     task: dict,
     task_id: int,
@@ -264,7 +265,7 @@ def _run_custom_adapter(
     data_dir = Path(prep_data["data_dir"])
     adapter = adapter_cls(data_dir=data_dir)
 
-    store = adapter.add("")
+    store = await adapter.add("")
     client = adapter.get_search_client(store)
 
     system_instruction = (
@@ -300,8 +301,8 @@ def _run_custom_adapter(
         },
     ]
 
-    def _memory_search(query: str, top_k: int = 5) -> dict:
-        results = client.search(query=query, top_k=top_k)
+    async def _memory_search(query: str, top_k: int = 5) -> dict:
+        results = await client.search(query=query, top_k=top_k)
         text, count = format_search_results(results)
         return {"success": True, "results": text, "count": count}
 
@@ -328,7 +329,7 @@ def report(output_path: Optional[Path] = None) -> None:
 
     for path in sorted(output_dir.glob("*_results.json")):
         mtype = path.stem.replace("_results", "").rsplit("_file_", 1)[0]
-        with open(path) as f:
+        with path.open() as f:
             results = json.load(f)
         if mtype not in all_results:
             all_results[mtype] = []
@@ -351,7 +352,7 @@ def report(output_path: Optional[Path] = None) -> None:
                 )
 
     out = output_path if output_path is not None else output_dir / "report.json"
-    with open(out, "w") as f:
+    with out.open("w") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
     print(f"Report written to {out}")
 

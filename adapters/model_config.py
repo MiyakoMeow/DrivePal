@@ -7,16 +7,26 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from app.models.chat import ChatModel
-from app.models.embedding import EmbeddingModel
+from typing import TYPE_CHECKING
 
-CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "llm.json")
+if TYPE_CHECKING:
+    from app.models.embedding import EmbeddingModel
+    from app.models.chat import ChatModel
+
+
+def _get_config_path() -> Path:
+    """获取配置文件路径，支持环境变量覆盖."""
+    env_path = os.environ.get("CONFIG_PATH", "config/llm.json")
+    if Path(env_path).is_absolute():
+        return Path(env_path)
+    return Path(__file__).resolve().parent.parent / env_path
 
 
 @lru_cache(maxsize=1)
 def _load_config() -> dict:
     """从 JSON 文件加载配置（已缓存）."""
-    with open(CONFIG_PATH) as f:
+    config_path = _get_config_path()
+    with config_path.open() as f:
         return json.load(f)
 
 

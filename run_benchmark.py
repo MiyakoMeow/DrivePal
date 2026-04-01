@@ -3,7 +3,7 @@
 import argparse
 
 
-def main() -> None:
+async def main() -> None:
     """Entry point for benchmark CLI."""
     parser = argparse.ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
@@ -31,11 +31,11 @@ def main() -> None:
     if args.command == "prepare":
         from adapters.runner import prepare as do_prepare
 
-        do_prepare(args.file_range, args.memory_types)
+        await do_prepare(args.file_range, args.memory_types)
     elif args.command == "run":
         from adapters.runner import run as do_run
 
-        do_run(args.file_range, args.memory_types)
+        await do_run(args.file_range, args.memory_types)
     elif args.command == "report":
         from adapters.runner import report as do_report
 
@@ -45,14 +45,14 @@ def main() -> None:
         try:
             from adapters.runner import prepare as do_prepare
 
-            do_prepare(args.file_range, args.memory_types)
+            await do_prepare(args.file_range, args.memory_types)
         except Exception as e:
             print(f"[prepare] failed: {e}")
             failed = True
         try:
             from adapters.runner import run as do_run
 
-            do_run(args.file_range, args.memory_types)
+            await do_run(args.file_range, args.memory_types)
         except Exception as e:
             print(f"[run] failed: {e}")
             failed = True
@@ -69,4 +69,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+
+    asyncio.run(main())

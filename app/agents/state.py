@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Optional, TypedDict
 
-from app.memory.types import MemoryMode
-
 
 class AgentState(TypedDict):
     """Agent状态定义."""
@@ -14,6 +12,5 @@ class AgentState(TypedDict):
     context: dict
     task: Optional[dict]
     decision: Optional[dict]
-    memory_mode: MemoryMode
     result: Optional[str]
     event_id: Optional[str]

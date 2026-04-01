@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import openai
-from openai.types.chat import ChatCompletionMessageParam
 
 from app.models.settings import LLMProviderConfig, LLMSettings
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
+    from collections.abc import AsyncIterator
 
 
 class ChatModel:
@@ -67,20 +69,19 @@ class ChatModel:
             self.temperature if self.temperature is not None else provider.temperature
         )
 
-    def generate(
+    async def generate(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] | None = None,
         **_kwargs: object,
     ) -> str:
-        """生成回复，按provider顺序尝试，失败自动fallback."""
+        """异步生成回复."""
         messages = self._build_messages(prompt, system_prompt)
-
         errors = []
         for provider in self.providers:
             try:
-                client = self._create_client(provider)
-                response = client.chat.completions.create(
+                client = self._create_async_client(provider)
+                response = await client.chat.completions.create(
                     model=provider.provider.model,
                     messages=messages,
                     temperature=self._get_temperature(provider),
@@ -89,7 +90,6 @@ class ChatModel:
             except Exception as e:
                 errors.append(f"{provider.provider.model}: {e}")
                 continue
-
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
     async def generate_stream(
@@ -122,10 +122,10 @@ class ChatModel:
 
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
-    def batch_generate(
+    async def batch_generate(
         self,
         prompts: list[str],
-        system_prompt: Optional[str] = None,
+        system_prompt: Optional[str] | None = None,
     ) -> list[str]:
         """批量生成回复."""
-        return [self.generate(p, system_prompt) for p in prompts]
+        return [await self.generate(p, system_prompt) for p in prompts]

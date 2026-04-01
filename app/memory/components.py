@@ -1,5 +1,6 @@
 """MemoryStore 可组合组件."""
 
+import asyncio
 import math
 import uuid
 from datetime import date, datetime, timezone
@@ -40,20 +41,20 @@ class EventStorage:
         """生成唯一事件 ID."""
         return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
-    def read_events(self) -> list[dict]:
+    async def read_events(self) -> list[dict]:
         """读取所有事件."""
-        return self._store.read()
+        return await self._store.read()
 
-    def write_events(self, events: list[dict]) -> None:
+    async def write_events(self, events: list[dict]) -> None:
         """覆写全部事件."""
-        self._store.write(events)
+        await self._store.write(events)
 
-    def append_event(self, event: MemoryEvent) -> str:
+    async def append_event(self, event: MemoryEvent) -> str:
         """追加事件并返回 ID."""
         event = event.model_copy(deep=True)
         event.id = self.generate_id()
         event.created_at = datetime.now(timezone.utc).isoformat()
-        self._store.append(event.model_dump())
+        await self._store.append(event.model_dump())
         return event.id
 
 
@@ -74,6 +75,10 @@ class KeywordSearch:
         return [SearchResult(event=e) for e in matched[:top_k]]
 
 
+_strategy_locks: dict[str, asyncio.Lock] = {}
+_strategy_locks_lock = asyncio.Lock()
+
+
 class FeedbackManager:
     """反馈更新 + 策略权重管理."""
 
@@ -82,32 +87,40 @@ class FeedbackManager:
         self._strategies_store = JSONStore(data_dir, Path("strategies.json"), dict)
         self.data_dir = data_dir
 
-    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+    async def _get_lock(self) -> asyncio.Lock:
+        async with _strategy_locks_lock:
+            if str(self.data_dir) not in _strategy_locks:
+                _strategy_locks[str(self.data_dir)] = asyncio.Lock()
+            return _strategy_locks[str(self.data_dir)]
+
+    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
         feedback_store = JSONStore(self.data_dir, Path("feedback.json"), list)
-        feedback_store.append(feedback.model_dump())
-        self._update_strategy(event_id, feedback.model_dump())
+        await feedback_store.append(feedback.model_dump())
+        await self._update_strategy(event_id, feedback.model_dump())
 
-    def _update_strategy(self, event_id: str, feedback: dict) -> None:
-        strategies = self._strategies_store.read()
-        action = feedback.get("action")
-        event_type = feedback.get("type", "default")
+    async def _update_strategy(self, event_id: str, feedback: dict) -> None:
+        lock = await self._get_lock()
+        async with lock:
+            strategies = await self._strategies_store.read()
+            action = feedback.get("action")
+            event_type = feedback.get("type", "default")
 
-        if "reminder_weights" not in strategies:
-            strategies["reminder_weights"] = {}
+            if "reminder_weights" not in strategies:
+                strategies["reminder_weights"] = {}
 
-        if action == "accept":
-            strategies["reminder_weights"][event_type] = min(
-                strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
-            )
-        elif action == "ignore":
-            strategies["reminder_weights"][event_type] = max(
-                strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
-            )
+            if action == "accept":
+                strategies["reminder_weights"][event_type] = min(
+                    strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
+                )
+            elif action == "ignore":
+                strategies["reminder_weights"][event_type] = max(
+                    strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
+                )
 
-        self._strategies_store.write(strategies)
+            await self._strategies_store.write(strategies)
 
 
 class SimpleInteractionWriter:
@@ -117,7 +130,7 @@ class SimpleInteractionWriter:
         """初始化交互写入器."""
         self._storage = storage
 
-    def write_interaction(
+    async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录."""
@@ -126,7 +139,7 @@ class SimpleInteractionWriter:
             type=event_type,
             description=response,
         )
-        return self._storage.append_event(event)
+        return await self._storage.append_event(event)
 
 
 class MemoryBankEngine:
@@ -147,6 +160,7 @@ class MemoryBankEngine:
         self.embedding_model = embedding_model
         self.chat_model = chat_model
         self._interactions_store = JSONStore(data_dir, Path("interactions.json"), list)
+        self._lock = asyncio.Lock()
         self._default_summaries = {"daily_summaries": {}, "overall_summary": ""}
         self._summaries_store = JSONStore(
             data_dir,
@@ -154,7 +168,7 @@ class MemoryBankEngine:
             lambda: dict(self._default_summaries),
         )
 
-    def write(self, event: MemoryEvent) -> str:
+    async def write(self, event: MemoryEvent) -> str:
         """写入事件并触发摘要."""
         event = event.model_copy(deep=True)
         event.id = self._storage.generate_id()
@@ -163,36 +177,36 @@ class MemoryBankEngine:
         event.memory_strength = 1
         event.last_recall_date = today
         event.date_group = today
-        self._storage._store.append(event.model_dump())
-        self._maybe_summarize(today)
+        await self._storage._store.append(event.model_dump())
+        await self._maybe_summarize(today)
         return event.id
 
-    def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆事件与摘要."""
         if not query.strip():
             return []
-        events = self._storage.read_events()
-        summaries = self._summaries_store.read()
+        events = await self._storage.read_events()
+        summaries = await self._summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
         if not events and not daily_summaries:
             return []
         if self.embedding_model is None:
-            event_results = self._search_by_keyword(query, events, top_k)
+            event_results = await self._search_by_keyword(query, events, top_k)
         else:
-            event_results = self._search_by_embedding(query, events, top_k)
+            event_results = await self._search_by_embedding(query, events, top_k)
             if not event_results:
-                event_results = self._search_by_keyword(query, events, top_k)
-        summary_results = self._search_summaries(query, daily_summaries, top_k=1)
+                event_results = await self._search_by_keyword(query, events, top_k)
+        summary_results = await self._search_summaries(query, daily_summaries, top_k=1)
         all_results = event_results + summary_results
         all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
-        return self._expand_event_interactions(top_results)
+        return await self._expand_event_interactions(top_results)
 
     def _get_searchable_text(self, event: dict) -> str:
         parts = [event.get("content", ""), event.get("description", "")]
         return "\n".join(p for p in parts if p)
 
-    def _search_by_keyword(
+    async def _search_by_keyword(
         self, query: str, events: list[dict], top_k: int
     ) -> list[SearchResult]:
         query_lower = query.lower()
@@ -214,16 +228,16 @@ class MemoryBankEngine:
                 )
         results.sort(key=lambda x: x.score, reverse=True)
         top_results = results[:top_k]
-        self._strengthen_events([r.event for r in top_results])
+        await self._strengthen_events([r.event for r in top_results])
         return top_results
 
-    def _search_by_embedding(
+    async def _search_by_embedding(
         self, query: str, events: list[dict], top_k: int
     ) -> list[SearchResult]:
         assert self.embedding_model is not None
-        query_vector = self.embedding_model.encode(query)
+        query_vector = await self.embedding_model.encode(query)
         event_texts = [self._get_searchable_text(event) for event in events]
-        all_event_vectors = self.embedding_model.batch_encode(event_texts)
+        all_event_vectors = await self.embedding_model.batch_encode(event_texts)
         today = datetime.now(timezone.utc).date()
         results = []
         for event, event_vector in zip(events, all_event_vectors):
@@ -243,13 +257,13 @@ class MemoryBankEngine:
                 )
         results.sort(key=lambda x: x.score, reverse=True)
         top_results = results[:top_k]
-        self._strengthen_events([r.event for r in top_results])
+        await self._strengthen_events([r.event for r in top_results])
         return top_results
 
-    def _expand_event_interactions(
+    async def _expand_event_interactions(
         self, results: list[SearchResult]
     ) -> list[SearchResult]:
-        interactions = self._interactions_store.read()
+        interactions = await self._interactions_store.read()
         interaction_by_event: dict[str, list[dict]] = {}
         for i in interactions:
             eid = i.get("event_id", "")
@@ -260,13 +274,13 @@ class MemoryBankEngine:
             result.interactions = interaction_by_event.get(eid, [])
         return results
 
-    def _strengthen_events(self, matched_events: list[dict]) -> None:
+    async def _strengthen_events(self, matched_events: list[dict]) -> None:
         if not matched_events:
             return
         matched_ids = {e["id"] for e in matched_events if "id" in e}
         if not matched_ids:
             return
-        all_events = self._storage.read_events()
+        all_events = await self._storage.read_events()
         today = datetime.now(timezone.utc).date().isoformat()
         updated = False
         for event in all_events:
@@ -275,13 +289,13 @@ class MemoryBankEngine:
                 event["last_recall_date"] = today
                 updated = True
         if updated:
-            self._storage.write_events(all_events)
-        self._strengthen_interactions(matched_ids)
+            await self._storage.write_events(all_events)
+        await self._strengthen_interactions(matched_ids)
 
-    def _strengthen_interactions(self, event_ids: set[str]) -> None:
+    async def _strengthen_interactions(self, event_ids: set[str]) -> None:
         if not event_ids:
             return
-        all_interactions = self._interactions_store.read()
+        all_interactions = await self._interactions_store.read()
         today = datetime.now(timezone.utc).date().isoformat()
         updated = False
         for interaction in all_interactions:
@@ -292,9 +306,9 @@ class MemoryBankEngine:
                 interaction["last_recall_date"] = today
                 updated = True
         if updated:
-            self._interactions_store.write(all_interactions)
+            await self._interactions_store.write(all_interactions)
 
-    def _search_summaries(
+    async def _search_summaries(
         self, query: str, daily_summaries: dict, top_k: int = 1
     ) -> list[SearchResult]:
         if not daily_summaries:
@@ -334,10 +348,10 @@ class MemoryBankEngine:
                 )
                 matched_keys.append(date_group)
         results.sort(key=lambda x: x.score, reverse=True)
-        self._strengthen_summaries(matched_keys, daily_summaries)
+        await self._strengthen_summaries(matched_keys, daily_summaries)
         return results[:top_k]
 
-    def _strengthen_summaries(
+    async def _strengthen_summaries(
         self, matched_keys: list[str], daily_summaries: dict
     ) -> None:
         if not matched_keys:
@@ -354,11 +368,11 @@ class MemoryBankEngine:
                     summary_data["last_recall_date"] = today
                     updated = True
         if updated:
-            summaries = self._summaries_store.read()
+            summaries = await self._summaries_store.read()
             summaries["daily_summaries"] = daily_summaries
-            self._summaries_store.write(summaries)
+            await self._summaries_store.write(summaries)
 
-    def write_interaction(
+    async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录并关联事件."""
@@ -374,7 +388,7 @@ class MemoryBankEngine:
             "last_recall_date": today,
         }
 
-        append_event_id = self._should_append_to_event(interaction)
+        append_event_id = await self._should_append_to_event(interaction)
         event = None
         if append_event_id:
             interaction["event_id"] = append_event_id
@@ -394,19 +408,19 @@ class MemoryBankEngine:
             }
             interaction["event_id"] = event_id
 
-        self._interactions_store.append(interaction)
+        await self._interactions_store.append(interaction)
 
         if append_event_id:
-            self._append_interaction_to_event(append_event_id, interaction_id)
-            self._update_event_summary(append_event_id)
+            await self._append_interaction_to_event(append_event_id, interaction_id)
+            await self._update_event_summary(append_event_id)
         else:
-            self._storage._store.append(event)
+            await self._storage._store.append(event)
 
-        self._maybe_summarize(today)
+        await self._maybe_summarize(today)
         return interaction_id
 
-    def _should_append_to_event(self, interaction: dict) -> Optional[str]:
-        events = self._storage.read_events()
+    async def _should_append_to_event(self, interaction: dict) -> Optional[str]:
+        events = await self._storage.read_events()
         if not events:
             return None
         today = datetime.now(timezone.utc).date().isoformat()
@@ -414,8 +428,8 @@ class MemoryBankEngine:
         if recent.get("date_group") != today:
             return None
         if self.embedding_model:
-            query_vec = self.embedding_model.encode(interaction["query"])
-            event_vec = self.embedding_model.encode(recent.get("content", ""))
+            query_vec = await self.embedding_model.encode(interaction["query"])
+            event_vec = await self.embedding_model.encode(recent.get("content", ""))
             similarity = cosine_similarity(query_vec, event_vec)
             if similarity >= AGGREGATION_SIMILARITY_THRESHOLD:
                 return recent["id"]
@@ -430,19 +444,22 @@ class MemoryBankEngine:
             return recent["id"]
         return None
 
-    def _append_interaction_to_event(self, event_id: str, interaction_id: str) -> None:
-        all_events = self._storage.read_events()
-        for event in all_events:
-            if event.get("id") == event_id:
-                event.setdefault("interaction_ids", []).append(interaction_id)
-                event["updated_at"] = datetime.now(timezone.utc).isoformat()
-                break
-        self._storage.write_events(all_events)
+    async def _append_interaction_to_event(
+        self, event_id: str, interaction_id: str
+    ) -> None:
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            for event in all_events:
+                if event.get("id") == event_id:
+                    event.setdefault("interaction_ids", []).append(interaction_id)
+                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    break
+            await self._storage.write_events(all_events)
 
-    def _update_event_summary(self, event_id: str) -> None:
+    async def _update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:
             return
-        interactions = self._interactions_store.read()
+        interactions = await self._interactions_store.read()
         child_interactions = [i for i in interactions if i.get("event_id") == event_id]
         if not child_interactions:
             return
@@ -451,31 +468,31 @@ class MemoryBankEngine:
         )
         prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
         try:
-            summary_text = self.chat_model.generate(prompt)
+            summary_text = await self.chat_model.generate(prompt)
         except Exception:
             return
-        all_events = self._storage.read_events()
+        all_events = await self._storage.read_events()
         for event in all_events:
             if event.get("id") == event_id:
                 event["content"] = summary_text
                 break
-        self._storage.write_events(all_events)
+        await self._storage.write_events(all_events)
 
-    def _persist_interaction(self, interaction: dict) -> None:
-        all_interactions = self._interactions_store.read()
+    async def _persist_interaction(self, interaction: dict) -> None:
+        all_interactions = await self._interactions_store.read()
         for i, item in enumerate(all_interactions):
             if item["id"] == interaction["id"]:
                 all_interactions[i] = interaction
                 break
-        self._interactions_store.write(all_interactions)
+        await self._interactions_store.write(all_interactions)
 
-    def _maybe_summarize(self, date_group: str) -> None:
-        events = self._storage.read_events()
+    async def _maybe_summarize(self, date_group: str) -> None:
+        events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == date_group]
         count = len(group_events)
         if count < DAILY_SUMMARY_THRESHOLD:
             return
-        summaries = self._summaries_store.read()
+        summaries = await self._summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
         latest_source_ts = max(
             (e.get("updated_at") or e.get("created_at", "") for e in group_events),
@@ -496,7 +513,7 @@ class MemoryBankEngine:
         )
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
         try:
-            summary_text = self.chat_model.generate(prompt)
+            summary_text = await self.chat_model.generate(prompt)
         except Exception:
             return
         daily_summaries[date_group] = {
@@ -507,11 +524,13 @@ class MemoryBankEngine:
             "source_updated_at": latest_source_ts,
         }
         summaries["daily_summaries"] = daily_summaries
-        self._summaries_store.write(summaries)
+        await self._summaries_store.write(summaries)
         if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
-            self._update_overall_summary(daily_summaries, summaries)
+            await self._update_overall_summary(daily_summaries, summaries)
 
-    def _update_overall_summary(self, daily_summaries: dict, summaries: dict) -> None:
+    async def _update_overall_summary(
+        self, daily_summaries: dict, summaries: dict
+    ) -> None:
         if not self.chat_model:
             return
         all_summaries = []
@@ -525,8 +544,8 @@ class MemoryBankEngine:
         combined = "\n".join(all_summaries)
         prompt = f"请简洁总结以下每日摘要（两到三句话）：\n{combined}"
         try:
-            overall = self.chat_model.generate(prompt)
+            overall = await self.chat_model.generate(prompt)
         except Exception:
             return
         summaries["overall_summary"] = overall
-        self._summaries_store.write(summaries)
+        await self._summaries_store.write(summaries)

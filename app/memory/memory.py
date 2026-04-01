@@ -1,14 +1,17 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
+import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
-from app.models.chat import ChatModel
-from app.models.embedding import EmbeddingModel
+
+if TYPE_CHECKING:
+    from app.models.embedding import EmbeddingModel
+    from app.models.chat import ChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +45,10 @@ class MemoryModule:
     ) -> None:
         """初始化记忆模块."""
         self._stores: dict[MemoryMode, MemoryStore] = {}
+        self._stores_lock = asyncio.Lock()
         self._data_dir = data_dir
         self._embedding_model = embedding_model
         self._chat_model = chat_model
-        self._default_mode: MemoryMode = MemoryMode.MEMORY_BANK
 
     @property
     def chat_model(self) -> "ChatModel":
@@ -56,10 +59,16 @@ class MemoryModule:
             self._chat_model = get_chat_model()
         return self._chat_model
 
-    def _get_store(self, mode: MemoryMode) -> MemoryStore:
+    async def _get_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in self._stores:
-            self._stores[mode] = self._create_store(mode)
+            async with self._stores_lock:
+                if mode not in self._stores:
+                    self._stores[mode] = self._create_store(mode)
         return self._stores[mode]
+
+    def _resolve_mode(self, mode: MemoryMode | None) -> MemoryMode:
+        """解析 mode 参数，默认 MEMORY_BANK."""
+        return mode or MemoryMode.MEMORY_BANK
 
     def _create_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in _STORES_REGISTRY:
@@ -82,38 +91,44 @@ class MemoryModule:
             kwargs["chat_model"] = self._chat_model
         return store_cls(**kwargs)
 
-    def set_default_mode(self, mode: MemoryMode) -> None:
-        """设置默认记忆检索模式."""
-        if mode not in _STORES_REGISTRY:
-            raise ValueError(f"Unknown mode: {mode}")
-        self._default_mode = mode
-
-    def write(self, event: MemoryEvent) -> str:
+    async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
         """写入记忆事件."""
-        return self._get_store(self._default_mode).write(event)
+        store = await self._get_store(self._resolve_mode(mode))
+        return await store.write(event)
 
-    def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+    async def write_interaction(
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
+        *,
+        mode: MemoryMode | None = None,
     ) -> str:
         """写入交互记录."""
-        store = self._get_store(self._default_mode)
+        store = await self._get_store(self._resolve_mode(mode))
         if not getattr(store, "supports_interaction", False):
             raise NotImplementedError(
                 f"Store '{store.store_name}' does not support write_interaction"
             )
-        return store.write_interaction(query, response, event_type)
+        return await store.write_interaction(query, response, event_type)
 
-    def search(
-        self, query: str, mode: MemoryMode | None = None, top_k: int = 10
+    async def search(
+        self, query: str, top_k: int = 10, *, mode: MemoryMode | None = None
     ) -> list[SearchResult]:
-        """检索记忆，可指定模式，默认使用默认模式."""
-        target_mode = mode or self._default_mode
-        return self._get_store(target_mode).search(query, top_k=top_k)
+        """搜索记忆内容."""
+        store = await self._get_store(self._resolve_mode(mode))
+        return await store.search(query, top_k=top_k)
 
-    def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+    async def get_history(
+        self, limit: int = 10, *, mode: MemoryMode | None = None
+    ) -> list[MemoryEvent]:
         """获取历史记忆事件."""
-        return self._get_store(self._default_mode).get_history(limit)
+        store = await self._get_store(self._resolve_mode(mode))
+        return await store.get_history(limit)
 
-    def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-        """更新事件反馈."""
-        self._get_store(self._default_mode).update_feedback(event_id, feedback)
+    async def update_feedback(
+        self, event_id: str, feedback: FeedbackData, *, mode: MemoryMode | None = None
+    ) -> None:
+        """更新记忆反馈."""
+        store = await self._get_store(self._resolve_mode(mode))
+        await store.update_feedback(event_id, feedback)

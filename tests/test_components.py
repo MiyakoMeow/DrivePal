@@ -64,34 +64,34 @@ class TestEventStorage:
         assert len(parts[0]) == 14
         assert len(parts[1]) == 8
 
-    def test_read_events_empty(self, storage: EventStorage) -> None:
+    async def test_read_events_empty(self, storage: EventStorage) -> None:
         """验证从空存储读取返回空列表."""
-        assert storage.read_events() == []
+        assert await storage.read_events() == []
 
-    def test_append_event_assigns_id_and_created_at(
+    async def test_append_event_assigns_id_and_created_at(
         self, storage: EventStorage
     ) -> None:
         """验证 append_event 分配 ID 和 created_at 时间戳."""
         event = MemoryEvent(content="测试事件")
-        eid = storage.append_event(event)
-        events = storage.read_events()
+        eid = await storage.append_event(event)
+        events = await storage.read_events()
         assert len(events) == 1
         assert events[0]["id"] == eid
         assert events[0]["created_at"] != ""
 
-    def test_write_events_overwrites(self, storage: EventStorage) -> None:
+    async def test_write_events_overwrites(self, storage: EventStorage) -> None:
         """验证 write_events 完全覆盖现有事件."""
-        storage.append_event(MemoryEvent(content="事件A"))
-        storage.write_events([{"id": "x", "content": "覆盖"}])
-        events = storage.read_events()
+        await storage.append_event(MemoryEvent(content="事件A"))
+        await storage.write_events([{"id": "x", "content": "覆盖"}])
+        events = await storage.read_events()
         assert len(events) == 1
         assert events[0]["id"] == "x"
 
-    def test_multiple_appends(self, storage: EventStorage) -> None:
+    async def test_multiple_appends(self, storage: EventStorage) -> None:
         """验证多次追加能正确累积."""
-        storage.append_event(MemoryEvent(content="A"))
-        storage.append_event(MemoryEvent(content="B"))
-        assert len(storage.read_events()) == 2
+        await storage.append_event(MemoryEvent(content="A"))
+        await storage.append_event(MemoryEvent(content="B"))
+        assert len(await storage.read_events()) == 2
 
 
 class TestKeywordSearch:
@@ -152,61 +152,69 @@ class TestFeedbackManager:
         """提供由临时目录支持的 FeedbackManager."""
         return FeedbackManager(tmp_path)
 
-    def test_accept_increases_weight(
+    async def test_accept_increases_weight(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证接受反馈增加策略权重."""
         from app.storage.json_store import JSONStore
 
-        manager.update_feedback("eid1", FeedbackData(action="accept", type="meeting"))
-        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        await manager.update_feedback(
+            "eid1", FeedbackData(action="accept", type="meeting")
+        )
+        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
-    def test_ignore_decreases_weight(
+    async def test_ignore_decreases_weight(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证忽略反馈降低策略权重."""
         from app.storage.json_store import JSONStore
 
-        manager.update_feedback("eid2", FeedbackData(action="ignore", type="general"))
-        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        await manager.update_feedback(
+            "eid2", FeedbackData(action="ignore", type="general")
+        )
+        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["general"] == pytest.approx(0.4)
 
-    def test_accept_capped_at_one(
+    async def test_accept_capped_at_one(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证接受权重上限为 1.0."""
         from app.storage.json_store import JSONStore
 
         for _ in range(20):
-            manager.update_feedback(
+            await manager.update_feedback(
                 "eid", FeedbackData(action="accept", type="meeting")
             )
-        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["meeting"] <= 1.0
 
-    def test_ignore_floored_at_zero_point_one(
+    async def test_ignore_floored_at_zero_point_one(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证忽略权重下限为 0.1."""
         from app.storage.json_store import JSONStore
 
         for _ in range(20):
-            manager.update_feedback(
+            await manager.update_feedback(
                 "eid", FeedbackData(action="ignore", type="general")
             )
-        strategies = JSONStore(tmp_path, Path("strategies.json"), dict).read()
+        strategies = await JSONStore(tmp_path, Path("strategies.json"), dict).read()
         assert strategies["reminder_weights"]["general"] >= 0.1
 
-    def test_feedback_appended_to_history(
+    async def test_feedback_appended_to_history(
         self, manager: FeedbackManager, tmp_path: Path
     ) -> None:
         """验证每条反馈记录都追加到历史记录中."""
         from app.storage.json_store import JSONStore
 
-        manager.update_feedback("eid1", FeedbackData(action="accept", type="meeting"))
-        manager.update_feedback("eid2", FeedbackData(action="ignore", type="general"))
-        feedback = JSONStore(tmp_path, Path("feedback.json"), list).read()
+        await manager.update_feedback(
+            "eid1", FeedbackData(action="accept", type="meeting")
+        )
+        await manager.update_feedback(
+            "eid2", FeedbackData(action="ignore", type="general")
+        )
+        feedback = await JSONStore(tmp_path, Path("feedback.json"), list).read()
         assert len(feedback) == 2
 
 
@@ -219,28 +227,28 @@ class TestSimpleInteractionWriter:
         storage = EventStorage(tmp_path)
         return SimpleInteractionWriter(storage)
 
-    def test_write_returns_id(self, writer: SimpleInteractionWriter) -> None:
+    async def test_write_returns_id(self, writer: SimpleInteractionWriter) -> None:
         """验证 write_interaction 返回非空 ID."""
-        iid = writer.write_interaction("查询", "响应")
+        iid = await writer.write_interaction("查询", "响应")
         assert isinstance(iid, str)
         assert len(iid) > 0
 
-    def test_write_stores_content_and_description(
+    async def test_write_stores_content_and_description(
         self, writer: SimpleInteractionWriter, tmp_path: Path
     ) -> None:
         """验证查询和响应存储为 content 和 description."""
-        writer.write_interaction("查询内容", "响应内容")
-        events = EventStorage(tmp_path).read_events()
+        await writer.write_interaction("查询内容", "响应内容")
+        events = await EventStorage(tmp_path).read_events()
         assert len(events) == 1
         assert events[0]["content"] == "查询内容"
         assert events[0]["description"] == "响应内容"
 
-    def test_write_custom_event_type(
+    async def test_write_custom_event_type(
         self, writer: SimpleInteractionWriter, tmp_path: Path
     ) -> None:
         """验证自定义 event_type 被正确存储."""
-        writer.write_interaction("查询", "响应", event_type="meeting")
-        events = EventStorage(tmp_path).read_events()
+        await writer.write_interaction("查询", "响应", event_type="meeting")
+        events = await EventStorage(tmp_path).read_events()
         assert events[0]["type"] == "meeting"
 
 
@@ -257,45 +265,47 @@ class TestMemoryBankEngineWrite:
         """提供不带嵌入或聊天模型的 MemoryBankEngine."""
         return MemoryBankEngine(tmp_path, storage)
 
-    def test_write_returns_id(self, engine: MemoryBankEngine) -> None:
+    async def test_write_returns_id(self, engine: MemoryBankEngine) -> None:
         """验证 write 返回非空事件 ID."""
-        eid = engine.write(MemoryEvent(content="测试事件"))
+        eid = await engine.write(MemoryEvent(content="测试事件"))
         assert isinstance(eid, str)
         assert len(eid) > 0
 
-    def test_write_sets_defaults(
+    async def test_write_sets_defaults(
         self, engine: MemoryBankEngine, storage: EventStorage
     ) -> None:
         """验证 write 设置 memory_strength、last_recall_date 和 date_group."""
-        engine.write(MemoryEvent(content="测试事件"))
-        events = storage.read_events()
+        await engine.write(MemoryEvent(content="测试事件"))
+        events = await storage.read_events()
         assert events[0]["memory_strength"] == 1
         assert events[0]["last_recall_date"] != ""
         assert events[0]["date_group"] != ""
 
-    def test_search_empty_returns_empty(self, engine: MemoryBankEngine) -> None:
+    async def test_search_empty_returns_empty(self, engine: MemoryBankEngine) -> None:
         """验证无事件时搜索返回空列表."""
-        assert engine.search("测试") == []
+        assert await engine.search("测试") == []
 
-    def test_search_blank_query_returns_empty(self, engine: MemoryBankEngine) -> None:
+    async def test_search_blank_query_returns_empty(
+        self, engine: MemoryBankEngine
+    ) -> None:
         """验证空白查询返回空列表."""
-        engine.write(MemoryEvent(content="测试"))
-        assert engine.search("   ") == []
+        await engine.write(MemoryEvent(content="测试"))
+        assert await engine.search("   ") == []
 
-    def test_keyword_search_finds_match(self, engine: MemoryBankEngine) -> None:
+    async def test_keyword_search_finds_match(self, engine: MemoryBankEngine) -> None:
         """验证关键词搜索能找到匹配的事件."""
-        engine.write(MemoryEvent(content="天气晴朗"))
-        results = engine.search("天气")
+        await engine.write(MemoryEvent(content="天气晴朗"))
+        results = await engine.search("天气")
         assert len(results) > 0
         assert "天气" in results[0].event["content"]
 
-    def test_search_strengthens_matched_events(
+    async def test_search_strengthens_matched_events(
         self, engine: MemoryBankEngine, storage: EventStorage
     ) -> None:
         """验证搜索增强匹配事件的记忆."""
-        engine.write(MemoryEvent(content="重要会议"))
-        engine.search("会议")
-        events = storage.read_events()
+        await engine.write(MemoryEvent(content="重要会议"))
+        await engine.search("会议")
+        events = await storage.read_events()
         assert events[0]["memory_strength"] == 2
 
 
@@ -312,29 +322,29 @@ class TestMemoryBankEngineWriteInteraction:
         """提供不带嵌入或聊天模型的 MemoryBankEngine."""
         return MemoryBankEngine(tmp_path, storage)
 
-    def test_write_interaction_returns_id(self, engine: MemoryBankEngine) -> None:
+    async def test_write_interaction_returns_id(self, engine: MemoryBankEngine) -> None:
         """验证 write_interaction 返回非空交互 ID."""
-        iid = engine.write_interaction("查询", "响应")
+        iid = await engine.write_interaction("查询", "响应")
         assert isinstance(iid, str)
         assert len(iid) > 0
 
-    def test_write_interaction_creates_event_and_interaction(
+    async def test_write_interaction_creates_event_and_interaction(
         self, engine: MemoryBankEngine, storage: EventStorage
     ) -> None:
         """验证 write_interaction 同时创建事件和交互."""
-        engine.write_interaction("提醒我开会", "好的")
-        events = storage.read_events()
-        interactions = engine._interactions_store.read()
+        await engine.write_interaction("提醒我开会", "好的")
+        events = await storage.read_events()
+        interactions = await engine._interactions_store.read()
         assert len(events) == 1
         assert len(interactions) == 1
         assert interactions[0]["event_id"] == events[0]["id"]
 
-    def test_similar_interactions_aggregate_to_same_event(
+    async def test_similar_interactions_aggregate_to_same_event(
         self, engine: MemoryBankEngine, storage: EventStorage
     ) -> None:
         """验证相似的交互聚合到同一事件."""
-        engine.write_interaction("明天上午开会", "好的")
-        engine.write_interaction("明天上午开会讨论", "已更新")
-        events = storage.read_events()
+        await engine.write_interaction("明天上午开会", "好的")
+        await engine.write_interaction("明天上午开会讨论", "已更新")
+        events = await storage.read_events()
         assert len(events) == 1
         assert len(events[0]["interaction_ids"]) == 2

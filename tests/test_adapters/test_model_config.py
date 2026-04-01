@@ -22,7 +22,10 @@ def test_get_benchmark_client_returns_openai_instance(
     }
     config_file = tmp_path / "llm.json"
     config_file.write_text(json.dumps(config))
-    monkeypatch.setattr("adapters.model_config.CONFIG_PATH", str(config_file))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
+    from adapters.model_config import _load_config
+
+    _load_config.cache_clear()
     from adapters.model_config import get_benchmark_client
 
     client = get_benchmark_client()
@@ -46,7 +49,10 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
     }
     config_file = tmp_path / "llm.json"
     config_file.write_text(json.dumps(config))
-    monkeypatch.setattr("adapters.model_config.CONFIG_PATH", str(config_file))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
+    from adapters.model_config import _load_config
+
+    _load_config.cache_clear()
     from adapters.model_config import get_benchmark_client
 
     client = get_benchmark_client()
@@ -77,7 +83,10 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
     }
     config_file = tmp_path / "llm.json"
     config_file.write_text(json.dumps(config))
-    monkeypatch.setattr("adapters.model_config.CONFIG_PATH", str(config_file))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
+    from adapters.model_config import _load_config
+
+    _load_config.cache_clear()
     from adapters.model_config import get_benchmark_client
 
     client = get_benchmark_client()
@@ -98,7 +107,10 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     }
     config_file = tmp_path / "llm.json"
     config_file.write_text(json.dumps(config))
-    monkeypatch.setattr("adapters.model_config.CONFIG_PATH", str(config_file))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
+    from adapters.model_config import _load_config
+
+    _load_config.cache_clear()
     from adapters.model_config import get_store_chat_model
 
     model = get_store_chat_model()

@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 import os
 import logging
 
@@ -56,7 +56,7 @@ class FeedbackRequest(BaseModel):
 
 @app.post("/api/query")
 async def query(
-    request: QueryRequest, mm: MemoryModule = Depends(get_memory_module)
+    request: QueryRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
 ) -> dict:
     """处理用户查询."""
     from app.agents.workflow import AgentWorkflow
@@ -67,16 +67,16 @@ async def query(
             memory_mode=request.memory_mode,
             memory_module=mm,
         )
-        result, event_id = workflow.run(request.query)
+        result, event_id = await workflow.run(request.query)
         return {"result": result, "event_id": event_id}
     except Exception as e:
-        logger.error(f"Query failed: {e}", exc_info=True)
+        logger.exception("Query failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/feedback")
 async def feedback(
-    request: FeedbackRequest, mm: MemoryModule = Depends(get_memory_module)
+    request: FeedbackRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
 ) -> dict:
     """提交用户反馈."""
     try:
@@ -86,10 +86,10 @@ async def feedback(
             action=request.action,
             modified_content=request.modified_content,
         )
-        mm.update_feedback(request.event_id, feedback)
+        await mm.update_feedback(request.event_id, feedback)
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Feedback failed: {e}", exc_info=True)
+        logger.exception("Feedback failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -101,12 +101,12 @@ async def experiment_report() -> dict:
 
 @app.get("/api/history")
 async def history(
-    limit: int = 10, mm: MemoryModule = Depends(get_memory_module)
+    mm: Annotated[MemoryModule, Depends(get_memory_module)], limit: int = 10
 ) -> dict:
     """获取历史记录."""
     try:
-        events = mm.get_history(limit=limit)
+        events = await mm.get_history(limit=limit)
         return {"history": [e.model_dump() for e in events]}
     except Exception as e:
-        logger.error(f"History retrieval failed: {e}", exc_info=True)
+        logger.exception("History retrieval failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
