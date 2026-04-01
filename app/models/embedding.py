@@ -31,9 +31,13 @@ def get_cached_embedding_model() -> EmbeddingModel:
     """获取缓存的embedding模型实例，避免重复加载."""
     settings = LLMSettings.load()
     provider = settings.get_embedding_provider()
-    cache_key = f"{provider.provider.model}" if provider else "default"
+    model = provider.provider.model if provider else "BAAI/bge-small-zh-v1.5"
+    base_url = provider.provider.base_url if provider else ""
+    device = provider.device if provider else ""
+    device = device or ""
+    cache_key = f"{model}|{base_url}|{device}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
-        _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel()
+        _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(provider=provider)
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
