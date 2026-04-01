@@ -1,6 +1,7 @@
 """MemoryStore 可组合组件."""
 
 import asyncio
+import logging
 import math
 import uuid
 from datetime import date, datetime, timezone
@@ -19,6 +20,11 @@ OVERALL_SUMMARY_THRESHOLD = 3
 SUMMARY_WEIGHT = 0.8
 TOP_K = 3
 
+PERSONALITY_SUMMARY_THRESHOLD = 2
+OVERALL_PERSONALITY_THRESHOLD = 3
+
+logger = logging.getLogger(__name__)
+
 
 def forgetting_curve(days_elapsed: int, strength: int) -> float:
     """遗忘曲线衰减函数."""
@@ -27,6 +33,10 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
     if strength <= 0:
         return 0.0
     return math.exp(-days_elapsed / (5 * strength))
+
+
+SOFT_FORGET_THRESHOLD = 0.15
+SOFT_FORGET_STRENGTH = 0
 
 
 class EventStorage:
@@ -167,6 +177,12 @@ class MemoryBankEngine:
             Path("memorybank_summaries.toml"),
             lambda: dict(self._default_summaries),
         )
+        self._personality_store = TOMLStore(
+            data_dir,
+            Path("memorybank_personality.toml"),
+            lambda: {"daily_personality": {}, "overall_personality": ""},
+        )
+        self._personality_lock = asyncio.Lock()
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件并触发摘要."""
@@ -188,7 +204,9 @@ class MemoryBankEngine:
         events = await self._storage.read_events()
         summaries = await self._summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
-        if not events and not daily_summaries:
+        personality_data = await self._personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        if not events and not daily_summaries and not daily_personality:
             return []
         if self.embedding_model is None:
             event_results = await self._search_by_keyword(query, events, top_k)
@@ -197,7 +215,8 @@ class MemoryBankEngine:
             if not event_results:
                 event_results = await self._search_by_keyword(query, events, top_k)
         summary_results = await self._search_summaries(query, daily_summaries, top_k=1)
-        all_results = event_results + summary_results
+        personality_results = await self._search_personality(query, top_k=1)
+        all_results = event_results + summary_results + personality_results
         all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
         return await self._expand_event_interactions(top_results)
@@ -291,6 +310,8 @@ class MemoryBankEngine:
         if updated:
             await self._storage.write_events(all_events)
         await self._strengthen_interactions(matched_ids)
+        all_events = await self._storage.read_events()
+        await self._soft_forget_events(all_events, matched_ids)
 
     async def _strengthen_interactions(self, event_ids: set[str]) -> None:
         if not event_ids:
@@ -307,6 +328,32 @@ class MemoryBankEngine:
                 updated = True
         if updated:
             await self._interactions_store.write(all_interactions)
+
+    async def _soft_forget_events(
+        self, all_events: list[dict], matched_ids: set[str]
+    ) -> None:
+        """对 retention 过低的记忆执行软遗忘."""
+        if not matched_ids:
+            return
+        today = datetime.now(timezone.utc).date()
+        updated = False
+        for event in all_events:
+            if event.get("id") in matched_ids:
+                continue
+            strength = event.get("memory_strength", 1)
+            last_recall = event.get("last_recall_date", today.isoformat())
+            try:
+                last_date = date.fromisoformat(last_recall)
+                days_elapsed = (today - last_date).days
+            except (ValueError, TypeError):
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, strength)
+            if retention < SOFT_FORGET_THRESHOLD:
+                event["memory_strength"] = SOFT_FORGET_STRENGTH
+                event["forgotten"] = True
+                updated = True
+        if updated:
+            await self._storage.write_events(all_events)
 
     async def _search_summaries(
         self, query: str, daily_summaries: dict, top_k: int = 1
@@ -372,6 +419,69 @@ class MemoryBankEngine:
             summaries["daily_summaries"] = daily_summaries
             await self._summaries_store.write(summaries)
 
+    async def _search_personality(self, query: str, top_k: int) -> list[SearchResult]:
+        """Search personality summaries using keyword matching, retention weight is SUMMARY_WEIGHT * 0.8."""
+        personality_data = await self._personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        if not daily_personality:
+            return []
+        query_lower = query.lower()
+        today = datetime.now(timezone.utc).date()
+        results = []
+        matched_date_groups = []
+        for date_group, data in daily_personality.items():
+            if not isinstance(data, dict):
+                continue
+            content = data.get("content", "")
+            if query_lower in content.lower():
+                strength = data.get("memory_strength", 1)
+                last_recall = data.get("last_recall_date", date_group)
+                try:
+                    last_date = date.fromisoformat(last_recall)
+                    days_elapsed = (today - last_date).days
+                except (ValueError, TypeError):
+                    days_elapsed = 0
+                retention = forgetting_curve(days_elapsed, strength)
+                score = retention * SUMMARY_WEIGHT * 0.8
+                results.append(
+                    SearchResult(
+                        event={
+                            "content": content,
+                            "date_group": date_group,
+                            "memory_strength": strength,
+                            "last_recall_date": last_recall,
+                        },
+                        score=score,
+                        source="personality",
+                    )
+                )
+                matched_date_groups.append(date_group)
+        results.sort(key=lambda x: x.score, reverse=True)
+        await self._strengthen_personality(matched_date_groups, daily_personality)
+        return results[:top_k]
+
+    async def _strengthen_personality(
+        self, matched_date_groups: list[str], daily_personality: dict
+    ) -> None:
+        """强化匹配到的人格摘要的 memory_strength 和 last_recall_date."""
+        if not matched_date_groups:
+            return
+        today = datetime.now(timezone.utc).date().isoformat()
+        async with self._personality_lock:
+            personality_data = await self._personality_store.read()
+            current_daily = personality_data.get("daily_personality", {})
+            updated = False
+            for date_group in matched_date_groups:
+                if date_group in current_daily:
+                    data = current_daily[date_group]
+                    if isinstance(data, dict):
+                        data["memory_strength"] = data.get("memory_strength", 1) + 1
+                        data["last_recall_date"] = today
+                        updated = True
+            if updated:
+                personality_data["daily_personality"] = current_daily
+                await self._personality_store.write(personality_data)
+
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
@@ -417,6 +527,7 @@ class MemoryBankEngine:
             await self._storage._store.append(event)
 
         await self._maybe_summarize(today)
+        await self._maybe_summarize_personality(today)
         return interaction_id
 
     async def _should_append_to_event(self, interaction: dict) -> Optional[str]:
@@ -527,6 +638,105 @@ class MemoryBankEngine:
         await self._summaries_store.write(summaries)
         if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
             await self._update_overall_summary(daily_summaries, summaries)
+
+    async def _maybe_summarize_personality(self, date_group: str) -> None:
+        """每日对话达到阈值时，生成人格分析摘要."""
+        if not self.chat_model:
+            return
+        events = await self._storage.read_events()
+        group_events = [e for e in events if e.get("date_group") == date_group]
+        interactions = await self._interactions_store.read()
+        group_interactions = [
+            i
+            for i in interactions
+            if i.get("event_id") in {e.get("id") for e in group_events}
+        ]
+        if len(group_interactions) < PERSONALITY_SUMMARY_THRESHOLD:
+            return
+        latest_source_ts = max(
+            (e.get("updated_at") or e.get("created_at", "") for e in group_events),
+            default="",
+        )
+        should_generate = False
+        async with self._personality_lock:
+            personality_data = await self._personality_store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            if date_group in daily_personality:
+                existing = daily_personality[date_group]
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("interaction_count", 0) >= len(group_interactions)
+                    and existing.get("source_updated_at", "") >= latest_source_ts
+                ):
+                    return
+            should_generate = True
+            combined = "\n".join(
+                f"用户: {i['query']}\n系统: {i['response']}" for i in group_interactions
+            )
+        if not should_generate:
+            return
+        prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
+        and devise response strategies based on your speculation. Dialogue content:
+        {combined}
+
+        User's personality traits, emotions, and response strategy are:
+        """
+        try:
+            summary_text = await self.chat_model.generate(prompt)
+        except Exception:
+            logger.exception(
+                "Failed to generate personality summary for date_group=%s", date_group
+            )
+            return
+        needs_overall_update = False
+        async with self._personality_lock:
+            personality_data = await self._personality_store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            daily_personality[date_group] = {
+                "content": summary_text,
+                "memory_strength": 1,
+                "last_recall_date": date_group,
+                "interaction_count": len(group_interactions),
+                "source_updated_at": latest_source_ts,
+            }
+            personality_data["daily_personality"] = daily_personality
+            await self._personality_store.write(personality_data)
+            if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
+                needs_overall_update = True
+        if needs_overall_update:
+            overall_text = await self._generate_overall_personality_text(
+                personality_data
+            )
+            if overall_text:
+                async with self._personality_lock:
+                    personality_data["overall_personality"] = overall_text
+                    await self._personality_store.write(personality_data)
+
+    async def _generate_overall_personality_text(
+        self, personality_data: dict
+    ) -> Optional[str]:
+        """生成整体人格档案文本（不含锁，不写存储）."""
+        if not self.chat_model:
+            return None
+        daily_personality = personality_data.get("daily_personality", {})
+        all_summaries = [
+            f"[{date_group}] {data.get('content', '')}"
+            for date_group, data in daily_personality.items()
+            if isinstance(data, dict)
+        ]
+        combined = "\n".join(all_summaries)
+        prompt = f"""The following are the user's exhibited personality traits and emotions throughout multiple dialogues,
+        along with appropriate response strategies for the current situation:
+        {combined}
+
+        Please provide a highly concise and general summary of the user's personality and the most appropriate
+        response strategy for the AI lover, summarized as:
+        """
+        try:
+            return await self.chat_model.generate(prompt)
+        except Exception:
+            logger.exception("Failed to generate overall personality summary")
+            return None
 
     async def _update_overall_summary(
         self, daily_summaries: dict, summaries: dict

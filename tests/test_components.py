@@ -1,6 +1,7 @@
 """app.memory.components 可组合组件测试."""
 
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,8 @@ from app.memory.components import (
     MemoryBankEngine,
     SimpleInteractionWriter,
     forgetting_curve,
+    SOFT_FORGET_STRENGTH,
+    SOFT_FORGET_THRESHOLD,
 )
 from app.memory.schemas import FeedbackData, MemoryEvent
 
@@ -348,3 +351,152 @@ class TestMemoryBankEngineWriteInteraction:
         events = await storage.read_events()
         assert len(events) == 1
         assert len(events[0]["interaction_ids"]) == 2
+
+
+class TestPersonalitySummary:
+    """人格摘要测试."""
+
+    @pytest.fixture
+    def storage(self, tmp_path: Path) -> EventStorage:
+        """提供由临时目录支持的 EventStorage."""
+        return EventStorage(tmp_path)
+
+    @pytest.fixture
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
+        """提供不带嵌入或聊天模型的 MemoryBankEngine."""
+        return MemoryBankEngine(tmp_path, storage)
+
+    async def test_maybe_summarize_personality_skips_without_chat_model(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证无 chat_model 时跳过人格摘要."""
+        today = datetime.now(timezone.utc).date().isoformat()
+        await engine._maybe_summarize_personality(today)
+        personality_data = await engine._personality_store.read()
+        assert personality_data["daily_personality"] == {}
+
+    async def test_search_personality_returns_matching_summaries(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证人格摘要搜索返回匹配结果."""
+        personality_data = {
+            "daily_personality": {
+                "2026-04-01": {
+                    "content": "用户喜欢讨论天气",
+                    "memory_strength": 1,
+                    "last_recall_date": "2026-04-01",
+                }
+            },
+            "overall_personality": "",
+        }
+        await engine._personality_store.write(personality_data)
+        results = await engine._search_personality("天气", top_k=1)
+        assert len(results) == 1
+        assert results[0].source == "personality"
+        assert "天气" in results[0].event["content"]
+
+    async def test_search_personality_returns_empty_when_no_match(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证无匹配时返回空结果."""
+        personality_data = {
+            "daily_personality": {
+                "2026-04-01": {
+                    "content": "用户喜欢讨论天气",
+                    "memory_strength": 1,
+                    "last_recall_date": "2026-04-01",
+                }
+            },
+            "overall_personality": "",
+        }
+        await engine._personality_store.write(personality_data)
+        results = await engine._search_personality("音乐", top_k=1)
+        assert len(results) == 0
+
+    async def test_search_personality_via_public_interface(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证通过 search() 公共接口能返回人格摘要."""
+        personality_data = {
+            "daily_personality": {
+                "2026-04-01": {
+                    "content": "用户喜欢讨论天气",
+                    "memory_strength": 1,
+                    "last_recall_date": "2026-04-01",
+                }
+            },
+            "overall_personality": "",
+        }
+        await engine._personality_store.write(personality_data)
+        results = await engine.search("天气", top_k=5)
+        personality_results = [r for r in results if r.source == "personality"]
+        assert len(personality_results) == 1
+        assert "天气" in personality_results[0].event["content"]
+
+
+class TestSoftForgetConstants:
+    """软遗忘常量测试."""
+
+    def test_threshold_value(self) -> None:
+        """验证 SOFT_FORGET_THRESHOLD 为 0.15."""
+        assert SOFT_FORGET_THRESHOLD == 0.15
+
+    def test_strength_value(self) -> None:
+        """验证 SOFT_FORGET_STRENGTH 为 0."""
+        assert SOFT_FORGET_STRENGTH == 0
+
+
+class TestSoftForgetMechanism:
+    """软遗忘机制测试."""
+
+    @pytest.fixture
+    def storage(self, tmp_path: Path) -> EventStorage:
+        """提供由临时目录支持的 EventStorage."""
+        return EventStorage(tmp_path)
+
+    @pytest.fixture
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
+        """提供不带嵌入或聊天模型的 MemoryBankEngine."""
+        return MemoryBankEngine(tmp_path, storage)
+
+    async def test_soft_forget_reduces_low_retention_events(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证 retention 过低的事件被软遗忘."""
+        await engine.write(MemoryEvent(content="旧事件"))
+        await engine.write(MemoryEvent(content="新事件"))
+        events = await storage.read_events()
+        old_event = next(e for e in events if e["content"] == "旧事件")
+        old_event["last_recall_date"] = "2020-01-01"
+        old_event["memory_strength"] = 1
+        await storage.write_events(events)
+        await engine.search("新事件")
+        updated_events = await storage.read_events()
+        forgotten = next((e for e in updated_events if e["content"] == "旧事件"), None)
+        assert forgotten is not None
+        assert forgotten["forgotten"] is True
+        assert forgotten["memory_strength"] == SOFT_FORGET_STRENGTH
+
+    async def test_soft_forget_preserves_matched_events(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证匹配的事件不被软遗忘."""
+        await engine.write(MemoryEvent(content="重要事件"))
+        await engine.search("重要事件")
+        events = await storage.read_events()
+        event = events[0]
+        assert event.get("forgotten") is not True
+
+    async def test_soft_forget_only_applies_to_unmatched(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证软遗忘只应用于未匹配的记忆."""
+        await engine.write(MemoryEvent(content="匹配事件"))
+        await engine.write(MemoryEvent(content="完全不相关事件"))
+        await engine.search("匹配事件")
+        events = await storage.read_events()
+        matched = next(e for e in events if e["content"] == "匹配事件")
+        unmatched = next(e for e in events if e["content"] == "完全不相关事件")
+        assert matched.get("forgotten") is not True
+        if unmatched.get("forgotten"):
+            assert matched["memory_strength"] > unmatched["memory_strength"]
