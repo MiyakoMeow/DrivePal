@@ -5,7 +5,7 @@ from typing import Optional, TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager, MemoryBankEngine
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
-from app.storage.json_store import JSONStore
+from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
@@ -37,22 +37,22 @@ class MemoryBankStore:
         self.chat_model = chat_model
 
     @property
-    def events_store(self) -> JSONStore:
+    def events_store(self) -> TOMLStore:
         """事件存储."""
         return self._storage._store
 
     @property
-    def strategies_store(self) -> JSONStore:
+    def strategies_store(self) -> TOMLStore:
         """策略存储."""
         return self._feedback._strategies_store
 
     @property
-    def summaries_store(self) -> JSONStore:
+    def summaries_store(self) -> TOMLStore:
         """摘要存储."""
         return self._engine._summaries_store
 
     @property
-    def interactions_store(self) -> JSONStore:
+    def interactions_store(self) -> TOMLStore:
         """交互存储."""
         return self._engine._interactions_store
 
