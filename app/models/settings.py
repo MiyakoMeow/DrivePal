@@ -128,11 +128,6 @@ class LLMSettings:
             if env_provider is not None:
                 llm_providers.append(env_provider)
 
-        if not llm_providers:
-            raise RuntimeError(
-                "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.toml"
-            )
-
         seen = set()
         deduped = []
         for p in llm_providers:
@@ -166,6 +161,11 @@ class LLMSettings:
                 model_name = str(benchmark_data) if benchmark_data else ""
             if model_name:
                 model_groups["benchmark"] = {"models": [model_name]}
+
+        if not llm_providers and "benchmark" not in config_data:
+            raise RuntimeError(
+                "No LLM configuration found. Set OPENAI_MODEL/DEEPSEEK_MODEL or create config/llm.toml"
+            )
 
         return cls(
             llm_providers=deduped,
