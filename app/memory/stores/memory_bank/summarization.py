@@ -154,14 +154,14 @@ class SummaryManager:
             if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
                 needs_overall_update = True
         if needs_overall_update:
-            await self.update_overall_summary(daily_summaries, summaries, chat_model)
+            await self.update_overall_summary(chat_model)
 
-    async def update_overall_summary(
-        self, daily_summaries: dict, summaries: dict, chat_model: ChatModel | None
-    ) -> None:
+    async def update_overall_summary(self, chat_model: ChatModel | None) -> None:
         """根据日常摘要更新总体摘要."""
         if not chat_model:
             return
+        summaries = await self._summaries_store.read()
+        daily_summaries = summaries.get("daily_summaries", {})
         all_summaries: list[str] = []
         for date_group, summary_data in daily_summaries.items():
             if isinstance(summary_data, dict):

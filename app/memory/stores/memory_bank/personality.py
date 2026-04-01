@@ -4,7 +4,6 @@ import asyncio
 import logging
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from app.memory.components import forgetting_curve, SUMMARY_WEIGHT
 from app.memory.schemas import SearchResult
@@ -128,7 +127,8 @@ class PersonalityManager:
                     return
             should_generate = True
             combined = "\n".join(
-                f"用户: {i['query']}\n系统: {i['response']}" for i in group_interactions
+                f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
+                for i in group_interactions
             )
         if not should_generate:
             return
@@ -172,7 +172,7 @@ class PersonalityManager:
 
     async def generate_overall_text(
         self, personality_data: dict, chat_model: ChatModel | None
-    ) -> Optional[str]:
+    ) -> str | None:
         """生成整体人格档案文本（不含锁，不写存储）."""
         if not chat_model:
             return None

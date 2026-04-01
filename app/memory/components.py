@@ -49,6 +49,10 @@ class EventStorage:
         await self._store.append(event.model_dump())
         return event.id
 
+    async def append_raw(self, event: dict) -> None:
+        """追加原始事件字典."""
+        await self._store.append(event)
+
 
 class KeywordSearch:
     """关键词大小写不敏感搜索."""

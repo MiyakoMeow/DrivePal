@@ -121,9 +121,7 @@ class TestHierarchicalSummarization:
                 "last_recall_date": date_group,
             }
         await backend.summaries_store.write(summaries)
-        await backend._engine._summary_mgr.update_overall_summary(
-            summaries["daily_summaries"], summaries, mock_chat_model
-        )
+        await backend._engine._summary_mgr.update_overall_summary(mock_chat_model)
         updated = await backend.summaries_store.read()
         assert updated["overall_summary"] == "总体摘要"
 

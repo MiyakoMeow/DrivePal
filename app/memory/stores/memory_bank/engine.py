@@ -62,7 +62,7 @@ class MemoryBankEngine:
         event.memory_strength = 1
         event.last_recall_date = today
         event.date_group = today
-        await self._storage._store.append(event.model_dump())
+        await self._storage.append_raw(event.model_dump())
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
         await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
@@ -206,6 +206,19 @@ class MemoryBankEngine:
                     event["memory_strength"] = event.get("memory_strength", 1) + 1
                     event["last_recall_date"] = today
                     updated = True
+                else:
+                    strength = event.get("memory_strength", 1)
+                    last_recall = event.get("last_recall_date", today_date.isoformat())
+                    try:
+                        last_date = date.fromisoformat(last_recall)
+                        days_elapsed = (today_date - last_date).days
+                    except (ValueError, TypeError):
+                        days_elapsed = 0
+                    retention = forgetting_curve(days_elapsed, strength)
+                    if retention < SOFT_FORGET_THRESHOLD:
+                        event["memory_strength"] = SOFT_FORGET_STRENGTH
+                        event["forgotten"] = True
+                        updated = True
             if updated:
                 await self._storage.write_events(all_events)
 
@@ -220,26 +233,6 @@ class MemoryBankEngine:
                     updated = True
             if updated:
                 await self._interactions_store.write(all_interactions)
-
-            all_events = await self._storage.read_events()
-            updated = False
-            for event in all_events:
-                if event.get("id") in matched_ids:
-                    continue
-                strength = event.get("memory_strength", 1)
-                last_recall = event.get("last_recall_date", today_date.isoformat())
-                try:
-                    last_date = date.fromisoformat(last_recall)
-                    days_elapsed = (today_date - last_date).days
-                except (ValueError, TypeError):
-                    days_elapsed = 0
-                retention = forgetting_curve(days_elapsed, strength)
-                if retention < SOFT_FORGET_THRESHOLD:
-                    event["memory_strength"] = SOFT_FORGET_STRENGTH
-                    event["forgotten"] = True
-                    updated = True
-            if updated:
-                await self._storage.write_events(all_events)
 
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
@@ -289,7 +282,8 @@ class MemoryBankEngine:
                         break
                 await self._storage.write_events(all_events)
             else:
-                await self._storage._store.append(event)
+                assert event is not None
+                await self._storage.append_raw(event)
 
         if append_event_id:
             await self._update_event_summary(append_event_id)
@@ -336,7 +330,8 @@ class MemoryBankEngine:
         if not child_interactions:
             return
         combined = "\n".join(
-            f"用户: {i['query']}\n系统: {i['response']}" for i in child_interactions
+            f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
+            for i in child_interactions
         )
         prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
         try:
