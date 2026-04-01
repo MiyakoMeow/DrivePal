@@ -1,6 +1,6 @@
 [lint]
-extend-select = ["ANN", "D", "DTZ", "ASYNC", "FAST"]
-ignore = ["D211", "D213", "D203"]
+extend-select = ["ANN", "D", "DTZ", "ASYNC", "FAST", "N", "PERF", "E", "W", "PTH", "TC", "SIM", "PT", "G", "INP", "PIE"]
+ignore = ["D211", "D213", "D203", "E501"]
 exclude = [".agents/**", "vendor/**"]
 
 [lint.per-file-ignores]

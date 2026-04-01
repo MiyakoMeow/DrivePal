@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import openai
-from openai.types.chat import ChatCompletionMessageParam
 
 from app.models.settings import LLMProviderConfig, LLMSettings
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
+    from collections.abc import AsyncIterator
 
 
 class ChatModel:

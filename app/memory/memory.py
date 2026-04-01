@@ -2,13 +2,15 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
-from app.models.chat import ChatModel
-from app.models.embedding import EmbeddingModel
+
+if TYPE_CHECKING:
+    from app.models.embedding import EmbeddingModel
+    from app.models.chat import ChatModel
 
 logger = logging.getLogger(__name__)
 

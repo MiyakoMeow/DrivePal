@@ -7,8 +7,11 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from app.models.chat import ChatModel
-from app.models.embedding import EmbeddingModel
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.embedding import EmbeddingModel
+    from app.models.chat import ChatModel
 
 CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "llm.json")
 
@@ -16,7 +19,7 @@ CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config" / "llm.json"
 @lru_cache(maxsize=1)
 def _load_config() -> dict:
     """从 JSON 文件加载配置（已缓存）."""
-    with open(CONFIG_PATH) as f:
+    with Path(CONFIG_PATH).open() as f:
         return json.load(f)
 
 

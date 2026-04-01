@@ -1,7 +1,6 @@
 """VehicleMemBench 评估基准的测试运行器."""
 
 import sys
-import os
 import json
 from pathlib import Path
 from typing import Optional
@@ -27,7 +26,7 @@ def setup_vehiclemembench_path() -> None:
     """将 VehicleMemBench 路径添加到 sys.path."""
     for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
         d_str = str(d)
-        if not any(os.path.abspath(p) == os.path.abspath(d_str) for p in sys.path):
+        if not any(Path(p).resolve() == Path(d_str).resolve() for p in sys.path):
             sys.path.insert(0, d_str)
 
 
@@ -90,13 +89,13 @@ def _get_agent_client() -> AgentClient:
 
 def _load_qa(file_num: int) -> dict:
     path = BENCHMARK_DIR / "qa_data" / f"qa_{file_num}.json"
-    with open(path) as f:
+    with path.open() as f:
         return json.load(f)
 
 
 def _load_history(file_num: int) -> str:
     path = BENCHMARK_DIR / "history" / f"history_{file_num}.txt"
-    with open(path) as f:
+    with path.open() as f:
         return f.read()
 
 
@@ -330,7 +329,7 @@ def report(output_path: Optional[Path] = None) -> None:
 
     for path in sorted(output_dir.glob("*_results.json")):
         mtype = path.stem.replace("_results", "").rsplit("_file_", 1)[0]
-        with open(path) as f:
+        with path.open() as f:
             results = json.load(f)
         if mtype not in all_results:
             all_results[mtype] = []
@@ -353,7 +352,7 @@ def report(output_path: Optional[Path] = None) -> None:
                 )
 
     out = output_path if output_path is not None else output_dir / "report.json"
-    with open(out, "w") as f:
+    with out.open("w") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
     print(f"Report written to {out}")
 

@@ -8,13 +8,15 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from app.agents.state import AgentState
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
 from app.storage.json_store import JSONStore
+
+if TYPE_CHECKING:
+    from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +70,7 @@ class AgentWorkflow:
     async def _context_node(self, state: AgentState) -> dict:
         """Context Agent节点."""
         messages = state.get("messages", [])
-        if not messages:
-            user_input = ""
-        else:
-            user_input = str(messages[-1].get("content", ""))
+        user_input = "" if not messages else str(messages[-1].get("content", ""))
 
         try:
             related_events = (
@@ -80,7 +79,7 @@ class AgentWorkflow:
                 else []
             )
         except Exception as e:
-            logger.warning(f"Memory search failed: {e}")
+            logger.warning("Memory search failed: %s", e)
             related_events = []
 
         try:
@@ -91,7 +90,7 @@ class AgentWorkflow:
                     e.model_dump() for e in await self.memory_module.get_history()
                 ]
         except Exception as e:
-            logger.warning(f"Memory get_history failed: {e}")
+            logger.warning("Memory get_history failed: %s", e)
             relevant_memories = (
                 [e.to_public() for e in related_events] if related_events else []
             )

@@ -287,9 +287,11 @@ class TestChatModelFallback:
             side_effect=RuntimeError("fail")
         )
 
-        with patch.object(chat, "_create_async_client", return_value=mock_client):
-            with pytest.raises(RuntimeError, match="All LLM providers failed"):
-                await chat.generate("hello")
+        with (
+            patch.object(chat, "_create_async_client", return_value=mock_client),
+            pytest.raises(RuntimeError, match="All LLM providers failed"),
+        ):
+            await chat.generate("hello")
 
 
 class TestEmbeddingModelFallback:

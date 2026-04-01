@@ -37,7 +37,7 @@ def init_storage(data_dir: Optional[Path] = None) -> None:
     for filename, default_data in files.items():
         filepath = data_dir / filename
         if not filepath.exists():
-            with open(filepath, "w", encoding="utf-8") as f:
+            with filepath.open("w", encoding="utf-8") as f:
                 json.dump(default_data, f, ensure_ascii=False, indent=2)
 
 

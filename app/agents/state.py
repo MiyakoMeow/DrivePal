@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, TYPE_CHECKING
 
-from app.memory.types import MemoryMode
+
+if TYPE_CHECKING:
+    from app.memory.types import MemoryMode
 
 
 class AgentState(TypedDict):

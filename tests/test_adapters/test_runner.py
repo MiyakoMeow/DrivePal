@@ -40,4 +40,3 @@ def test_paths_exist() -> None:
 
 def test_imports_available() -> None:
     """测试 vendor 导入可用."""
-    pass

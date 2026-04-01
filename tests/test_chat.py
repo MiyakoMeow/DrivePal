@@ -7,6 +7,10 @@ from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.models.chat import ChatModel
 from tests.conftest import SKIP_IF_NO_LLM
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.agents.state import AgentState
 
 
 @SKIP_IF_NO_LLM
@@ -24,7 +28,6 @@ async def test_chat_drives_llm_memory_search(tmp_path: Path) -> None:
 async def test_chat_feeds_workflow_context(tmp_path: Path) -> None:
     """验证记忆上下文被注入到代理工作流状态中."""
     from app.agents.workflow import AgentWorkflow
-    from app.agents.state import AgentState
 
     memory = MemoryModule(tmp_path, chat_model=ChatModel())
     await memory.write(MemoryEvent(content="下午三点开会", type="meeting"))

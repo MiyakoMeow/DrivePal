@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, TYPE_CHECKING
 
 import pytest
 
-from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+
+if TYPE_CHECKING:
+    from app.memory.interfaces import MemoryStore
+    from pathlib import Path
 
 
 def _get_store_params() -> list[str]:
@@ -38,7 +40,7 @@ class TestMemoryStoreContract:
     ) -> None:
         """验证写入后能在事件存储中找到同一事件."""
         event_id = await store.write(MemoryEvent(content="测试事件"))
-        events_store = cast(Any, store).events_store
+        events_store = cast("Any", store).events_store
         events = await events_store.read()
         assert any(e["id"] == event_id for e in events)
 
@@ -75,6 +77,6 @@ class TestMemoryStoreContract:
         await store.update_feedback(
             event_id, FeedbackData(action="accept", type="meeting")
         )
-        strategies_store = cast(Any, store).strategies_store
+        strategies_store = cast("Any", store).strategies_store
         strategies = await strategies_store.read()
         assert "reminder_weights" in strategies

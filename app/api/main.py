@@ -70,7 +70,7 @@ async def query(
         result, event_id = await workflow.run(request.query)
         return {"result": result, "event_id": event_id}
     except Exception as e:
-        logger.error(f"Query failed: {e}", exc_info=True)
+        logger.exception("Query failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -89,7 +89,7 @@ async def feedback(
         await mm.update_feedback(request.event_id, feedback)
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Feedback failed: {e}", exc_info=True)
+        logger.exception("Feedback failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -108,5 +108,5 @@ async def history(
         events = await mm.get_history(limit=limit)
         return {"history": [e.model_dump() for e in events]}
     except Exception as e:
-        logger.error(f"History retrieval failed: {e}", exc_info=True)
+        logger.exception("History retrieval failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
