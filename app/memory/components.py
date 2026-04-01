@@ -19,6 +19,9 @@ OVERALL_SUMMARY_THRESHOLD = 3
 SUMMARY_WEIGHT = 0.8
 TOP_K = 3
 
+PERSONALITY_SUMMARY_THRESHOLD = 2
+OVERALL_PERSONALITY_THRESHOLD = 3
+
 
 def forgetting_curve(days_elapsed: int, strength: int) -> float:
     """遗忘曲线衰减函数."""
@@ -170,6 +173,11 @@ class MemoryBankEngine:
             data_dir,
             Path("memorybank_summaries.toml"),
             lambda: dict(self._default_summaries),
+        )
+        self._personality_store = JSONStore(
+            data_dir,
+            Path("memorybank_personality.json"),
+            lambda: {"daily_personality": {}, "overall_personality": ""},
         )
 
     async def write(self, event: MemoryEvent) -> str:
