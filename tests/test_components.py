@@ -12,6 +12,8 @@ from app.memory.components import (
     MemoryBankEngine,
     SimpleInteractionWriter,
     forgetting_curve,
+    SOFT_FORGET_STRENGTH,
+    SOFT_FORGET_THRESHOLD,
 )
 from app.memory.schemas import FeedbackData, MemoryEvent
 
@@ -348,3 +350,71 @@ class TestMemoryBankEngineWriteInteraction:
         events = await storage.read_events()
         assert len(events) == 1
         assert len(events[0]["interaction_ids"]) == 2
+
+
+class TestSoftForgetConstants:
+    """软遗忘常量测试."""
+
+    def test_threshold_value(self) -> None:
+        """验证 SOFT_FORGET_THRESHOLD 为 0.15."""
+        assert SOFT_FORGET_THRESHOLD == 0.15
+
+    def test_strength_value(self) -> None:
+        """验证 SOFT_FORGET_STRENGTH 为 0.1."""
+        assert SOFT_FORGET_STRENGTH == 0.1
+
+
+class TestSoftForgetMechanism:
+    """软遗忘机制测试."""
+
+    @pytest.fixture
+    def storage(self, tmp_path: Path) -> EventStorage:
+        """提供由临时目录支持的 EventStorage."""
+        return EventStorage(tmp_path)
+
+    @pytest.fixture
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
+        """提供不带嵌入或聊天模型的 MemoryBankEngine."""
+        return MemoryBankEngine(tmp_path, storage)
+
+    async def test_soft_forget_reduces_low_retention_events(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证 retention 过低的事件被软遗忘."""
+        await engine.write(MemoryEvent(content="旧事件"))
+        await engine.write(MemoryEvent(content="新事件"))
+        events = await storage.read_events()
+        old_event = next(e for e in events if e["content"] == "旧事件")
+        old_event["last_recall_date"] = "2020-01-01"
+        old_event["memory_strength"] = 1
+        await storage.write_events(events)
+        await engine.search("新事件")
+        updated_events = await storage.read_events()
+        forgotten = next((e for e in updated_events if e["content"] == "旧事件"), None)
+        assert forgotten is not None
+        assert forgotten["forgotten"] is True
+        assert forgotten["memory_strength"] == SOFT_FORGET_STRENGTH
+
+    async def test_soft_forget_preserves_matched_events(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证匹配的事件不被软遗忘."""
+        await engine.write(MemoryEvent(content="重要事件"))
+        await engine.search("重要事件")
+        events = await storage.read_events()
+        event = events[0]
+        assert event.get("forgotten") is not True
+
+    async def test_soft_forget_only_applies_to_unmatched(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证软遗忘只应用于未匹配的记忆."""
+        await engine.write(MemoryEvent(content="匹配事件"))
+        await engine.write(MemoryEvent(content="未匹配事件"))
+        await engine.search("匹配事件")
+        events = await storage.read_events()
+        matched = next(e for e in events if e["content"] == "匹配事件")
+        unmatched = next(e for e in events if e["content"] == "未匹配事件")
+        assert matched.get("forgotten") is not True
+        if unmatched.get("forgotten"):
+            assert matched["memory_strength"] > unmatched["memory_strength"]

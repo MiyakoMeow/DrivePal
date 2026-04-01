@@ -29,6 +29,10 @@ def forgetting_curve(days_elapsed: int, strength: int) -> float:
     return math.exp(-days_elapsed / (5 * strength))
 
 
+SOFT_FORGET_THRESHOLD = 0.15
+SOFT_FORGET_STRENGTH = 0.1
+
+
 class EventStorage:
     """事件 JSON 文件 CRUD + ID 生成."""
 
@@ -291,6 +295,8 @@ class MemoryBankEngine:
         if updated:
             await self._storage.write_events(all_events)
         await self._strengthen_interactions(matched_ids)
+        all_events = await self._storage.read_events()
+        await self._soft_forget_events(all_events, matched_ids)
 
     async def _strengthen_interactions(self, event_ids: set[str]) -> None:
         if not event_ids:
@@ -307,6 +313,30 @@ class MemoryBankEngine:
                 updated = True
         if updated:
             await self._interactions_store.write(all_interactions)
+
+    async def _soft_forget_events(
+        self, all_events: list[dict], matched_ids: set[str]
+    ) -> None:
+        """对 retention 过低的记忆执行软遗忘."""
+        today = datetime.now(timezone.utc).date()
+        updated = False
+        for event in all_events:
+            if event.get("id") in matched_ids:
+                continue
+            strength = event.get("memory_strength", 1)
+            last_recall = event.get("last_recall_date", today.isoformat())
+            try:
+                last_date = date.fromisoformat(last_recall)
+                days_elapsed = (today - last_date).days
+            except (ValueError, TypeError):
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, strength)
+            if retention < SOFT_FORGET_THRESHOLD:
+                event["memory_strength"] = SOFT_FORGET_STRENGTH
+                event["forgotten"] = True
+                updated = True
+        if updated:
+            await self._storage.write_events(all_events)
 
     async def _search_summaries(
         self, query: str, daily_summaries: dict, top_k: int = 1
