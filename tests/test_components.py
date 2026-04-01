@@ -352,6 +352,81 @@ class TestMemoryBankEngineWriteInteraction:
         assert len(events[0]["interaction_ids"]) == 2
 
 
+class TestSoftForget:
+    """软遗忘机制测试."""
+
+    @pytest.fixture
+    def storage(self, tmp_path: Path) -> EventStorage:
+        """提供由临时目录支持的 EventStorage."""
+        return EventStorage(tmp_path)
+
+    @pytest.fixture
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
+        """提供不带嵌入或聊天模型的 MemoryBankEngine."""
+        return MemoryBankEngine(tmp_path, storage)
+
+    async def test_soft_forget_reduces_strength(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证 retention 过低时 memory_strength 降至 SOFT_FORGET_STRENGTH."""
+        from datetime import datetime, timedelta, timezone
+        from app.memory.components import SOFT_FORGET_STRENGTH
+
+        await engine.write(MemoryEvent(content="旧事件"))
+        events = await storage.read_events()
+        old_date = (datetime.now(timezone.utc).date() - timedelta(days=30)).isoformat()
+        events[0]["last_recall_date"] = old_date
+        events[0]["memory_strength"] = 1
+        await storage.write_events(events)
+
+        matched_ids = set()
+        all_events = await storage.read_events()
+        await engine._soft_forget_events(all_events, matched_ids)
+
+        updated_events = await storage.read_events()
+        assert updated_events[0]["memory_strength"] == SOFT_FORGET_STRENGTH
+        assert updated_events[0]["forgotten"] is True
+
+    async def test_soft_forget_skips_recent_events(
+        self, engine: MemoryBankEngine, storage: EventStorage
+    ) -> None:
+        """验证最近记忆不会被软遗忘."""
+        await engine.write(MemoryEvent(content="新事件"))
+        events = await storage.read_events()
+        matched_ids = {events[0]["id"]}
+        all_events = await storage.read_events()
+        await engine._soft_forget_events(all_events, matched_ids)
+
+        updated_events = await storage.read_events()
+        assert updated_events[0]["memory_strength"] == 1
+        assert updated_events[0].get("forgotten") is None
+
+
+class TestPersonalitySummary:
+    """人格摘要测试."""
+
+    @pytest.fixture
+    def storage(self, tmp_path: Path) -> EventStorage:
+        """提供由临时目录支持的 EventStorage."""
+        return EventStorage(tmp_path)
+
+    @pytest.fixture
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
+        """提供不带嵌入或聊天模型的 MemoryBankEngine."""
+        return MemoryBankEngine(tmp_path, storage)
+
+    async def test_maybe_summarize_personality_skips_without_chat_model(
+        self, engine: MemoryBankEngine
+    ) -> None:
+        """验证无 chat_model 时跳过人格摘要."""
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        await engine._maybe_summarize_personality(today)
+        personality_data = await engine._personality_store.read()
+        assert personality_data["daily_personality"] == {}
+
+
 class TestSoftForgetConstants:
     """软遗忘常量测试."""
 
