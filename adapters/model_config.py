@@ -8,11 +8,13 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
     from app.models.chat import ChatModel
+
+from app.models.settings import ResolvedModel
 
 
 def _get_config_path() -> Path:
@@ -110,3 +112,38 @@ def get_store_embedding_model() -> "EmbeddingModel":
     from app.models.settings import get_embedding_model
 
     return get_embedding_model()
+
+
+def resolve_model_string(model_str: str) -> ResolvedModel:
+    """解析模型引用 'provider/model?key=value' 格式.
+
+    Args:
+        model_str: 模型引用字符串，如 'deepseek/deepseek-chat?temperature=0.1'
+
+    Returns:
+        ResolvedModel 实例
+
+    Raises:
+        ValueError: 格式无效时
+    """
+    params: dict[str, Any] = {}
+    if "?" in model_str:
+        model_part, query_part = model_str.split("?", 1)
+        for item in query_part.split("&"):
+            if "=" in item:
+                key, value = item.split("=", 1)
+                try:
+                    params[key] = float(value) if "." in value else int(value)
+                except ValueError:
+                    params[key] = value
+        model_str = model_part
+
+    if "/" not in model_str:
+        raise ValueError(
+            f"Invalid model string format: {model_str}. Expected 'provider/model'"
+        )
+
+    provider_name, model_name = model_str.split("/", 1)
+    return ResolvedModel(
+        provider_name=provider_name, model_name=model_name, params=params
+    )

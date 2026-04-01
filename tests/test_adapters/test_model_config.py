@@ -115,3 +115,33 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
     model = get_store_chat_model()
     assert model is not None
+
+
+def test_resolve_model_string_simple() -> None:
+    """测试简单模型引用解析."""
+    from adapters.model_config import resolve_model_string
+
+    result = resolve_model_string("deepseek/deepseek-chat")
+    assert result.provider_name == "deepseek"
+    assert result.model_name == "deepseek-chat"
+    assert result.params == {}
+
+
+def test_resolve_model_string_with_params() -> None:
+    """测试带参数的模型引用解析."""
+    from adapters.model_config import resolve_model_string
+
+    result = resolve_model_string(
+        "zhipuai-coding-plan/glm-4.7-flashx?temperature=0.1&max_tokens=1000"
+    )
+    assert result.provider_name == "zhipuai-coding-plan"
+    assert result.model_name == "glm-4.7-flashx"
+    assert result.params == {"temperature": 0.1, "max_tokens": 1000}
+
+
+def test_resolve_model_string_invalid_format() -> None:
+    """测试无效格式."""
+    from adapters.model_config import resolve_model_string
+
+    with pytest.raises(ValueError, match="Invalid model string format"):
+        resolve_model_string("invalid-format")
