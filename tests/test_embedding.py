@@ -1,22 +1,14 @@
 """嵌入模型测试."""
 
-import pytest
-
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.memory.stores.memory_bank import MemoryBankStore
-from app.models.embedding import EmbeddingModel
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-@pytest.fixture(scope="module")
-def embedding() -> EmbeddingModel:
-    """为模块提供共享的 EmbeddingModel 实例."""
-    return EmbeddingModel()
+    from app.models.embedding import EmbeddingModel
 
 
 class TestEmbeddingForMemorySearch:

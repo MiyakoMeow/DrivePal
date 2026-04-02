@@ -6,7 +6,11 @@ from typing import Optional, TYPE_CHECKING
 
 import openai
 
+import asyncio
+
 from app.models.settings import LLMProviderConfig, LLMSettings
+
+_llm_semaphore = asyncio.Semaphore(4)
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
@@ -76,21 +80,22 @@ class ChatModel:
         **_kwargs: object,
     ) -> str:
         """异步生成回复."""
-        messages = self._build_messages(prompt, system_prompt)
-        errors = []
-        for provider in self.providers:
-            try:
-                client = self._create_async_client(provider)
-                response = await client.chat.completions.create(
-                    model=provider.provider.model,
-                    messages=messages,
-                    temperature=self._get_temperature(provider),
-                )
-                return response.choices[0].message.content or ""
-            except Exception as e:
-                errors.append(f"{provider.provider.model}: {e}")
-                continue
-        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
+        async with _llm_semaphore:
+            messages = self._build_messages(prompt, system_prompt)
+            errors = []
+            for provider in self.providers:
+                try:
+                    client = self._create_async_client(provider)
+                    response = await client.chat.completions.create(
+                        model=provider.provider.model,
+                        messages=messages,
+                        temperature=self._get_temperature(provider),
+                    )
+                    return response.choices[0].message.content or ""
+                except Exception as e:
+                    errors.append(f"{provider.provider.model}: {e}")
+                    continue
+            raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
     async def generate_stream(
         self,
@@ -99,28 +104,29 @@ class ChatModel:
         **_kwargs: object,
     ) -> AsyncIterator[str]:
         """流式生成回复."""
-        messages = self._build_messages(prompt, system_prompt)
+        async with _llm_semaphore:
+            messages = self._build_messages(prompt, system_prompt)
 
-        errors = []
-        for provider in self.providers:
-            try:
-                client = self._create_async_client(provider)
-                stream = await client.chat.completions.create(
-                    model=provider.provider.model,
-                    messages=messages,
-                    temperature=self._get_temperature(provider),
-                    stream=True,
-                )
-                async for chunk in stream:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        yield delta.content
-                return
-            except Exception as e:
-                errors.append(f"{provider.provider.model}: {e}")
-                continue
+            errors = []
+            for provider in self.providers:
+                try:
+                    client = self._create_async_client(provider)
+                    stream = await client.chat.completions.create(
+                        model=provider.provider.model,
+                        messages=messages,
+                        temperature=self._get_temperature(provider),
+                        stream=True,
+                    )
+                    async for chunk in stream:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            yield delta.content
+                    return
+                except Exception as e:
+                    errors.append(f"{provider.provider.model}: {e}")
+                    continue
 
-        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
+            raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
     async def batch_generate(
         self,
