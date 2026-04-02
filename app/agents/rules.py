@@ -19,7 +19,7 @@ class Rule:
 SAFETY_RULES: list[Rule] = [
     Rule(
         name="highway_audio_only",
-        condition=lambda ctx: ctx["scenario"] == "highway",
+        condition=lambda ctx: ctx.get("scenario") == "highway",
         constraint={"allowed_channels": ["audio"], "max_frequency_minutes": 30},
         priority=10,
     ),
@@ -37,7 +37,7 @@ SAFETY_RULES: list[Rule] = [
     ),
     Rule(
         name="parked_all_channels",
-        condition=lambda ctx: ctx["scenario"] == "parked",
+        condition=lambda ctx: ctx.get("scenario") == "parked",
         constraint={"allowed_channels": ["visual", "audio", "detailed"]},
         priority=5,
     ),

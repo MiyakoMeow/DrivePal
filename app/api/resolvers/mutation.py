@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
+
+import logging
 
 import strawberry
 from graphql.error import GraphQLError
+
+logger = logging.getLogger(__name__)
 
 from app.api.graphql_schema import (
     DrivingContextGQL,
@@ -176,9 +180,7 @@ class Mutation:
                 ),
             )
         except Exception as e:
-            import logging
-
-            logging.getLogger(__name__).exception("processQuery failed: %s", e)
+            logger.exception("processQuery failed: %s", e)
             raise GraphQLError("Internal server error")
 
     @strawberry.mutation
@@ -191,16 +193,16 @@ class Mutation:
 
         try:
             mm = get_memory_module()
+            safe_action: Literal["accept", "ignore"]
+            safe_action = "accept" if input.action == "accept" else "ignore"
             feedback = FeedbackData(
-                action=input.action,
+                action=safe_action,
                 modified_content=input.modified_content,
             )
             await mm.update_feedback(input.event_id, feedback)
             return FeedbackResult(status="success")
         except Exception as e:
-            import logging
-
-            logging.getLogger(__name__).exception("submitFeedback failed: %s", e)
+            logger.exception("submitFeedback failed: %s", e)
             raise GraphQLError("Internal server error")
 
     @strawberry.mutation
@@ -234,10 +236,10 @@ class Mutation:
         return _to_gql_preset(preset.model_dump())
 
     @strawberry.mutation
-    async def delete_scenario_preset(self, id: str) -> bool:
+    async def delete_scenario_preset(self, preset_id: str) -> bool:
         store = _preset_store()
         presets = await store.read()
-        new_presets = [p for p in presets if p.get("id") != id]
+        new_presets = [p for p in presets if p.get("id") != preset_id]
         if len(new_presets) == len(presets):
             return False
         await store.write(new_presets)
