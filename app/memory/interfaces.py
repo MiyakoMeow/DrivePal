@@ -1,8 +1,10 @@
 """MemoryStore 结构化接口定义（Protocol）."""
 
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
 
-from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+
+if TYPE_CHECKING:
+    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 
 
 class MemoryStore(Protocol):

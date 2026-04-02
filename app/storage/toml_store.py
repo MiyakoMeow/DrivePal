@@ -2,11 +2,13 @@
 
 import asyncio
 import tomllib
-from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, TYPE_CHECKING
 
 import aiofiles
 import tomli_w
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 T = TypeVar("T")
 

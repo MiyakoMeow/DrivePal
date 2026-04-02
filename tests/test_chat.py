@@ -1,16 +1,15 @@
 """聊天模型集成测试."""
 
-from pathlib import Path
-
 import pytest
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.models.chat import ChatModel
-from app.models.settings import LLMProviderConfig
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from app.models.settings import LLMProviderConfig
+    from pathlib import Path
     from app.agents.state import AgentState
 
 

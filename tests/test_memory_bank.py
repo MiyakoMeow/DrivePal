@@ -1,6 +1,5 @@
 """记忆库后端和集成测试."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -13,7 +12,11 @@ from app.memory.stores.memory_bank.summarization import (
     OVERALL_SUMMARY_THRESHOLD,
 )
 from app.memory.types import MemoryMode
-from app.models.settings import LLMProviderConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.settings import LLMProviderConfig
+    from pathlib import Path
 
 
 @pytest.fixture

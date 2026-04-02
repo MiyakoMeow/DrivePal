@@ -1,7 +1,6 @@
 """MemoChatEngine 测试."""
 
 import json
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -12,6 +11,10 @@ from app.memory.stores.memochat.engine import (
     SUMMARIZATION_TURN_THRESHOLD,
 )
 from app.memory.stores.memochat.retriever import RetrievalMode
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
