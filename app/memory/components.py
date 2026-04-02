@@ -105,8 +105,6 @@ class FeedbackManager:
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
         lock = await self._get_lock()
         async with lock:
-            feedback_store = TOMLStore(self.data_dir, Path("feedback.toml"), list)
-            await feedback_store.append(feedback.model_dump())
             strategies = await self._strategies_store.read()
             action = feedback.action
             event_type = feedback.type
@@ -122,29 +120,12 @@ class FeedbackManager:
                 strategies["reminder_weights"][event_type] = max(
                     strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
                 )
+            else:
+                raise ValueError(f"Invalid action: {action!r}")
 
             await self._strategies_store.write(strategies)
-
-    async def _update_strategy(self, event_id: str, feedback: dict) -> None:
-        lock = await self._get_lock()
-        async with lock:
-            strategies = await self._strategies_store.read()
-            action = feedback.get("action")
-            event_type = feedback.get("type", "default")
-
-            if "reminder_weights" not in strategies:
-                strategies["reminder_weights"] = {}
-
-            if action == "accept":
-                strategies["reminder_weights"][event_type] = min(
-                    strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
-                )
-            elif action == "ignore":
-                strategies["reminder_weights"][event_type] = max(
-                    strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
-                )
-
-            await self._strategies_store.write(strategies)
+            feedback_store = TOMLStore(self.data_dir, Path("feedback.toml"), list)
+            await feedback_store.append(feedback.model_dump())
 
 
 class SimpleInteractionWriter:

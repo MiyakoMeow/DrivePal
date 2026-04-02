@@ -44,6 +44,7 @@ def _normalize_model_outputs(model_text: str) -> list[dict]:
             and extracted_elements[ti + 2] == "summary"
             and extracted_elements[ti + 4] == "start"
             and extracted_elements[ti + 6] == "end"
+            and ti + 7 < len(extracted_elements)
         ):
             with contextlib.suppress(ValueError, IndexError):
                 outputs.append(
@@ -151,7 +152,7 @@ class MemoChatEngine:
         await self._ensure_initialized()
         await self._dialogs_store.append(dialog)
 
-    async def read_memos(self) -> dict:
+    async def read_memos(self) -> dict[str, list[dict]]:
         """读取全部记忆条目."""
         await self._ensure_initialized()
         return await self._memos_store.read()
@@ -194,6 +195,7 @@ class MemoChatEngine:
             if not self._should_summarize(dialogs):
                 return
             if self.chat is None:
+                logger.warning("MemoChat summarization skipped: chat model is None")
                 return
 
             conversation_lines = dialogs

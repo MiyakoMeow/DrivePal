@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_STORES_REGISTRY: dict[MemoryMode, type] = {}
+_STORES_REGISTRY: dict[MemoryMode, type[MemoryStore]] = {}
 
 
-def register_store(name: MemoryMode, store_cls: type) -> None:
+def register_store(name: MemoryMode, store_cls: type[MemoryStore]) -> None:
     """注册记忆存储实现到全局注册表."""
     if name in _STORES_REGISTRY:
         return

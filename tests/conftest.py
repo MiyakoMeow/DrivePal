@@ -1,7 +1,5 @@
 """共享测试配置和 fixtures."""
 
-from functools import lru_cache
-
 import pytest
 
 from app.models.settings import LLMSettings, LLMProviderConfig
@@ -30,7 +28,6 @@ def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
         return False
 
 
-@lru_cache(maxsize=1)
 def get_available_provider() -> LLMProviderConfig | None:
     """获取第一个可达的 LLM provider，或 None."""
     try:

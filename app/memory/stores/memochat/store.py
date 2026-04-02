@@ -125,5 +125,5 @@ class MemoChatStore:
             await self._engine.append_interaction(interaction)
             await self._engine.append_recent_dialog(f"user: {query}")
             await self._engine.append_recent_dialog(f"bot: {response}")
-            await self._engine.trigger_summarization()
+        await self._engine.trigger_summarization()
         return interaction_id
