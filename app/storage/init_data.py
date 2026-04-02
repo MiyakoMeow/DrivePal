@@ -29,6 +29,7 @@ def init_storage(data_dir: Path | None = None) -> None:
         "interactions.toml": [],
         "feedback.toml": [],
         "experiment_results.toml": [],
+        "scenario_presets.toml": [],
     }
 
     dict_files = {
