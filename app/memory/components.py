@@ -127,9 +127,11 @@ class FeedbackManager:
 
     async def _locked_update_feedback(self, feedback: FeedbackData) -> None:
         """带锁的反馈更新（内部方法）."""
-        assert feedback.action is not None
-        await self._write_feedback(feedback)
-        await self._update_strategy(feedback.type, feedback.action)
+        lock = await self._get_lock()
+        async with lock:
+            assert feedback.action is not None
+            await self._write_feedback(feedback)
+            await self._update_strategy(feedback.type, feedback.action)
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
@@ -137,9 +139,7 @@ class FeedbackManager:
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
         if feedback.action is None:
             raise ValueError("action is required")
-        lock = await self._get_lock()
-        async with lock:
-            await self._locked_update_feedback(feedback)
+        await self._locked_update_feedback(feedback)
 
 
 class SimpleInteractionWriter:

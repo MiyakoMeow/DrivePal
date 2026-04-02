@@ -84,21 +84,22 @@ class SummaryManager:
         self, matched_keys: list[str], today: str
     ) -> None:
         """强化匹配到的摘要的记忆强度（受锁保护）."""
-        summaries = await self._summaries_store.read()
-        current_daily = summaries.get("daily_summaries", {})
-        updated = False
-        for key in matched_keys:
-            if key in current_daily:
-                summary_data = current_daily[key]
-                if isinstance(summary_data, dict):
-                    summary_data["memory_strength"] = (
-                        summary_data.get("memory_strength", 1) + 1
-                    )
-                    summary_data["last_recall_date"] = today
-                    updated = True
-        if updated:
-            summaries["daily_summaries"] = current_daily
-            await self._summaries_store.write(summaries)
+        async with self._lock:
+            summaries = await self._summaries_store.read()
+            current_daily = summaries.get("daily_summaries", {})
+            updated = False
+            for key in matched_keys:
+                if key in current_daily:
+                    summary_data = current_daily[key]
+                    if isinstance(summary_data, dict):
+                        summary_data["memory_strength"] = (
+                            summary_data.get("memory_strength", 1) + 1
+                        )
+                        summary_data["last_recall_date"] = today
+                        updated = True
+            if updated:
+                summaries["daily_summaries"] = current_daily
+                await self._summaries_store.write(summaries)
 
     async def strengthen_summaries(self, matched_keys: list[str]) -> None:
         """强化匹配到的摘要的记忆强度."""
@@ -114,6 +115,13 @@ class SummaryManager:
         async with self._lock:
             summaries = await self._summaries_store.read()
             daily_summaries = summaries.get("daily_summaries", {})
+            existing = daily_summaries.get(date_group)
+            if (
+                isinstance(existing, dict)
+                and existing.get("event_count", 0) >= count
+                and existing.get("source_updated_at", "") >= latest_source_ts
+            ):
+                return len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD
             daily_summaries[date_group] = {
                 "content": summary_text,
                 "memory_strength": 1,

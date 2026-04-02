@@ -196,40 +196,41 @@ class MemoryBankEngine:
     async def _locked_strengthen_and_forget(
         self, matched_ids: set[str], today: str, today_date: date
     ) -> None:
-        all_events = await self._storage.read_events()
-        updated = False
-        for event in all_events:
-            if event.get("id") in matched_ids:
-                event["memory_strength"] = event.get("memory_strength", 1) + 1
-                event["last_recall_date"] = today
-                updated = True
-            else:
-                strength = event.get("memory_strength", 1)
-                last_recall = event.get("last_recall_date", today_date.isoformat())
-                try:
-                    last_date = date.fromisoformat(last_recall)
-                    days_elapsed = (today_date - last_date).days
-                except (ValueError, TypeError):
-                    days_elapsed = 0
-                retention = forgetting_curve(days_elapsed, strength)
-                if retention < SOFT_FORGET_THRESHOLD:
-                    event["memory_strength"] = SOFT_FORGET_STRENGTH
-                    event["forgotten"] = True
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            updated = False
+            for event in all_events:
+                if event.get("id") in matched_ids:
+                    event["memory_strength"] = event.get("memory_strength", 1) + 1
+                    event["last_recall_date"] = today
                     updated = True
-        if updated:
-            await self._storage.write_events(all_events)
+                else:
+                    strength = event.get("memory_strength", 1)
+                    last_recall = event.get("last_recall_date", today_date.isoformat())
+                    try:
+                        last_date = date.fromisoformat(last_recall)
+                        days_elapsed = (today_date - last_date).days
+                    except (ValueError, TypeError):
+                        days_elapsed = 0
+                    retention = forgetting_curve(days_elapsed, strength)
+                    if retention < SOFT_FORGET_THRESHOLD:
+                        event["memory_strength"] = SOFT_FORGET_STRENGTH
+                        event["forgotten"] = True
+                        updated = True
+            if updated:
+                await self._storage.write_events(all_events)
 
-        all_interactions = await self._interactions_store.read()
-        updated = False
-        for interaction in all_interactions:
-            if interaction.get("event_id") in matched_ids:
-                interaction["memory_strength"] = (
-                    interaction.get("memory_strength", 1) + 1
-                )
-                interaction["last_recall_date"] = today
-                updated = True
-        if updated:
-            await self._interactions_store.write(all_interactions)
+            all_interactions = await self._interactions_store.read()
+            updated = False
+            for interaction in all_interactions:
+                if interaction.get("event_id") in matched_ids:
+                    interaction["memory_strength"] = (
+                        interaction.get("memory_strength", 1) + 1
+                    )
+                    interaction["last_recall_date"] = today
+                    updated = True
+            if updated:
+                await self._interactions_store.write(all_interactions)
 
     async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
         """强化匹配记忆并遗忘弱记忆."""
@@ -356,13 +357,14 @@ class MemoryBankEngine:
     async def _locked_update_event_summary(
         self, event_id: str, summary_text: str
     ) -> None:
-        all_events = await self._storage.read_events()
-        for event in all_events:
-            if event.get("id") == event_id:
-                event["content"] = summary_text
-                event["updated_at"] = datetime.now(timezone.utc).isoformat()
-                break
-        await self._storage.write_events(all_events)
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            for event in all_events:
+                if event.get("id") == event_id:
+                    event["content"] = summary_text
+                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    break
+            await self._storage.write_events(all_events)
 
     async def _update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:
