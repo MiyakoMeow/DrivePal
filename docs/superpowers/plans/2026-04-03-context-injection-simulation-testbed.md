@@ -403,7 +403,7 @@ def apply_rules(
             channels = set(channels_rules[-1].constraint["allowed_channels"])
         merged_channels = sorted(channels)
     else:
-        merged_channels = ["visual", "audio", "detailed"]
+        merged_channels = sorted(["visual", "audio", "detailed"])
 
     only_urgent = any(r.constraint.get("only_urgent", False) for r in matched)
     postpone = any(r.constraint.get("postpone", False) for r in matched)
@@ -1122,7 +1122,7 @@ class Query:
 
         mm = get_memory_module()
         mode = MemoryMode(memory_mode.value)
-        events = await mm.get_history(limit=limit)
+        events = await mm.get_history(limit=limit, mode=mode)
         return [
             MemoryEventGQL(
                 id=e.id,
@@ -1176,7 +1176,7 @@ from app.api.graphql_schema import (
 )
 from app.memory.schemas import FeedbackData
 from app.memory.types import MemoryMode
-from app.schemas.context import DriverState, DrivingContext, GeoLocation, TrafficCondition
+from app.schemas.context import DriverState, DrivingContext, GeoLocation, ScenarioPreset, TrafficCondition
 from app.storage.toml_store import TOMLStore
 
 
@@ -1335,7 +1335,7 @@ class Mutation:
 
     @strawberry.mutation
     async def save_scenario_preset(self, input: ScenarioPresetInput) -> ScenarioPresetGQL:
-        from app.schemas.context import ScenarioPreset, DrivingContext
+    from app.schemas.context import ScenarioPreset
 
         store = _preset_store()
         preset = ScenarioPreset(name=input.name)
