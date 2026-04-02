@@ -220,12 +220,11 @@ input ScenarioPresetInput {
 }
 ```
 
-### 2.3 与现有 REST API 的关系
+### 2.3 替换原有 REST API
 
-- **共存方案**：GraphQL 端点挂载在 `/graphql`，原有 REST 端点全部保留
+- **完全替换**：删除现有 REST 端点（`/api/query`、`/api/feedback`、`/api/history`、`/api/experiment/report`），所有功能通过 GraphQL 暴露
+- GraphQL 端点挂载在 `/graphql`
 - GraphQL playground 自动可用（Strawberry 提供），便于开发调试
-- 新功能（上下文注入、场景预设、工作流调试）仅通过 GraphQL 暴露
-- REST 端点的 `AgentWorkflow.run()` 调用不变（不传 `driving_context`，返回值保持二元素）
 
 ### 2.4 GraphQL 错误处理
 
@@ -243,7 +242,7 @@ input ScenarioPresetInput {
 
 ```
 app/api/
-├── main.py              # FastAPI app，挂载 GraphQL router，保留 REST 端点
+├── main.py              # FastAPI app，挂载 GraphQL router（删除 REST 端点）
 ├── graphql_schema.py    # Strawberry schema 定义（type/mutation/query）
 ├── resolvers/
 │   ├── __init__.py
@@ -270,14 +269,9 @@ class AgentState(TypedDict):
 
 ### 3.2 AgentWorkflow 签名
 
-保持 `run()` 返回二元素（向后兼容 REST），新增 `run_with_stages()` 方法：
+新增 `run_with_stages()` 方法作为唯一公开接口（`run()` 删除）：
 
 ```python
-async def run(self, user_input: str, driving_context: dict | None = None) -> tuple[str, str | None]:
-    """运行工作流，返回 (result, event_id)。向后兼容。"""
-    result, event_id, _ = await self.run_with_stages(user_input, driving_context)
-    return result, event_id
-
 async def run_with_stages(
     self, user_input: str, driving_context: dict | None = None
 ) -> tuple[str, str | None, WorkflowStages]:
@@ -482,13 +476,15 @@ P0 阶段：postpone 规则匹配时，Strategy Node 返回 `{"should_remind": f
 | # | 任务 | 优先级 |
 |---|------|--------|
 | 1 | `app/schemas/context.py` — 上下文数据模型 + 场景预设模型 | P0 |
-| 2 | GraphQL schema + resolvers | P0 |
-| 3 | `AgentState` 扩展 + `AgentWorkflow` 改造（`run_with_stages`） | P0 |
-| 4 | 轻量规则引擎 `app/agents/rules.py` + 规则合并 + prompt 注入 | P0 |
-| 5 | `app/storage/init_data.py` 更新 — 新增 `scenario_presets.toml` 初始化 | P0 |
-| 6 | 模拟测试 WebUI | P1 |
-| 7 | 场景预设管理（CRUD via GraphQL） | P1 |
-| 8 | 测试 | P0 |
+| 2 | GraphQL schema + resolvers（替代所有 REST 端点） | P0 |
+| 3 | 删除现有 REST 端点（`/api/query`、`/api/feedback`、`/api/history`、`/api/experiment/report`） | P0 |
+| 4 | `AgentState` 扩展 + `AgentWorkflow` 改造（`run_with_stages`，删除 `run`） | P0 |
+| 5 | 轻量规则引擎 `app/agents/rules.py` + 规则合并 + prompt 注入 | P0 |
+| 6 | `app/storage/init_data.py` 更新 — 新增 `scenario_presets.toml` 初始化 | P0 |
+| 7 | 迁移现有 REST API 测试为 GraphQL 测试 | P0 |
+| 8 | 模拟测试 WebUI（基于 GraphQL） | P1 |
+| 9 | 场景预设管理（CRUD via GraphQL） | P1 |
+| 10 | 新增功能测试 | P0 |
 
 ### 未来规划（仅规划，不实施）
 
