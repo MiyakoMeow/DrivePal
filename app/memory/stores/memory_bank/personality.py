@@ -1,5 +1,7 @@
 """人格分析管理器."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import date, datetime, timezone
@@ -131,6 +133,13 @@ class PersonalityManager:
         async with self._personality_lock:
             personality_data = await self._store.read()
             daily_personality = personality_data.get("daily_personality", {})
+            existing = daily_personality.get(date_group)
+            if (
+                isinstance(existing, dict)
+                and existing.get("interaction_count", 0) >= interaction_count
+                and existing.get("source_updated_at", "") >= latest_source_ts
+            ):
+                return len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD
             daily_personality[date_group] = {
                 "content": summary_text,
                 "memory_strength": 1,
@@ -197,16 +206,26 @@ class PersonalityManager:
             date_group, summary_text, len(group_interactions), latest_source_ts
         )
         if needs_overall_update:
-            overall_text = await self.generate_overall_text(combined, chat_model)
+            overall_text = await self._generate_overall_from_stored(chat_model)
             if overall_text:
                 await self._locked_update_overall(overall_text)
 
-    async def generate_overall_text(
-        self, combined: str, chat_model: ChatModel | None
+    async def _generate_overall_from_stored(
+        self, chat_model: ChatModel | None
     ) -> str | None:
-        """生成整体人格档案文本（不含锁，不写存储）."""
+        """从已存储的多日摘要拼接生成整体人格档案文本（受锁保护）."""
         if not chat_model:
             return None
+        async with self._personality_lock:
+            personality_data = await self._store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+        if not daily_personality:
+            return None
+        combined = "\n".join(
+            f"[{dg}] {data.get('content', '')}"
+            for dg, data in sorted(daily_personality.items())
+            if isinstance(data, dict)
+        )
         prompt = f"""The following are the user's exhibited personality traits and emotions throughout multiple dialogues,
         along with appropriate response strategies for the current situation:
         {combined}

@@ -1,5 +1,7 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any, Optional, TYPE_CHECKING

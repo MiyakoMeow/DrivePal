@@ -238,8 +238,9 @@ class MemoryBankEngine:
         """强化匹配记忆并遗忘弱记忆."""
         if not matched_ids:
             return
-        today = datetime.now(timezone.utc).date().isoformat()
-        today_date = datetime.now(timezone.utc).date()
+        now_utc = datetime.now(timezone.utc)
+        today_date = now_utc.date()
+        today = today_date.isoformat()
         await self._locked_strengthen_and_forget(matched_ids, today, today_date)
 
     async def _locked_write_interaction(
@@ -249,7 +250,7 @@ class MemoryBankEngine:
         event_type: str,
         interaction_id: str,
         today: str,
-    ) -> Optional[str]:
+    ) -> tuple[str, bool]:
         interaction_template = {
             "id": interaction_id,
             "event_id": "",
@@ -289,9 +290,11 @@ class MemoryBankEngine:
             }
             if append_event_id:
                 interaction["event_id"] = append_event_id
+                final_event_id = append_event_id
             else:
                 assert event is not None
                 interaction["event_id"] = str(event["id"])
+                final_event_id = str(event["id"])
 
             await self._interactions_store.append(interaction)
 
@@ -307,7 +310,8 @@ class MemoryBankEngine:
                 assert event is not None
                 await self._storage.append_raw(event)
 
-        return append_event_id
+        is_new = append_event_id is None
+        return final_event_id, is_new
 
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
@@ -315,12 +319,12 @@ class MemoryBankEngine:
         """写入交互记录并关联事件."""
         interaction_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         today = datetime.now(timezone.utc).date().isoformat()
-        append_event_id = await self._locked_write_interaction(
+        event_id, is_new = await self._locked_write_interaction(
             query, response, event_type, interaction_id, today
         )
 
-        if append_event_id:
-            await self._update_event_summary(append_event_id)
+        if not is_new:
+            await self._update_event_summary(event_id)
 
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
@@ -356,7 +360,12 @@ class MemoryBankEngine:
             return recent["id"]
         return None
 
-    async def _locked_update_event_summary(
+    async def _locked_read_event_interactions(self, event_id: str) -> list[dict]:
+        async with self._lock:
+            interactions = await self._interactions_store.read()
+            return [i for i in interactions if i.get("event_id") == event_id]
+
+    async def _locked_write_event_summary(
         self, event_id: str, summary_text: str
     ) -> None:
         async with self._lock:
@@ -371,8 +380,7 @@ class MemoryBankEngine:
     async def _update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:
             return
-        interactions = await self._interactions_store.read()
-        child_interactions = [i for i in interactions if i.get("event_id") == event_id]
+        child_interactions = await self._locked_read_event_interactions(event_id)
         if not child_interactions:
             return
         combined = "\n".join(
@@ -384,4 +392,4 @@ class MemoryBankEngine:
             summary_text = await self.chat_model.generate(prompt)
         except Exception:
             return
-        await self._locked_update_event_summary(event_id, summary_text)
+        await self._locked_write_event_summary(event_id, summary_text)
