@@ -129,6 +129,11 @@ class MemoChatEngine:
     async def _write_memos(self, memos: dict) -> None:
         await self._memos_store.write(memos)
 
+    async def read_interactions(self) -> list[dict]:
+        """读取全部交互记录."""
+        await self._ensure_initialized()
+        return await self._interactions_store.read()
+
     def _should_summarize(self, dialogs: list[str]) -> bool:
         if len(dialogs) >= SUMMARIZATION_TURN_THRESHOLD:
             return True

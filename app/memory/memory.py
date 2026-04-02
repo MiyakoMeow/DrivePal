@@ -27,8 +27,10 @@ def register_store(name: MemoryMode, store_cls: type) -> None:
 
 def _import_all_stores() -> None:
     from app.memory.stores.memory_bank import MemoryBankStore
+    from app.memory.stores.memochat import MemoChatStore
 
     register_store(MemoryMode.MEMORY_BANK, MemoryBankStore)
+    register_store(MemoryMode.MEMOCHAT, MemoChatStore)
 
 
 _import_all_stores()
