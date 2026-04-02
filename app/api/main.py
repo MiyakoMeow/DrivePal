@@ -1,15 +1,15 @@
-"""FastAPI应用主入口."""
+"""FastAPI 应用主入口."""
 
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from pathlib import Path
-from typing import Annotated, Optional, Literal
-import os
 import logging
+import os
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+import strawberry
+import strawberry.fastapi
 
 from app.memory.memory import MemoryModule
-from app.memory.types import MemoryMode
-from app.models.settings import get_chat_model, get_embedding_model
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -21,10 +21,12 @@ DATA_DIR = Path(_data_dir_env)
 
 
 def _ensure_memory_module() -> MemoryModule:
-    chat_model = get_chat_model()
-    embedding_model = get_embedding_model()
+    from app.models.settings import get_chat_model, get_embedding_model
+
     return MemoryModule(
-        data_dir=DATA_DIR, embedding_model=embedding_model, chat_model=chat_model
+        data_dir=DATA_DIR,
+        embedding_model=get_embedding_model(),
+        chat_model=get_chat_model(),
     )
 
 
@@ -32,81 +34,26 @@ _memory_module: MemoryModule | None = None
 
 
 def get_memory_module() -> MemoryModule:
-    """获取或初始化记忆模块单例."""
     global _memory_module
     if _memory_module is None:
         _memory_module = _ensure_memory_module()
     return _memory_module
 
 
-class QueryRequest(BaseModel):
-    """用户查询请求."""
+def _mount_graphql() -> None:
+    from app.api.resolvers.mutation import Mutation as MutationImpl
+    from app.api.resolvers.query import Query as QueryImpl
 
-    query: str
-    memory_mode: MemoryMode = MemoryMode.MEMORY_BANK
-
-
-class FeedbackRequest(BaseModel):
-    """用户反馈请求."""
-
-    event_id: str
-    action: Literal["accept", "ignore"]
-    modified_content: Optional[str] = None
+    schema = strawberry.Schema(query=QueryImpl, mutation=MutationImpl)
+    graphql_app = strawberry.fastapi.GraphQLRouter(schema)
+    app.include_router(graphql_app, prefix="/graphql")
 
 
-@app.post("/api/query")
-async def query(
-    request: QueryRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
-) -> dict:
-    """处理用户查询."""
-    from app.agents.workflow import AgentWorkflow
+_mount_graphql()
 
-    try:
-        workflow = AgentWorkflow(
-            data_dir=DATA_DIR,
-            memory_mode=request.memory_mode,
-            memory_module=mm,
-        )
-        result, event_id = await workflow.run(request.query)
-        return {"result": result, "event_id": event_id}
-    except Exception as e:
-        logger.exception("Query failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+webui_path = Path(__file__).parent.parent.parent / "webui"
 
 
-@app.post("/api/feedback")
-async def feedback(
-    request: FeedbackRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
-) -> dict:
-    """提交用户反馈."""
-    try:
-        from app.memory.schemas import FeedbackData
-
-        feedback = FeedbackData(
-            action=request.action,
-            modified_content=request.modified_content,
-        )
-        await mm.update_feedback(request.event_id, feedback)
-        return {"status": "success"}
-    except Exception as e:
-        logger.exception("Feedback failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@app.get("/api/experiment/report")
-async def experiment_report() -> dict:
-    """获取实验报告."""
-    return {"report": "Experiment runner migrated to CLI pipeline"}
-
-
-@app.get("/api/history")
-async def history(
-    mm: Annotated[MemoryModule, Depends(get_memory_module)], limit: int = 10
-) -> dict:
-    """获取历史记录."""
-    try:
-        events = await mm.get_history(limit=limit)
-        return {"history": [e.model_dump() for e in events]}
-    except Exception as e:
-        logger.exception("History retrieval failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+@app.get("/")
+async def root() -> FileResponse:
+    return FileResponse(webui_path / "index.html")

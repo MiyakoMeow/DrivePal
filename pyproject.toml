@@ -17,6 +17,7 @@ dependencies = [
     "tomli-w>=1.2.0",
     "torch>=2.11.0",
     "torchvision>=0.26.0",
+    "strawberry-graphql[fastapi]>=0.312.2",
 ]
 
 [[tool.uv.index]]
