@@ -118,3 +118,33 @@ class TestSummarizeIfNeeded:
         await engine._summarize_if_needed()
         dialogs_after = await engine.read_recent_dialogs()
         assert len(dialogs_after) == len(dialogs_before)
+
+
+class TestSearch:
+    async def test_search_returns_empty_without_memos(
+        self, engine: MemoChatEngine, mock_chat: MagicMock
+    ) -> None:
+        mock_chat.generate.return_value = "1"
+        results = await engine.search("天气")
+        assert results == []
+
+    async def test_search_returns_results_via_llm(
+        self, engine: MemoChatEngine, mock_chat: MagicMock
+    ) -> None:
+        mock_chat.generate.return_value = json.dumps(
+            [{"topic": "天气", "summary": "用户讨论了天气", "start": 1, "end": 2}]
+        )
+        for i in range(SUMMARIZATION_TURN_THRESHOLD):
+            await engine.append_recent_dialog(f"user: 今天天气不错{i}")
+        await engine._summarize_if_needed()
+        mock_chat.generate.reset_mock()
+        mock_chat.generate.return_value = "2"
+        results = await engine.search("天气")
+        assert len(results) >= 1
+        assert results[0].source == "event"
+
+    async def test_search_returns_empty_on_empty_query(
+        self, engine: MemoChatEngine
+    ) -> None:
+        results = await engine.search("")
+        assert results == []

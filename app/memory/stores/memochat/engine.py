@@ -15,6 +15,7 @@ from app.memory.stores.memochat.retriever import RetrievalMode
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
+    from app.memory.schemas import SearchResult
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
@@ -201,3 +202,37 @@ class MemoChatEngine:
 
         kept = dialogs[-RECENT_DIALOGS_KEEP_AFTER_SUMMARY:]
         await self._dialogs_store.write(kept)
+
+    async def search(self, query: str, top_k: int = 10) -> list["SearchResult"]:
+        """检索与查询相关的记忆条目."""
+        from app.memory.schemas import SearchResult
+        from app.memory.stores.memochat.retriever import (
+            retrieve_full_llm,
+            retrieve_hybrid,
+        )
+
+        if not query.strip():
+            return []
+        memos = await self.read_memos()
+        if not memos:
+            return []
+        if not self.chat:
+            return []
+        if self.retrieval_mode == RetrievalMode.HYBRID:
+            matched = await retrieve_hybrid(
+                self.chat, self.embedding, query, memos, top_k
+            )
+        else:
+            matched = await retrieve_full_llm(self.chat, query, memos, top_k)
+        return [
+            SearchResult(
+                event={
+                    "id": entry.get("id", ""),
+                    "content": f"{topic}: {entry.get('summary', '')}",
+                    "description": " ### ".join(entry.get("dialogs", [])),
+                },
+                score=1.0,
+                source="event",
+            )
+            for topic, entry in matched
+        ]
