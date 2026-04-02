@@ -56,14 +56,17 @@ class DrivingContext(BaseModel):
 ### 场景预设数据模型
 
 ```python
+import uuid
+from datetime import datetime, timezone
+
 class ScenarioPreset(BaseModel):
-    id: str = ""
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     name: str = ""
     context: DrivingContext = DrivingContext()
-    created_at: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 ```
 
-存储于 `data/scenario_presets.toml`，结构为 `list[ScenarioPreset]`。
+存储于 `data/scenario_presets.toml`，结构为 `list[ScenarioPreset]`。所有时间戳统一为 ISO 8601 UTC 格式。
 
 ## 2. GraphQL API 层
 
@@ -230,7 +233,13 @@ input ScenarioPresetInput {
 - 使用 Strawberry 的 `raise GraphQLError("message")` 模式
 - HTTP 层面的错误（如 404）仍由 FastAPI 处理
 
-### 2.5 文件结构
+### 2.5 Strawberry 实现注意事项
+
+- **JSON scalar**：通过 `strawberry.scalar(NewType("JSON", object), serialize=lambda v: v, parse_value=lambda v: v)` 定义
+- **FeedbackInput.action**：在 resolver 中校验 `action in ("accept", "ignore")`，不合法时 raise `GraphQLError("Invalid action")`
+- **deleteScenarioPreset**：删除不存在的 ID 返回 `false`，不抛异常
+
+### 2.6 文件结构
 
 ```
 app/api/
@@ -278,9 +287,10 @@ async def run_with_stages(
 ### 3.3 Context Node 使用真实数据
 
 当 `state["driving_context"]` 非空时：
-- 跳过 LLM 调用，直接将 `driving_context` 作为 context
-- 附加 current_datetime 和 memory 搜索结果
-- prompt 中标注"以下为真实传感器/系统注入数据，请直接使用"
+- 跳过 LLM 调用，直接将 `driving_context` 作为 context 基础
+- 附加 `current_datetime`（ISO 8601 格式）
+- 执行 memory 搜索，将结果附加到 `related_events` 和 `relevant_memories` 字段（保持与 LLM 路径一致的输出结构）
+- 最终输出结构：`{"driver": ..., "spatial": ..., "traffic": ..., "scenario": ..., "current_datetime": "...", "related_events": [...], "relevant_memories": [...]}`
 
 当 `state["driving_context"]` 为空时：
 - 走原有 LLM 推断路径（向后兼容）
@@ -298,7 +308,7 @@ class WorkflowStages:
     execution: dict = field(default_factory=dict)
 ```
 
-`run_with_stages()` 内部创建 `WorkflowStages` 实例，每个 node 执行后将输出写入对应字段。
+`run_with_stages()` 内部创建 `WorkflowStages` 实例，每个 node 执行后将输出写入对应字段。通过闭包方式：`run_with_stages()` 内部创建 `stages`，node 函数通过闭包捕获并写入。`stages` 实例挂载到 `state["stages"]` 供各 node 访问。
 
 ## 4. 轻量规则引擎
 
@@ -327,7 +337,7 @@ SAFETY_RULES: list[Rule] = [
     Rule(
         name="highway_audio_only",
         condition=lambda ctx: ctx["scenario"] == "highway",
-        constraint={"allowed_channels": ["audio"], "max_frequency": "30min"},
+        constraint={"allowed_channels": ["audio"], "max_frequency_minutes": 30},
         priority=10,
     ),
     Rule(
@@ -353,11 +363,11 @@ SAFETY_RULES: list[Rule] = [
 
 ### 4.3 规则合并策略
 
-多规则同时匹配时，按优先级从高到低处理：
-- `allowed_channels`：取交集（最严格约束）
-- `only_urgent`：任一规则为 True 则为 True
-- `postpone`：任一规则为 True 则为 True
-- `max_frequency`：取最短间隔
+多规则同时匹配时，按优先级从高到低处理。**仅对该字段存在于 constraint 中的规则参与合并**，缺失该字段的规则视为"不约束"：
+- `allowed_channels`：仅对定义了该字段的规则取交集（最严格约束）。若交集为空，取最后一条定义该字段的规则的值
+- `only_urgent`：任一定义了该字段且为 True 的规则生效
+- `postpone`：任一定义了该字段且为 True 的规则生效
+- `max_frequency_minutes`：仅对定义了该字段的规则取最小值（分钟整数）
 
 ### 4.4 规则引擎输出格式
 
@@ -368,7 +378,7 @@ SAFETY_RULES: list[Rule] = [
 你必须遵守以下约束（由系统规则引擎生成，不可违反）：
 - 允许的提醒通道: ["audio"]
 - 仅允许紧急提醒: true
-- 最大提醒频率: 30min
+- 最大提醒频率: 30分钟
 
 请在以上约束范围内做出决策。
 ```
@@ -380,6 +390,8 @@ Context Node → Task Node → [Rule Engine] → Strategy Node → Execution Nod
 ```
 
 规则引擎在 Task Node 之后、Strategy Node 之前执行。仅当 `driving_context` 存在时执行；否则跳过，Strategy Agent 自行决策。
+
+实现方式：`_strategy_node` 方法内部前置调用规则引擎（`_apply_rules`），根据 `state["driving_context"]` 是否存在决定是否注入约束。不新增独立的 node 方法，避免修改 `_nodes` 静态列表的顺序逻辑。
 
 ### 4.6 postpone 处理
 
@@ -473,9 +485,10 @@ P0 阶段：postpone 规则匹配时，Strategy Node 返回 `{"should_remind": f
 | 2 | GraphQL schema + resolvers | P0 |
 | 3 | `AgentState` 扩展 + `AgentWorkflow` 改造（`run_with_stages`） | P0 |
 | 4 | 轻量规则引擎 `app/agents/rules.py` + 规则合并 + prompt 注入 | P0 |
-| 5 | 模拟测试 WebUI | P1 |
-| 6 | 场景预设管理（CRUD via GraphQL） | P1 |
-| 7 | 测试 | P0 |
+| 5 | `app/storage/init_data.py` 更新 — 新增 `scenario_presets.toml` 初始化 | P0 |
+| 6 | 模拟测试 WebUI | P1 |
+| 7 | 场景预设管理（CRUD via GraphQL） | P1 |
+| 8 | 测试 | P0 |
 
 ### 未来规划（仅规划，不实施）
 
