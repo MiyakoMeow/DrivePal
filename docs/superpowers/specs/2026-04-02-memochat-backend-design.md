@@ -227,7 +227,14 @@ async def retrieve_hybrid(
 
 ### write_interaction 与 PersonalityManager 的衔接
 
-`PersonalityManager.maybe_summarize()` 需要 `interactions: list[dict]` 且每条包含 `event_id`。MemoChatEngine 维护独立的 `memochat_interactions.toml`，在 summarization 产生新 memo 时，将对应的 interaction 记录关联到 memo 的 id（作为 `event_id`），确保 PersonalityManager 能正确过滤和计数交互。
+`PersonalityManager.maybe_summarize()` 需要 `interactions: list[dict]` 且每条包含 `event_id`（`personality.py:105-109` 通过 `event_id` 过滤属于当日事件的交互）。
+
+MemoChatEngine 维护独立的 `memochat_interactions.toml`。交互记录的 `event_id` 关联分两步完成：
+
+1. **写入时**：interaction 先以 `event_id = ""` 写入（此时尚未触发 summarization，无法预知 event_id）
+2. **Summarization 后回填**：summarization 产生新 memo（带 id）后，回溯更新该轮 interactions 的 `event_id` 为对应 memo 的 id。未触发 summarization 时，interaction 的 `event_id` 保持为空
+
+这样 PersonalityManager 的 `group_interactions` 过滤逻辑能正确工作——只有被 summarization 归档到 memo 的交互才会被纳入人格分析。
 
 ## 数据流
 
@@ -237,13 +244,15 @@ async def retrieve_hybrid(
 query + response
     ↓
 追加到 Recent Dialogs
-追加到 interactions TOML（关联 summarization 后的 event_id）
+追加到 interactions TOML（event_id 暂为空）
     ↓
 字符数/条目超阈值？ ──否──→ 触发 PersonalityManager.maybe_summarize() → 结束
     ↓ 是
 Stage 1: Summarization
     ↓
 LLM 提取 topic+summary → 写入 memos TOML（带 id）+ 事件存储
+    ↓
+回填本轮 interactions 的 event_id 为对应 memo id
     ↓
 截断 Recent Dialogs 到 2 条
     ↓
