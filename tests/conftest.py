@@ -27,10 +27,11 @@ def get_available_provider() -> LLMProviderConfig | None:
             continue
         try:
             import requests
+        except ImportError:
+            continue
 
+        try:
             base = provider.provider.base_url.rstrip("/")
-            if base.endswith("/v1"):
-                base = base[:-3]
             resp = requests.get(
                 f"{base}/models",
                 headers={"Authorization": f"Bearer {provider.provider.api_key}"}
@@ -40,7 +41,7 @@ def get_available_provider() -> LLMProviderConfig | None:
             )
             if resp.status_code == 200:
                 return provider
-        except Exception:
+        except requests.RequestException:
             continue
     return fallback_provider
 

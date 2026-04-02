@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from app.memory.schemas import SearchResult
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+
+logger = logging.getLogger(__name__)
 
 MAX_LEN = 2048
 TARGET_LEN = 512
@@ -168,6 +171,14 @@ class MemoChatEngine:
         await self._ensure_initialized()
         return await self._interactions_store.read()
 
+    async def append_interaction(self, interaction: dict) -> None:
+        """追加交互记录."""
+        await self._interactions_store.append(interaction)
+
+    async def trigger_summarization(self) -> None:
+        """触发摘要检查."""
+        await self._summarize_if_needed()
+
     def _should_summarize(self, dialogs: list[str]) -> bool:
         if len(dialogs) >= SUMMARIZATION_TURN_THRESHOLD:
             return True
@@ -200,6 +211,7 @@ class MemoChatEngine:
             try:
                 raw_output = await self.chat.generate(prompt)
             except Exception:
+                logger.warning("MemoChat summarization LLM call failed", exc_info=True)
                 return
 
             parsed = _parse_json_outputs(raw_output)

@@ -54,13 +54,14 @@ class MemoChatStore:
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件，创建 memo 条目."""
+        now = datetime.now(timezone.utc)
         memo_entry = {
             "id": self._storage.generate_id(),
             "summary": event.content,
             "dialogs": [],
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": now.isoformat(),
             "memory_strength": 1,
-            "last_recall_date": datetime.now(timezone.utc).date().isoformat(),
+            "last_recall_date": now.date().isoformat(),
         }
         topic = event.type or "general"
         await self._engine.append_memo(topic, memo_entry)
@@ -119,8 +120,8 @@ class MemoChatStore:
             "event_type": event_type,
         }
         async with self._write_lock:
-            await self._engine._interactions_store.append(interaction)
+            await self._engine.append_interaction(interaction)
             await self._engine.append_recent_dialog(f"user: {query}")
             await self._engine.append_recent_dialog(f"bot: {response}")
-        await self._engine._summarize_if_needed()
+        await self._engine.trigger_summarization()
         return interaction_id
