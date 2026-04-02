@@ -30,6 +30,7 @@ class AgentWorkflow:
         memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
         memory_module: Optional[MemoryModule] = None,
     ) -> None:
+        """初始化工作流实例."""
         self.data_dir = data_dir
         self._memory_mode = memory_mode
 
@@ -224,6 +225,7 @@ class AgentWorkflow:
         user_input: str,
         driving_context: dict | None = None,
     ) -> tuple[str, Optional[str], WorkflowStages]:
+        """运行完整工作流并返回结果、事件ID和各阶段输出."""
         stages = WorkflowStages()
         state: AgentState = {
             "messages": [{"role": "user", "content": user_input}],

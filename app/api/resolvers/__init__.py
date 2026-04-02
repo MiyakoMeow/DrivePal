@@ -1,0 +1,1 @@
+"""GraphQL resolver 包."""

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import logging
-
 import strawberry
 from graphql.error import GraphQLError
-
-logger = logging.getLogger(__name__)
 
 from app.api.graphql_schema import (
     DrivingContextGQL,
@@ -38,6 +35,8 @@ from app.schemas.context import (
     TrafficCondition,
 )
 from app.storage.toml_store import TOMLStore
+
+logger = logging.getLogger(__name__)
 
 
 def _preset_store() -> TOMLStore:
@@ -129,16 +128,14 @@ def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
 
 
 def _to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
-    from app.schemas.context import DrivingContext as DCM
-
     ctx_raw = p.get("context", {})
-    safe = {k: v for k, v in ctx_raw.items() if k in DCM.model_fields}
+    safe = {k: v for k, v in ctx_raw.items() if k in DrivingContext.model_fields}
     sp = safe.get("spatial", {})
     if isinstance(sp, dict):
         for key in ("destination", "eta_minutes", "heading"):
             if sp.get(key) == "":
                 sp[key] = None
-    ctx = DCM(**safe)
+    ctx = DrivingContext(**safe)
     return ScenarioPresetGQL(
         id=p.get("id", ""),
         name=p.get("name", ""),
@@ -149,8 +146,11 @@ def _to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
 
 @strawberry.type
 class Mutation:
+    """GraphQL Mutation 集合."""
+
     @strawberry.mutation
     async def process_query(self, input: ProcessQueryInput) -> ProcessQueryResult:
+        """处理用户查询并返回工作流结果."""
         from app.api.main import DATA_DIR, get_memory_module
         from app.agents.workflow import AgentWorkflow
 
@@ -185,6 +185,7 @@ class Mutation:
 
     @strawberry.mutation
     async def submit_feedback(self, input: FeedbackInput) -> FeedbackResult:
+        """提交用户反馈."""
         if input.action not in ("accept", "ignore"):
             raise GraphQLError(
                 f"Invalid action: {input.action!r}. Must be 'accept' or 'ignore'"
@@ -209,6 +210,7 @@ class Mutation:
     async def save_scenario_preset(
         self, input: ScenarioPresetInput
     ) -> ScenarioPresetGQL:
+        """保存场景预设."""
         store = _preset_store()
         preset = ScenarioPreset(name=input.name)
         if input.context:
@@ -237,6 +239,7 @@ class Mutation:
 
     @strawberry.mutation
     async def delete_scenario_preset(self, preset_id: str) -> bool:
+        """删除场景预设."""
         store = _preset_store()
         presets = await store.read()
         new_presets = [p for p in presets if p.get("id") != preset_id]

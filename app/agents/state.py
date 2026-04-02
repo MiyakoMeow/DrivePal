@@ -7,6 +7,8 @@ from typing import Any, Optional, TypedDict
 
 
 class AgentState(TypedDict):
+    """工作流流水线中的共享状态."""
+
     messages: list[dict]
     context: dict
     task: Optional[dict]
@@ -19,6 +21,8 @@ class AgentState(TypedDict):
 
 @dataclass
 class WorkflowStages:
+    """各 Agent 阶段的输出快照."""
+
     context: dict = field(default_factory=dict)
     task: dict = field(default_factory=dict)
     decision: dict = field(default_factory=dict)

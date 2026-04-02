@@ -2,7 +2,9 @@
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -15,16 +17,18 @@ from app.storage.init_data import init_storage
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="知行车秘 - 车载AI智能体")
-
 DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
 WEBUI_DIR = Path(os.getenv("WEBUI_DIR", Path(__file__).parent.parent.parent / "webui"))
 
 
-@app.on_event("startup")
-async def _startup() -> None:
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_storage(DATA_DIR)
     logger.info("Data directory initialized: %s", DATA_DIR)
+    yield
+
+
+app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
 
 
 def _ensure_memory_module() -> MemoryModule:
@@ -41,6 +45,7 @@ _memory_module: MemoryModule | None = None
 
 
 def get_memory_module() -> MemoryModule:
+    """获取或初始化记忆模块单例."""
     global _memory_module
     if _memory_module is None:
         _memory_module = _ensure_memory_module()
@@ -63,4 +68,5 @@ webui_path = WEBUI_DIR
 
 @app.get("/")
 async def root() -> FileResponse:
+    """返回前端 WebUI 入口页面."""
     return FileResponse(webui_path / "index.html")
