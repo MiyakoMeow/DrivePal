@@ -95,7 +95,7 @@ class FeedbackManager:
         """策略存储."""
         return self._strategies_store
 
-    async def _get_lock(self) -> asyncio.Lock:
+    async def _locked_get_lock(self) -> asyncio.Lock:
         async with _strategy_locks_lock:
             if str(self.data_dir) not in _strategy_locks:
                 _strategy_locks[str(self.data_dir)] = asyncio.Lock()
@@ -125,16 +125,21 @@ class FeedbackManager:
 
         await self._strategies_store.write(strategies)
 
+    async def _locked_update_feedback(self, feedback: FeedbackData) -> None:
+        """持锁执行反馈写入和策略更新."""
+        assert feedback.action is not None
+        lock = await self._locked_get_lock()
+        async with lock:
+            await self._write_feedback(feedback)
+            await self._update_strategy(feedback.type, feedback.action)
+
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
         if feedback.action is None:
             raise ValueError("action is required")
-        lock = await self._get_lock()
-        async with lock:
-            await self._write_feedback(feedback)
-            await self._update_strategy(feedback.type, feedback.action)
+        await self._locked_update_feedback(feedback)
 
 
 class SimpleInteractionWriter:
