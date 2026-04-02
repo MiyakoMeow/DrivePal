@@ -32,6 +32,7 @@ exclude = [".agents/**", "vendor/**"]
 
 [lint.per-file-ignores]
 "adapters/runner.py" = ["E402"]
+"tests/**" = ["D"]
 
 [format]
 exclude = ["vendor/**", ".agents/**"]
