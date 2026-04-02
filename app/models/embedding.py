@@ -147,3 +147,8 @@ class EmbeddingModel:
                 cl, self.provider.provider.model, texts
             )
         return self._batch_encode_with_local(cl, texts)
+
+
+def reset_embedding_singleton() -> None:
+    """清除缓存并重置为初始状态（供测试使用）."""
+    _EMBEDDING_MODEL_CACHE.clear()

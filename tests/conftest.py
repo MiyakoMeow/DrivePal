@@ -4,6 +4,9 @@ import os
 
 import pytest
 
+from typing import Generator
+
+from app.models.embedding import EmbeddingModel, get_cached_embedding_model
 from app.models.settings import LLMSettings, LLMProviderConfig
 
 
@@ -97,3 +100,13 @@ def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProvider
     if llm_provider is None:
         pytest.skip("No LLM provider available")
     return llm_provider
+
+
+@pytest.fixture(scope="session")
+def embedding() -> Generator[EmbeddingModel, None, None]:
+    """Session-level embedding instance, each pytest-xdist worker is independent."""
+    from app.models.embedding import reset_embedding_singleton
+
+    reset_embedding_singleton()
+    yield get_cached_embedding_model()
+    reset_embedding_singleton()
