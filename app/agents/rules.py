@@ -25,13 +25,13 @@ SAFETY_RULES: list[Rule] = [
     ),
     Rule(
         name="fatigue_suppress",
-        condition=lambda ctx: ctx["driver"]["fatigue_level"] > 0.7,
+        condition=lambda ctx: ctx.get("driver", {}).get("fatigue_level", 0) > 0.7,
         constraint={"only_urgent": True, "allowed_channels": ["audio"]},
         priority=20,
     ),
     Rule(
         name="overloaded_postpone",
-        condition=lambda ctx: ctx["driver"]["workload"] == "overloaded",
+        condition=lambda ctx: ctx.get("driver", {}).get("workload", "") == "overloaded",
         constraint={"postpone": True},
         priority=15,
     ),

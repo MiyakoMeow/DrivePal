@@ -159,3 +159,20 @@ def test_format_empty_constraints() -> None:
         }
     )
     assert "audio" in text
+
+
+def test_empty_driver_dict() -> None:
+    """空 driver dict 不触发 fatigue/overloaded 规则."""
+    ctx: dict[str, Any] = {"scenario": "highway", "driver": {}}
+    result = apply_rules(ctx, SAFETY_RULES)
+    assert result["allowed_channels"] == ["audio"]
+    assert result["only_urgent"] is False
+    assert result["postpone"] is False
+
+
+def test_missing_driver_key() -> None:
+    """完全无 driver key 不崩溃."""
+    ctx: dict[str, Any] = {"scenario": "city_driving"}
+    result = apply_rules(ctx, SAFETY_RULES)
+    assert result["only_urgent"] is False
+    assert result["postpone"] is False

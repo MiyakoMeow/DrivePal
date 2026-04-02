@@ -152,7 +152,7 @@ class AgentWorkflow:
 
     async def _strategy_node(self, state: AgentState) -> dict:
         context = state.get("context", {})
-        task = state.get("task", {})
+        task = state.get("task") or {}
         stages = state.get("stages")
 
         strategies = await self._strategies_store.read()

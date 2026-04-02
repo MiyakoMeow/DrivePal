@@ -247,12 +247,11 @@
                     <label>情绪</label>
                     <select id="ctx-emotion">
                         <option value="">（未设置）</option>
+                        <option value="neutral">正常</option>
                         <option value="calm">平静</option>
                         <option value="anxious">焦虑</option>
+                        <option value="fatigued">疲倦</option>
                         <option value="angry">愤怒</option>
-                        <option value="tired">疲倦</option>
-                        <option value="confused">困惑</option>
-                        <option value="focused">专注</option>
                     </select>
                 </div>
                 <div class="field">
@@ -260,14 +259,14 @@
                     <select id="ctx-workload">
                         <option value="">（未设置）</option>
                         <option value="low">低</option>
-                        <option value="medium">中</option>
+                        <option value="normal">正常</option>
                         <option value="high">高</option>
-                        <option value="extreme">极高</option>
+                        <option value="overloaded">过载</option>
                     </select>
                 </div>
                 <div class="field">
-                    <label>疲劳程度: <span id="fatigueVal" class="range-val">5</span></label>
-                    <input type="range" id="ctx-fatigueLevel" min="0" max="10" value="5" oninput="document.getElementById('fatigueVal').textContent=this.value">
+                    <label>疲劳程度: <span id="fatigueVal" class="range-val">0.0</span></label>
+                    <input type="range" id="ctx-fatigueLevel" min="0" max="1" step="0.1" value="0" oninput="document.getElementById('fatigueVal').textContent=parseFloat(this.value).toFixed(1)">
                 </div>
             </div>
 
@@ -305,11 +304,10 @@
                     <label>拥堵程度</label>
                     <select id="ctx-congestionLevel">
                         <option value="">（未设置）</option>
-                        <option value="none">无拥堵</option>
-                        <option value="light">轻度</option>
-                        <option value="moderate">中度</option>
-                        <option value="heavy">重度</option>
-                        <option value="gridlock">严重拥堵</option>
+                        <option value="smooth">畅通</option>
+                        <option value="slow">缓行</option>
+                        <option value="congested">拥堵</option>
+                        <option value="blocked">严重拥堵</option>
                     </select>
                 </div>
                 <div class="field">
@@ -328,13 +326,10 @@
                     <label>场景类型</label>
                     <select id="ctx-scenario">
                         <option value="">（未设置）</option>
+                        <option value="parked">停车场</option>
+                        <option value="city_driving">城市道路</option>
                         <option value="highway">高速公路</option>
-                        <option value="urban">城市道路</option>
-                        <option value="parking">停车场</option>
-                        <option value="residential">小区道路</option>
-                        <option value="night">夜间驾驶</option>
-                        <option value="rain">雨天驾驶</option>
-                        <option value="fog">雾天驾驶</option>
+                        <option value="traffic_jam">交通拥堵</option>
                     </select>
                 </div>
             </div>
@@ -403,7 +398,7 @@
         function getContextInput() {
             const emotion = document.getElementById('ctx-emotion').value;
             const workload = document.getElementById('ctx-workload').value;
-            const fatigueLevel = parseInt(document.getElementById('ctx-fatigueLevel').value, 10);
+            const fatigueLevel = parseFloat(document.getElementById('ctx-fatigueLevel').value);
             const lat = document.getElementById('ctx-lat').value;
             const lng = document.getElementById('ctx-lng').value;
             const address = document.getElementById('ctx-address').value;
@@ -433,12 +428,11 @@
             if (Object.keys(dest).length) spatial.destination = dest;
 
             if (etaMinutes !== '') spatial.etaMinutes = parseFloat(etaMinutes);
-            if (Object.keys(spatial).length) spatial;
 
             const traffic = {};
             if (congestionLevel) traffic.congestionLevel = congestionLevel;
-            if (incidents) traffic.incidents = incidents;
-            if (delayMinutes !== '') traffic.estimatedDelayMinutes = parseFloat(delayMinutes);
+            if (incidents) traffic.incidents = [incidents];
+            if (delayMinutes !== '') traffic.estimatedDelayMinutes = parseInt(delayMinutes, 10);
 
             const ctx = {};
             if (Object.keys(driver).length) ctx.driver = driver;
@@ -458,8 +452,8 @@
 
             document.getElementById('ctx-emotion').value = d.emotion || '';
             document.getElementById('ctx-workload').value = d.workload || '';
-            document.getElementById('ctx-fatigueLevel').value = d.fatigueLevel ?? 5;
-            document.getElementById('fatigueVal').textContent = d.fatigueLevel ?? 5;
+            document.getElementById('ctx-fatigueLevel').value = d.fatigueLevel ?? 0;
+            document.getElementById('fatigueVal').textContent = (d.fatigueLevel ?? 0).toFixed(1);
 
             const cl = s.currentLocation || {};
             document.getElementById('ctx-lat').value = cl.latitude ?? '';
@@ -481,23 +475,12 @@
         function clearForm() {
             document.getElementById('ctx-emotion').value = '';
             document.getElementById('ctx-workload').value = '';
-            document.getElementById('ctx-fatigueLevel').value = 5;
-            document.getElementById('fatigueVal').textContent = '5';
-            document.getElementById('ctx-lat').value = '';
-            document.getElementById('ctx-lng').value = '';
-            document.getElementById('ctx-address').value = '';
-            document.getElementById('ctx-speedKmh').value = '';
-            document.getElementById('ctx-dest-address').value = '';
-            document.getElementById('ctx-etaMinutes').value = '';
-            document.getElementById('ctx-congestionLevel').value = '';
-            document.getElementById('ctx-incidents').value = '';
-            document.getElementById('ctx-delayMinutes').value = '';
-            document.getElementById('ctx-scenario').value = '';
-            document.getElementById('presetSelect').value = '';
+            document.getElementById('ctx-fatigueLevel').value = 0;
+            document.getElementById('fatigueVal').textContent = '0.0';
         }
 
         function formatJson(val) {
-            if (val === null || val === undefined) return '<span class="error">null</span>';
+            if (val === null || val === undefined) return 'null';
             try {
                 return JSON.stringify(val, null, 2);
             } catch {

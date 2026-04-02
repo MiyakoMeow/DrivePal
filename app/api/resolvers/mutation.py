@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any
 
 import strawberry
 from graphql.error import GraphQLError
@@ -105,8 +105,8 @@ def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
                 speed_kmh=loc.get("speed_kmh", 0.0),
             ),
             destination=GeoLocationGQL(
-                latitude=dest["latitude"],
-                longitude=dest["longitude"],
+                latitude=dest.get("latitude", 0.0),
+                longitude=dest.get("longitude", 0.0),
                 address=dest.get("address", ""),
                 speed_kmh=dest.get("speed_kmh", 0.0),
             )
@@ -179,7 +179,7 @@ class Mutation:
             import logging
 
             logging.getLogger(__name__).exception("processQuery failed: %s", e)
-            raise GraphQLError(f"Internal server error: {e}")
+            raise GraphQLError("Internal server error")
 
     @strawberry.mutation
     async def submit_feedback(self, input: FeedbackInput) -> FeedbackResult:
@@ -192,7 +192,7 @@ class Mutation:
         try:
             mm = get_memory_module()
             feedback = FeedbackData(
-                action=cast("Literal['accept', 'ignore']", input.action),
+                action=input.action,
                 modified_content=input.modified_content,
             )
             await mm.update_feedback(input.event_id, feedback)
@@ -201,7 +201,7 @@ class Mutation:
             import logging
 
             logging.getLogger(__name__).exception("submitFeedback failed: %s", e)
-            raise GraphQLError(f"Internal server error: {e}")
+            raise GraphQLError("Internal server error")
 
     @strawberry.mutation
     async def save_scenario_preset(
