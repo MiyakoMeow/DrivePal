@@ -160,9 +160,11 @@ class AgentWorkflow:
 
         constraints_block = ""
         driving_context = state.get("driving_context")
+        postpone = False
         if driving_context:
             constraints = apply_rules(driving_context)
             constraints_block = "\n\n" + format_constraints(constraints)
+            postpone = constraints.get("postpone", False)
 
         prompt = f"""{SYSTEM_PROMPTS["strategy"]}
 
@@ -173,6 +175,7 @@ class AgentWorkflow:
 请输出JSON格式的决策结果. """
 
         decision = await self._call_llm_json(prompt)
+        decision["postpone"] = postpone
         if stages is not None:
             stages.decision = decision
         return {
@@ -186,6 +189,21 @@ class AgentWorkflow:
         messages = state.get("messages", [])
         user_input = str(messages[0].get("content", "")) if messages else ""
         stages = state.get("stages")
+
+        if decision.get("postpone"):
+            result = "提醒已延后：当前驾驶状态不适合发送提醒"
+            event_id = None
+            if stages is not None:
+                stages.execution = {
+                    "content": None,
+                    "event_id": None,
+                    "result": result,
+                }
+            return {
+                "result": result,
+                "event_id": None,
+                "messages": state["messages"] + [{"role": "user", "content": result}],
+            }
 
         remind_content = decision.get("reminder_content") or decision.get(
             "remind_content"

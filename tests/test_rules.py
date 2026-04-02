@@ -118,7 +118,7 @@ def test_missing_field_not_constraining() -> None:
 
 
 def test_empty_intersection_fallback() -> None:
-    """allowed_channels 交集为空时回退到最后一条定义该字段的规则（最低优先级）."""
+    """allowed_channels 交集为空时回退到默认通道."""
     rules = [
         Rule(
             name="a",
@@ -136,7 +136,7 @@ def test_empty_intersection_fallback() -> None:
     result = apply_rules(
         {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules
     )
-    assert result["allowed_channels"] == ["visual"]
+    assert result["allowed_channels"] == ["audio", "detailed", "visual"]
 
 
 def test_format_constraints() -> None:

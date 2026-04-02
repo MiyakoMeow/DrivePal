@@ -17,6 +17,47 @@ class MemoryModeEnum(Enum):
     MEMOCHAT = "memochat"
 
 
+@strawberry.enum
+class EmotionEnum(Enum):
+    """驾驶员情绪枚举."""
+
+    NEUTRAL = "neutral"
+    ANXIOUS = "anxious"
+    FATIGUED = "fatigued"
+    CALM = "calm"
+    ANGRY = "angry"
+
+
+@strawberry.enum
+class WorkloadEnum(Enum):
+    """工作负荷枚举."""
+
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    OVERLOADED = "overloaded"
+
+
+@strawberry.enum
+class CongestionLevelEnum(Enum):
+    """拥堵等级枚举."""
+
+    SMOOTH = "smooth"
+    SLOW = "slow"
+    CONGESTED = "congested"
+    BLOCKED = "blocked"
+
+
+@strawberry.enum
+class ScenarioEnum(Enum):
+    """驾驶场景枚举."""
+
+    PARKED = "parked"
+    CITY_DRIVING = "city_driving"
+    HIGHWAY = "highway"
+    TRAFFIC_JAM = "traffic_jam"
+
+
 @strawberry.input
 class GeoLocationInput:
     """地理位置输入."""
@@ -31,8 +72,8 @@ class GeoLocationInput:
 class DriverStateInput:
     """驾驶员状态输入."""
 
-    emotion: str = "neutral"
-    workload: str = "normal"
+    emotion: EmotionEnum = EmotionEnum.NEUTRAL
+    workload: WorkloadEnum = WorkloadEnum.NORMAL
     fatigue_level: float = 0.0
 
 
@@ -50,7 +91,7 @@ class SpatioTemporalContextInput:
 class TrafficConditionInput:
     """交通状况输入."""
 
-    congestion_level: str = "smooth"
+    congestion_level: CongestionLevelEnum = CongestionLevelEnum.SMOOTH
     incidents: list[str] = strawberry.field(default_factory=list)
     estimated_delay_minutes: int = 0
 
@@ -62,7 +103,7 @@ class DrivingContextInput:
     driver: Optional[DriverStateInput] = None
     spatial: Optional[SpatioTemporalContextInput] = None
     traffic: Optional[TrafficConditionInput] = None
-    scenario: str = "parked"
+    scenario: ScenarioEnum = ScenarioEnum.PARKED
 
 
 @strawberry.input

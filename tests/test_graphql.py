@@ -51,7 +51,7 @@ def test_save_scenario_preset(client: TestClient) -> None:
             }
         }
     """,
-        {"name": "test-highway", "ctx": {"scenario": "highway"}},
+        {"name": "test-highway", "ctx": {"scenario": "HIGHWAY"}},
     )
     assert "data" in result
     preset = result["data"]["saveScenarioPreset"]
@@ -67,7 +67,7 @@ def test_delete_scenario_preset(client: TestClient) -> None:
             saveScenarioPreset(input: { name: $name, context: $ctx }) { id }
         }
     """,
-        {"name": "to-delete", "ctx": {"scenario": "parked"}},
+        {"name": "to-delete", "ctx": {"scenario": "PARKED"}},
     )
     preset_id = result["data"]["saveScenarioPreset"]["id"]
 

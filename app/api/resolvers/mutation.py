@@ -43,16 +43,23 @@ def _preset_store() -> TOMLStore:
 
 def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
     result: dict[str, Any] = {
-        "scenario": input_obj.scenario,
+        "scenario": input_obj.scenario.value
+        if hasattr(input_obj.scenario, "value")
+        else input_obj.scenario,
         "driver": {},
         "spatial": {},
         "traffic": {},
     }
     if input_obj.driver:
+        driver = input_obj.driver
         result["driver"] = {
-            "emotion": input_obj.driver.emotion,
-            "workload": input_obj.driver.workload,
-            "fatigue_level": input_obj.driver.fatigue_level,
+            "emotion": driver.emotion.value
+            if hasattr(driver.emotion, "value")
+            else driver.emotion,
+            "workload": driver.workload.value
+            if hasattr(driver.workload, "value")
+            else driver.workload,
+            "fatigue_level": driver.fatigue_level,
         }
     if input_obj.spatial:
         spatial: dict[str, Any] = {"current_location": {}}
@@ -76,10 +83,13 @@ def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
             spatial["heading"] = input_obj.spatial.heading
         result["spatial"] = spatial
     if input_obj.traffic:
+        traffic = input_obj.traffic
         result["traffic"] = {
-            "congestion_level": input_obj.traffic.congestion_level,
-            "incidents": input_obj.traffic.incidents,
-            "estimated_delay_minutes": input_obj.traffic.estimated_delay_minutes,
+            "congestion_level": traffic.congestion_level.value
+            if hasattr(traffic.congestion_level, "value")
+            else traffic.congestion_level,
+            "incidents": traffic.incidents,
+            "estimated_delay_minutes": traffic.estimated_delay_minutes,
         }
     return result
 
