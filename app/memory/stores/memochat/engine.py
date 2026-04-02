@@ -67,6 +67,12 @@ def _parse_json_outputs(text: str) -> list[dict]:
                 end_val = entry.get("end")
                 if not isinstance(start_val, int) or not isinstance(end_val, int):
                     continue
+                topic = entry.get("topic")
+                summary = entry.get("summary")
+                if topic is not None and not isinstance(topic, str):
+                    entry["topic"] = str(topic)
+                if summary is not None and not isinstance(summary, str):
+                    entry["summary"] = str(summary)
                 valid_entries.append(entry)
             return valid_entries
     except (json.JSONDecodeError, TypeError):

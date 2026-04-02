@@ -45,12 +45,12 @@ class MemoChatStore:
     @property
     def events_store(self) -> TOMLStore:
         """事件存储."""
-        return self._storage._store
+        return self._storage.store
 
     @property
     def strategies_store(self) -> TOMLStore:
         """策略存储."""
-        return self._feedback._strategies_store
+        return self._feedback.strategies_store
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件，创建 memo 条目."""
@@ -83,8 +83,8 @@ class MemoChatStore:
         all_entries: list[tuple[str, dict]] = [
             (topic, entry)
             for topic, entries in memos.items()
-            if topic != "NOTO"
             for entry in entries
+            if entry.get("id") and entry.get("created_at")
         ]
         all_entries.sort(key=lambda x: x[1].get("created_at", ""), reverse=True)
         results = []
@@ -119,9 +119,11 @@ class MemoChatStore:
             "query": query,
             "response": response,
             "timestamp": now.isoformat(),
+            "event_type": event_type,
         }
-        await self._engine._interactions_store.append(interaction)
-        await self._engine.append_recent_dialog(f"user: {query}")
-        await self._engine.append_recent_dialog(f"bot: {response}")
+        async with self._write_lock:
+            await self._engine._interactions_store.append(interaction)
+            await self._engine.append_recent_dialog(f"user: {query}")
+            await self._engine.append_recent_dialog(f"bot: {response}")
         await self._engine._summarize_if_needed()
         return interaction_id

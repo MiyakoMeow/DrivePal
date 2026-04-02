@@ -29,6 +29,11 @@ class EventStorage:
         self._store = TOMLStore(data_dir, Path("events.toml"), list)
         self.data_dir = data_dir
 
+    @property
+    def store(self) -> TOMLStore:
+        """事件存储."""
+        return self._store
+
     def generate_id(self) -> str:
         """生成唯一事件 ID."""
         return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -82,6 +87,11 @@ class FeedbackManager:
         """初始化反馈管理器."""
         self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
         self.data_dir = data_dir
+
+    @property
+    def strategies_store(self) -> TOMLStore:
+        """策略存储."""
+        return self._strategies_store
 
     async def _get_lock(self) -> asyncio.Lock:
         async with _strategy_locks_lock:

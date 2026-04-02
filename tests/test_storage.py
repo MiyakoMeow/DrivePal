@@ -2,19 +2,13 @@
 
 from pathlib import Path
 
-import pytest
 from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent
-from app.models.settings import LLMProviderConfig
 from app.storage.init_data import init_storage
 
 
-async def test_events_persist_across_instances(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
-) -> None:
+async def test_events_persist_across_instances(tmp_path: Path) -> None:
     """Verify that events persist when creating a new MemoryModule instance."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
     init_storage(tmp_path)
     m1 = MemoryModule(tmp_path)
     await m1.write(MemoryEvent(content="项目进度会议", type="meeting"))
@@ -24,12 +18,8 @@ async def test_events_persist_across_instances(
     assert events[0].content == "项目进度会议"
 
 
-async def test_feedback_updates_strategies(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
-) -> None:
+async def test_feedback_updates_strategies(tmp_path: Path) -> None:
     """Verify that accepting feedback increases the corresponding strategy weight."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
     from app.storage.toml_store import TOMLStore
 
     memory = MemoryModule(tmp_path)
@@ -41,12 +31,8 @@ async def test_feedback_updates_strategies(
     assert strategies["reminder_weights"]["meeting"] == 0.6
 
 
-async def test_ignore_feedback_decreases_weight(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
-) -> None:
+async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
     """Verify that ignoring feedback decreases the corresponding strategy weight."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
     from app.storage.toml_store import TOMLStore
 
     memory = MemoryModule(tmp_path)
@@ -58,12 +44,8 @@ async def test_ignore_feedback_decreases_weight(
     assert strategies["reminder_weights"]["general"] < 0.5
 
 
-async def test_feedback_history_appended(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
-) -> None:
+async def test_feedback_history_appended(tmp_path: Path) -> None:
     """Verify that each feedback entry is appended to the feedback history."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
     from app.storage.toml_store import TOMLStore
 
     memory = MemoryModule(tmp_path)

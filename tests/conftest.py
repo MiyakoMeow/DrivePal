@@ -22,7 +22,7 @@ def get_available_provider() -> LLMProviderConfig | None:
 
     for provider in providers:
         if not provider.provider.base_url:
-            continue
+            return provider
         try:
             import requests
 
@@ -58,3 +58,11 @@ SKIP_IF_NO_LLM = pytest.mark.skipif(
 def llm_provider() -> LLMProviderConfig | None:
     """返回可达的 LLM provider（若有），否则 None。"""
     return get_available_provider()
+
+
+@pytest.fixture
+def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProviderConfig:
+    """返回可用 provider；不可用时直接 skip。"""
+    if llm_provider is None:
+        pytest.skip("No LLM provider available")
+    return llm_provider
