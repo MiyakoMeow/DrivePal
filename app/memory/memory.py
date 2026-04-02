@@ -61,7 +61,7 @@ class MemoryModule:
             self._chat_model = get_chat_model()
         return self._chat_model
 
-    async def _get_store(self, mode: MemoryMode) -> MemoryStore:
+    async def _locked_get_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in self._stores:
             async with self._stores_lock:
                 if mode not in self._stores:
@@ -95,7 +95,7 @@ class MemoryModule:
 
     async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
         """写入记忆事件."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._locked_get_store(self._resolve_mode(mode))
         return await store.write(event)
 
     async def write_interaction(
@@ -107,7 +107,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
     ) -> str:
         """写入交互记录."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._locked_get_store(self._resolve_mode(mode))
         if not getattr(store, "supports_interaction", False):
             raise NotImplementedError(
                 f"Store '{store.store_name}' does not support write_interaction"
@@ -118,19 +118,19 @@ class MemoryModule:
         self, query: str, top_k: int = 10, *, mode: MemoryMode | None = None
     ) -> list[SearchResult]:
         """搜索记忆内容."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._locked_get_store(self._resolve_mode(mode))
         return await store.search(query, top_k=top_k)
 
     async def get_history(
         self, limit: int = 10, *, mode: MemoryMode | None = None
     ) -> list[MemoryEvent]:
         """获取历史记忆事件."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._locked_get_store(self._resolve_mode(mode))
         return await store.get_history(limit)
 
     async def update_feedback(
         self, event_id: str, feedback: FeedbackData, *, mode: MemoryMode | None = None
     ) -> None:
         """更新记忆反馈."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._locked_get_store(self._resolve_mode(mode))
         await store.update_feedback(event_id, feedback)

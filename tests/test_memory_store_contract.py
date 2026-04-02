@@ -42,7 +42,7 @@ class TestMemoryStoreContract:
             from app.models.chat import ChatModel
 
             mm._chat_model = ChatModel(providers=[llm_provider])
-        return await mm._get_store(MemoryMode(request.param))
+        return await mm._locked_get_store(MemoryMode(request.param))
 
     async def test_write_returns_string_id(self, store: "MemoryStore") -> None:
         """验证 write 返回一个字符串 ID."""
