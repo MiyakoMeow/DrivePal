@@ -63,10 +63,7 @@ class MemoChatStore:
             "last_recall_date": datetime.now(timezone.utc).date().isoformat(),
         }
         topic = event.type or "general"
-        async with self._write_lock:
-            memos = await self._engine.read_memos()
-            memos.setdefault(topic, []).append(memo_entry)
-            await self._engine._write_memos(memos)
+        await self._engine.append_memo(topic, memo_entry)
         event_copy = event.model_copy(deep=True)
         event_copy.id = memo_entry["id"]
         event_copy.created_at = memo_entry["created_at"]

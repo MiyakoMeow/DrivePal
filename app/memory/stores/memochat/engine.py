@@ -69,11 +69,22 @@ def _parse_json_outputs(text: str) -> list[dict]:
                     continue
                 topic = entry.get("topic")
                 summary = entry.get("summary")
-                if topic is not None and not isinstance(topic, str):
-                    entry["topic"] = str(topic)
-                if summary is not None and not isinstance(summary, str):
-                    entry["summary"] = str(summary)
-                valid_entries.append(entry)
+                if topic is None:
+                    topic = "NOTO"
+                elif not isinstance(topic, str):
+                    topic = str(topic)
+                if summary is None:
+                    summary = ""
+                elif not isinstance(summary, str):
+                    summary = str(summary)
+                valid_entries.append(
+                    {
+                        "topic": topic,
+                        "summary": summary,
+                        "start": start_val,
+                        "end": end_val,
+                    }
+                )
             return valid_entries
     except (json.JSONDecodeError, TypeError):
         pass
@@ -144,6 +155,13 @@ class MemoChatEngine:
 
     async def _write_memos(self, memos: dict) -> None:
         await self._memos_store.write(memos)
+
+    async def append_memo(self, topic: str, memo_entry: dict) -> None:
+        """追加 memo 条目，受摘要锁保护."""
+        async with self._summary_lock:
+            memos = await self.read_memos()
+            memos.setdefault(topic, []).append(memo_entry)
+            await self._write_memos(memos)
 
     async def read_interactions(self) -> list[dict]:
         """读取全部交互记录."""

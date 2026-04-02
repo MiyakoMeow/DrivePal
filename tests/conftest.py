@@ -20,9 +20,11 @@ def get_available_provider() -> LLMProviderConfig | None:
     except (KeyError, ValueError, RuntimeError):
         return None
 
+    fallback_provider: LLMProviderConfig | None = None
     for provider in providers:
         if not provider.provider.base_url:
-            return provider
+            fallback_provider = fallback_provider or provider
+            continue
         try:
             import requests
 
@@ -40,18 +42,7 @@ def get_available_provider() -> LLMProviderConfig | None:
                 return provider
         except Exception:
             continue
-    return None
-
-
-def is_llm_available() -> bool:
-    """检查外部 LLM 是否已配置并可响应."""
-    return get_available_provider() is not None
-
-
-SKIP_IF_NO_LLM = pytest.mark.skipif(
-    not is_llm_available(),
-    reason="LLM API 不可用",
-)
+    return fallback_provider
 
 
 @pytest.fixture
