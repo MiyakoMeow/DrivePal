@@ -20,3 +20,21 @@
 - **禁止**在公共API方法中直接使用锁
 - 公共API通过调用对应的 `_locked_` 方法间接获得线程安全
 - TOMLStore 等底层存储的内部锁机制作为实现细节，不受此规则约束
+
+## Skills
+
+- **项目特定Skills目录：** `.agents/skills/`
+- **使用时机：** 如果任务匹配可用skill描述，立即通过 `skill` 工具加载
+- **技能列表：**
+  - `brainstorming` - 任何创意工作前（创建功能、组件、添加功能或修改行为）
+  - `python-design-patterns` - 设计新服务或组件时
+  - `python-error-handling` - 实现验证逻辑、异常策略
+  - `python-observability` - 添加日志、指标收集、追踪
+  - `python-resilience` - 添加重试逻辑、超时、容错
+  - `python-testing-patterns` - 编写Python测试
+  - `rag-implementation` - 实现RAG系统
+  - `langchain-architecture` - 使用LangChain/LangGraph构建应用
+  - `prompt-engineering-patterns` - 优化提示模板
+  - `python-type-safety` - 添加类型注解、泛型
+  - `python-code-style` - 代码风格、lint配置
+  - `verification-before-completion` - 任务完成前验证
