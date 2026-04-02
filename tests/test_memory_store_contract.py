@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from typing import Any, cast, TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+
+if TYPE_CHECKING:
+    from app.models.settings import LLMProviderConfig
 
 if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
@@ -23,17 +25,20 @@ class TestMemoryStoreContract:
 
     @pytest.fixture(params=_get_store_params())
     async def store(
-        self, request: pytest.FixtureRequest, tmp_path: Path
+        self,
+        request: pytest.FixtureRequest,
+        tmp_path: Path,
+        llm_provider: LLMProviderConfig | None,
     ) -> "MemoryStore":
         """提供参数化的 MemoryStore 实例."""
         from app.memory.memory import MemoryModule
         from app.memory.types import MemoryMode
 
         mm = MemoryModule(tmp_path)
-        if request.param == "memochat":
-            mock_chat = MagicMock()
-            mock_chat.generate = AsyncMock(return_value="无相关主题")
-            mm._chat_model = mock_chat
+        if request.param == "memochat" and llm_provider is not None:
+            from app.models.chat import ChatModel
+
+            mm._chat_model = ChatModel(providers=[llm_provider])
         return await mm._get_store(MemoryMode(request.param))
 
     async def test_write_returns_string_id(self, store: "MemoryStore") -> None:

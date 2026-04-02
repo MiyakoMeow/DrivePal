@@ -5,16 +5,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.stores.memory_bank.summarization import (
     DAILY_SUMMARY_THRESHOLD,
     OVERALL_SUMMARY_THRESHOLD,
 )
-
-from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
-from tests.conftest import SKIP_IF_NO_LLM
+from app.models.settings import LLMProviderConfig
 
 
 @pytest.fixture
@@ -163,12 +162,15 @@ class TestUpdateEventSummary:
         assert events[0]["content"] == "提醒我明天上午开会"
 
 
-@SKIP_IF_NO_LLM
 class TestMemoryModuleIntegration:
     """MemoryModule 与记忆库的完整集成测试."""
 
-    async def test_write_interaction_flow(self, tmp_path: Path) -> None:
+    async def test_write_interaction_flow(
+        self, tmp_path: Path, llm_provider: LLMProviderConfig | None
+    ) -> None:
         """验证端到端的写入交互和搜索流程."""
+        if llm_provider is None:
+            pytest.skip("No LLM provider available")
         memory = MemoryModule(tmp_path)
         await memory.write_interaction("测试查询", "测试回复")
         results = await memory.search("测试", mode=MemoryMode.MEMORY_BANK)
