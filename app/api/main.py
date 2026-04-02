@@ -8,6 +8,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import strawberry
 import strawberry.fastapi
 
@@ -29,6 +30,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
+app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
 
 def _ensure_memory_module() -> MemoryModule:
