@@ -74,11 +74,10 @@ class PersonalityManager:
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
 
-    async def strengthen(self, matched_date_groups: list[str]) -> None:
-        """强化匹配到的人格摘要的 memory_strength 和 last_recall_date."""
-        if not matched_date_groups:
-            return
-        today = datetime.now(timezone.utc).date().isoformat()
+    async def _locked_strengthen(
+        self, matched_date_groups: list[str], today: str
+    ) -> None:
+        """持锁强化匹配到的人格摘要."""
         async with self._personality_lock:
             personality_data = await self._store.read()
             current_daily = personality_data.get("daily_personality", {})
@@ -93,6 +92,66 @@ class PersonalityManager:
             if updated:
                 personality_data["daily_personality"] = current_daily
                 await self._store.write(personality_data)
+
+    async def strengthen(self, matched_date_groups: list[str]) -> None:
+        """强化匹配到的人格摘要的 memory_strength 和 last_recall_date."""
+        if not matched_date_groups:
+            return
+        today = datetime.now(timezone.utc).date().isoformat()
+        await self._locked_strengthen(matched_date_groups, today)
+
+    async def _locked_check_summarize(
+        self,
+        date_group: str,
+        group_interactions: list[dict],
+        latest_source_ts: str,
+    ) -> tuple[bool, str]:
+        """持锁检查是否需要生成人格摘要，返回 (should_generate, combined_text)."""
+        async with self._personality_lock:
+            personality_data = await self._store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            if date_group in daily_personality:
+                existing = daily_personality[date_group]
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("interaction_count", 0) >= len(group_interactions)
+                    and existing.get("source_updated_at", "") >= latest_source_ts
+                ):
+                    return False, ""
+            combined = "\n".join(
+                f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
+                for i in group_interactions
+            )
+            return True, combined
+
+    async def _locked_save_personality(
+        self,
+        date_group: str,
+        summary_text: str,
+        interaction_count: int,
+        latest_source_ts: str,
+    ) -> bool:
+        """持锁写入人格摘要，返回是否需要更新总体."""
+        async with self._personality_lock:
+            personality_data = await self._store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            daily_personality[date_group] = {
+                "content": summary_text,
+                "memory_strength": 1,
+                "last_recall_date": date_group,
+                "interaction_count": interaction_count,
+                "source_updated_at": latest_source_ts,
+            }
+            personality_data["daily_personality"] = daily_personality
+            await self._store.write(personality_data)
+            return len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD
+
+    async def _locked_write_overall_personality(self, overall_text: str) -> None:
+        """持锁写入总体人格."""
+        async with self._personality_lock:
+            personality_data = await self._store.read()
+            personality_data["overall_personality"] = overall_text
+            await self._store.write(personality_data)
 
     async def maybe_summarize(
         self,
@@ -116,23 +175,9 @@ class PersonalityManager:
             (e.get("updated_at") or e.get("created_at", "") for e in group_events),
             default="",
         )
-        should_generate = False
-        async with self._personality_lock:
-            personality_data = await self._store.read()
-            daily_personality = personality_data.get("daily_personality", {})
-            if date_group in daily_personality:
-                existing = daily_personality[date_group]
-                if (
-                    isinstance(existing, dict)
-                    and existing.get("interaction_count", 0) >= len(group_interactions)
-                    and existing.get("source_updated_at", "") >= latest_source_ts
-                ):
-                    return
-            should_generate = True
-            combined = "\n".join(
-                f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
-                for i in group_interactions
-            )
+        should_generate, combined = await self._locked_check_summarize(
+            date_group, group_interactions, latest_source_ts
+        )
         if not should_generate:
             return
         prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
@@ -148,30 +193,15 @@ class PersonalityManager:
                 "Failed to generate personality summary for date_group=%s", date_group
             )
             return
-        needs_overall_update = False
-        async with self._personality_lock:
-            personality_data = await self._store.read()
-            daily_personality = personality_data.get("daily_personality", {})
-            daily_personality[date_group] = {
-                "content": summary_text,
-                "memory_strength": 1,
-                "last_recall_date": date_group,
-                "interaction_count": len(group_interactions),
-                "source_updated_at": latest_source_ts,
-            }
-            personality_data["daily_personality"] = daily_personality
-            await self._store.write(personality_data)
-            if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
-                needs_overall_update = True
+        needs_overall_update = await self._locked_save_personality(
+            date_group, summary_text, len(group_interactions), latest_source_ts
+        )
         if needs_overall_update:
             overall_text = await self.generate_overall_text(
-                personality_data, chat_model
+                await self._store.read(), chat_model
             )
             if overall_text:
-                async with self._personality_lock:
-                    personality_data = await self._store.read()
-                    personality_data["overall_personality"] = overall_text
-                    await self._store.write(personality_data)
+                await self._locked_write_overall_personality(overall_text)
 
     async def generate_overall_text(
         self, personality_data: dict, chat_model: ChatModel | None
