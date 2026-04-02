@@ -1,29 +1,33 @@
 """GraphQL 端点测试."""
 
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Generator
+from unittest.mock import patch
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from fastapi.testclient import TestClient
 
 import pytest
 
 
 @pytest.fixture
-def isolated_app(tmp_path: "Path") -> TestClient:
+def isolated_app(tmp_path: Path) -> Generator[TestClient, None, None]:
     """Each test gets an independent FastAPI app instance."""
     import os
 
     from fastapi.testclient import TestClient
 
-    from app.api.main import app
     from tests.fixtures import reset_all_singletons
 
-    os.environ["DATA_DIR"] = str(tmp_path / "data")
-    reset_all_singletons()
+    data_dir = tmp_path / "data"
+    os.environ["DATA_DIR"] = str(data_dir)
 
-    return TestClient(app)
+    with patch("app.api.main.DATA_DIR", Path(data_dir)):
+        from app.api.main import app
+
+        reset_all_singletons()
+        yield TestClient(app)
+        reset_all_singletons()
 
 
 GRAPHQL_ENDPOINT = "/graphql"
