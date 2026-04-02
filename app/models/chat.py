@@ -76,7 +76,7 @@ class ChatModel:
     async def generate(
         self,
         prompt: str,
-        system_prompt: Optional[str] | None = None,
+        system_prompt: str | None = None,
         **_kwargs: object,
     ) -> str:
         """异步生成回复."""
@@ -100,7 +100,7 @@ class ChatModel:
     async def generate_stream(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         **_kwargs: object,
     ) -> AsyncIterator[str]:
         """流式生成回复."""
