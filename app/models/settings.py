@@ -42,17 +42,8 @@ class LLMProviderConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "LLMProviderConfig":
         """从字典创建配置实例."""
-        model = d.get("model")
-        if model is None:
-            raise ValueError("Missing required field 'model' in provider config")
-        return cls(
-            provider=ProviderConfig(
-                model=model,
-                base_url=d.get("base_url"),
-                api_key=d.get("api_key"),
-            ),
-            temperature=d.get("temperature", 0.7),
-        )
+        provider, extra = _build_provider_config_from_dict(d, {"temperature": 0.7})
+        return cls(provider=provider, **extra)
 
 
 @dataclass
@@ -65,19 +56,8 @@ class EmbeddingProviderConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "EmbeddingProviderConfig":
         """从字典创建配置实例."""
-        model = d.get("model")
-        if model is None:
-            raise ValueError(
-                "Missing required field 'model' in embedding provider config"
-            )
-        return cls(
-            provider=ProviderConfig(
-                model=model,
-                base_url=d.get("base_url"),
-                api_key=d.get("api_key"),
-            ),
-            device=d.get("device"),
-        )
+        provider, extra = _build_provider_config_from_dict(d, {"device": None})
+        return cls(provider=provider, **extra)
 
 
 @dataclass
@@ -90,17 +70,8 @@ class JudgeProviderConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "JudgeProviderConfig":
         """从字典创建配置实例."""
-        model = d.get("model")
-        if model is None:
-            raise ValueError("Missing required field 'model' in judge provider config")
-        return cls(
-            provider=ProviderConfig(
-                model=model,
-                base_url=d.get("base_url"),
-                api_key=d.get("api_key"),
-            ),
-            temperature=d.get("temperature", 0.1),
-        )
+        provider, extra = _build_provider_config_from_dict(d, {"temperature": 0.1})
+        return cls(provider=provider, **extra)
 
 
 @dataclass
@@ -210,6 +181,37 @@ class LLMSettings:
         )
 
 
+def _build_provider_config_from_dict(
+    d: dict,
+    extra_fields: dict[str, Any],
+) -> tuple[ProviderConfig, dict[str, Any]]:
+    """从字典构建 ProviderConfig 和剩余字段.
+
+    Args:
+        d: 配置字典
+        extra_fields: 需要提取的额外字段名到默认值的映射
+
+    Returns:
+        (ProviderConfig, 剩余字段字典) 元组
+
+    Raises:
+        ValueError: model 字段缺失时
+
+    """
+    model = d.get("model")
+    if model is None:
+        raise ValueError("Missing required field 'model' in provider config")
+    provider = ProviderConfig(
+        model=model,
+        base_url=d.get("base_url"),
+        api_key=d.get("api_key"),
+    )
+    result = {}
+    for key, default in extra_fields.items():
+        result[key] = d.get(key, default)
+    return provider, result
+
+
 def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
     """从环境变量构建 provider 配置."""
     model = os.getenv(f"{prefix}_MODEL")
@@ -306,20 +308,22 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
 
 
 def get_judge_model() -> "ChatModel":
-    """从配置创建 judge ChatModel 实例."""
+    """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
+    global _settings_cache
     from app.models.chat import ChatModel
 
-    settings = LLMSettings.load()
-    if settings.judge_provider is None:
+    if _settings_cache is None:
+        _settings_cache = LLMSettings.load()
+    if _settings_cache.judge_provider is None:
         raise RuntimeError(
             "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.toml"
         )
     provider = LLMProviderConfig(
         provider=ProviderConfig(
-            model=settings.judge_provider.provider.model,
-            base_url=settings.judge_provider.provider.base_url,
-            api_key=settings.judge_provider.provider.api_key,
+            model=_settings_cache.judge_provider.provider.model,
+            base_url=_settings_cache.judge_provider.provider.base_url,
+            api_key=_settings_cache.judge_provider.provider.api_key,
         ),
-        temperature=settings.judge_provider.temperature,
+        temperature=_settings_cache.judge_provider.temperature,
     )
     return ChatModel(providers=[provider])

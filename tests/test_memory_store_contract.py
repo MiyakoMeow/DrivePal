@@ -20,6 +20,7 @@ def _get_store_params() -> list[str]:
     return ["memory_bank", "memochat"]
 
 
+@pytest.mark.integration
 class TestMemoryStoreContract:
     """验证所有 MemoryStore 实现满足接口契约."""
 
