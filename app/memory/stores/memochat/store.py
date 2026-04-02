@@ -52,9 +52,18 @@ class MemoChatStore:
         """策略存储."""
         return self._feedback.strategies_store
 
+    async def _locked_write(
+        self, topic: str, memo_entry: dict, event_copy: dict
+    ) -> None:
+        """持锁执行 memo 写入和事件记录."""
+        async with self._write_lock:
+            await self._engine._locked_append_memo(topic, memo_entry)
+            await self._storage.append_raw(event_copy)
+
     async def write(self, event: MemoryEvent) -> str:
         """写入事件，创建 memo 条目."""
         now = datetime.now(timezone.utc)
+        topic = event.type or "general"
         memo_entry = {
             "id": self._storage.generate_id(),
             "summary": event.content,
@@ -63,13 +72,10 @@ class MemoChatStore:
             "memory_strength": 1,
             "last_recall_date": now.isoformat(),
         }
-        topic = event.type or "general"
-        async with self._write_lock:
-            await self._engine._locked_append_memo(topic, memo_entry)
-            event_copy = event.model_copy(deep=True)
-            event_copy.id = memo_entry["id"]
-            event_copy.created_at = memo_entry["created_at"]
-            await self._storage.append_raw(event_copy.model_dump())
+        event_copy = event.model_copy(deep=True)
+        event_copy.id = memo_entry["id"]
+        event_copy.created_at = memo_entry["created_at"]
+        await self._locked_write(topic, memo_entry, event_copy.model_dump())
         return memo_entry["id"]
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
@@ -108,6 +114,13 @@ class MemoChatStore:
         """更新反馈."""
         await self._feedback.update_feedback(event_id, feedback)
 
+    async def _locked_write_interaction(self, interaction: dict) -> None:
+        """持锁执行交互写入和对话记录追加."""
+        async with self._write_lock:
+            await self._engine.append_interaction(interaction)
+            await self._engine.append_recent_dialog(f"user: {interaction['query']}")
+            await self._engine.append_recent_dialog(f"bot: {interaction['response']}")
+
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
@@ -122,9 +135,6 @@ class MemoChatStore:
             "timestamp": now.isoformat(),
             "event_type": event_type,
         }
-        async with self._write_lock:
-            await self._engine.append_interaction(interaction)
-            await self._engine.append_recent_dialog(f"user: {query}")
-            await self._engine.append_recent_dialog(f"bot: {response}")
+        await self._locked_write_interaction(interaction)
         await self._engine.trigger_summarization()
         return interaction_id
