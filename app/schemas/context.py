@@ -31,7 +31,7 @@ class SpatioTemporalContext(BaseModel):
 
     current_location: GeoLocation = Field(default_factory=GeoLocation)
     destination: GeoLocation | None = None
-    eta_minutes: float | None = None
+    eta_minutes: float | None = Field(default=None, ge=0)
     heading: float | None = Field(default=None, ge=0, le=360)
 
 

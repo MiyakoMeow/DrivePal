@@ -1,5 +1,8 @@
 """上下文数据模型测试."""
 
+import pytest
+from pydantic import ValidationError
+
 from app.schemas.context import (
     DriverState,
     GeoLocation,
@@ -18,25 +21,16 @@ def test_driver_state_defaults() -> None:
 
 
 def test_driver_state_invalid_emotion() -> None:
-    import pytest
-    from pydantic import ValidationError
-
     with pytest.raises(ValidationError):
         DriverState.model_validate({"emotion": "happy"})
 
 
 def test_driver_state_invalid_workload() -> None:
-    import pytest
-    from pydantic import ValidationError
-
     with pytest.raises(ValidationError):
         DriverState.model_validate({"workload": "extreme"})
 
 
 def test_driver_state_fatigue_bounds() -> None:
-    import pytest
-    from pydantic import ValidationError
-
     DriverState(fatigue_level=0.0)
     DriverState(fatigue_level=1.0)
     with pytest.raises(ValidationError):
@@ -46,9 +40,6 @@ def test_driver_state_fatigue_bounds() -> None:
 
 
 def test_geo_location_bounds() -> None:
-    import pytest
-    from pydantic import ValidationError
-
     GeoLocation(latitude=90.0, longitude=180.0)
     with pytest.raises(ValidationError):
         GeoLocation.model_validate({"latitude": 91.0})
@@ -71,9 +62,6 @@ def test_traffic_condition_defaults() -> None:
 
 
 def test_traffic_condition_invalid_congestion() -> None:
-    import pytest
-    from pydantic import ValidationError
-
     with pytest.raises(ValidationError):
         TrafficCondition.model_validate({"congestion_level": "unknown"})
 

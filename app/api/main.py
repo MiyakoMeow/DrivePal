@@ -73,10 +73,8 @@ def _mount_graphql() -> None:
 
 _mount_graphql()
 
-webui_path = WEBUI_DIR
-
 
 @app.get("/")
 async def root() -> FileResponse:
     """返回前端 WebUI 入口页面."""
-    return FileResponse(webui_path / "index.html")
+    return FileResponse(WEBUI_DIR / "index.html")

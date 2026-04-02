@@ -27,11 +27,8 @@ from app.api.graphql_schema import (
 from app.memory.schemas import FeedbackData
 from app.memory.types import MemoryMode
 from app.schemas.context import (
-    DriverState,
     DrivingContext,
-    GeoLocation,
     ScenarioPreset,
-    TrafficCondition,
 )
 from app.storage.toml_store import TOMLStore
 
@@ -58,14 +55,14 @@ def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
             "fatigue_level": input_obj.driver.fatigue_level,
         }
     if input_obj.spatial:
-        spatial: dict[str, Any] = {
-            "current_location": {
+        spatial: dict[str, Any] = {"current_location": {}}
+        if input_obj.spatial.current_location:
+            spatial["current_location"] = {
                 "latitude": input_obj.spatial.current_location.latitude,
                 "longitude": input_obj.spatial.current_location.longitude,
                 "address": input_obj.spatial.current_location.address,
                 "speed_kmh": input_obj.spatial.current_location.speed_kmh,
-            },
-        }
+            }
         if input_obj.spatial.destination:
             spatial["destination"] = {
                 "latitude": input_obj.spatial.destination.latitude,
@@ -163,7 +160,8 @@ class Mutation:
 
             driving_context = None
             if input.context:
-                driving_context = _input_to_context_dict(input.context)
+                ctx_dict = _input_to_context_dict(input.context)
+                driving_context = DrivingContext(**ctx_dict).model_dump()
 
             result, event_id, stages = await workflow.run_with_stages(
                 input.query, driving_context
@@ -213,26 +211,7 @@ class Mutation:
         store = _preset_store()
         preset = ScenarioPreset(name=input.name)
         if input.context:
-            ctx_dict = _input_to_context_dict(input.context)
-            preset.context = DrivingContext()
-            if "driver" in ctx_dict and ctx_dict["driver"]:
-                preset.context.driver = DriverState(**ctx_dict["driver"])
-            if "spatial" in ctx_dict and ctx_dict["spatial"]:
-                sp = ctx_dict["spatial"]
-                preset.context.spatial.current_location = GeoLocation(
-                    **sp.get("current_location", {})
-                )
-                if sp.get("destination"):
-                    preset.context.spatial.destination = GeoLocation(
-                        **sp["destination"]
-                    )
-                if sp.get("eta_minutes") is not None:
-                    preset.context.spatial.eta_minutes = sp["eta_minutes"]
-                if sp.get("heading") is not None:
-                    preset.context.spatial.heading = sp["heading"]
-            if "traffic" in ctx_dict and ctx_dict["traffic"]:
-                preset.context.traffic = TrafficCondition(**ctx_dict["traffic"])
-            preset.context.scenario = ctx_dict.get("scenario", "parked")
+            preset.context = DrivingContext(**_input_to_context_dict(input.context))
         await store.append(preset.model_dump())
         return _to_gql_preset(preset.model_dump())
 

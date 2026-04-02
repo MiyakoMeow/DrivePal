@@ -40,7 +40,7 @@ class DriverStateInput:
 class SpatioTemporalContextInput:
     """时空上下文输入."""
 
-    current_location: GeoLocationInput
+    current_location: Optional[GeoLocationInput] = None
     destination: Optional[GeoLocationInput] = None
     eta_minutes: Optional[float] = None
     heading: Optional[float] = None

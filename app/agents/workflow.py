@@ -163,8 +163,6 @@ class AgentWorkflow:
         if driving_context:
             constraints = apply_rules(driving_context)
             constraints_block = "\n\n" + format_constraints(constraints)
-            if stages is not None:
-                stages["constraints"] = constraints
 
         prompt = f"""{SYSTEM_PROMPTS["strategy"]}
 
