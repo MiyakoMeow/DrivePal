@@ -137,6 +137,7 @@ class TestSearch:
         for i in range(SUMMARIZATION_TURN_THRESHOLD):
             await engine.append_recent_dialog(f"user: 今天天气不错{i}")
         await engine._summarize_if_needed()
+        assert mock_chat.generate.called
         mock_chat.generate.reset_mock()
         mock_chat.generate.return_value = "2"
         results = await engine.search("天气")

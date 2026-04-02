@@ -37,8 +37,8 @@ def test_retrieval_instruction_mentions_separator() -> None:
 
 def test_retrieval_mode_values() -> None:
     """RetrievalMode 枚举值正确."""
-    assert RetrievalMode.FULL_LLM == "full_llm"
-    assert RetrievalMode.HYBRID == "hybrid"
+    assert RetrievalMode.FULL_LLM.value == "full_llm"
+    assert RetrievalMode.HYBRID.value == "hybrid"
 
 
 def test_retrieval_mode_is_str() -> None:

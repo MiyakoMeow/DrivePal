@@ -29,12 +29,11 @@ def _parse_selection(output: str, total: int) -> list[int]:
     indices = []
     for part in output.split("#"):
         part = part.strip()
-        try:
-            idx = int(re.sub(r"[^\d]", "", part))
+        match = re.match(r"^(\d+)$", part)
+        if match:
+            idx = int(match.group(1))
             if 1 <= idx <= total:
                 indices.append(idx - 1)
-        except (ValueError, TypeError):
-            continue
     return indices
 
 

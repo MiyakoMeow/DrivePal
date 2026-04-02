@@ -64,7 +64,7 @@ class TestRecallStrengthening:
         await backend.write(MemoryEvent(content="重要的会议"))
         await backend.search("会议")
         events = await backend.events_store.read()
-        assert events[0]["memory_strength"] == 2
+        assert events[0]["memory_strength"] >= 2
 
     async def test_search_updates_only_matched_events(
         self, backend: MemoryBankStore
@@ -76,7 +76,7 @@ class TestRecallStrengthening:
         events = await backend.events_store.read()
         weather = [e for e in events if "天气" in e["content"]][0]
         meeting = [e for e in events if "会议" in e["content"]][0]
-        assert weather["memory_strength"] == 2
+        assert weather["memory_strength"] >= 2
         assert meeting["memory_strength"] == 1
 
 

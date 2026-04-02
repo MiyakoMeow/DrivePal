@@ -35,7 +35,9 @@ class TestMemoryStoreContract:
         from app.memory.types import MemoryMode
 
         mm = MemoryModule(tmp_path)
-        if request.param == "memochat" and llm_provider is not None:
+        if request.param == "memochat":
+            if llm_provider is None:
+                pytest.skip("No LLM provider available")
             from app.models.chat import ChatModel
 
             mm._chat_model = ChatModel(providers=[llm_provider])

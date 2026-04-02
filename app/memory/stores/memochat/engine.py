@@ -221,7 +221,9 @@ class MemoChatEngine:
                 for entry in parsed:
                     topic = entry.get("topic", "NOTO")
                     start = max(1, entry.get("start", 1)) - 1
-                    end = entry.get("end", start + 1)
+                    end = min(entry.get("end", start + 1), line_count)
+                    if start >= end:
+                        continue
                     related = conversation_lines[start:end]
                     memo_item = {
                         "id": self._generate_id(),

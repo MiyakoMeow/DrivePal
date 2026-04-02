@@ -7,6 +7,29 @@ import pytest
 from app.models.settings import LLMSettings, LLMProviderConfig
 
 
+def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
+    """检查 provider 是否可达（发起真实 HTTP 请求）."""
+    if not provider.provider.base_url:
+        return True
+    try:
+        import requests
+    except ImportError:
+        return False
+
+    try:
+        base = provider.provider.base_url.rstrip("/")
+        resp = requests.get(
+            f"{base}/models",
+            headers={"Authorization": f"Bearer {provider.provider.api_key}"}
+            if provider.provider.api_key
+            else {},
+            timeout=5,
+        )
+        return resp.status_code == 200
+    except requests.RequestException:
+        return False
+
+
 @lru_cache(maxsize=1)
 def get_available_provider() -> LLMProviderConfig | None:
     """获取第一个可达的 LLM provider，或 None."""
@@ -25,24 +48,8 @@ def get_available_provider() -> LLMProviderConfig | None:
         if not provider.provider.base_url:
             fallback_provider = fallback_provider or provider
             continue
-        try:
-            import requests
-        except ImportError:
-            continue
-
-        try:
-            base = provider.provider.base_url.rstrip("/")
-            resp = requests.get(
-                f"{base}/models",
-                headers={"Authorization": f"Bearer {provider.provider.api_key}"}
-                if provider.provider.api_key
-                else {},
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                return provider
-        except requests.RequestException:
-            continue
+        if _check_provider_reachable(provider):
+            return provider
     return fallback_provider
 
 

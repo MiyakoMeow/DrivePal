@@ -95,7 +95,9 @@ class MemoChatStore:
                     description=" ### ".join(entry.get("dialogs", [])),
                     memory_strength=entry.get("memory_strength", 1),
                     last_recall_date=entry.get("last_recall_date", ""),
-                    date_group=entry.get("created_at", "")[:10],
+                    date_group=entry.get("created_at", "")[:10]
+                    if entry.get("created_at")
+                    else datetime.now(timezone.utc).date().isoformat(),
                     created_at=entry.get("created_at", ""),
                 )
             )
@@ -123,5 +125,5 @@ class MemoChatStore:
             await self._engine.append_interaction(interaction)
             await self._engine.append_recent_dialog(f"user: {query}")
             await self._engine.append_recent_dialog(f"bot: {response}")
-        await self._engine.trigger_summarization()
+            await self._engine.trigger_summarization()
         return interaction_id

@@ -103,9 +103,27 @@ class FeedbackManager:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
-        feedback_store = TOMLStore(self.data_dir, Path("feedback.toml"), list)
-        await feedback_store.append(feedback.model_dump())
-        await self._update_strategy(event_id, feedback.model_dump())
+        lock = await self._get_lock()
+        async with lock:
+            feedback_store = TOMLStore(self.data_dir, Path("feedback.toml"), list)
+            await feedback_store.append(feedback.model_dump())
+            strategies = await self._strategies_store.read()
+            action = feedback.action
+            event_type = feedback.type
+
+            if "reminder_weights" not in strategies:
+                strategies["reminder_weights"] = {}
+
+            if action == "accept":
+                strategies["reminder_weights"][event_type] = min(
+                    strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
+                )
+            elif action == "ignore":
+                strategies["reminder_weights"][event_type] = max(
+                    strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
+                )
+
+            await self._strategies_store.write(strategies)
 
     async def _update_strategy(self, event_id: str, feedback: dict) -> None:
         lock = await self._get_lock()

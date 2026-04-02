@@ -42,6 +42,8 @@ class TestRetrieveFullLlm:
         topic, entry = results[0]
         assert topic == "天气"
         assert entry["id"] == "id1"
+        assert entry["summary"] == "用户讨论了天气"
+        assert entry["dialogs"] == ["user: 今天天气不错"]
 
     async def test_returns_empty_on_no_match(self, mock_chat: MagicMock) -> None:
         mock_chat.generate.return_value = "3"
