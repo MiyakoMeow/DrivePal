@@ -10,14 +10,21 @@ import strawberry
 import strawberry.fastapi
 
 from app.memory.memory import MemoryModule
+from app.storage.init_data import init_storage
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="知行车秘 - 车载AI智能体")
 
-_data_dir_env = os.getenv("DATA_DIR", "data")
-DATA_DIR = Path(_data_dir_env)
+DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
+WEBUI_DIR = Path(os.getenv("WEBUI_DIR", Path(__file__).parent.parent.parent / "webui"))
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    init_storage(DATA_DIR)
+    logger.info("Data directory initialized: %s", DATA_DIR)
 
 
 def _ensure_memory_module() -> MemoryModule:
@@ -51,7 +58,7 @@ def _mount_graphql() -> None:
 
 _mount_graphql()
 
-webui_path = Path(__file__).parent.parent.parent / "webui"
+webui_path = WEBUI_DIR
 
 
 @app.get("/")

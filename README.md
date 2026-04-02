@@ -313,6 +313,21 @@ mutation { deleteScenarioPreset(id: "abc123") }
 - **历史记录**：查看最近交互记录
 - **GraphQL Playground**：通过底部链接访问高级查询界面
 
+#### 启动方式
+
+WebUI 由 FastAPI 静态文件服务托管，无需单独构建或启动前端开发服务器。数据目录在服务启动时自动初始化。
+
+```bash
+# 1. 安装依赖（首次）
+uv sync
+
+# 2. 启动服务
+python main.py
+```
+
+- 模拟测试工作台：http://localhost:8000
+- GraphQL Playground：http://localhost:8000/graphql
+
 ---
 
 ## 快速开始
@@ -337,13 +352,9 @@ uv sync
 export MINIMAX_API_KEY="your-api-key"
 ```
 
-### 3. 初始化数据目录
+### 3. 启动Web服务
 
-```bash
-python -c "from app.storage.init_data import init_storage; init_storage()"
-```
-
-### 4. 启动Web服务
+数据目录在服务启动时自动初始化，无需手动操作。
 
 ```bash
 python main.py
