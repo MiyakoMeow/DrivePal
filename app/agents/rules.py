@@ -16,10 +16,15 @@ class Rule:
     priority: int = 0
 
 
+SCENARIO_HIGHWAY = "highway"
+SCENARIO_PARKED = "parked"
+WORKLOAD_OVERLOADED = "overloaded"
+
+
 SAFETY_RULES: list[Rule] = [
     Rule(
         name="highway_audio_only",
-        condition=lambda ctx: ctx.get("scenario") == "highway",
+        condition=lambda ctx: ctx.get("scenario") == SCENARIO_HIGHWAY,
         constraint={"allowed_channels": ["audio"], "max_frequency_minutes": 30},
         priority=10,
     ),
@@ -31,13 +36,15 @@ SAFETY_RULES: list[Rule] = [
     ),
     Rule(
         name="overloaded_postpone",
-        condition=lambda ctx: ctx.get("driver", {}).get("workload", "") == "overloaded",
+        condition=lambda ctx: (
+            ctx.get("driver", {}).get("workload", "") == WORKLOAD_OVERLOADED
+        ),
         constraint={"postpone": True},
         priority=15,
     ),
     Rule(
         name="parked_all_channels",
-        condition=lambda ctx: ctx.get("scenario") == "parked",
+        condition=lambda ctx: ctx.get("scenario") == SCENARIO_PARKED,
         constraint={"allowed_channels": ["visual", "audio", "detailed"]},
         priority=5,
     ),

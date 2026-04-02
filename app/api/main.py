@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import strawberry
@@ -19,7 +20,11 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
-WEBUI_DIR = Path(os.getenv("WEBUI_DIR", Path(__file__).parent.parent.parent / "webui"))
+
+_default_webui = Path(__file__).parent.parent.parent / "webui"
+WEBUI_DIR = Path(os.getenv("WEBUI_DIR", _default_webui)).resolve()
+if not WEBUI_DIR.exists():
+    WEBUI_DIR = _default_webui.resolve()
 
 
 @asynccontextmanager
@@ -32,6 +37,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
 

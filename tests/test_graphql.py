@@ -114,3 +114,77 @@ def test_history_query(client: TestClient) -> None:
     )
     assert "data" in result
     assert isinstance(result["data"]["history"], list)
+
+
+@pytest.mark.integration
+def test_process_query_without_context(client: TestClient) -> None:
+    """测试不带上下文的 processQuery mutation（需要 LLM）。"""
+    result = _graphql_query(
+        client,
+        """
+        mutation($query: String!) {
+            processQuery(input: { query: $query, memoryMode: MEMORY_BANK }) {
+                result
+                eventId
+                stages { context task decision execution }
+            }
+        }
+    """,
+        {"query": "明天上午9点有个会议"},
+    )
+    assert "data" in result
+    pqr = result["data"]["processQuery"]
+    assert pqr["result"] is not None
+
+
+@pytest.mark.integration
+def test_process_query_with_context(client: TestClient) -> None:
+    """测试带上下文的 processQuery mutation（验证规则引擎）。"""
+    result = _graphql_query(
+        client,
+        """
+        mutation($input: ProcessQueryInput!) {
+            processQuery(input: $input) {
+                result
+                eventId
+                stages { context task decision execution }
+            }
+        }
+    """,
+        {
+            "input": {
+                "query": "提醒我买牛奶",
+                "memoryMode": "MEMORY_BANK",
+                "context": {
+                    "driver": {
+                        "emotion": "CALM",
+                        "workload": "NORMAL",
+                        "fatigueLevel": 0.2,
+                    },
+                    "spatial": {
+                        "currentLocation": {
+                            "latitude": 39.9042,
+                            "longitude": 116.4074,
+                            "address": "北京市东城区",
+                            "speedKmh": 0,
+                        },
+                        "destination": {
+                            "latitude": 39.9142,
+                            "longitude": 116.4174,
+                            "address": "国贸大厦",
+                        },
+                    },
+                    "traffic": {
+                        "congestionLevel": "SMOOTH",
+                        "incidents": [],
+                        "estimatedDelayMinutes": 0,
+                    },
+                    "scenario": "PARKED",
+                },
+            }
+        },
+    )
+    assert "data" in result
+    pqr = result["data"]["processQuery"]
+    assert pqr["result"] is not None
+    assert pqr["stages"] is not None

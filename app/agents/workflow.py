@@ -131,7 +131,7 @@ class AgentWorkflow:
 
     async def _task_node(self, state: AgentState) -> dict:
         messages = state.get("messages", [])
-        user_input = messages[0].get("content", "") if messages else ""
+        user_input = messages[-1].get("content", "") if messages else ""
         context = state.get("context", {})
         stages = state.get("stages")
 
@@ -187,7 +187,7 @@ class AgentWorkflow:
     async def _execution_node(self, state: AgentState) -> dict:
         decision = state.get("decision") or {}
         messages = state.get("messages", [])
-        user_input = str(messages[0].get("content", "")) if messages else ""
+        user_input = str(messages[-1].get("content", "")) if messages else ""
         stages = state.get("stages")
 
         if decision.get("postpone"):
