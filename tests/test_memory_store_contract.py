@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, cast, TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def _get_store_params() -> list[str]:
-    return ["memory_bank"]
+    return ["memory_bank", "memochat"]
 
 
 class TestMemoryStoreContract:
@@ -29,6 +30,10 @@ class TestMemoryStoreContract:
         from app.memory.types import MemoryMode
 
         mm = MemoryModule(tmp_path)
+        if request.param == "memochat":
+            mock_chat = MagicMock()
+            mock_chat.generate = AsyncMock(return_value="无相关主题")
+            mm._chat_model = mock_chat
         return await mm._get_store(MemoryMode(request.param))
 
     async def test_write_returns_string_id(self, store: "MemoryStore") -> None:

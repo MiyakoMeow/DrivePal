@@ -15,7 +15,12 @@ def is_llm_available() -> bool:
     except RuntimeError:
         return False
 
-    for provider in settings.llm_providers:
+    try:
+        providers = settings.get_model_group_providers("default")
+    except (KeyError, ValueError, RuntimeError):
+        return False
+
+    for provider in providers:
         if not provider.provider.base_url:
             continue
         try:
