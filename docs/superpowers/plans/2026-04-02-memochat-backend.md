@@ -366,12 +366,11 @@ from app.memory.stores.memochat.prompts import (
 )
 from app.memory.stores.memochat.retriever import RetrievalMode
 from app.storage.toml_store import TOMLStore
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
-
-from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
