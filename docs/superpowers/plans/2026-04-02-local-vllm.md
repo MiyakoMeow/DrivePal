@@ -270,53 +270,7 @@ class VLLMChatModel:
 
 
 def _wait_for_engine(engine: AsyncLLMEngine, timeout: float) -> bool:
-    """同步等待 vLLM 引擎模型加载完成."""
-    deadline = time.monotonic() + timeout
-
-    async def _probe() -> bool:
-        async for _ in engine.generate(
-            "hi",
-            SamplingParams(max_tokens=1),
-            request_id="health-check",
-        ):
-            return True
-        return False
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is not None and loop.is_running():
-        import concurrent.futures
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(asyncio.run, _probe())
-            remaining = deadline - time.monotonic()
-            return future.result(timeout=max(remaining, 0.1))
-    else:
-        remaining = deadline - time.monotonic()
-        return asyncio.run_with_timeout(
-            _probe(), timeout=max(remaining, 0.1)
-        )
-```
-
-注意：`asyncio.run_with_timeout` 不存在，应使用：
-
-```python
-    else:
-        remaining = deadline - time.monotonic()
-        try:
-            return asyncio.run(_probe())
-        except Exception:
-            return False
-```
-
-最终 `_wait_for_engine` 实现：
-
-```python
-def _wait_for_engine(engine: AsyncLLMEngine, timeout: float) -> bool:
-    """同步等待 vLLM 引擎模型加载完成."""
+    """同步等待 vLLM 引擎模型加载完成（在新线程中运行 async probe）."""
     import concurrent.futures
 
     async def _probe() -> bool:
@@ -348,56 +302,15 @@ git commit -m "feat: add VLLMChatModel with streaming and availability check"
 - Modify: `app/models/settings.py`
 - Modify: `config/llm.toml`
 
-- [ ] **Step 1: 修改 settings.py — LLMProviderConfig 增加 type 字段**
+- [ ] **Step 1: 修改 settings.py — LLMProviderConfig 增加 type 和 extra 字段**
 
-在 `LLMProviderConfig` dataclass 中添加 `type: str | None = None` 字段。
-
-更新 `from_dict` 方法读取 `type`：
-```python
-@classmethod
-def from_dict(cls, d: dict) -> "LLMProviderConfig":
-    return cls(
-        provider=ProviderConfig(
-            model=d["model"],
-            base_url=d.get("base_url"),
-            api_key=d.get("api_key"),
-        ),
-        temperature=d.get("temperature", 0.7),
-        type=d.get("type"),
-    )
-```
-
-- [ ] **Step 2: 修改 settings.py — get_model_group_providers 读取 type**
-
-在 `get_model_group_providers()` 方法中，构建 `LLMProviderConfig` 时加入 `type` 和 `model`（对 vLLM 类型，model 使用 provider config 中的 `model` 字段）：
-
-```python
-provider_type = provider_config.get("type")
-model_name = (
-    provider_config.get("model", resolved.model_name)
-    if provider_type == "vllm"
-    else resolved.model_name
-)
-result.append(
-    LLMProviderConfig(
-        provider=ProviderConfig(
-            model=model_name,
-            base_url=provider_config.get("base_url"),
-            api_key=api_key,
-        ),
-        temperature=resolved.params.get("temperature", 0.7),
-        type=provider_type,
-    )
-)
-```
-
-同时从 provider config 读取额外参数（如 `tensor_parallel_size`），存入 `LLMProviderConfig` 的新字段 `extra: dict[str, Any] = field(default_factory=dict)`。
-
-完整 `LLMProviderConfig`：
+替换 `settings.py:36-52` 的 `LLMProviderConfig` dataclass 为：
 
 ```python
 @dataclass
 class LLMProviderConfig:
+    """单个 LLM 服务提供商配置."""
+
     provider: ProviderConfig
     temperature: float = 0.7
     type: str | None = None
@@ -416,11 +329,45 @@ class LLMProviderConfig:
         )
 ```
 
-在 `get_model_group_providers` 中读取 extra：
+- [ ] **Step 2: 修改 settings.py — get_model_group_providers 读取 type**
+
+替换 `settings.py:161-188` 中 `get_model_group_providers()` 方法内的 `for ref in model_refs:` 循环体（从 `resolved = resolve_model_string(ref)` 到 `result.append(...)` 结束）为：
 
 ```python
-extra_keys = {"type", "model", "base_url", "api_key", "api_key_env"}
-extra = {k: v for k, v in provider_config.items() if k not in extra_keys}
+    for ref in model_refs:
+        resolved = resolve_model_string(ref)
+        if resolved.provider_name not in self.model_providers:
+            raise ValueError(
+                f"Provider '{resolved.provider_name}' not found in model_providers"
+            )
+        provider_config = self.model_providers[resolved.provider_name]
+        api_key_env = provider_config.get("api_key_env")
+        if api_key_env:
+            api_key: str | None = os.environ.get(api_key_env, "")
+        else:
+            api_key = provider_config.get("api_key")
+
+        provider_type = provider_config.get("type")
+        model_name = (
+            provider_config.get("model", resolved.model_name)
+            if provider_type == "vllm"
+            else resolved.model_name
+        )
+        extra_keys = {"type", "model", "base_url", "api_key", "api_key_env"}
+        extra = {k: v for k, v in provider_config.items() if k not in extra_keys}
+
+        result.append(
+            LLMProviderConfig(
+                provider=ProviderConfig(
+                    model=model_name,
+                    base_url=provider_config.get("base_url"),
+                    api_key=api_key,
+                ),
+                temperature=resolved.params.get("temperature", 0.7),
+                type=provider_type,
+                extra=extra,
+            )
+        )
 ```
 
 - [ ] **Step 3: 修改 settings.py — get_chat_model 工厂路由 + 单例**
