@@ -67,7 +67,7 @@ class TestSummarizeIfNeeded:
     ) -> None:
         for i in range(3):
             await engine.append_recent_dialog(f"user: 短消息{i}")
-        await engine._summarize_if_needed()
+        await engine._locked_summarize_if_needed()
         mock_chat.generate.assert_not_called()
 
     async def test_triggers_summary_on_turn_count(
@@ -80,7 +80,7 @@ class TestSummarizeIfNeeded:
         while len(dialogs) < SUMMARIZATION_TURN_THRESHOLD:
             await engine.append_recent_dialog("user: 填充内容")
             dialogs = await engine.read_recent_dialogs()
-        await engine._summarize_if_needed()
+        await engine._locked_summarize_if_needed()
         mock_chat.generate.assert_called_once()
         dialogs_after = await engine.read_recent_dialogs()
         assert len(dialogs_after) == RECENT_DIALOGS_KEEP_AFTER_SUMMARY
@@ -93,7 +93,7 @@ class TestSummarizeIfNeeded:
         )
         for i in range(SUMMARIZATION_TURN_THRESHOLD):
             await engine.append_recent_dialog(f"user: 今天天气不错{i}")
-        await engine._summarize_if_needed()
+        await engine._locked_summarize_if_needed()
         memos = await engine.read_memos()
         assert "天气" in memos
 
@@ -103,7 +103,7 @@ class TestSummarizeIfNeeded:
         mock_chat.generate.return_value = "无法解析的文本"
         for i in range(SUMMARIZATION_TURN_THRESHOLD):
             await engine.append_recent_dialog(f"user: 内容{i}")
-        await engine._summarize_if_needed()
+        await engine._locked_summarize_if_needed()
         memos = await engine.read_memos()
         assert "NOTO" in memos
         assert len(memos["NOTO"]) > 0
@@ -115,7 +115,7 @@ class TestSummarizeIfNeeded:
         for i in range(SUMMARIZATION_TURN_THRESHOLD):
             await engine.append_recent_dialog(f"user: 内容{i}")
         dialogs_before = await engine.read_recent_dialogs()
-        await engine._summarize_if_needed()
+        await engine._locked_summarize_if_needed()
         dialogs_after = await engine.read_recent_dialogs()
         assert len(dialogs_after) == len(dialogs_before)
 
@@ -136,7 +136,7 @@ class TestSearch:
         )
         for i in range(SUMMARIZATION_TURN_THRESHOLD):
             await engine.append_recent_dialog(f"user: 今天天气不错{i}")
-        await engine._summarize_if_needed()
+        await engine._locked_summarize_if_needed()
         assert mock_chat.generate.called
         mock_chat.generate.reset_mock()
         mock_chat.generate.return_value = "2"

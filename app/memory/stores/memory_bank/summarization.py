@@ -80,27 +80,67 @@ class SummaryManager:
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
 
+    async def _locked_strengthen_summaries(
+        self, matched_keys: list[str], today: str
+    ) -> None:
+        """强化匹配到的摘要的记忆强度（受锁保护）."""
+        summaries = await self._summaries_store.read()
+        current_daily = summaries.get("daily_summaries", {})
+        updated = False
+        for key in matched_keys:
+            if key in current_daily:
+                summary_data = current_daily[key]
+                if isinstance(summary_data, dict):
+                    summary_data["memory_strength"] = (
+                        summary_data.get("memory_strength", 1) + 1
+                    )
+                    summary_data["last_recall_date"] = today
+                    updated = True
+        if updated:
+            summaries["daily_summaries"] = current_daily
+            await self._summaries_store.write(summaries)
+
     async def strengthen_summaries(self, matched_keys: list[str]) -> None:
         """强化匹配到的摘要的记忆强度."""
         if not matched_keys:
             return
         today = datetime.now(timezone.utc).date().isoformat()
+        await self._locked_strengthen_summaries(matched_keys, today)
+
+    async def _locked_maybe_summarize(
+        self, date_group: str, latest_source_ts: str, count: int, summary_text: str
+    ) -> bool:
+        """生成摘要（受锁保护）。返回是否需要更新整体摘要."""
         async with self._lock:
             summaries = await self._summaries_store.read()
-            current_daily = summaries.get("daily_summaries", {})
-            updated = False
-            for key in matched_keys:
-                if key in current_daily:
-                    summary_data = current_daily[key]
-                    if isinstance(summary_data, dict):
-                        summary_data["memory_strength"] = (
-                            summary_data.get("memory_strength", 1) + 1
-                        )
-                        summary_data["last_recall_date"] = today
-                        updated = True
-            if updated:
-                summaries["daily_summaries"] = current_daily
-                await self._summaries_store.write(summaries)
+            daily_summaries = summaries.get("daily_summaries", {})
+            daily_summaries[date_group] = {
+                "content": summary_text,
+                "memory_strength": 1,
+                "last_recall_date": date_group,
+                "event_count": count,
+                "source_updated_at": latest_source_ts,
+            }
+            summaries["daily_summaries"] = daily_summaries
+            await self._summaries_store.write(summaries)
+            return len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD
+
+    async def _locked_should_generate_summary(
+        self, date_group: str, latest_source_ts: str, count: int
+    ) -> bool:
+        """检查是否需要生成摘要（受锁保护）。."""
+        async with self._lock:
+            summaries = await self._summaries_store.read()
+            daily_summaries = summaries.get("daily_summaries", {})
+            if date_group in daily_summaries:
+                existing = daily_summaries[date_group]
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("event_count", 0) >= count
+                    and existing.get("source_updated_at", "") >= latest_source_ts
+                ):
+                    return False
+            return True
 
     async def maybe_summarize(
         self, date_group: str, events: list[dict], chat_model: ChatModel | None
@@ -115,46 +155,29 @@ class SummaryManager:
             (e.get("updated_at") or e.get("created_at", "") for e in events),
             default="",
         )
-        should_generate = False
-        async with self._lock:
-            summaries = await self._summaries_store.read()
-            daily_summaries = summaries.get("daily_summaries", {})
-            if date_group in daily_summaries:
-                existing = daily_summaries[date_group]
-                if (
-                    isinstance(existing, dict)
-                    and existing.get("event_count", 0) >= count
-                    and existing.get("source_updated_at", "") >= latest_source_ts
-                ):
-                    return
-            should_generate = True
-            content = "\n".join(
-                e.get("content", "") for e in events if e.get("content")
-            )
+        should_generate = await self._locked_should_generate_summary(
+            date_group, latest_source_ts, count
+        )
         if not should_generate:
             return
+        content = "\n".join(e.get("content", "") for e in events if e.get("content"))
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
         try:
             summary_text = await chat_model.generate(prompt)
         except Exception:
             return
-        needs_overall_update = False
-        async with self._lock:
-            summaries = await self._summaries_store.read()
-            daily_summaries = summaries.get("daily_summaries", {})
-            daily_summaries[date_group] = {
-                "content": summary_text,
-                "memory_strength": 1,
-                "last_recall_date": date_group,
-                "event_count": count,
-                "source_updated_at": latest_source_ts,
-            }
-            summaries["daily_summaries"] = daily_summaries
-            await self._summaries_store.write(summaries)
-            if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
-                needs_overall_update = True
+        needs_overall_update = await self._locked_maybe_summarize(
+            date_group, latest_source_ts, count, summary_text
+        )
         if needs_overall_update:
             await self.update_overall_summary(chat_model)
+
+    async def _locked_update_overall_summary(self, overall: str) -> None:
+        """更新总体摘要（受锁保护）."""
+        async with self._lock:
+            summaries = await self._summaries_store.read()
+            summaries["overall_summary"] = overall
+            await self._summaries_store.write(summaries)
 
     async def update_overall_summary(self, chat_model: ChatModel | None) -> None:
         """根据日常摘要更新总体摘要."""
@@ -176,7 +199,4 @@ class SummaryManager:
             overall = await chat_model.generate(prompt)
         except Exception:
             return
-        async with self._lock:
-            summaries = await self._summaries_store.read()
-            summaries["overall_summary"] = overall
-            await self._summaries_store.write(summaries)
+        await self._locked_update_overall_summary(overall)

@@ -125,6 +125,12 @@ class FeedbackManager:
 
         await self._strategies_store.write(strategies)
 
+    async def _locked_update_feedback(self, feedback: FeedbackData) -> None:
+        """带锁的反馈更新（内部方法）."""
+        assert feedback.action is not None
+        await self._write_feedback(feedback)
+        await self._update_strategy(feedback.type, feedback.action)
+
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
@@ -133,8 +139,7 @@ class FeedbackManager:
             raise ValueError("action is required")
         lock = await self._get_lock()
         async with lock:
-            await self._write_feedback(feedback)
-            await self._update_strategy(feedback.type, feedback.action)
+            await self._locked_update_feedback(feedback)
 
 
 class SimpleInteractionWriter:

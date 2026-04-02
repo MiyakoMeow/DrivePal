@@ -61,11 +61,17 @@ class MemoryModule:
             self._chat_model = get_chat_model()
         return self._chat_model
 
+    async def _locked_get_store(self, mode: MemoryMode) -> MemoryStore:
+        """获取 store，受锁保护."""
+        if mode not in self._stores:
+            self._stores[mode] = self._create_store(mode)
+        return self._stores[mode]
+
     async def _get_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in self._stores:
             async with self._stores_lock:
                 if mode not in self._stores:
-                    self._stores[mode] = self._create_store(mode)
+                    await self._locked_get_store(mode)
         return self._stores[mode]
 
     def _resolve_mode(self, mode: MemoryMode | None) -> MemoryMode:

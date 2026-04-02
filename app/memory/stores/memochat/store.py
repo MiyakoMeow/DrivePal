@@ -52,8 +52,8 @@ class MemoChatStore:
         """策略存储."""
         return self._feedback.strategies_store
 
-    async def write(self, event: MemoryEvent) -> str:
-        """写入事件，创建 memo 条目."""
+    async def _locked_write(self, event: MemoryEvent) -> str:
+        """写入事件，创建 memo 条目（受锁保护）."""
         now = datetime.now(timezone.utc)
         memo_entry = {
             "id": self._storage.generate_id(),
@@ -71,6 +71,10 @@ class MemoChatStore:
             event_copy.created_at = memo_entry["created_at"]
             await self._storage.append_raw(event_copy.model_dump())
         return memo_entry["id"]
+
+    async def write(self, event: MemoryEvent) -> str:
+        """写入事件，创建 memo 条目."""
+        return await self._locked_write(event)
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆."""
@@ -108,10 +112,10 @@ class MemoChatStore:
         """更新反馈."""
         await self._feedback.update_feedback(event_id, feedback)
 
-    async def write_interaction(
+    async def _locked_write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
-        """写入交互记录."""
+        """写入交互记录（受锁保护）."""
         now = datetime.now(timezone.utc)
         interaction_id = f"{now.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         interaction = {
@@ -126,5 +130,11 @@ class MemoChatStore:
             await self._engine.append_interaction(interaction)
             await self._engine.append_recent_dialog(f"user: {query}")
             await self._engine.append_recent_dialog(f"bot: {response}")
-        await self._engine.trigger_summarization()
+            await self._engine.trigger_summarization()
         return interaction_id
+
+    async def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> str:
+        """写入交互记录."""
+        return await self._locked_write_interaction(query, response, event_type)
