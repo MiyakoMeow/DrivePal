@@ -9,7 +9,6 @@ from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.models.embedding import EmbeddingModel
-from tests.conftest import SKIP_IF_NO_LLM
 
 
 @pytest.fixture(scope="module")
@@ -18,7 +17,6 @@ def embedding() -> EmbeddingModel:
     return EmbeddingModel()
 
 
-@SKIP_IF_NO_LLM
 class TestEmbeddingForMemorySearch:
     """基于嵌入的记忆搜索测试."""
 
@@ -42,7 +40,6 @@ class TestEmbeddingForMemorySearch:
             assert results[0].score < 0.5
 
 
-@SKIP_IF_NO_LLM
 class TestEmbeddingForMemoryBankRetrieval:
     """带遗忘的基于嵌入的记忆库检索测试."""
 

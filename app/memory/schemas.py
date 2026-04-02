@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MemoryEvent(BaseModel):
@@ -37,11 +39,19 @@ class FeedbackData(BaseModel):
     """反馈数据模型."""
 
     event_id: str = ""
-    action: str = ""
+    action: Literal["accept", "ignore"] | None = None
     type: str = "default"
     timestamp: str = ""
     modified_content: str | None = None
     model_config = ConfigDict(extra="allow")
+
+    @field_validator("action")
+    @classmethod
+    def validate_action(cls, v: str | None) -> str | None:
+        """验证 action 值."""
+        if v is not None and v not in ("accept", "ignore"):
+            raise ValueError(f"Invalid action: {v!r}. Must be 'accept' or 'ignore'")
+        return v
 
 
 class SearchResult(BaseModel):

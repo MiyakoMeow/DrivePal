@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import pytest
 
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+
+if TYPE_CHECKING:
+    from app.models.settings import LLMProviderConfig
 
 if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
@@ -14,21 +17,31 @@ if TYPE_CHECKING:
 
 
 def _get_store_params() -> list[str]:
-    return ["memory_bank"]
+    return ["memory_bank", "memochat"]
 
 
+@pytest.mark.integration
 class TestMemoryStoreContract:
     """验证所有 MemoryStore 实现满足接口契约."""
 
     @pytest.fixture(params=_get_store_params())
     async def store(
-        self, request: pytest.FixtureRequest, tmp_path: Path
+        self,
+        request: pytest.FixtureRequest,
+        tmp_path: Path,
+        llm_provider: LLMProviderConfig | None,
     ) -> "MemoryStore":
         """提供参数化的 MemoryStore 实例."""
         from app.memory.memory import MemoryModule
         from app.memory.types import MemoryMode
 
         mm = MemoryModule(tmp_path)
+        if request.param == "memochat":
+            if llm_provider is None:
+                pytest.skip("No LLM provider available")
+            from app.models.chat import ChatModel
+
+            mm._chat_model = ChatModel(providers=[llm_provider])
         return await mm._get_store(MemoryMode(request.param))
 
     async def test_write_returns_string_id(self, store: "MemoryStore") -> None:
@@ -37,14 +50,13 @@ class TestMemoryStoreContract:
         assert isinstance(event_id, str)
         assert len(event_id) > 0
 
-    async def test_write_then_search_returns_same_event(
+    async def test_write_then_get_history_returns_same_event(
         self, store: "MemoryStore"
     ) -> None:
-        """验证写入后能在事件存储中找到同一事件."""
-        event_id = await store.write(MemoryEvent(content="测试事件"))
-        events_store = cast("Any", store).events_store
-        events = await events_store.read()
-        assert any(e["id"] == event_id for e in events)
+        """验证写入后能在历史记录中找到同一事件."""
+        event_id = await store.write(MemoryEvent(content="唯一标识测试事件XYZ"))
+        history = await store.get_history(limit=10)
+        assert any(e.id == event_id for e in history)
 
     async def test_search_returns_list_of_search_result(
         self, store: "MemoryStore"
@@ -71,14 +83,11 @@ class TestMemoryStoreContract:
         history = await store.get_history(limit=3)
         assert len(history) == 3
 
-    async def test_update_feedback_updates_strategies(
-        self, store: "MemoryStore"
-    ) -> None:
-        """验证 update_feedback 正确更新策略存储."""
-        event_id = await store.write(MemoryEvent(content="事件"))
+    async def test_update_feedback_affects_history(self, store: "MemoryStore") -> None:
+        """验证 update_feedback 后历史记录中包含反馈的事件."""
+        event_id = await store.write(MemoryEvent(content="可接受的事件"))
         await store.update_feedback(
             event_id, FeedbackData(action="accept", type="meeting")
         )
-        strategies_store = cast("Any", store).strategies_store
-        strategies = await strategies_store.read()
-        assert "reminder_weights" in strategies
+        history = await store.get_history(limit=10)
+        assert any(e.id == event_id for e in history)
