@@ -1,9 +1,12 @@
 """model_groups 集成测试."""
 
 import tomli_w
-from pathlib import Path
 
 import pytest
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_model_groups_basic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -72,7 +72,7 @@ def get_available_provider() -> LLMProviderConfig | None:
 
     try:
         providers = settings.get_model_group_providers("default")
-    except (KeyError, ValueError, RuntimeError):
+    except KeyError, ValueError, RuntimeError:
         return None
 
     fallback_provider: LLMProviderConfig | None = None

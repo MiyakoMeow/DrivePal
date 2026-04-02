@@ -1,11 +1,14 @@
 """MemoryBankStore 测试 - 仅存储级别测试."""
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.memory.stores.memory_bank import MemoryBankStore
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture

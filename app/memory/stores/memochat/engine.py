@@ -89,7 +89,7 @@ def _parse_json_outputs(text: str) -> list[dict]:
                     }
                 )
             return valid_entries
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         pass
     return _normalize_model_outputs(text)
 

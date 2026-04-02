@@ -1,12 +1,15 @@
 """MemoChatStore 测试."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.memory.schemas import FeedbackData, MemoryEvent
 from app.memory.stores.memochat.store import MemoChatStore
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture

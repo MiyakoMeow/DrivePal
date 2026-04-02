@@ -1,9 +1,12 @@
 """model_config 模块测试."""
 
 import tomli_w
-from pathlib import Path
 
 import pytest
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_get_benchmark_client_returns_openai_instance(

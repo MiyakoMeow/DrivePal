@@ -5,7 +5,10 @@ from fastapi.testclient import TestClient
 import pytest
 
 from app.models.chat import ChatModel
-from app.models.settings import LLMProviderConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.settings import LLMProviderConfig
 
 
 @pytest.fixture

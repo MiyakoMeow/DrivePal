@@ -1,14 +1,14 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
-from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.engine import MemoryBankEngine
-from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
+    from app.storage.toml_store import TOMLStore
+    from pathlib import Path
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
