@@ -116,7 +116,7 @@ class MemoryBankEngine:
         )
 
         if event_ids:
-            await self._strengthen_and_forget(event_ids)
+            await self._locked_strengthen_and_forget(event_ids)
         if summary_keys:
             await self._summary_mgr.strengthen_summaries(summary_keys)
         if personality_keys:
@@ -195,7 +195,7 @@ class MemoryBankEngine:
             result.interactions = interaction_by_event.get(eid, [])
         return results
 
-    async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
+    async def _locked_strengthen_and_forget(self, matched_ids: set[str]) -> None:
         if not matched_ids:
             return
         today = datetime.now(timezone.utc).date().isoformat()
@@ -236,6 +236,49 @@ class MemoryBankEngine:
             if updated:
                 await self._interactions_store.write(all_interactions)
 
+    async def _locked_write_interaction(
+        self,
+        interaction: dict,
+        today: str,
+    ) -> Optional[str]:
+        """持锁执行交互写入和事件关联，返回关联的 event_id 或 None."""
+        async with self._lock:
+            append_event_id = await self._should_append_to_event(interaction)
+            event = None
+            if append_event_id:
+                interaction["event_id"] = append_event_id
+            else:
+                event_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                now_iso = datetime.now(timezone.utc).isoformat()
+                event = {
+                    "id": event_id,
+                    "content": interaction["query"],
+                    "type": interaction.get("event_type", "reminder"),
+                    "interaction_ids": [interaction["id"]],
+                    "created_at": now_iso,
+                    "updated_at": now_iso,
+                    "memory_strength": 1,
+                    "last_recall_date": today,
+                    "date_group": today,
+                }
+                interaction["event_id"] = event_id
+
+            await self._interactions_store.append(interaction)
+
+            if append_event_id:
+                all_events = await self._storage.read_events()
+                for ev in all_events:
+                    if ev.get("id") == append_event_id:
+                        ev.setdefault("interaction_ids", []).append(interaction["id"])
+                        ev["updated_at"] = datetime.now(timezone.utc).isoformat()
+                        break
+                await self._storage.write_events(all_events)
+            else:
+                assert event is not None
+                await self._storage.append_raw(event)
+
+            return append_event_id
+
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
@@ -252,43 +295,10 @@ class MemoryBankEngine:
             "last_recall_date": today,
         }
 
-        async with self._lock:
-            append_event_id = await self._should_append_to_event(interaction)
-            event = None
-            if append_event_id:
-                interaction["event_id"] = append_event_id
-            else:
-                event_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-                now_iso = datetime.now(timezone.utc).isoformat()
-                event = {
-                    "id": event_id,
-                    "content": query,
-                    "type": event_type,
-                    "interaction_ids": [interaction_id],
-                    "created_at": now_iso,
-                    "updated_at": now_iso,
-                    "memory_strength": 1,
-                    "last_recall_date": today,
-                    "date_group": today,
-                }
-                interaction["event_id"] = event_id
-
-            await self._interactions_store.append(interaction)
-
-            if append_event_id:
-                all_events = await self._storage.read_events()
-                for ev in all_events:
-                    if ev.get("id") == append_event_id:
-                        ev.setdefault("interaction_ids", []).append(interaction_id)
-                        ev["updated_at"] = datetime.now(timezone.utc).isoformat()
-                        break
-                await self._storage.write_events(all_events)
-            else:
-                assert event is not None
-                await self._storage.append_raw(event)
+        append_event_id = await self._locked_write_interaction(interaction, today)
 
         if append_event_id:
-            await self._update_event_summary(append_event_id)
+            await self._locked_update_event_summary(append_event_id)
 
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
@@ -324,7 +334,7 @@ class MemoryBankEngine:
             return recent["id"]
         return None
 
-    async def _update_event_summary(self, event_id: str) -> None:
+    async def _locked_update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:
             return
         interactions = await self._interactions_store.read()
