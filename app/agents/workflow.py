@@ -8,15 +8,15 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from app.agents.prompts import SYSTEM_PROMPTS
+from app.agents.rules import apply_rules, format_constraints
+from app.agents.state import AgentState, WorkflowStages
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
 
-if TYPE_CHECKING:
-    from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,6 @@ class AgentWorkflow:
         memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
         memory_module: Optional[MemoryModule] = None,
     ) -> None:
-        """初始化工作流实例."""
         self.data_dir = data_dir
         self._memory_mode = memory_mode
 
@@ -51,7 +50,6 @@ class AgentWorkflow:
         self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
 
     async def _call_llm_json(self, user_prompt: str) -> dict:
-        """构建prompt、调LLM并解析JSON返回dict."""
         if not self.memory_module.chat_model:
             raise RuntimeError("ChatModel not available")
         result = await self.memory_module.chat_model.generate(user_prompt)
@@ -67,9 +65,9 @@ class AgentWorkflow:
         return parsed
 
     async def _context_node(self, state: AgentState) -> dict:
-        """Context Agent节点."""
         messages = state.get("messages", [])
         user_input = "" if not messages else str(messages[-1].get("content", ""))
+        stages = state.get("stages")
 
         try:
             related_events = (
@@ -98,20 +96,31 @@ class AgentWorkflow:
             )
 
         current_datetime = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        system_prompt = SYSTEM_PROMPTS["context"].format(
-            current_datetime=current_datetime
-        )
+        driving_context = state.get("driving_context")
 
-        prompt = f"""{system_prompt}
+        if driving_context:
+            context = dict(driving_context)
+            context["current_datetime"] = current_datetime
+            context["related_events"] = relevant_memories
+            context["relevant_memories"] = relevant_memories
+        else:
+            system_prompt = SYSTEM_PROMPTS["context"].format(
+                current_datetime=current_datetime
+            )
+
+            prompt = f"""{system_prompt}
 
 用户输入: {user_input}
 历史记录: {json.dumps(relevant_memories, ensure_ascii=False)}
 
 请输出JSON格式的上下文对象. """
 
-        context = await self._call_llm_json(prompt)
-        context["related_events"] = relevant_memories
-        context["relevant_memories"] = relevant_memories
+            context = await self._call_llm_json(prompt)
+            context["related_events"] = relevant_memories
+            context["relevant_memories"] = relevant_memories
+
+        if stages is not None:
+            stages["context"] = context
 
         return {
             "context": context,
@@ -120,10 +129,10 @@ class AgentWorkflow:
         }
 
     async def _task_node(self, state: AgentState) -> dict:
-        """Task Agent节点."""
         messages = state.get("messages", [])
         user_input = messages[-1].get("content", "") if messages else ""
         context = state.get("context", {})
+        stages = state.get("stages")
 
         prompt = f"""{SYSTEM_PROMPTS["task"]}
 
@@ -133,6 +142,8 @@ class AgentWorkflow:
 请输出JSON格式的任务对象. """
 
         task = await self._call_llm_json(prompt)
+        if stages is not None:
+            stages["task"] = task
         return {
             "task": task,
             "messages": state["messages"]
@@ -140,21 +151,31 @@ class AgentWorkflow:
         }
 
     async def _strategy_node(self, state: AgentState) -> dict:
-        """Strategy Agent节点."""
         context = state.get("context", {})
         task = state.get("task", {})
+        stages = state.get("stages")
 
         strategies = await self._strategies_store.read()
+
+        constraints_block = ""
+        driving_context = state.get("driving_context")
+        if driving_context:
+            constraints = apply_rules(driving_context)
+            constraints_block = "\n\n" + format_constraints(constraints)
+            if stages is not None:
+                stages["constraints"] = constraints
 
         prompt = f"""{SYSTEM_PROMPTS["strategy"]}
 
 上下文: {json.dumps(context, ensure_ascii=False)}
 任务: {json.dumps(task, ensure_ascii=False)}
-个性化策略: {json.dumps(strategies, ensure_ascii=False)}
+个性化策略: {json.dumps(strategies, ensure_ascii=False)}{constraints_block}
 
 请输出JSON格式的决策结果. """
 
         decision = await self._call_llm_json(prompt)
+        if stages is not None:
+            stages["decision"] = decision
         return {
             "decision": decision,
             "messages": state["messages"]
@@ -162,10 +183,10 @@ class AgentWorkflow:
         }
 
     async def _execution_node(self, state: AgentState) -> dict:
-        """执行提醒动作的Agent节点."""
         decision = state.get("decision") or {}
         messages = state.get("messages", [])
         user_input = str(messages[0].get("content", "")) if messages else ""
+        stages = state.get("stages")
 
         remind_content = decision.get("reminder_content") or decision.get(
             "remind_content"
@@ -186,21 +207,33 @@ class AgentWorkflow:
             event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
 
         result = f"提醒已发送: {content}"
+        if stages is not None:
+            stages["execution"] = {
+                "content": content,
+                "event_id": event_id,
+                "result": result,
+            }
         return {
             "result": result,
             "event_id": event_id,
             "messages": state["messages"] + [{"role": "user", "content": result}],
         }
 
-    async def run(self, user_input: str) -> tuple[str, Optional[str]]:
-        """运行完整工作流并返回结果和事件ID."""
+    async def run_with_stages(
+        self,
+        user_input: str,
+        driving_context: dict | None = None,
+    ) -> tuple[str, Optional[str], WorkflowStages]:
+        stages = WorkflowStages()
         state: AgentState = {
             "messages": [{"role": "user", "content": user_input}],
             "context": {},
-            "task": {},
-            "decision": {},
+            "task": None,
+            "decision": None,
             "result": None,
             "event_id": None,
+            "driving_context": driving_context,
+            "stages": stages.__dict__,
         }
 
         for node_fn in self._nodes:
@@ -209,12 +242,4 @@ class AgentWorkflow:
 
         result = state.get("result") or "处理完成"
         event_id = state.get("event_id")
-        return result, event_id
-
-
-def create_workflow(
-    data_dir: Path = Path("data"),
-    memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
-) -> AgentWorkflow:
-    """创建工作流实例."""
-    return AgentWorkflow(data_dir, memory_mode)
+        return result, event_id, stages

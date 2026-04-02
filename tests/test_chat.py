@@ -48,6 +48,8 @@ async def test_chat_feeds_workflow_context(
         "decision": None,
         "result": None,
         "event_id": None,
+        "driving_context": None,
+        "stages": None,
     }
     result = await workflow._context_node(state)
     assert "related_events" in result["context"]
