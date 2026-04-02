@@ -40,6 +40,18 @@ class TestLLMProviderConfig:
         assert cfg.provider.api_key is None
         assert cfg.temperature == 0.7
 
+    def test_from_dict_with_type(self) -> None:
+        """验证 from_dict 正确解析 type 字段."""
+        cfg = LLMProviderConfig.from_dict(
+            {
+                "model": "Qwen/Qwen3.5-2B",
+                "type": "vllm",
+                "temperature": 0.7,
+            }
+        )
+        assert cfg.type == "vllm"
+        assert cfg.provider.model == "Qwen/Qwen3.5-2B"
+
 
 class TestEmbeddingProviderConfig:
     """EmbeddingProviderConfig 测试."""
@@ -237,6 +249,37 @@ class TestLLMSettingsLoad:
         providers = settings.get_model_group_providers("default")
         assert len(providers) == 1
         assert providers[0].provider.model == "gpt-4"
+        _load_config.cache_clear()
+
+    def test_get_model_group_providers_vllm_type(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证 get_model_group_providers 正确解析 vllm 类型的提供者."""
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(
+            tomli_w.dumps(
+                {
+                    "model_groups": {"default": {"models": ["local/qwen3.5-2b"]}},
+                    "model_providers": {
+                        "local": {
+                            "type": "vllm",
+                            "model": "Qwen/Qwen3.5-2B",
+                            "tensor_parallel_size": 1,
+                        },
+                    },
+                }
+            )
+        )
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        providers = settings.get_model_group_providers("default")
+        assert len(providers) == 1
+        assert providers[0].type == "vllm"
+        assert providers[0].provider.model == "Qwen/Qwen3.5-2B"
+        assert "tensor_parallel_size" in providers[0].extra
         _load_config.cache_clear()
 
 
