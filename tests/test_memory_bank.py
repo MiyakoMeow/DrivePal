@@ -51,7 +51,7 @@ class TestSearchWithForgetting:
         for i in range(10):
             await backend.write(MemoryEvent(content=f"事件{i}关于天气"))
         results = await backend.search("天气")
-        assert len(results) <= 10
+        assert len(results) == 10
 
 
 class TestRecallStrengthening:
@@ -64,7 +64,7 @@ class TestRecallStrengthening:
         await backend.write(MemoryEvent(content="重要的会议"))
         await backend.search("会议")
         events = await backend.events_store.read()
-        assert events[0]["memory_strength"] >= 2
+        assert events[0]["memory_strength"] == 2
 
     async def test_search_updates_only_matched_events(
         self, backend: MemoryBankStore

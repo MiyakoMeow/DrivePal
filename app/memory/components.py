@@ -5,6 +5,7 @@ import math
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.storage.toml_store import TOMLStore
@@ -86,6 +87,7 @@ class FeedbackManager:
     def __init__(self, data_dir: Path) -> None:
         """初始化反馈管理器."""
         self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
+        self._feedback_store = TOMLStore(data_dir, Path("feedback.toml"), list)
         self.data_dir = data_dir
 
     @property
@@ -99,33 +101,40 @@ class FeedbackManager:
                 _strategy_locks[str(self.data_dir)] = asyncio.Lock()
             return _strategy_locks[str(self.data_dir)]
 
+    async def _write_feedback(self, feedback: FeedbackData) -> None:
+        """写入反馈记录."""
+        await self._feedback_store.append(feedback.model_dump())
+
+    async def _update_strategy(
+        self, event_type: str, action: Literal["accept", "ignore"]
+    ) -> None:
+        """更新策略权重."""
+        strategies = await self._strategies_store.read()
+
+        if "reminder_weights" not in strategies:
+            strategies["reminder_weights"] = {}
+
+        if action == "accept":
+            strategies["reminder_weights"][event_type] = min(
+                strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
+            )
+        elif action == "ignore":
+            strategies["reminder_weights"][event_type] = max(
+                strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
+            )
+
+        await self._strategies_store.write(strategies)
+
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(timezone.utc).isoformat()
+        if feedback.action is None:
+            raise ValueError("action is required")
         lock = await self._get_lock()
         async with lock:
-            strategies = await self._strategies_store.read()
-            action = feedback.action
-            event_type = feedback.type
-
-            if "reminder_weights" not in strategies:
-                strategies["reminder_weights"] = {}
-
-            if action == "accept":
-                strategies["reminder_weights"][event_type] = min(
-                    strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
-                )
-            elif action == "ignore":
-                strategies["reminder_weights"][event_type] = max(
-                    strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
-                )
-            else:
-                raise ValueError(f"Invalid action: {action!r}")
-
-            feedback_store = TOMLStore(self.data_dir, Path("feedback.toml"), list)
-            await feedback_store.append(feedback.model_dump())
-            await self._strategies_store.write(strategies)
+            await self._write_feedback(feedback)
+            await self._update_strategy(feedback.type, feedback.action)
 
 
 class SimpleInteractionWriter:

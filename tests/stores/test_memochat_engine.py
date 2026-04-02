@@ -141,7 +141,7 @@ class TestSearch:
         mock_chat.generate.reset_mock()
         mock_chat.generate.return_value = "2"
         results = await engine.search("天气")
-        assert len(results) >= 1
+        assert len(results) == 1
         assert results[0].source == "event"
 
     async def test_search_returns_empty_on_empty_query(

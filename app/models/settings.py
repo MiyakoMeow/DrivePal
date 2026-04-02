@@ -42,9 +42,12 @@ class LLMProviderConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "LLMProviderConfig":
         """从字典创建配置实例."""
+        model = d.get("model")
+        if model is None:
+            raise ValueError("Missing required field 'model' in provider config")
         return cls(
             provider=ProviderConfig(
-                model=d["model"],
+                model=model,
                 base_url=d.get("base_url"),
                 api_key=d.get("api_key"),
             ),
@@ -62,9 +65,14 @@ class EmbeddingProviderConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "EmbeddingProviderConfig":
         """从字典创建配置实例."""
+        model = d.get("model")
+        if model is None:
+            raise ValueError(
+                "Missing required field 'model' in embedding provider config"
+            )
         return cls(
             provider=ProviderConfig(
-                model=d["model"],
+                model=model,
                 base_url=d.get("base_url"),
                 api_key=d.get("api_key"),
             ),
@@ -82,9 +90,12 @@ class JudgeProviderConfig:
     @classmethod
     def from_dict(cls, d: dict) -> "JudgeProviderConfig":
         """从字典创建配置实例."""
+        model = d.get("model")
+        if model is None:
+            raise ValueError("Missing required field 'model' in judge provider config")
         return cls(
             provider=ProviderConfig(
-                model=d["model"],
+                model=model,
                 base_url=d.get("base_url"),
                 api_key=d.get("api_key"),
             ),
@@ -134,30 +145,10 @@ class LLMSettings:
 
         default_providers: list[LLMProviderConfig] = []
         if "default" in model_groups:
-            from adapters.model_config import resolve_model_string
-
-            for ref in model_groups["default"].get("models", []):
-                resolved = resolve_model_string(ref)
-                if resolved.provider_name not in model_providers:
-                    raise ValueError(
-                        f"Provider '{resolved.provider_name}' not found in model_providers"
-                    )
-                provider_config = model_providers[resolved.provider_name]
-                api_key_env = provider_config.get("api_key_env")
-                if api_key_env:
-                    api_key: str = os.environ.get(api_key_env, "")
-                else:
-                    api_key = provider_config.get("api_key")
-                default_providers.append(
-                    LLMProviderConfig(
-                        provider=ProviderConfig(
-                            model=resolved.model_name,
-                            base_url=provider_config.get("base_url"),
-                            api_key=api_key,
-                        ),
-                        temperature=resolved.params.get("temperature", 0.7),
-                    )
-                )
+            default_providers.extend(
+                _build_provider_config_from_ref(ref, model_providers)
+                for ref in model_groups["default"].get("models", [])
+            )
 
         return cls(
             llm_providers=default_providers,
@@ -183,36 +174,14 @@ class LLMSettings:
         if name not in self.model_groups:
             raise KeyError(f"Model group '{name}' not found")
 
-        from adapters.model_config import resolve_model_string
-
         model_refs = self.model_groups[name].get("models", [])
         if not model_refs:
             return []
 
-        result = []
-        for ref in model_refs:
-            resolved = resolve_model_string(ref)
-            if resolved.provider_name not in self.model_providers:
-                raise ValueError(
-                    f"Provider '{resolved.provider_name}' not found in model_providers"
-                )
-            provider_config = self.model_providers[resolved.provider_name]
-            api_key_env = provider_config.get("api_key_env")
-            if api_key_env:
-                api_key: str | None = os.environ.get(api_key_env, "")
-            else:
-                api_key = provider_config.get("api_key")
-            result.append(
-                LLMProviderConfig(
-                    provider=ProviderConfig(
-                        model=resolved.model_name,
-                        base_url=provider_config.get("base_url"),
-                        api_key=api_key,
-                    ),
-                    temperature=resolved.params.get("temperature", 0.7),
-                )
-            )
-        return result
+        return [
+            _build_provider_config_from_ref(ref, self.model_providers)
+            for ref in model_refs
+        ]
 
     def get_embedding_provider(self) -> EmbeddingProviderConfig | None:
         """解析 embedding_model 配置字符串，返回 EmbeddingProviderConfig."""
@@ -255,14 +224,59 @@ def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
     )
 
 
+def _build_provider_config_from_ref(
+    ref: str,
+    model_providers: dict[str, dict],
+) -> LLMProviderConfig:
+    """从模型引用字符串构建 LLMProviderConfig.
+
+    Args:
+        ref: 模型引用字符串，格式为 "provider/model_name"
+        model_providers: 提供商配置字典
+
+    Returns:
+        LLMProviderConfig 实例
+
+    Raises:
+        ValueError: 提供商不存在或引用格式无效
+
+    """
+    from adapters.model_config import resolve_model_string
+
+    resolved = resolve_model_string(ref)
+    if resolved.provider_name not in model_providers:
+        raise ValueError(
+            f"Provider '{resolved.provider_name}' not found in model_providers"
+        )
+    provider_config = model_providers[resolved.provider_name]
+    api_key_env = provider_config.get("api_key_env")
+    if api_key_env:
+        api_key: str | None = os.environ.get(api_key_env, "")
+    else:
+        api_key = provider_config.get("api_key")
+    return LLMProviderConfig(
+        provider=ProviderConfig(
+            model=resolved.model_name,
+            base_url=provider_config.get("base_url"),
+            api_key=api_key,
+        ),
+        temperature=resolved.params.get("temperature", 0.7),
+    )
+
+
+_settings_cache: "LLMSettings | None" = None
+
+
 def get_chat_model(temperature: float | None = None) -> "ChatModel":
-    """从配置创建 ChatModel 实例."""
+    """从配置创建 ChatModel 实例（使用缓存避免重复加载）."""
+    global _settings_cache
     from app.models.chat import ChatModel
 
-    settings = LLMSettings.load()
-    if "default" not in settings.model_groups:
+    if _settings_cache is None:
+        _settings_cache = LLMSettings.load()
+    if "default" not in _settings_cache.model_groups:
         raise RuntimeError("No default model group configured")
-    providers = settings.get_model_group_providers("default")
+    providers = _settings_cache.get_model_group_providers("default")
     return ChatModel(providers=providers, temperature=temperature)
 
 

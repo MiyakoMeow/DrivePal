@@ -16,6 +16,7 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+@pytest.mark.integration
 def test_query_endpoint(
     client: TestClient, llm_provider: LLMProviderConfig | None
 ) -> None:
@@ -32,6 +33,7 @@ def test_query_endpoint(
     assert "event_id" in data
 
 
+@pytest.mark.integration
 def test_feedback_endpoint(
     client: TestClient, llm_provider: LLMProviderConfig | None
 ) -> None:
@@ -46,6 +48,7 @@ def test_feedback_endpoint(
     assert response.json()["status"] == "success"
 
 
+@pytest.mark.integration
 def test_history_endpoint(
     client: TestClient, llm_provider: LLMProviderConfig | None
 ) -> None:

@@ -61,7 +61,7 @@ class MemoChatStore:
             "dialogs": [],
             "created_at": now.isoformat(),
             "memory_strength": 1,
-            "last_recall_date": now.date().isoformat(),
+            "last_recall_date": now.isoformat(),
         }
         topic = event.type or "general"
         async with self._write_lock:

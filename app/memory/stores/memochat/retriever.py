@@ -33,7 +33,7 @@ def _parse_selection(output: str, total: int) -> list[int]:
         if match:
             idx = int(match.group(1))
             if 1 <= idx <= total:
-                indices.append(idx - 1)
+                indices.append(idx)
     return indices
 
 
@@ -66,13 +66,14 @@ async def retrieve_full_llm(
     try:
         raw = await chat_model.generate(prompt)
     except Exception:
-        logger.warning("Retrieval LLM call failed")
+        logger.warning("Retrieval LLM call failed: query=%s", query, exc_info=True)
         return []
     selected_indices = _parse_selection(raw, len(flat))
     results = []
     for idx in selected_indices:
-        if idx < len(flat):
-            topic, entry = flat[idx]
+        zero_idx = idx - 1
+        if zero_idx < len(flat):
+            topic, entry = flat[zero_idx]
             if topic != "NOTO":
                 results.append((topic, entry))
     return results[:top_k]
@@ -109,7 +110,12 @@ async def _coarse_filter(
     try:
         return await _embedding_filter(embedding_model, query, flat, top_k)
     except Exception:
-        logger.warning("Embedding filter failed, falling back to keyword filter")
+        logger.warning(
+            "Embedding filter failed, falling back to keyword filter: query=%s, top_k=%s",
+            query,
+            top_k,
+            exc_info=True,
+        )
         return _keyword_filter(query, flat, top_k)
 
 
@@ -122,6 +128,14 @@ def _keyword_filter(
         text = f"{topic} {entry.get('summary', '')}".lower()
         if query_lower in text:
             scored.append((topic, entry))
+    if len(scored) < top_k:
+        logger.debug(
+            "Keyword filter returned fewer results than requested, "
+            "considering this a fallback search: query=%s, requested=%s, returned=%s",
+            query,
+            top_k,
+            len(scored),
+        )
     return scored[:top_k]
 
 

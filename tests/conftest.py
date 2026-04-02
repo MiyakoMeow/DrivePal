@@ -1,8 +1,43 @@
 """共享测试配置和 fixtures."""
 
+import os
+
 import pytest
 
 from app.models.settings import LLMSettings, LLMProviderConfig
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """注册自定义标记."""
+    config.addinivalue_line("markers", "integration: 集成测试，需要真实的 LLM provider")
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """添加自定义命令行选项."""
+    parser.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="运行集成测试（需要真实 LLM provider）",
+    )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """默认跳过 integration 测试，除非显式启用."""
+    run_integration = (
+        config.getoption("--run-integration", default=False)
+        or os.environ.get("INTEGRATION_TESTS") == "1"
+    )
+    if run_integration:
+        return
+    skip_integration = pytest.mark.skip(
+        reason="需要 --run-integration 标志或 INTEGRATION_TESTS=1 环境变量"
+    )
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
 
 
 def _check_provider_reachable(provider: LLMProviderConfig) -> bool:

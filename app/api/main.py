@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Literal
 import os
 import logging
 
@@ -50,7 +50,7 @@ class FeedbackRequest(BaseModel):
     """用户反馈请求."""
 
     event_id: str
-    action: str
+    action: Literal["accept", "ignore"]
     modified_content: Optional[str] = None
 
 

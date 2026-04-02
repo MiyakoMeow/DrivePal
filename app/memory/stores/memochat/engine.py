@@ -38,13 +38,12 @@ def _normalize_model_outputs(model_text: str) -> list[dict]:
     ]
     outputs: list[dict] = []
     ti = 0
-    while ti + 7 < len(extracted_elements):
+    while ti + 8 <= len(extracted_elements):
         if (
             extracted_elements[ti] == "topic"
             and extracted_elements[ti + 2] == "summary"
             and extracted_elements[ti + 4] == "start"
             and extracted_elements[ti + 6] == "end"
-            and ti + 7 < len(extracted_elements)
         ):
             with contextlib.suppress(ValueError, IndexError):
                 outputs.append(
@@ -128,8 +127,6 @@ class MemoChatEngine:
         self._initialized = False
 
     async def _ensure_initialized(self) -> None:
-        if self._initialized:
-            return
         async with self._init_lock:
             if self._initialized:
                 return
@@ -212,8 +209,12 @@ class MemoChatEngine:
 
             try:
                 raw_output = await self.chat.generate(prompt)
-            except Exception:
-                logger.warning("MemoChat summarization LLM call failed", exc_info=True)
+            except Exception as e:
+                logger.warning(
+                    "MemoChat summarization LLM call failed: %s: %s",
+                    type(e).__name__,
+                    e,
+                )
                 return
 
             parsed = _parse_json_outputs(raw_output)
@@ -240,6 +241,8 @@ class MemoChatEngine:
                     memos[topic].append(memo_item)
             else:
                 n_dialogs = len(conversation_lines)
+                if n_dialogs == 0:
+                    return
                 sample_count = min(2, n_dialogs)
                 sampled = sample(conversation_lines, sample_count)
                 noto_entry = {

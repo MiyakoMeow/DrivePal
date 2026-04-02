@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.agents.state import AgentState
 
 
+@pytest.mark.integration
 async def test_chat_drives_llm_memory_search(
     tmp_path: Path, llm_provider: LLMProviderConfig | None
 ) -> None:
@@ -28,6 +29,7 @@ async def test_chat_drives_llm_memory_search(
     assert "会议" in results[0].event["content"]
 
 
+@pytest.mark.integration
 async def test_chat_feeds_workflow_context(
     tmp_path: Path, llm_provider: LLMProviderConfig | None
 ) -> None:
