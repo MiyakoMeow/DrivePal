@@ -24,7 +24,7 @@ app/api/resolvers/mutation.py   # 新建 — Mutation resolvers
 app/agents/state.py             # 修改 — AgentState 新增 driving_context, stages
 app/agents/workflow.py          # 修改 — 新增 run_with_stages，改造 _context_node, _strategy_node
 app/agents/rules.py             # 新建 — Rule 数据类 + 规则合并逻辑
-app/agents/prompts.py           # 修改 — Strategy prompt 支持约束注入
+
 app/storage/init_data.py        # 修改 — 新增 scenario_presets.toml 初始化
 webui/index.html                # 重写 — 模拟测试工作台
 tests/test_context_schemas.py   # 新建 — 上下文数据模型测试
@@ -241,7 +241,7 @@ git commit -m "feat: add driving context data models"
 # tests/test_rules.py
 """规则引擎测试."""
 
-from app.agents.rules import Rule, apply_rules, SAFETY_RULES
+from app.agents.rules import Rule, apply_rules, format_constraints, SAFETY_RULES
 
 
 def test_rule_dataclass():
@@ -256,9 +256,9 @@ def test_rule_dataclass():
 
 
 def test_no_matching_rules():
-    ctx = {"scenario": "parked", "driver": {"fatigue_level": 0.1, "workload": "low"}}
+    ctx = {"scenario": "city_driving", "driver": {"fatigue_level": 0.1, "workload": "low"}}
     result = apply_rules(ctx, SAFETY_RULES)
-    assert result["allowed_channels"] == ["visual", "audio", "detailed"]
+    assert result["allowed_channels"] == ["audio", "detailed", "visual"]
     assert result["only_urgent"] is False
     assert result["postpone"] is False
 
@@ -313,10 +313,10 @@ def test_missing_field_not_constraining():
 
 
 def test_empty_intersection_fallback():
-    """allowed_channels 交集为空时回退到最后一条定义该字段的规则."""
+    """allowed_channels 交集为空时回退到最后一条定义该字段的规则（最低优先级）."""
     rules = [
-        Rule(name="a", condition=lambda c: True, constraint={"allowed_channels": ["audio"]}, priority=10),
-        Rule(name="b", condition=lambda c: True, constraint={"allowed_channels": ["visual"]}, priority=20),
+        Rule(name="a", condition=lambda c: True, constraint={"allowed_channels": ["audio"]}, priority=20),
+        Rule(name="b", condition=lambda c: True, constraint={"allowed_channels": ["visual"]}, priority=10),
     ]
     result = apply_rules({"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules)
     assert result["allowed_channels"] == ["visual"]
@@ -331,7 +331,6 @@ def test_format_constraints():
 
 
 def test_format_empty_constraints():
-    from app.agents.rules import format_constraints
     text = format_constraints({"only_urgent": False, "postpone": False, "allowed_channels": ["visual", "audio", "detailed"]})
     assert "audio" in text
 ```
@@ -401,7 +400,7 @@ def apply_rules(
         for r in channels_rules[1:]:
             channels &= set(r.constraint["allowed_channels"])
         if not channels:
-            channels = set(channels_rules[0].constraint["allowed_channels"])
+            channels = set(channels_rules[-1].constraint["allowed_channels"])
         merged_channels = sorted(channels)
     else:
         merged_channels = ["visual", "audio", "detailed"]
@@ -1162,7 +1161,7 @@ from strawberry import GraphQLError
 
 from app.api.graphql_schema import (
     DrivingContextGQL,
-    DrivingStateGQL,
+    DriverStateGQL,
     GeoLocationGQL,
     FeedbackInput,
     FeedbackResult,
@@ -1177,6 +1176,7 @@ from app.api.graphql_schema import (
 )
 from app.memory.schemas import FeedbackData
 from app.memory.types import MemoryMode
+from app.schemas.context import DriverState, DrivingContext, GeoLocation, TrafficCondition
 from app.storage.toml_store import TOMLStore
 
 
@@ -1281,13 +1281,13 @@ def _to_gql_preset(p: dict) -> ScenarioPresetGQL:
 class Mutation:
     @strawberry.mutation
     async def process_query(self, input: ProcessQueryInput) -> ProcessQueryResult:
-        from app.api.main import get_memory_module
+        from app.api.main import get_memory_module, DATA_DIR
         from app.agents.workflow import AgentWorkflow
 
         try:
             mm = get_memory_module()
             workflow = AgentWorkflow(
-                data_dir=getattr(get_memory_module, '_data_dir', Path("data")),
+                data_dir=DATA_DIR,
                 memory_mode=MemoryMode(input.memory_mode.value),
                 memory_module=mm,
             )
@@ -1335,16 +1335,26 @@ class Mutation:
 
     @strawberry.mutation
     async def save_scenario_preset(self, input: ScenarioPresetInput) -> ScenarioPresetGQL:
-        from app.schemas.context import ScenarioPreset
+        from app.schemas.context import ScenarioPreset, DrivingContext
 
         store = _preset_store()
         preset = ScenarioPreset(name=input.name)
         if input.context:
-            preset.context = ScenarioPreset.model_fields["context"].default
             ctx_dict = _input_to_context_dict(input.context)
-            for key in ["driver", "spatial", "traffic"]:
-                if key in ctx_dict:
-                    setattr(preset.context, key, type(getattr(preset.context, key))(**ctx_dict[key]))
+            preset.context = DrivingContext()
+            if "driver" in ctx_dict and ctx_dict["driver"]:
+                preset.context.driver = DriverState(**ctx_dict["driver"])
+            if "spatial" in ctx_dict and ctx_dict["spatial"]:
+                sp = ctx_dict["spatial"]
+                preset.context.spatial.current_location = GeoLocation(**sp.get("current_location", {}))
+                if sp.get("destination"):
+                    preset.context.spatial.destination = GeoLocation(**sp["destination"])
+                if sp.get("eta_minutes") is not None:
+                    preset.context.spatial.eta_minutes = sp["eta_minutes"]
+                if sp.get("heading") is not None:
+                    preset.context.spatial.heading = sp["heading"]
+            if "traffic" in ctx_dict and ctx_dict["traffic"]:
+                preset.context.traffic = TrafficCondition(**ctx_dict["traffic"])
             preset.context.scenario = ctx_dict.get("scenario", "parked")
         await store.append(preset.model_dump())
         return _to_gql_preset(preset.model_dump())
