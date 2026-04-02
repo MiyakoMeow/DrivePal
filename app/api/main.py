@@ -53,10 +53,18 @@ def get_memory_module() -> MemoryModule:
 
 
 def _mount_graphql() -> None:
+    from strawberry.scalars import JSON
+    from strawberry.schema.config import StrawberryConfig
+
+    from app.api.graphql_schema import JSONScalar
     from app.api.resolvers.mutation import Mutation as MutationImpl
     from app.api.resolvers.query import Query as QueryImpl
 
-    schema = strawberry.Schema(query=QueryImpl, mutation=MutationImpl)
+    schema = strawberry.Schema(
+        query=QueryImpl,
+        mutation=MutationImpl,
+        config=StrawberryConfig(scalar_map={JSON: JSONScalar}),
+    )
     graphql_app = strawberry.fastapi.GraphQLRouter(schema)
     app.include_router(graphql_app, prefix="/graphql")
 

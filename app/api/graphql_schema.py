@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Optional
 
 import strawberry
+from strawberry.scalars import JSON
 
 
 @strawberry.enum
@@ -90,12 +91,8 @@ class ScenarioPresetInput:
     context: DrivingContextInput
 
 
-class _JSON:
-    """JSON 标量内部占位."""
-
-
-JSON = strawberry.scalar(
-    _JSON,
+JSONScalar = strawberry.scalar(
+    name="JSON",
     serialize=lambda v: v,
     parse_value=lambda v: v,
 )

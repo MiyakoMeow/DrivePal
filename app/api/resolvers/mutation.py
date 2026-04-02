@@ -16,7 +16,6 @@ from app.api.graphql_schema import (
     FeedbackInput,
     FeedbackResult,
     GeoLocationGQL,
-    JSON,
     ProcessQueryInput,
     ProcessQueryResult,
     ScenarioPresetGQL,
@@ -173,10 +172,10 @@ class Mutation:
                 result=result,
                 event_id=event_id,
                 stages=WorkflowStagesGQL(
-                    context=cast("JSON", stages.context),
-                    task=cast("JSON", stages.task),
-                    decision=cast("JSON", stages.decision),
-                    execution=cast("JSON", stages.execution),
+                    context=cast("Any", stages.context),
+                    task=cast("Any", stages.task),
+                    decision=cast("Any", stages.decision),
+                    execution=cast("Any", stages.execution),
                 ),
             )
         except Exception as e:

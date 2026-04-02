@@ -74,9 +74,9 @@ def test_delete_scenario_preset(client: TestClient) -> None:
     del_result = _graphql_query(
         client,
         """
-        mutation($id: String!) { deleteScenarioPreset(id: $id) }
+        mutation($presetId: String!) { deleteScenarioPreset(presetId: $presetId) }
     """,
-        {"id": preset_id},
+        {"presetId": preset_id},
     )
     assert del_result["data"]["deleteScenarioPreset"] is True
 
@@ -85,7 +85,7 @@ def test_delete_nonexistent_preset(client: TestClient) -> None:
     result = _graphql_query(
         client,
         """
-        mutation { deleteScenarioPreset(id: "nonexistent") }
+        mutation { deleteScenarioPreset(presetId: "nonexistent") }
     """,
     )
     assert result["data"]["deleteScenarioPreset"] is False
