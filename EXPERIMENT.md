@@ -22,7 +22,7 @@ flowchart TD
 
 ## 适配器模式
 
-`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用（当前仅支持 MemoryBank）：
+`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用（当前仅支持 MemoryBank，MemoChat 尚未添加适配器）：
 
 | 适配器 | 封装 | 原理 |
 |--------|------|------|

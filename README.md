@@ -22,7 +22,7 @@
 
 ## 项目概述
 
-知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于 LangGraph 构建多Agent协作工作流，基于 MemoryBank 实现长期记忆管理。
+知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于多Agent协作工作流（Context → Task → Strategy → Execution），支持 MemoryBank 和 MemoChat 两种长期记忆管理策略。
 
 ### 设计目标
 
@@ -38,37 +38,47 @@
 thesis-cockpit-memo/
 ├── app/                          # 应用核心代码
 │   ├── agents/                   # AI智能体核心模块
-│   │   ├── workflow.py           # LangGraph工作流编排
+│   │   ├── workflow.py           # 多Agent工作流编排（四阶段流水线）
 │   │   ├── state.py              # Agent状态类型定义
 │   │   └── prompts.py            # 系统提示词模板
 │   ├── models/                   # AI模型封装
-│   │   ├── chat.py               # LLM调用封装
+│   │   ├── chat.py               # LLM调用封装（多provider自动fallback）
 │   │   ├── embedding.py          # 嵌入模型封装
-│   │   └── settings.py           # ProviderConfig组合配置 + Judge配置
+│   │   └── settings.py           # 模型组/Provider配置加载
 │   ├── memory/                   # 记忆模块
-│   │   ├── memory.py             # MemoryModule调度层
+│   │   ├── memory.py             # MemoryModule Facade（工厂注册表）
 │   │   ├── interfaces.py         # MemoryStore Protocol定义
 │   │   ├── components.py         # 可组合组件（EventStorage等）
-│   │   ├── types.py              # MemoryMode枚举
+│   │   ├── types.py              # MemoryMode枚举（memory_bank/memochat）
 │   │   ├── schemas.py            # 数据模型定义
-│   │   └── stores/               # 各记忆后端实现（组合components）
-│   │       └── memory_bank_store.py # MemoryBank后端（唯一支持）
+│   │   └── stores/               # 各记忆后端实现
+│   │       ├── memory_bank/      # MemoryBank后端
+│   │       │   ├── store.py      #   薄Facade
+│   │       │   ├── engine.py     #   核心引擎（遗忘曲线+聚合+摘要）
+│   │       │   ├── personality.py #  个性分析管理器
+│   │       │   └── summarization.py # 分层摘要管理器
+│   │       └── memochat/         # MemoChat后端
+│   │           ├── store.py      #   薄Facade
+│   │           ├── engine.py     #   对话缓冲+LLM摘要引擎
+│   │           ├── retriever.py  #   检索策略（Full LLM / Hybrid）
+│   │           └── prompts.py    #   车载场景提示词
 │   ├── storage/                  # 存储模块
-│   │   └── json_store.py         # JSON文件存储
+│   │   ├── toml_store.py         # TOML文件存储引擎
+│   │   └── init_data.py          # 数据目录初始化
 │   └── api/                      # FastAPI接口
 │       └── main.py               # REST API
 ├── adapters/                     # VehicleMemBench适配器层
 │   ├── __init__.py               # 适配器注册表
-│   ├── model_config.py           # 基准测试模型配置
+│   ├── model_config.py           # 模型字符串解析（provider/model?params）
 │   ├── runner.py                 # VehicleMemBench运行器
 │   └── memory_adapters/          # 记忆存储策略适配器
 │       ├── __init__.py           # 适配器注册表
 │       ├── common.py            # 通用工具函数
-│       └── memory_bank_adapter.py # MemoryBank适配器（唯一支持）
+│       └── memory_bank_adapter.py # MemoryBank适配器
 ├── config/                       # 配置文件
 │   ├── scenarios.toml            # 驾驶场景模板
 │   ├── driver_states.toml        # 驾驶员状态配置
-│   └── llm.toml                  # 模型配置（含benchmark）
+│   └── llm.toml                  # 模型组+Provider配置
 ├── data/                         # 数据目录（运行时生成）
 ├── vendor/VehicleMemBench        # 基准测试子模块
 ├── tests/                        # 测试
@@ -84,7 +94,7 @@ thesis-cockpit-memo/
 
 ### 1. 多Agent工作流
 
-基于 LangGraph 构建的四阶段工作流，每个阶段由专门的Agent处理。**所有工作流方法均为异步（async/await）。**
+自定义四阶段流水线工作流，每个阶段由专门的Agent处理。**所有工作流方法均为异步（async/await）。**
 
 ```mermaid
 flowchart LR
@@ -107,11 +117,11 @@ flowchart LR
 
 ### 2. 记忆检索系统
 
-基于 MemoryBank 实现长期记忆管理，各 Store 通过组合 `app/memory/components.py` 中的可复用组件实现。通过 `memory_mode` 参数切换（当前仅支持 `memory_bank`）：
+通过 `memory_mode` 参数切换记忆策略（当前支持 `memory_bank` 和 `memochat`）：
 
-#### MemoryBank 分层记忆结构
+#### MemoryBank（遗忘曲线 + 分层摘要）
 
-基于 MemoryBank 论文实现的三层记忆架构：
+基于 MemoryBank 论文实现的三层记忆架构，核心引擎委托 `PersonalityManager` 和 `SummaryManager`：
 
 ```mermaid
 flowchart TD
@@ -132,8 +142,26 @@ flowchart TD
 - **遗忘曲线**：`retention = e^(-days / (5 × strength))`，模拟人类记忆衰减
 - **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存
 - **自动聚合**：语义相似的交互自动聚合为同一事件（余弦相似度 ≥ 0.8 或关键词重叠 ≥ 50%）
-- **层级摘要**：事件数达到日阈值后生成 daily_summary，daily_summary 数量达到总阈值后生成 overall_summary
+- **层级摘要**：`SummaryManager` 管理事件数达到日阈值后生成 daily_summary，达到总阈值后生成 overall_summary
+- **个性分析**：`PersonalityManager` 管理每日个性摘要和总体个性画像
 - **结果展开**：检索命中事件时，自动附加其关联的原始交互记录
+
+#### MemoChat（对话缓冲 + LLM摘要）
+
+基于 MemoChat 论文实现的三阶段 pipeline：
+
+```mermaid
+flowchart LR
+    A[对话缓冲] -->|达到阈值| B[LLM摘要]
+    B -->|主题分组| C[主题Memo]
+    C -->|检索| D[LLM选主题]
+```
+
+**核心机制：**
+
+- **滚动对话缓冲**：维护 `memochat_recent_dialogs.toml`，对话轮次 ≥ 10 或总字符 > 1024 时触发摘要
+- **LLM主题摘要**：LLM 将对话解析为 `{topic, summary, start, end}` JSON，写入 `memochat_memos.toml`（主题→条目映射）
+- **检索策略**：`RetrievalMode.FULL_LLM`（全量送LLM选题）/ `RetrievalMode.HYBRID`（Embedding/关键词粗筛 + LLM精排）
 
 #### 可组合组件架构
 
@@ -141,15 +169,15 @@ flowchart TD
 
 | 组件 | 职责 |
 |------|------|
-| `EventStorage` | 事件 JSON 文件 CRUD + ID 生成 |
+| `EventStorage` | 事件 TOML 文件 CRUD + ID 生成 |
 | `KeywordSearch` | 关键词大小写不敏感搜索 |
 | `FeedbackManager` | 反馈记录 + 策略权重更新 |
 | `SimpleInteractionWriter` | 交互记录写入 |
-| `MemoryBankEngine` | 遗忘曲线衰减 + 事件聚合 + 分层摘要 |
+| `forgetting_curve()` | Ebbinghaus遗忘曲线计算（供MemoryBank使用） |
 
 #### 反馈学习机制
 
-用户反馈（accept/ignore）会更新 `strategies.json` 中的 `reminder_weights`：
+用户反馈（accept/ignore）会更新 `strategies.toml` 中的 `reminder_weights`：
 
 - **accept**：对应事件类型权重 +0.1（上限1.0）
 - **ignore**：对应事件类型权重 -0.1（下限0.1）
@@ -170,7 +198,6 @@ flowchart TD
 
 - 基础路径：`/api`
 - 服务启动：`python main.py`（默认 `0.0.0.0:8000`）
-- Web界面：`/` 根路径返回 `webui/index.html`
 
 #### API端点
 
@@ -184,6 +211,8 @@ flowchart TD
   "memory_mode": "memory_bank"
 }
 ```
+
+`memory_mode` 可选值：`memory_bank`（默认）、`memochat`
 
 **响应：**
 
@@ -248,14 +277,13 @@ flowchart TD
 uv sync
 ```
 
-### 2. 配置环境变量
+### 2. 配置
+
+编辑 `config/llm.toml` 中的 `model_providers` 和 `model_groups`。也可通过环境变量覆盖：
 
 ```bash
-# 设置 vLLM 服务地址（默认 http://localhost:8000/v1）
-export VLLM_BASE_URL="http://localhost:8000/v1"
-
-# 如需使用 DeepSeek 作为备用
-# export DEEPSEEK_API_KEY="your-api-key"
+# 示例：设置 MiniMax API Key（用于 benchmark 模型组）
+export MINIMAX_API_KEY="your-api-key"
 ```
 
 ### 3. 初始化数据目录
