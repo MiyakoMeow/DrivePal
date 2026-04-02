@@ -59,7 +59,16 @@ def _parse_json_outputs(text: str) -> list[dict]:
     try:
         result = json.loads(text)
         if isinstance(result, list):
-            return result
+            valid_entries = []
+            for entry in result:
+                if not isinstance(entry, dict):
+                    continue
+                start_val = entry.get("start")
+                end_val = entry.get("end")
+                if not isinstance(start_val, int) or not isinstance(end_val, int):
+                    continue
+                valid_entries.append(entry)
+            return valid_entries
     except (json.JSONDecodeError, TypeError):
         pass
     return _normalize_model_outputs(text)
@@ -94,6 +103,7 @@ class MemoChatEngine:
             data_dir, Path("memochat_interactions.toml"), list
         )
         self._init_lock = asyncio.Lock()
+        self._summary_lock = asyncio.Lock()
         self._initialized = False
 
     async def _ensure_initialized(self) -> None:
@@ -144,69 +154,70 @@ class MemoChatEngine:
         return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     async def _summarize_if_needed(self) -> None:
-        dialogs = await self.read_recent_dialogs()
-        if not self._should_summarize(dialogs):
-            return
-        if self.chat is None:
-            return
+        async with self._summary_lock:
+            dialogs = await self.read_recent_dialogs()
+            if not self._should_summarize(dialogs):
+                return
+            if self.chat is None:
+                return
 
-        conversation_lines = dialogs
-        history_log = "\n".join(
-            f"(line {i + 1}) {d}" for i, d in enumerate(conversation_lines)
-        )
-        line_count = len(conversation_lines)
-        system = WRITING_SYSTEM.replace("LINE", str(line_count))
-        instruction = WRITING_INSTRUCTION.replace("LINE", str(line_count))
+            conversation_lines = dialogs
+            history_log = "\n".join(
+                f"(line {i + 1}) {d}" for i, d in enumerate(conversation_lines)
+            )
+            line_count = len(conversation_lines)
+            system = WRITING_SYSTEM.replace("LINE", str(line_count))
+            instruction = WRITING_INSTRUCTION.replace("LINE", str(line_count))
 
-        prompt = (
-            system + "\n\n```\n任务对话：\n" + history_log + "\n```\n" + instruction
-        )
+            prompt = (
+                system + "\n\n```\n任务对话：\n" + history_log + "\n```\n" + instruction
+            )
 
-        try:
-            raw_output = await self.chat.generate(prompt)
-        except Exception:
-            return
+            try:
+                raw_output = await self.chat.generate(prompt)
+            except Exception:
+                return
 
-        parsed = _parse_json_outputs(raw_output)
-        memos = await self.read_memos()
+            parsed = _parse_json_outputs(raw_output)
+            memos = await self.read_memos()
 
-        if parsed:
-            for entry in parsed:
-                topic = entry.get("topic", "NOTO")
-                start = max(1, entry.get("start", 1)) - 1
-                end = entry.get("end", start + 1)
-                related = conversation_lines[start:end]
-                memo_item = {
+            if parsed:
+                for entry in parsed:
+                    topic = entry.get("topic", "NOTO")
+                    start = max(1, entry.get("start", 1)) - 1
+                    end = entry.get("end", start + 1)
+                    related = conversation_lines[start:end]
+                    memo_item = {
+                        "id": self._generate_id(),
+                        "summary": entry.get("summary", ""),
+                        "dialogs": related,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "memory_strength": 1,
+                        "last_recall_date": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if topic not in memos:
+                        memos[topic] = []
+                    memos[topic].append(memo_item)
+            else:
+                n_dialogs = len(conversation_lines)
+                sample_count = min(2, n_dialogs)
+                sampled = sample(conversation_lines, sample_count)
+                noto_entry = {
                     "id": self._generate_id(),
-                    "summary": entry.get("summary", ""),
-                    "dialogs": related,
+                    "summary": f"Partial dialogs about: {' or '.join(sampled)}.",
+                    "dialogs": conversation_lines,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "memory_strength": 1,
                     "last_recall_date": datetime.now(timezone.utc).isoformat(),
                 }
-                if topic not in memos:
-                    memos[topic] = []
-                memos[topic].append(memo_item)
-        else:
-            n_dialogs = len(conversation_lines)
-            sample_count = min(2, n_dialogs)
-            sampled = sample(conversation_lines, sample_count)
-            noto_entry = {
-                "id": self._generate_id(),
-                "summary": f"Partial dialogs about: {' or '.join(sampled)}.",
-                "dialogs": conversation_lines,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "memory_strength": 1,
-                "last_recall_date": datetime.now(timezone.utc).isoformat(),
-            }
-            if "NOTO" not in memos:
-                memos["NOTO"] = []
-            memos["NOTO"].append(noto_entry)
+                if "NOTO" not in memos:
+                    memos["NOTO"] = []
+                memos["NOTO"].append(noto_entry)
 
-        await self._write_memos(memos)
+            await self._write_memos(memos)
 
-        kept = dialogs[-RECENT_DIALOGS_KEEP_AFTER_SUMMARY:]
-        await self._dialogs_store.write(kept)
+            kept = dialogs[-RECENT_DIALOGS_KEEP_AFTER_SUMMARY:]
+            await self._dialogs_store.write(kept)
 
     async def search(self, query: str, top_k: int = 10) -> list["SearchResult"]:
         """检索与查询相关的记忆条目."""

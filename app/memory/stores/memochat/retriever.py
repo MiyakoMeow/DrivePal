@@ -107,7 +107,11 @@ async def _coarse_filter(
 ) -> list[tuple[str, dict]]:
     if embedding_model is None:
         return _keyword_filter(query, flat, top_k)
-    return await _embedding_filter(embedding_model, query, flat, top_k)
+    try:
+        return await _embedding_filter(embedding_model, query, flat, top_k)
+    except Exception:
+        logger.warning("Embedding filter failed, falling back to keyword filter")
+        return _keyword_filter(query, flat, top_k)
 
 
 def _keyword_filter(
@@ -117,7 +121,7 @@ def _keyword_filter(
     scored = []
     for topic, entry in flat:
         text = f"{topic} {entry.get('summary', '')}".lower()
-        if query_lower in text or any(c in text for c in query_lower):
+        if query_lower in text:
             scored.append((topic, entry))
     return scored[:top_k]
 

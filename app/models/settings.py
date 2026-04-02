@@ -138,24 +138,27 @@ class LLMSettings:
 
             for ref in model_groups["default"].get("models", []):
                 resolved = resolve_model_string(ref)
-                if resolved.provider_name in model_providers:
-                    provider_config = model_providers[resolved.provider_name]
-                    api_key_env = provider_config.get("api_key_env")
-                    api_key: str | None = (
-                        os.environ.get(api_key_env, "")
-                        if api_key_env
-                        else provider_config.get("api_key")
+                if resolved.provider_name not in model_providers:
+                    raise ValueError(
+                        f"Provider '{resolved.provider_name}' not found in model_providers"
                     )
-                    default_providers.append(
-                        LLMProviderConfig(
-                            provider=ProviderConfig(
-                                model=resolved.model_name,
-                                base_url=provider_config.get("base_url"),
-                                api_key=api_key,
-                            ),
-                            temperature=resolved.params.get("temperature", 0.7),
-                        )
+                provider_config = model_providers[resolved.provider_name]
+                api_key_env = provider_config.get("api_key_env")
+                api_key: str | None = (
+                    os.environ.get(api_key_env, "")
+                    if api_key_env
+                    else provider_config.get("api_key")
+                )
+                default_providers.append(
+                    LLMProviderConfig(
+                        provider=ProviderConfig(
+                            model=resolved.model_name,
+                            base_url=provider_config.get("base_url"),
+                            api_key=api_key,
+                        ),
+                        temperature=resolved.params.get("temperature", 0.7),
                     )
+                )
 
         return cls(
             llm_providers=default_providers,

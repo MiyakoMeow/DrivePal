@@ -46,13 +46,12 @@ class TestRetrieveFullLlm:
     async def test_returns_empty_on_no_match(self, mock_chat: MagicMock) -> None:
         mock_chat.generate.return_value = "3"
         results = await retrieve_full_llm(mock_chat, "无关查询", MEMOS_SAMPLE, 5)
-        assert all(t == "NOTO" for t, _ in results) or len(results) == 0
+        assert results == []
 
     async def test_handles_multi_selection(self, mock_chat: MagicMock) -> None:
         mock_chat.generate.return_value = "1#2"
         results = await retrieve_full_llm(mock_chat, "天气和会议", MEMOS_SAMPLE, 5)
-        topics = {t for t, _ in results}
-        assert len(topics) >= 1
+        assert {t for t, _ in results} == {"天气", "会议"}
 
     async def test_returns_empty_on_llm_error(self, mock_chat: MagicMock) -> None:
         mock_chat.generate.side_effect = RuntimeError("fail")

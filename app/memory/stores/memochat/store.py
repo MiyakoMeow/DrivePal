@@ -1,5 +1,6 @@
 """MemoChat 记忆存储后端."""
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ class MemoChatStore:
         self._feedback = FeedbackManager(data_dir)
         self.embedding_model = embedding_model
         self.chat_model = chat_model
+        self._write_lock = asyncio.Lock()
 
     @property
     def events_store(self) -> TOMLStore:
@@ -61,9 +63,10 @@ class MemoChatStore:
             "last_recall_date": datetime.now(timezone.utc).date().isoformat(),
         }
         topic = event.type or "general"
-        memos = await self._engine.read_memos()
-        memos.setdefault(topic, []).append(memo_entry)
-        await self._engine._write_memos(memos)
+        async with self._write_lock:
+            memos = await self._engine.read_memos()
+            memos.setdefault(topic, []).append(memo_entry)
+            await self._engine._write_memos(memos)
         event_copy = event.model_copy(deep=True)
         event_copy.id = memo_entry["id"]
         event_copy.created_at = memo_entry["created_at"]
@@ -78,7 +81,10 @@ class MemoChatStore:
         """获取历史事件."""
         memos = await self._engine.read_memos()
         all_entries: list[tuple[str, dict]] = [
-            (topic, entry) for topic, entries in memos.items() for entry in entries
+            (topic, entry)
+            for topic, entries in memos.items()
+            if topic != "NOTO"
+            for entry in entries
         ]
         all_entries.sort(key=lambda x: x[1].get("created_at", ""), reverse=True)
         results = []
