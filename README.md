@@ -10,10 +10,11 @@
 - [项目结构](#项目结构)
 - [核心功能](#核心功能)
   - [多Agent工作流](#1-多agent工作流)
-  - [记忆检索系统](#2-记忆检索系统)
-  - [对比实验](#3-对比实验)
-  - [REST API](#4-rest-api)
-  - [Web界面](#5-web界面)
+  - [上下文注入与规则引擎](#2-上下文注入与规则引擎)
+  - [记忆检索系统](#3-记忆检索系统)
+  - [对比实验](#4-对比实验)
+  - [GraphQL API](#5-graphql-api)
+  - [模拟测试工作台](#6-模拟测试工作台)
 - [快速开始](#快速开始)
 - [开发指南](#开发指南)
 - [License](#license)
@@ -22,13 +23,14 @@
 
 ## 项目概述
 
-知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于多Agent协作工作流（Context → Task → Strategy → Execution），支持 MemoryBank 和 MemoChat 两种长期记忆管理策略。
+知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于多Agent协作工作流（Context → Task → Strategy → Execution），支持 MemoryBank 和 MemoChat 两种长期记忆管理策略，并通过请求级上下文注入实现外部数据（驾驶员状态、时空信息、交通状况）的集成。
 
 ### 设计目标
 
-1. **驾驶安全优先**：根据驾驶员状态（专注驾驶、交通拥堵、高速行驶等）智能调整提醒方式
-2. **遗忘曲线记忆**：基于 Ebbinghaus 遗忘曲线实现记忆衰减与强化，模拟人类记忆机制
-3. **可解释决策**：明确输出提醒决策的理由，支持用户反馈迭代优化
+1. **驾驶安全优先**：轻量规则引擎基于驾驶员状态（疲劳、工作负荷、驾驶场景）自动约束提醒方式
+2. **情境感知**：通过 GraphQL API 接收细粒度外部数据（经纬度、车速、ETA、拥堵等级），跳过 LLM 编造上下文
+3. **遗忘曲线记忆**：基于 Ebbinghaus 遗忘曲线实现记忆衰减与强化，模拟人类记忆机制
+4. **可解释决策**：四阶段工作流各节点输出可独立审查，支持用户反馈迭代优化
 
 ---
 
@@ -39,8 +41,15 @@ thesis-cockpit-memo/
 ├── app/                          # 应用核心代码
 │   ├── agents/                   # AI智能体核心模块
 │   │   ├── workflow.py           # 多Agent工作流编排（四阶段流水线）
-│   │   ├── state.py              # Agent状态类型定义
+│   │   ├── state.py              # Agent状态类型定义 + WorkflowStages
+│   │   ├── rules.py              # 轻量规则引擎（安全约束规则 + 合并策略）
 │   │   └── prompts.py            # 系统提示词模板
+│   ├── api/                      # GraphQL API 层
+│   │   ├── main.py               # FastAPI 应用入口 + GraphQL 挂载
+│   │   ├── graphql_schema.py     # Strawberry schema 定义
+│   │   └── resolvers/            # GraphQL resolvers
+│   │       ├── query.py          #   Query resolvers
+│   │       └── mutation.py       #   Mutation resolvers
 │   ├── models/                   # AI模型封装
 │   │   ├── chat.py               # LLM调用封装（多provider自动fallback）
 │   │   ├── embedding.py          # 嵌入模型封装
@@ -50,7 +59,7 @@ thesis-cockpit-memo/
 │   │   ├── interfaces.py         # MemoryStore Protocol定义
 │   │   ├── components.py         # 可组合组件（EventStorage等）
 │   │   ├── types.py              # MemoryMode枚举（memory_bank/memochat）
-│   │   ├── schemas.py            # 数据模型定义
+│   │   ├── schemas.py            # 记忆数据模型定义
 │   │   └── stores/               # 各记忆后端实现
 │   │       ├── memory_bank/      # MemoryBank后端
 │   │       │   ├── store.py      #   薄Facade
@@ -62,29 +71,25 @@ thesis-cockpit-memo/
 │   │           ├── engine.py     #   对话缓冲+LLM摘要引擎
 │   │           ├── retriever.py  #   检索策略（Full LLM / Hybrid）
 │   │           └── prompts.py    #   车载场景提示词
+│   ├── schemas/                  # 通用数据模型
+│   │   └── context.py            # 驾驶上下文数据模型（DrivingContext等）
 │   ├── storage/                  # 存储模块
 │   │   ├── toml_store.py         # TOML文件存储引擎
 │   │   └── init_data.py          # 数据目录初始化
-│   └── api/                      # FastAPI接口
-│       └── main.py               # REST API
+│   └── experiment/               # 实验模块
 ├── adapters/                     # VehicleMemBench适配器层
 │   ├── __init__.py               # 适配器注册表
 │   ├── model_config.py           # 模型字符串解析（provider/model?params）
 │   ├── runner.py                 # VehicleMemBench运行器
 │   └── memory_adapters/          # 记忆存储策略适配器
-│       ├── __init__.py           # 适配器注册表
-│       ├── common.py            # 通用工具函数
-│       └── memory_bank_adapter.py # MemoryBank适配器
 ├── config/                       # 配置文件
-│   ├── scenarios.toml            # 驾驶场景模板
-│   ├── driver_states.toml        # 驾驶员状态配置
 │   └── llm.toml                  # 模型组+Provider配置
 ├── data/                         # 数据目录（运行时生成）
 ├── vendor/VehicleMemBench        # 基准测试子模块
 ├── tests/                        # 测试
-├── webui/                        # Web界面
+├── webui/                        # 模拟测试工作台（Web UI）
 ├── run_benchmark.py              # VehicleMemBench CLI
-├── main.py                       # Web服务入口
+├── main.py                       # 服务入口
 └── pyproject.toml                # 项目配置
 ```
 
@@ -108,16 +113,58 @@ flowchart LR
 
 | Agent | 输入 | 输出 | 说明 |
 |-------|------|------|------|
-| **Context Agent** | 用户输入 + 历史记忆 | JSON上下文对象 | 整合时间、位置、交通、用户偏好 |
+| **Context Agent** | 用户输入 + 历史记忆 + 外部上下文 | JSON上下文对象 | 有外部数据时直接使用，无数据时 LLM 推断 |
 | **Task Agent** | 用户输入 + 上下文 | JSON任务对象 | 事件抽取、类型归因（meeting/travel/shopping/contact） |
-| **Strategy Agent** | 上下文 + 任务 + 个性化策略 | JSON决策对象 | 决定提醒时机、方式、内容 |
+| **Strategy Agent** | 上下文 + 任务 + 安全约束 + 个性化策略 | JSON决策对象 | 在安全约束范围内决定提醒时机、方式、内容 |
 | **Execution Agent** | 决策对象 | 执行结果 + event_id | 存储事件，返回提醒内容 |
+
+#### 工作流阶段输出
+
+通过 `run_with_stages()` 方法获取各阶段的详细输出，用于调试和可解释性：
+
+```python
+result, event_id, stages = await workflow.run_with_stages(
+    "明天上午9点有个会议",
+    driving_context={"scenario": "highway", "driver": {"fatigue_level": 0.8}},
+)
+# stages.context / stages.task / stages.decision / stages.execution
+```
 
 ---
 
-### 2. 记忆检索系统
+### 2. 上下文注入与规则引擎
 
-通过 `memory_mode` 参数切换记忆策略（当前支持 `memory_bank` 和 `memochat`）：
+#### 外部上下文注入
+
+通过 GraphQL API 的 `processQuery` mutation 传入 `DrivingContext`，包含细粒度驾驶环境数据：
+
+| 数据类别 | 字段 | 说明 |
+|----------|------|------|
+| **驾驶员状态** | `emotion`, `workload`, `fatigueLevel` | 情绪（5级）、工作负荷（4级）、疲劳度（0~1） |
+| **时空信息** | `currentLocation`, `destination`, `etaMinutes`, `heading` | 经纬度、街道地址、车速 |
+| **交通状况** | `congestionLevel`, `incidents`, `estimatedDelayMinutes` | 拥堵等级（4级）、事故列表 |
+| **驾驶场景** | `scenario` | parked / city_driving / highway / traffic_jam |
+
+当提供外部上下文时，Context Agent 跳过 LLM 推断，直接使用注入数据构建上下文对象。
+
+#### 轻量规则引擎
+
+规则引擎在 Task Agent 之后、Strategy Agent 之前执行，基于 `DrivingContext` 应用安全约束：
+
+| 规则 | 条件 | 约束 |
+|------|------|------|
+| 高速仅音频 | `scenario == "highway"` | `allowed_channels: [audio]`, 最大频率 30min |
+| 疲劳抑制 | `fatigueLevel > 0.7` | 仅允许紧急提醒, `allowed_channels: [audio]` |
+| 过载延后 | `workload == "overloaded"` | 延后提醒 |
+| 停车全通道 | `scenario == "parked"` | `allowed_channels: [visual, audio, detailed]` |
+
+多规则匹配时按优先级合并：`allowed_channels` 取交集，`only_urgent` / `postpone` 取布尔或。
+
+---
+
+### 3. 记忆检索系统
+
+通过 `memoryMode` 参数切换记忆策略（当前支持 `MEMORY_BANK` 和 `MEMOCHAT`）：
 
 #### MemoryBank（遗忘曲线 + 分层摘要）
 
@@ -137,8 +184,6 @@ flowchart TD
     classDef summary fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
-**核心机制：**
-
 - **遗忘曲线**：`retention = e^(-days / (5 × strength))`，模拟人类记忆衰减
 - **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存
 - **自动聚合**：语义相似的交互自动聚合为同一事件（余弦相似度 ≥ 0.8 或关键词重叠 ≥ 50%）
@@ -157,11 +202,9 @@ flowchart LR
     C -->|检索| D[LLM选主题]
 ```
 
-**核心机制：**
-
 - **滚动对话缓冲**：维护 `memochat_recent_dialogs.toml`，对话轮次 ≥ 10 或总字符 > 1024 时触发摘要
-- **LLM主题摘要**：LLM 将对话解析为 `{topic, summary, start, end}` JSON，写入 `memochat_memos.toml`（主题→条目映射）
-- **检索策略**：`RetrievalMode.FULL_LLM`（全量送LLM选题）/ `RetrievalMode.HYBRID`（Embedding/关键词粗筛 + LLM精排）
+- **LLM主题摘要**：LLM 将对话解析为 `{topic, summary, start, end}` JSON，写入 `memochat_memos.toml`
+- **检索策略**：`RetrievalMode.FULL_LLM` / `RetrievalMode.HYBRID`（Embedding/关键词粗筛 + LLM精排）
 
 #### 可组合组件架构
 
@@ -184,83 +227,91 @@ flowchart LR
 
 ---
 
-### 3. 对比实验
+### 4. 对比实验
 
 详见 [EXPERIMENT.md](./EXPERIMENT.md)。
 
 ---
 
-### 4. REST API
+### 5. GraphQL API
+
+基于 [Strawberry GraphQL](https://strawberry.rocks/) 的 code-first GraphQL API，与 FastAPI 集成。
 
 #### 基础信息
 
-**所有 API 端点均为异步（async/await）。**
-
-- 基础路径：`/api`
+- 端点：`/graphql`（GraphQL Playground 可用）
 - 服务启动：`python main.py`（默认 `0.0.0.0:8000`）
 
-#### API端点
+#### Query
 
-##### POST `/api/query` - 处理用户查询
-
-**请求体：**
-
-```json
-{
-  "query": "明天上午9点有个会议",
-  "memory_mode": "memory_bank"
+```graphql
+type Query {
+  history(limit: Int = 10, memoryMode: MemoryMode! = MEMORY_BANK): [MemoryEvent!]!
+  experimentReport: ExperimentReport!
+  scenarioPresets: [ScenarioPreset!]!
 }
 ```
 
-`memory_mode` 可选值：`memory_bank`（默认）、`memochat`
+#### Mutation
 
-**响应：**
-
-```json
-{
-  "result": "提醒已发送: 明天上午9点会议提醒",
-  "event_id": "20260327120000_a1b2c3d4"
+```graphql
+type Mutation {
+  processQuery(input: ProcessQueryInput!): ProcessQueryResult!
+  submitFeedback(input: FeedbackInput!): FeedbackResult!
+  saveScenarioPreset(input: ScenarioPresetInput!): ScenarioPreset!
+  deleteScenarioPreset(id: String!): Boolean!
 }
 ```
 
-##### POST `/api/feedback` - 提交反馈
+#### 核心查询示例 — 带上下文注入
 
-**请求体：**
-
-```json
-{
-  "event_id": "20260327120000_a1b2c3d4",
-  "action": "accept",        // accept | ignore
-  "modified_content": "修改后的内容"  // 可选
+```graphql
+mutation {
+  processQuery(input: {
+    query: "明天上午9点有个会议"
+    memoryMode: MEMORY_BANK
+    context: {
+      driver: { emotion: "calm", workload: "normal", fatigueLevel: 0.2 }
+      spatial: {
+        currentLocation: { latitude: 39.9042, longitude: 116.4074, address: "北京市东城区", speedKmh: 0 }
+        destination: { latitude: 39.9142, longitude: 116.4174, address: "国贸大厦" }
+        etaMinutes: 25
+      }
+      traffic: { congestionLevel: "smooth", incidents: [], estimatedDelayMinutes: 0 }
+      scenario: "parked"
+    }
+  }) {
+    result eventId
+    stages { context task decision execution }
+  }
 }
 ```
 
-**响应：**
+#### 场景预设管理
 
-```json
-{
-  "status": "success"
-}
+```graphql
+# 保存预设
+mutation { saveScenarioPreset(input: { name: "高速驾驶", context: { scenario: "highway" } }) { id name } }
+
+# 加载预设
+query { scenarioPresets { id name context { scenario driver { emotion } } } }
+
+# 删除预设
+mutation { deleteScenarioPreset(id: "abc123") }
 ```
-
-##### GET `/api/history` - 获取历史记录
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `limit` | int | 10 | 返回记录数（0 = 全部） |
-
-##### GET `/api/experiment/report` - 获取实验报告
 
 ---
 
-### 5. Web界面
+### 6. 模拟测试工作台
 
-基于纯HTML/CSS/JavaScript的单页应用，提供：
+基于纯 HTML/CSS/JavaScript 的单页应用，作为场景模拟与工作流调试工具：
 
-- **设置面板**：选择记忆检索模式
-- **输入面板**：文本输入框发送查询
-- **响应面板**：显示AI回复，支持接受/忽略反馈
-- **历史记录面板**：展示最近10条交互记录
+- **场景配置面板**：配置驾驶员状态、时空信息、交通状况、驾驶场景
+- **场景预设**：保存/加载模拟场景，快速切换测试场景
+- **工作流调试**：展示四个 Agent 各阶段的 JSON 输出（Context/Task/Strategy/Execution）
+- **反馈按钮**：接受/忽略提醒，验证反馈学习机制
+- **历史记录**：查看最近交互记录
+- **GraphQL Playground**：通过底部链接访问高级查询界面
 
 ---
 
@@ -298,7 +349,8 @@ python -c "from app.storage.init_data import init_storage; init_storage()"
 python main.py
 ```
 
-访问 http://localhost:8000
+- 模拟测试工作台：http://localhost:8000
+- GraphQL Playground：http://localhost:8000/graphql
 
 ---
 

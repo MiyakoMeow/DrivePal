@@ -33,28 +33,63 @@ model = "huggingface/BAAI/bge-small-zh-v1.5"
 | 变量 | 说明 |
 |------|------|
 | `CONFIG_PATH` | 自定义配置文件路径（默认 `config/llm.toml`） |
+| `DATA_DIR` | 数据目录路径（默认 `data`） |
 | `MINIMAX_API_KEY` | MiniMax provider API Key（用于 `benchmark` 模型组） |
 | `DEEPSEEK_API_KEY` | DeepSeek provider API Key（用于 `smart` 模型组） |
 | `ZHIPU_API_KEY` | 智谱 provider API Key（用于 `fast` 模型组） |
 
-### 驾驶场景配置 (`config/scenarios.toml`)
+---
 
-| 类型 | 说明 | 示例模板 |
-|------|------|----------|
-| `schedule_check` | 日程查询 | "今天有什么安排？" |
-| `event_add` | 添加事件 | "提醒我下午三点开会" |
-| `event_delete` | 删除事件 | "取消明天的会议" |
-| `general` | 通用对话 | "你好" |
+## API 层
 
-### 驾驶员状态配置 (`config/driver_states.toml`)
+### GraphQL API (`/graphql`)
 
-| 状态 | 说明 | 容忍度 | 合适方式 |
-|------|------|--------|----------|
-| `focused` | 专注驾驶 | 低 | visual, audio |
-| `traffic_jam` | 交通拥堵 | 中 | visual, audio |
-| `parked` | 停车状态 | 高 | visual, audio, detailed |
-| `highway` | 高速行驶 | 极低 | audio |
-| `city_driving` | 城市驾驶 | 低 | visual, audio |
+系统使用 Strawberry GraphQL（code-first）作为唯一 API 层。Schema 定义在 `app/api/graphql_schema.py`，resolvers 在 `app/api/resolvers/`。
+
+**添加新字段：**
+1. 在 `graphql_schema.py` 中定义 Strawberry type/input
+2. 在 `resolvers/query.py` 或 `resolvers/mutation.py` 中添加 resolver 方法
+
+**GraphQL Playground：** 启动服务后访问 `/graphql`，自动提供交互式查询界面。
+
+---
+
+## 驾驶上下文数据模型
+
+定义在 `app/schemas/context.py`，所有字段通过 Pydantic Literal 约束合法值：
+
+| 模型 | 字段 | 类型 | 说明 |
+|------|------|------|------|
+| `DriverState` | `emotion` | `Literal["neutral", "anxious", "fatigued", "calm", "angry"]` | 驾驶员情绪 |
+| | `workload` | `Literal["low", "normal", "high", "overloaded"]` | 工作负荷 |
+| | `fatigue_level` | `float` (0~1) | 疲劳等级 |
+| `GeoLocation` | `latitude` / `longitude` | `float` | 经纬度（含边界校验） |
+| | `address` / `speed_kmh` | `str` / `float` | 地址、车速 |
+| `SpatioTemporalContext` | `current_location` / `destination` | `GeoLocation` | 当前位置 / 目的地 |
+| | `eta_minutes` / `heading` | `float?` | ETA / 航向 |
+| `TrafficCondition` | `congestion_level` | `Literal["smooth", "slow", "congested", "blocked"]` | 拥堵等级 |
+| | `incidents` / `estimated_delay_minutes` | `list[str]` / `int` | 事故列表 / 延误 |
+| `DrivingContext` | `driver` / `spatial` / `traffic` | 子模型 | 完整上下文 |
+| | `scenario` | `Literal["parked", "city_driving", "highway", "traffic_jam"]` | 驾驶场景 |
+| `ScenarioPreset` | `id` / `name` / `context` / `created_at` | — | 场景预设（自动生成 ID 和时间戳） |
+
+---
+
+## 规则引擎
+
+定义在 `app/agents/rules.py`，在 Strategy Agent 之前应用安全约束。
+
+**添加新规则：**
+```python
+SAFETY_RULES.append(Rule(
+    name="rule_name",
+    condition=lambda ctx: ctx["scenario"] == "some_scenario",
+    constraint={"allowed_channels": ["audio"]},
+    priority=10,
+))
+```
+
+**合并策略：** 多规则匹配时按优先级从高到低处理，`allowed_channels` 取交集（空集时回退到最低优先级规则的值），`only_urgent` / `postpone` 取布尔或。
 
 ---
 
@@ -77,7 +112,8 @@ data/
 ├── preferences.toml         # 用户偏好
 ├── feedback.toml            # 用户反馈记录
 ├── strategies.toml          # 个性化策略
-└── experiment_results.toml   # 实验结果
+├── experiment_results.toml   # 实验结果
+└── scenario_presets.toml    # 模拟场景预设
 ```
 
 ### 存储接口 (`app/storage/toml_store.py`)
@@ -101,6 +137,14 @@ store.update(key, val) # 更新键值（仅dict类型）
 uv run pytest tests/ -v
 ```
 
+### 运行集成测试（需要 LLM provider）
+
+```bash
+uv run pytest tests/ -v --run-integration
+# 或
+INTEGRATION_TESTS=1 uv run pytest tests/ -v
+```
+
 ### 测试覆盖模块
 
 | 文件 | 说明 |
@@ -113,8 +157,9 @@ uv run pytest tests/ -v
 | `tests/stores/test_memochat_prompts.py` | MemoChat 提示词 |
 | `tests/stores/test_memochat_retriever.py` | MemoChat 检索策略 |
 | `tests/stores/test_memochat_store.py` | MemoChat 后端 |
-| `tests/test_integration/test_model_groups.py` | 模型组集成测试 |
-| `tests/test_api.py` | API 端点集成测试 |
+| `tests/test_context_schemas.py` | 驾驶上下文数据模型 |
+| `tests/test_graphql.py` | GraphQL 端点测试 |
+| `tests/test_rules.py` | 规则引擎测试 |
 | `tests/test_chat.py` | Chat 驱动 LLM 多provider fallback、Workflow 上下文注入 |
 | `tests/test_embedding.py` | Embedding 语义检索与聚合 |
 | `tests/test_memory_bank.py` | 遗忘曲线、层级摘要、交互聚合 |
@@ -133,7 +178,8 @@ uv run pytest tests/ -v
 | 类别 | 技术 |
 |------|------|
 | **Web框架** | FastAPI + Uvicorn |
-| **AI工作流** | 自定义四阶段 Agent 流水线 |
+| **API 层** | Strawberry GraphQL (code-first) |
+| **AI工作流** | 自定义四阶段 Agent 流水线 + 轻量规则引擎 |
 | **LLM支持** | Qwen3.5-2B (vLLM, 默认), MiniMax-M2.7, DeepSeek-chat, GLM-4.7-flashx |
 | **LLM推理** | vLLM (本地部署), OpenAI兼容接口（多provider自动fallback） |
 | **嵌入模型** | BGE-small-zh-v1.5 (HuggingFace) |
