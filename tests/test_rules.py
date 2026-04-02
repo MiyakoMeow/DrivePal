@@ -1,0 +1,161 @@
+"""规则引擎测试."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from app.agents.rules import SAFETY_RULES, Rule, apply_rules, format_constraints
+
+if TYPE_CHECKING:
+    from typing import Any
+
+
+def test_rule_dataclass() -> None:
+    r = Rule(
+        name="test",
+        condition=lambda ctx: True,
+        constraint={"allowed_channels": ["audio"]},
+        priority=10,
+    )
+    assert r.name == "test"
+    assert r.priority == 10
+
+
+def test_no_matching_rules() -> None:
+    ctx: dict[str, Any] = {
+        "scenario": "city_driving",
+        "driver": {"fatigue_level": 0.1, "workload": "low"},
+    }
+    result = apply_rules(ctx, SAFETY_RULES)
+    assert result["allowed_channels"] == ["audio", "detailed", "visual"]
+    assert result["only_urgent"] is False
+    assert result["postpone"] is False
+
+
+def test_highway_rule() -> None:
+    ctx: dict[str, Any] = {
+        "scenario": "highway",
+        "driver": {"fatigue_level": 0.1, "workload": "low"},
+    }
+    result = apply_rules(ctx, SAFETY_RULES)
+    assert result["allowed_channels"] == ["audio"]
+    assert result["postpone"] is False
+
+
+def test_fatigue_rule() -> None:
+    ctx: dict[str, Any] = {
+        "scenario": "city_driving",
+        "driver": {"fatigue_level": 0.8, "workload": "normal"},
+    }
+    result = apply_rules(ctx, SAFETY_RULES)
+    assert result["only_urgent"] is True
+    assert result["allowed_channels"] == ["audio"]
+
+
+def test_overloaded_rule() -> None:
+    ctx: dict[str, Any] = {
+        "scenario": "city_driving",
+        "driver": {"fatigue_level": 0.3, "workload": "overloaded"},
+    }
+    result = apply_rules(ctx, SAFETY_RULES)
+    assert result["postpone"] is True
+
+
+def test_highway_and_fatigue_intersection() -> None:
+    """高速+疲劳 → allowed_channels 取交集."""
+    ctx: dict[str, Any] = {
+        "scenario": "highway",
+        "driver": {"fatigue_level": 0.8, "workload": "normal"},
+    }
+    result = apply_rules(ctx, SAFETY_RULES)
+    assert result["only_urgent"] is True
+    assert set(result["allowed_channels"]) == {"audio"}
+
+
+def test_max_frequency_minutes_takes_min() -> None:
+    """多条规则定义 max_frequency_minutes 时取最小值."""
+    rules = [
+        Rule(
+            name="r1",
+            condition=lambda c: True,
+            constraint={"max_frequency_minutes": 30},
+            priority=10,
+        ),
+        Rule(
+            name="r2",
+            condition=lambda c: True,
+            constraint={"max_frequency_minutes": 10},
+            priority=20,
+        ),
+    ]
+    result = apply_rules(
+        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules
+    )
+    assert result["max_frequency_minutes"] == 10
+
+
+def test_missing_field_not_constraining() -> None:
+    """规则A有 allowed_channels，规则B只有 postpone → allowed_channels 仅从A."""
+    rules = [
+        Rule(
+            name="a",
+            condition=lambda c: True,
+            constraint={"allowed_channels": ["audio", "visual"]},
+            priority=10,
+        ),
+        Rule(
+            name="b",
+            condition=lambda c: True,
+            constraint={"postpone": True},
+            priority=20,
+        ),
+    ]
+    result = apply_rules(
+        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules
+    )
+    assert result["allowed_channels"] == ["audio", "visual"]
+    assert result["postpone"] is True
+
+
+def test_empty_intersection_fallback() -> None:
+    """allowed_channels 交集为空时回退到最后一条定义该字段的规则（最低优先级）."""
+    rules = [
+        Rule(
+            name="a",
+            condition=lambda c: True,
+            constraint={"allowed_channels": ["audio"]},
+            priority=20,
+        ),
+        Rule(
+            name="b",
+            condition=lambda c: True,
+            constraint={"allowed_channels": ["visual"]},
+            priority=10,
+        ),
+    ]
+    result = apply_rules(
+        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules
+    )
+    assert result["allowed_channels"] == ["visual"]
+
+
+def test_format_constraints() -> None:
+    ctx: dict[str, Any] = {
+        "scenario": "highway",
+        "driver": {"fatigue_level": 0.8, "workload": "normal"},
+    }
+    result = apply_rules(ctx, SAFETY_RULES)
+    text = format_constraints(result)
+    assert "audio" in text
+    assert "紧急" in text
+
+
+def test_format_empty_constraints() -> None:
+    text = format_constraints(
+        {
+            "only_urgent": False,
+            "postpone": False,
+            "allowed_channels": ["visual", "audio", "detailed"],
+        }
+    )
+    assert "audio" in text
