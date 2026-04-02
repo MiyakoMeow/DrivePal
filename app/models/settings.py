@@ -38,6 +38,8 @@ class LLMProviderConfig:
 
     provider: ProviderConfig
     temperature: float = 0.7
+    type: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict) -> "LLMProviderConfig":
@@ -49,6 +51,7 @@ class LLMProviderConfig:
                 api_key=d.get("api_key"),
             ),
             temperature=d.get("temperature", 0.7),
+            type=d.get("type"),
         )
 
 
@@ -170,19 +173,28 @@ class LLMSettings:
                     f"Provider '{resolved.provider_name}' not found in model_providers"
                 )
             provider_config = self.model_providers[resolved.provider_name]
+            provider_type = provider_config.get("type")
             api_key_env = provider_config.get("api_key_env")
             if api_key_env:
                 api_key: str | None = os.environ.get(api_key_env, "")
             else:
                 api_key = provider_config.get("api_key")
+            if provider_type == "vllm":
+                model_name = provider_config.get("model", resolved.model_name)
+            else:
+                model_name = resolved.model_name
+            extra_keys = {"type", "model", "base_url", "api_key", "api_key_env"}
+            extra = {k: v for k, v in provider_config.items() if k not in extra_keys}
             result.append(
                 LLMProviderConfig(
                     provider=ProviderConfig(
-                        model=resolved.model_name,
+                        model=model_name,
                         base_url=provider_config.get("base_url"),
                         api_key=api_key,
                     ),
                     temperature=resolved.params.get("temperature", 0.7),
+                    type=provider_type,
+                    extra=extra,
                 )
             )
         return result
@@ -228,15 +240,34 @@ def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
     )
 
 
+_cached_chat_model: ChatModelProtocol | None = None
+
+
 def get_chat_model(temperature: float | None = None) -> "ChatModelProtocol":
     """从配置创建 ChatModel 实例."""
-    from app.models.chat import ChatModel
-
+    global _cached_chat_model
+    if _cached_chat_model is not None:
+        return _cached_chat_model
     settings = LLMSettings.load()
     if "default" not in settings.model_groups:
         raise RuntimeError("No default model group configured")
     providers = settings.get_model_group_providers("default")
-    return ChatModel(providers=providers, temperature=temperature)
+    if providers and providers[0].type == "vllm":
+        from app.models.vllm_chat import VLLMChatModel
+
+        provider = providers[0]
+        _cached_chat_model = VLLMChatModel(
+            model_id=provider.provider.model,
+            temperature=temperature
+            if temperature is not None
+            else provider.temperature,
+            **provider.extra,
+        )
+    else:
+        from app.models.chat import ChatModel
+
+        _cached_chat_model = ChatModel(providers=providers, temperature=temperature)
+    return _cached_chat_model
 
 
 def get_embedding_model() -> "EmbeddingModel":
