@@ -24,7 +24,7 @@ class ChatModel:
         """初始化对话模型，按provider顺序自动fallback."""
         if providers is None:
             settings = LLMSettings.load()
-            providers = settings.get_model_group_providers("default")
+            providers = settings.llm_providers
         if not providers:
             raise RuntimeError("No LLM providers configured")
         self.providers = providers
