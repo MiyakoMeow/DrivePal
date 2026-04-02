@@ -3,104 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>知行车秘 - 车载AI智能体</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; }
-        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
-        h1 { text-align: center; color: #333; margin-bottom: 20px; }
-        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
-        input, select, textarea { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .response { background: #f8f9fa; padding: 15px; border-radius: 4px; white-space: pre-wrap; }
-        .history-item { border-left: 3px solid #007bff; padding-left: 10px; margin-bottom: 10px; }
-    </style>
+    <title>知行车秘 — 模拟测试工作台</title>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <div class="container">
-        <h1>知行车秘</h1>
-        
-        <div class="card">
-            <h3>设置</h3>
-            <div class="input-group">
-                <select id="memoryMode">
-                    <option value="keyword">关键词检索</option>
-                    <option value="llm_only">仅LLM</option>
-                    <option value="embeddings">向量检索</option>
-                    <option value="memorybank">MemoryBank</option>
-                </select>
+    <div class="header">
+        <span>知行车秘 — 模拟测试工作台</span>
+        <a href="/graphql" target="_blank">GraphQL Playground</a>
+    </div>
+
+    <div class="main">
+        <div class="panel-left">
+            <div>
+                <div class="section-title">场景预设</div>
+                <div class="preset-row">
+                    <select id="presetSelect" onchange="loadPreset(this.value)">
+                        <option value="">-- 选择预设 --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">记忆模式</div>
+                <div class="memory-row">
+                    <label>模式</label>
+                    <select id="memoryMode">
+                        <option value="MEMORY_BANK">MEMORY_BANK</option>
+                        <option value="MEMOCHAT">MEMOCHAT</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">驾驶员状态</div>
+                <div class="field">
+                    <label>情绪</label>
+                    <select id="ctx-emotion">
+                        <option value="">（未设置）</option>
+                        <option value="neutral">正常</option>
+                        <option value="calm">平静</option>
+                        <option value="anxious">焦虑</option>
+                        <option value="fatigued">疲倦</option>
+                        <option value="angry">愤怒</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>负荷</label>
+                    <select id="ctx-workload">
+                        <option value="">（未设置）</option>
+                        <option value="low">低</option>
+                        <option value="normal">正常</option>
+                        <option value="high">高</option>
+                        <option value="overloaded">过载</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>疲劳程度: <span id="fatigueVal" class="range-val">0.0</span></label>
+                    <input type="range" id="ctx-fatigueLevel" min="0" max="1" step="0.1" value="0" oninput="document.getElementById('fatigueVal').textContent=parseFloat(this.value).toFixed(1)">
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">时空信息</div>
+                <div class="field">
+                    <label>纬度</label>
+                    <input type="number" step="any" id="ctx-lat" placeholder="例: 39.9042">
+                </div>
+                <div class="field">
+                    <label>经度</label>
+                    <input type="number" step="any" id="ctx-lng" placeholder="例: 116.4074">
+                </div>
+                <div class="field">
+                    <label>地址</label>
+                    <input type="text" id="ctx-address" placeholder="当前位置地址">
+                </div>
+                <div class="field">
+                    <label>车速 (km/h)</label>
+                    <input type="number" id="ctx-speedKmh" placeholder="0" min="0">
+                </div>
+                <div class="field">
+                    <label>目的地地址</label>
+                    <input type="text" id="ctx-dest-address" placeholder="目的地">
+                </div>
+                <div class="field">
+                    <label>ETA (分钟)</label>
+                    <input type="number" id="ctx-etaMinutes" placeholder="预估到达时间" min="0">
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">交通状况</div>
+                <div class="field">
+                    <label>拥堵程度</label>
+                    <select id="ctx-congestionLevel">
+                        <option value="">（未设置）</option>
+                        <option value="smooth">畅通</option>
+                        <option value="slow">缓行</option>
+                        <option value="congested">拥堵</option>
+                        <option value="blocked">严重拥堵</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>事故信息</label>
+                    <input type="text" id="ctx-incidents" placeholder="事故描述（可选）">
+                </div>
+                <div class="field">
+                    <label>延误 (分钟)</label>
+                    <input type="number" id="ctx-delayMinutes" placeholder="0" min="0">
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">驾驶场景</div>
+                <div class="field">
+                    <label>场景类型</label>
+                    <select id="ctx-scenario">
+                        <option value="">（未设置）</option>
+                        <option value="parked">停车场</option>
+                        <option value="city_driving">城市道路</option>
+                        <option value="highway">高速公路</option>
+                        <option value="traffic_jam">交通拥堵</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary btn-sm" onclick="savePreset()">保存预设</button>
+                <button class="btn btn-secondary btn-sm" onclick="clearForm()">清空表单</button>
             </div>
         </div>
-        
-        <div class="card">
-            <h3>输入</h3>
-            <div class="input-group">
-                <input type="text" id="queryInput" placeholder="请输入您的需求..." />
-                <button onclick="sendQuery()">发送</button>
+
+        <div class="panel-right">
+            <div class="card">
+                <div class="query-bar">
+                    <input type="text" id="queryInput" placeholder="输入驾驶相关的查询..." onkeydown="if(event.key==='Enter')sendQuery()">
+                    <button class="btn btn-primary" id="sendBtn" onclick="sendQuery()">发送</button>
+                </div>
             </div>
-        </div>
-        
-        <div class="card" id="responseCard" style="display:none;">
-            <h3>响应</h3>
-            <div class="response" id="responseOutput"></div>
-            <div style="margin-top:10px;">
-                <button onclick="feedback('accept')">接受</button>
-                <button onclick="feedback('ignore')">忽略</button>
+
+            <details class="stage" id="stage-context" open>
+                <summary>Context Agent</summary>
+                <div class="stage-body"><pre id="stage-context-body"><span class="empty-hint">等待查询...</span></pre></div>
+            </details>
+
+            <details class="stage" id="stage-task">
+                <summary>Task Agent</summary>
+                <div class="stage-body"><pre id="stage-task-body"><span class="empty-hint">等待查询...</span></pre></div>
+            </details>
+
+            <details class="stage" id="stage-decision">
+                <summary>Strategy Agent</summary>
+                <div class="stage-body"><pre id="stage-decision-body"><span class="empty-hint">等待查询...</span></pre></div>
+            </details>
+
+            <details class="stage" id="stage-execution">
+                <summary>Execution Agent</summary>
+                <div class="stage-body"><pre id="stage-execution-body"><span class="empty-hint">等待查询...</span></pre></div>
+                <div class="feedback-row" id="feedbackRow" style="display:none; padding: 0 14px 12px;">
+                    <button class="btn btn-success btn-sm" onclick="submitFeedback('accept')">接受</button>
+                    <button class="btn btn-secondary btn-sm" onclick="submitFeedback('ignore')">忽略</button>
+                </div>
+            </details>
+
+            <div class="card history-section">
+                <div class="section-title">历史记录</div>
+                <div id="historyList"><span class="empty-hint">暂无历史记录</span></div>
             </div>
-        </div>
-        
-        <div class="card">
-            <h3>历史记录</h3>
-            <div id="historyList"></div>
         </div>
     </div>
-    
-    <script>
-        let currentEventId = null;
-        
-        async function sendQuery() {
-            const query = document.getElementById('queryInput').value;
-            const memoryMode = document.getElementById('memoryMode').value;
-            
-            const response = await fetch('/api/query', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({query, memory_mode: memoryMode})
-            });
-            
-            const data = await response.json();
-            currentEventId = data.event_id;
-            document.getElementById('responseCard').style.display = 'block';
-            document.getElementById('responseOutput').textContent = data.result;
-            loadHistory();
-        }
-        
-        async function feedback(action) {
-            if (!currentEventId) return;
-            await fetch('/api/feedback', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({event_id: currentEventId, action})
-            });
-            alert('反馈已提交');
-        }
-        
-        async function loadHistory() {
-            const response = await fetch('/api/history');
-            const data = await response.json();
-            const container = document.getElementById('historyList');
-            container.innerHTML = '';
-            data.history.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                div.textContent = item.content || JSON.stringify(item);
-                container.appendChild(div);
-            });
-        }
-        
-        loadHistory();
-    </script>
+
+    <script src="/static/app.js"></script>
 </body>
 </html>

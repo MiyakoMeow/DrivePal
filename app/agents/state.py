@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Optional, TypedDict
 
 
 class AgentState(TypedDict):
-    """Agent状态定义."""
+    """工作流流水线中的共享状态."""
 
     messages: list[dict]
     context: dict
@@ -14,3 +15,15 @@ class AgentState(TypedDict):
     decision: Optional[dict]
     result: Optional[str]
     event_id: Optional[str]
+    driving_context: Optional[dict]
+    stages: Optional[WorkflowStages]
+
+
+@dataclass
+class WorkflowStages:
+    """各 Agent 阶段的输出快照."""
+
+    context: dict = field(default_factory=dict)
+    task: dict = field(default_factory=dict)
+    decision: dict = field(default_factory=dict)
+    execution: dict = field(default_factory=dict)

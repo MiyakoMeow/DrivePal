@@ -64,6 +64,10 @@ data/benchmark/
 
 作为 `vendor/VehicleMemBench` 子模块引入，评估逻辑由供应商提供。
 
-## 实验报告 API
+## 实验报告
 
-##### GET `/api/experiment/report` - 获取实验报告
+通过 GraphQL 查询获取实验报告：
+
+```graphql
+query { experimentReport { report } }
+```

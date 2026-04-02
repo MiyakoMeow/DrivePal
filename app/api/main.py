@@ -1,30 +1,59 @@
-"""FastAPI应用主入口."""
+"""FastAPI 应用主入口."""
 
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from pathlib import Path
-from typing import Annotated, Optional, Literal
-import os
 import logging
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import AsyncIterator
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+import strawberry
+import strawberry.fastapi
 
 from app.memory.memory import MemoryModule
-from app.memory.types import MemoryMode
-from app.models.settings import get_chat_model, get_embedding_model
+from app.storage.init_data import init_storage
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="知行车秘 - 车载AI智能体")
+DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
 
-_data_dir_env = os.getenv("DATA_DIR", "data")
-DATA_DIR = Path(_data_dir_env)
+_default_webui = Path(__file__).parent.parent.parent / "webui"
+WEBUI_DIR = Path(os.getenv("WEBUI_DIR", _default_webui)).resolve()
+if not WEBUI_DIR.exists():
+    WEBUI_DIR = _default_webui.resolve()
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    init_storage(DATA_DIR)
+    logger.info("Data directory initialized: %s", DATA_DIR)
+    if not Path.exists(WEBUI_DIR):
+        logger.warning("WebUI directory not found: %s", WEBUI_DIR)
+    yield
+
+
+app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
 
 def _ensure_memory_module() -> MemoryModule:
-    chat_model = get_chat_model()
-    embedding_model = get_embedding_model()
+    from app.models.settings import get_chat_model, get_embedding_model
+
     return MemoryModule(
-        data_dir=DATA_DIR, embedding_model=embedding_model, chat_model=chat_model
+        data_dir=DATA_DIR,
+        embedding_model=get_embedding_model(),
+        chat_model=get_chat_model(),
     )
 
 
@@ -39,74 +68,27 @@ def get_memory_module() -> MemoryModule:
     return _memory_module
 
 
-class QueryRequest(BaseModel):
-    """用户查询请求."""
+def _mount_graphql() -> None:
+    from strawberry.scalars import JSON
+    from strawberry.schema.config import StrawberryConfig
 
-    query: str
-    memory_mode: MemoryMode = MemoryMode.MEMORY_BANK
+    from app.api.graphql_schema import JSONScalar
+    from app.api.resolvers.mutation import Mutation as MutationImpl
+    from app.api.resolvers.query import Query as QueryImpl
 
-
-class FeedbackRequest(BaseModel):
-    """用户反馈请求."""
-
-    event_id: str
-    action: Literal["accept", "ignore"]
-    modified_content: Optional[str] = None
-
-
-@app.post("/api/query")
-async def query(
-    request: QueryRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
-) -> dict:
-    """处理用户查询."""
-    from app.agents.workflow import AgentWorkflow
-
-    try:
-        workflow = AgentWorkflow(
-            data_dir=DATA_DIR,
-            memory_mode=request.memory_mode,
-            memory_module=mm,
-        )
-        result, event_id = await workflow.run(request.query)
-        return {"result": result, "event_id": event_id}
-    except Exception as e:
-        logger.exception("Query failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+    schema = strawberry.Schema(
+        query=QueryImpl,
+        mutation=MutationImpl,
+        config=StrawberryConfig(scalar_map={JSON: JSONScalar}),
+    )
+    graphql_app = strawberry.fastapi.GraphQLRouter(schema)
+    app.include_router(graphql_app, prefix="/graphql")
 
 
-@app.post("/api/feedback")
-async def feedback(
-    request: FeedbackRequest, mm: Annotated[MemoryModule, Depends(get_memory_module)]
-) -> dict:
-    """提交用户反馈."""
-    try:
-        from app.memory.schemas import FeedbackData
-
-        feedback = FeedbackData(
-            action=request.action,
-            modified_content=request.modified_content,
-        )
-        await mm.update_feedback(request.event_id, feedback)
-        return {"status": "success"}
-    except Exception as e:
-        logger.exception("Feedback failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+_mount_graphql()
 
 
-@app.get("/api/experiment/report")
-async def experiment_report() -> dict:
-    """获取实验报告."""
-    return {"report": "Experiment runner migrated to CLI pipeline"}
-
-
-@app.get("/api/history")
-async def history(
-    mm: Annotated[MemoryModule, Depends(get_memory_module)], limit: int = 10
-) -> dict:
-    """获取历史记录."""
-    try:
-        events = await mm.get_history(limit=limit)
-        return {"history": [e.model_dump() for e in events]}
-    except Exception as e:
-        logger.exception("History retrieval failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+@app.get("/")
+async def root() -> FileResponse:
+    """返回前端 WebUI 入口页面."""
+    return FileResponse(WEBUI_DIR / "index.html")
