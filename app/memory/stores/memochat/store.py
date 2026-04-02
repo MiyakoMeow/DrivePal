@@ -64,11 +64,12 @@ class MemoChatStore:
             "last_recall_date": now.date().isoformat(),
         }
         topic = event.type or "general"
-        await self._engine.append_memo(topic, memo_entry)
-        event_copy = event.model_copy(deep=True)
-        event_copy.id = memo_entry["id"]
-        event_copy.created_at = memo_entry["created_at"]
-        await self._storage.append_raw(event_copy.model_dump())
+        async with self._write_lock:
+            await self._engine.append_memo(topic, memo_entry)
+            event_copy = event.model_copy(deep=True)
+            event_copy.id = memo_entry["id"]
+            event_copy.created_at = memo_entry["created_at"]
+            await self._storage.append_raw(event_copy.model_dump())
         return memo_entry["id"]
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:

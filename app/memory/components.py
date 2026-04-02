@@ -123,9 +123,9 @@ class FeedbackManager:
             else:
                 raise ValueError(f"Invalid action: {action!r}")
 
-            await self._strategies_store.write(strategies)
             feedback_store = TOMLStore(self.data_dir, Path("feedback.toml"), list)
             await feedback_store.append(feedback.model_dump())
+            await self._strategies_store.write(strategies)
 
 
 class SimpleInteractionWriter:

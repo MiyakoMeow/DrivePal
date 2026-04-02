@@ -136,7 +136,8 @@ async def _embedding_filter(
     if not texts:
         return []
     vectors = await embedding_model.batch_encode(texts)
-    assert len(flat) == len(vectors), f"Length mismatch: {len(flat)} vs {len(vectors)}"
+    if len(flat) != len(vectors):
+        raise RuntimeError(f"Length mismatch: {len(flat)} vs {len(vectors)}")
     scored = []
     for (topic, entry), vec in zip(flat, vectors):
         sim = cosine_similarity(query_vec, vec)
