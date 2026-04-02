@@ -9,50 +9,65 @@
 | 决策项 | 选择 | 理由 |
 |--------|------|------|
 | 数据注入方式 | 请求级上下文注入 | 无状态、易测试、外部对接自然 |
-| API 风格 | GraphQL（Strawberry + FastAPI） | 强类型 schema、按需查询字段、便于复杂嵌套上下文数据、前端灵活组装 |
+| API 风格 | GraphQL（Strawberry + FastAPI）与 REST 共存 | GraphQL 处理新功能，REST 保留向后兼容 |
 | 策略决策 | 轻量规则 + LLM | 关键安全约束走规则，其余 LLM 生成 |
 | 时空数据粒度 | 细粒度（坐标级） | 支持精确场景模拟 |
 | WebUI 定位 | 场景模拟 + 工作流调试 | 可视化各 Agent 阶段输出 |
 
 ## 1. 数据模型
 
-新增 `app/schemas/context.py`，定义外部上下文数据结构。
+新增 `app/schemas/context.py`，定义外部上下文数据结构。枚举字段使用 `Literal` 约束合法值。
 
 ```python
+from typing import Literal
+from pydantic import BaseModel, Field
+
 class DriverState(BaseModel):
-    emotion: str = "neutral"        # neutral / anxious / fatigued / calm / angry
-    workload: str = "normal"        # low / normal / high / overloaded
-    fatigue_level: float = 0.0      # 0.0 ~ 1.0
+    emotion: Literal["neutral", "anxious", "fatigued", "calm", "angry"] = "neutral"
+    workload: Literal["low", "normal", "high", "overloaded"] = "normal"
+    fatigue_level: float = Field(default=0.0, ge=0.0, le=1.0)
 
 class GeoLocation(BaseModel):
-    latitude: float = 0.0
-    longitude: float = 0.0
+    latitude: float = Field(default=0.0, ge=-90.0, le=90.0)
+    longitude: float = Field(default=0.0, ge=-180.0, le=180.0)
     address: str = ""
-    speed_kmh: float = 0.0
+    speed_kmh: float = Field(default=0.0, ge=0.0)
 
 class SpatioTemporalContext(BaseModel):
     current_location: GeoLocation = GeoLocation()
     destination: GeoLocation | None = None
     eta_minutes: float | None = None
-    heading: float | None = None    # 行驶方向 0~360
+    heading: float | None = Field(default=None, ge=0, le=360)
 
 class TrafficCondition(BaseModel):
-    congestion_level: str = "smooth"  # smooth / slow / congested / blocked
+    congestion_level: Literal["smooth", "slow", "congested", "blocked"] = "smooth"
     incidents: list[str] = []
-    estimated_delay_minutes: int = 0
+    estimated_delay_minutes: int = Field(default=0, ge=0)
 
 class DrivingContext(BaseModel):
     driver: DriverState = DriverState()
     spatial: SpatioTemporalContext = SpatioTemporalContext()
     traffic: TrafficCondition = TrafficCondition()
-    scenario: str = "parked"        # parked / city_driving / highway / traffic_jam
+    scenario: Literal["parked", "city_driving", "highway", "traffic_jam"] = "parked"
 ```
 
 `DrivingContext` 可选 — 不传时走原有纯 LLM 推断路径，向后兼容。
 
+### 场景预设数据模型
+
+```python
+class ScenarioPreset(BaseModel):
+    id: str = ""
+    name: str = ""
+    context: DrivingContext = DrivingContext()
+    created_at: str = ""
+```
+
+存储于 `data/scenario_presets.toml`，结构为 `list[ScenarioPreset]`。
+
 ## 2. GraphQL API 层
 
-使用 Strawberry GraphQL 库与 FastAPI 集成，替换现有 REST API。
+使用 Strawberry GraphQL 库与 FastAPI 集成，与现有 REST API 共存。
 
 ### 2.1 技术选型
 
@@ -62,19 +77,22 @@ class DrivingContext(BaseModel):
 ### 2.2 Schema 定义
 
 ```graphql
+enum MemoryMode {
+  MEMORY_BANK
+  MEMOCHAT
+}
+
+scalar JSON
+
 type Query {
-  history(limit: Int = 10, memoryMode: MemoryMode! = MEMORY_BANK): [MemoryEvent!]!
+  history(limit: Int = 10, memoryMode: MemoryMode! = MEMORY_BANK): [MemoryEventGQL!]!
   experimentReport: ExperimentReport!
-  # 获取可用的模拟场景预设
   scenarioPresets: [ScenarioPreset!]!
 }
 
 type Mutation {
-  # 核心查询（含上下文注入）
   processQuery(input: ProcessQueryInput!): ProcessQueryResult!
-  # 提交反馈
   submitFeedback(input: FeedbackInput!): FeedbackResult!
-  # 场景预设管理（用于模拟测试）
   saveScenarioPreset(input: ScenarioPresetInput!): ScenarioPreset!
   deleteScenarioPreset(id: String!): Boolean!
 }
@@ -121,7 +139,6 @@ input TrafficConditionInput {
 type ProcessQueryResult {
   result: String!
   eventId: String
-  # 工作流各阶段输出（调试用）
   stages: WorkflowStages
 }
 
@@ -132,28 +149,92 @@ type WorkflowStages {
   execution: JSON!
 }
 
+type MemoryEventGQL {
+  id: String!
+  content: String!
+  type: String!
+  description: String!
+  createdAt: String!
+}
+
+type ExperimentReport {
+  report: String!
+}
+
+type ScenarioPreset {
+  id: String!
+  name: String!
+  context: DrivingContextGQL!
+  createdAt: String!
+}
+
+type DrivingContextGQL {
+  driver: DriverStateGQL!
+  spatial: SpatioTemporalContextGQL!
+  traffic: TrafficConditionGQL!
+  scenario: String!
+}
+
+type DriverStateGQL {
+  emotion: String!
+  workload: String!
+  fatigueLevel: Float!
+}
+
+type SpatioTemporalContextGQL {
+  currentLocation: GeoLocationGQL!
+  destination: GeoLocationGQL
+  etaMinutes: Float
+  heading: Float
+}
+
+type GeoLocationGQL {
+  latitude: Float!
+  longitude: Float!
+  address: String!
+  speedKmh: Float!
+}
+
+type TrafficConditionGQL {
+  congestionLevel: String!
+  incidents: [String!]!
+  estimatedDelayMinutes: Int!
+}
+
 input FeedbackInput {
   eventId: String!
-  action: String!   # accept | ignore
+  action: String!
   modifiedContent: String
 }
 
 type FeedbackResult {
   status: String!
 }
+
+input ScenarioPresetInput {
+  name: String!
+  context: DrivingContextInput!
+}
 ```
 
 ### 2.3 与现有 REST API 的关系
 
-- GraphQL 端点挂载在 `/graphql`，同时保留原有 REST 端点（标记 deprecated）
+- **共存方案**：GraphQL 端点挂载在 `/graphql`，原有 REST 端点全部保留
 - GraphQL playground 自动可用（Strawberry 提供），便于开发调试
-- 新功能仅通过 GraphQL 暴露
+- 新功能（上下文注入、场景预设、工作流调试）仅通过 GraphQL 暴露
+- REST 端点的 `AgentWorkflow.run()` 调用不变（不传 `driving_context`，返回值保持二元素）
 
-### 2.4 文件结构
+### 2.4 GraphQL 错误处理
+
+- 业务异常（查询失败、反馈失败等）转换为 GraphQL `GraphQLError`，在 `errors` 数组中返回
+- 使用 Strawberry 的 `raise GraphQLError("message")` 模式
+- HTTP 层面的错误（如 404）仍由 FastAPI 处理
+
+### 2.5 文件结构
 
 ```
 app/api/
-├── main.py              # FastAPI app，挂载 GraphQL router
+├── main.py              # FastAPI app，挂载 GraphQL router，保留 REST 端点
 ├── graphql_schema.py    # Strawberry schema 定义（type/mutation/query）
 ├── resolvers/
 │   ├── __init__.py
@@ -163,31 +244,48 @@ app/api/
 
 ## 3. 工作流改造
 
-### 3.1 AgentWorkflow 接受外部上下文
+### 3.1 AgentState 扩展
 
-`AgentWorkflow.run()` 签名扩展：
+`app/agents/state.py` 的 `AgentState` TypedDict 新增字段：
 
 ```python
-async def run(
-    self,
-    user_input: str,
-    driving_context: DrivingContext | None = None,
-) -> tuple[str, str | None, dict]:
-    # ...
-    # 返回值新增第三个元素：各阶段输出（用于调试）
+class AgentState(TypedDict):
+    messages: list[dict]
+    context: dict
+    task: Optional[dict]
+    decision: Optional[dict]
+    result: Optional[str]
+    event_id: Optional[str]
+    driving_context: Optional[dict]  # 新增：外部注入的驾驶上下文
 ```
 
-### 3.2 Context Node 使用真实数据
+### 3.2 AgentWorkflow 签名
 
-当 `driving_context` 非空时：
-- 跳过 LLM 生成上下文
-- 将 `DrivingContext` 序列化为 JSON 直接作为 context
+保持 `run()` 返回二元素（向后兼容 REST），新增 `run_with_stages()` 方法：
+
+```python
+async def run(self, user_input: str, driving_context: dict | None = None) -> tuple[str, str | None]:
+    """运行工作流，返回 (result, event_id)。向后兼容。"""
+    result, event_id, _ = await self.run_with_stages(user_input, driving_context)
+    return result, event_id
+
+async def run_with_stages(
+    self, user_input: str, driving_context: dict | None = None
+) -> tuple[str, str | None, WorkflowStages]:
+    """运行工作流，返回 (result, event_id, stages)。"""
+```
+
+### 3.3 Context Node 使用真实数据
+
+当 `state["driving_context"]` 非空时：
+- 跳过 LLM 调用，直接将 `driving_context` 作为 context
+- 附加 current_datetime 和 memory 搜索结果
 - prompt 中标注"以下为真实传感器/系统注入数据，请直接使用"
 
-当 `driving_context` 为空时：
+当 `state["driving_context"]` 为空时：
 - 走原有 LLM 推断路径（向后兼容）
 
-### 3.3 各阶段输出收集
+### 3.4 各阶段输出收集
 
 新增 `WorkflowStages` 数据类，工作流执行过程中逐步填充：
 
@@ -200,49 +298,110 @@ class WorkflowStages:
     execution: dict = field(default_factory=dict)
 ```
 
+`run_with_stages()` 内部创建 `WorkflowStages` 实例，每个 node 执行后将输出写入对应字段。
+
 ## 4. 轻量规则引擎
 
 在 Strategy Agent 之前，基于 `DrivingContext` 应用安全约束规则。
 
-### 4.1 规则定义
+### 4.1 Rule 数据类
+
+```python
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+@dataclass
+class Rule:
+    name: str
+    condition: Callable[[dict], bool]  # 接收 DrivingContext 的 dict 表示
+    constraint: dict[str, Any]         # 约束内容
+    priority: int = 0                  # 数字越大优先级越高
+```
+
+### 4.2 规则定义
 
 ```python
 # app/agents/rules.py
 
 SAFETY_RULES: list[Rule] = [
-    # 高速行驶 → 仅允许 audio 提醒，禁止 visual
     Rule(
-        condition=lambda ctx: ctx.scenario == "highway",
+        name="highway_audio_only",
+        condition=lambda ctx: ctx["scenario"] == "highway",
         constraint={"allowed_channels": ["audio"], "max_frequency": "30min"},
+        priority=10,
     ),
-    # 疲劳等级 > 0.7 → 抑制非紧急提醒
     Rule(
-        condition=lambda ctx: ctx.driver.fatigue_level > 0.7,
-        constraint={"only_urgent": True, "channels": ["audio"]},
+        name="fatigue_suppress",
+        condition=lambda ctx: ctx["driver"]["fatigue_level"] > 0.7,
+        constraint={"only_urgent": True, "allowed_channels": ["audio"]},
+        priority=20,
     ),
-    # 工作负荷 overloaded → 延后提醒
     Rule(
-        condition=lambda ctx: ctx.driver.workload == "overloaded",
-        constraint={"postpone": True, "postpone_until": "workload_normal"},
+        name="overloaded_postpone",
+        condition=lambda ctx: ctx["driver"]["workload"] == "overloaded",
+        constraint={"postpone": True},
+        priority=15,
     ),
-    # 停车状态 → 允许所有通道和详细内容
     Rule(
-        condition=lambda ctx: ctx.scenario == "parked",
+        name="parked_all_channels",
+        condition=lambda ctx: ctx["scenario"] == "parked",
         constraint={"allowed_channels": ["visual", "audio", "detailed"]},
+        priority=5,
     ),
 ]
 ```
 
-### 4.2 应用时机
+### 4.3 规则合并策略
+
+多规则同时匹配时，按优先级从高到低处理：
+- `allowed_channels`：取交集（最严格约束）
+- `only_urgent`：任一规则为 True 则为 True
+- `postpone`：任一规则为 True 则为 True
+- `max_frequency`：取最短间隔
+
+### 4.4 规则引擎输出格式
+
+规则引擎输出合并后的 `constraints` 字典，序列化为 JSON 注入 Strategy prompt：
+
+```
+【安全约束规则】
+你必须遵守以下约束（由系统规则引擎生成，不可违反）：
+- 允许的提醒通道: ["audio"]
+- 仅允许紧急提醒: true
+- 最大提醒频率: 30min
+
+请在以上约束范围内做出决策。
+```
+
+### 4.5 应用时机
 
 ```
 Context Node → Task Node → [Rule Engine] → Strategy Node → Execution Node
 ```
 
-规则引擎在 Task Node 之后、Strategy Node 之前执行：
-1. 遍历匹配的规则，收集 constraints
-2. 将 constraints 注入 Strategy prompt 作为硬性约束
-3. Strategy Agent 必须在约束范围内决策
+规则引擎在 Task Node 之后、Strategy Node 之前执行。仅当 `driving_context` 存在时执行；否则跳过，Strategy Agent 自行决策。
+
+### 4.6 postpone 处理
+
+P0 阶段：postpone 规则匹配时，Strategy Node 返回 `{"should_remind": false, "reason": "postponed", "postpone_reason": "overloaded"}`，由调用方（前端/外部系统）决定何时重试。不引入异步状态机。
+
+### 4.7 Strategy prompt 更新
+
+当规则引擎产出约束时，Strategy prompt 变为：
+
+```
+{STRATEGY_SYSTEM_PROMPT}
+
+{constraints_block}
+
+上下文: {context}
+任务: {task}
+个性化策略: {strategies}
+
+请输出JSON格式的决策结果.
+```
+
+`constraints_block` 为 4.4 节描述的格式。无约束时 `constraints_block` 为空字符串。
 
 ## 5. 模拟测试 WebUI
 
@@ -294,8 +453,15 @@ Context Node → Task Node → [Rule Engine] → Strategy Node → Execution Nod
 ### 5.3 技术实现
 
 - 纯 HTML/CSS/JS 单页应用（同现有模式）
+- 替换现有 `webui/index.html`
 - 使用 `fetch` 调用 `/graphql` 端点
-- 场景预设存储在服务端（`data/scenario_presets.toml`）
+- 场景预设通过 GraphQL mutation 管理，持久化到 `data/scenario_presets.toml`
+
+### 5.4 路由
+
+- `/` → 新的模拟测试 WebUI
+- 旧 WebUI 不保留（被新页面完全替代）
+- `/graphql` → GraphQL 端点 + Playground
 
 ## 6. 路线图与本次范围
 
@@ -303,12 +469,12 @@ Context Node → Task Node → [Rule Engine] → Strategy Node → Execution Nod
 
 | # | 任务 | 优先级 |
 |---|------|--------|
-| 1 | `app/schemas/context.py` — 上下文数据模型 | P0 |
+| 1 | `app/schemas/context.py` — 上下文数据模型 + 场景预设模型 | P0 |
 | 2 | GraphQL schema + resolvers | P0 |
-| 3 | `AgentWorkflow` 接受外部上下文 + 阶段输出收集 | P0 |
-| 4 | 轻量规则引擎 `app/agents/rules.py` | P0 |
+| 3 | `AgentState` 扩展 + `AgentWorkflow` 改造（`run_with_stages`） | P0 |
+| 4 | 轻量规则引擎 `app/agents/rules.py` + 规则合并 + prompt 注入 | P0 |
 | 5 | 模拟测试 WebUI | P1 |
-| 6 | 场景预设管理（CRUD） | P1 |
+| 6 | 场景预设管理（CRUD via GraphQL） | P1 |
 | 7 | 测试 | P0 |
 
 ### 未来规划（仅规划，不实施）
