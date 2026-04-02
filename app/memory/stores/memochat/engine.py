@@ -126,7 +126,7 @@ class MemoChatEngine:
         self._summary_lock = asyncio.Lock()
         self._initialized = False
 
-    async def _ensure_initialized(self) -> None:
+    async def _locked_ensure_initialized(self) -> None:
         async with self._init_lock:
             if self._initialized:
                 return
@@ -141,23 +141,23 @@ class MemoChatEngine:
 
     async def read_recent_dialogs(self) -> list[str]:
         """读取近期对话列表."""
-        await self._ensure_initialized()
+        await self._locked_ensure_initialized()
         return await self._dialogs_store.read()
 
     async def append_recent_dialog(self, dialog: str) -> None:
         """追加一条对话到近期对话列表."""
-        await self._ensure_initialized()
+        await self._locked_ensure_initialized()
         await self._dialogs_store.append(dialog)
 
     async def read_memos(self) -> dict[str, list[dict]]:
         """读取全部记忆条目."""
-        await self._ensure_initialized()
+        await self._locked_ensure_initialized()
         return await self._memos_store.read()
 
     async def _write_memos(self, memos: dict) -> None:
         await self._memos_store.write(memos)
 
-    async def append_memo(self, topic: str, memo_entry: dict) -> None:
+    async def _locked_append_memo(self, topic: str, memo_entry: dict) -> None:
         """追加 memo 条目，受摘要锁保护."""
         async with self._summary_lock:
             memos = await self.read_memos()
@@ -166,7 +166,7 @@ class MemoChatEngine:
 
     async def read_interactions(self) -> list[dict]:
         """读取全部交互记录."""
-        await self._ensure_initialized()
+        await self._locked_ensure_initialized()
         return await self._interactions_store.read()
 
     async def append_interaction(self, interaction: dict) -> None:
@@ -175,7 +175,7 @@ class MemoChatEngine:
 
     async def trigger_summarization(self) -> None:
         """触发摘要检查."""
-        await self._summarize_if_needed()
+        await self._locked_summarize_if_needed()
 
     def _should_summarize(self, dialogs: list[str]) -> bool:
         if len(dialogs) >= SUMMARIZATION_TURN_THRESHOLD:
@@ -186,7 +186,7 @@ class MemoChatEngine:
     def _generate_id(self) -> str:
         return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
-    async def _summarize_if_needed(self) -> None:
+    async def _locked_summarize_if_needed(self) -> None:
         async with self._summary_lock:
             dialogs = await self.read_recent_dialogs()
             if not self._should_summarize(dialogs):

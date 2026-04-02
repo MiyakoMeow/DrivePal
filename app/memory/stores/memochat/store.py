@@ -65,7 +65,7 @@ class MemoChatStore:
         }
         topic = event.type or "general"
         async with self._write_lock:
-            await self._engine.append_memo(topic, memo_entry)
+            await self._engine._locked_append_memo(topic, memo_entry)
             event_copy = event.model_copy(deep=True)
             event_copy.id = memo_entry["id"]
             event_copy.created_at = memo_entry["created_at"]
