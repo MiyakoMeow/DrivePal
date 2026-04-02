@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
-    from app.models.chat import ChatModel
+    from app.models.protocol import ChatModelProtocol
 
 from app.models.settings import ResolvedModel
 
@@ -100,7 +100,7 @@ def get_benchmark_max_tokens() -> int:
     return 8192
 
 
-def get_store_chat_model() -> "ChatModel":
+def get_store_chat_model() -> "ChatModelProtocol":
     """获取用于记忆存储操作的聊天模型."""
     from app.models.settings import get_chat_model
 

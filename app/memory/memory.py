@@ -11,7 +11,7 @@ from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
-    from app.models.chat import ChatModel
+    from app.models.protocol import ChatModelProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class MemoryModule:
         self,
         data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model: Optional["ChatModel"] = None,
+        chat_model: Optional["ChatModelProtocol"] = None,
     ) -> None:
         """初始化记忆模块."""
         self._stores: dict[MemoryMode, MemoryStore] = {}
@@ -51,7 +51,7 @@ class MemoryModule:
         self._chat_model = chat_model
 
     @property
-    def chat_model(self) -> "ChatModel":
+    def chat_model(self) -> "ChatModelProtocol":
         """获取聊天模型，延迟初始化."""
         if self._chat_model is None:
             from app.models.settings import get_chat_model

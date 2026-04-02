@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.memory.components import forgetting_curve, SUMMARY_WEIGHT
 from app.memory.schemas import SearchResult
-from app.models.chat import ChatModel
+from app.models.protocol import ChatModelProtocol
 from app.storage.toml_store import TOMLStore
 
 PERSONALITY_SUMMARY_THRESHOLD = 2
@@ -96,7 +96,7 @@ class PersonalityManager:
         date_group: str,
         events: list[dict],
         interactions: list[dict],
-        chat_model: ChatModel | None,
+        chat_model: ChatModelProtocol | None,
     ) -> None:
         """每日对话达到阈值时，生成人格分析摘要."""
         if not chat_model:
@@ -171,7 +171,7 @@ class PersonalityManager:
                     await self._store.write(personality_data)
 
     async def generate_overall_text(
-        self, personality_data: dict, chat_model: ChatModel | None
+        self, personality_data: dict, chat_model: ChatModelProtocol | None
     ) -> str | None:
         """生成整体人格档案文本（不含锁，不写存储）."""
         if not chat_model:

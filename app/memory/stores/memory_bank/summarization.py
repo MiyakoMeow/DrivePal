@@ -14,7 +14,7 @@ from app.memory.schemas import SearchResult
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
-    from app.models.chat import ChatModel
+    from app.models.protocol import ChatModelProtocol
 
 DAILY_SUMMARY_THRESHOLD = 2
 OVERALL_SUMMARY_THRESHOLD = 3
@@ -103,7 +103,7 @@ class SummaryManager:
                 await self._summaries_store.write(summaries)
 
     async def maybe_summarize(
-        self, date_group: str, events: list[dict], chat_model: ChatModel | None
+        self, date_group: str, events: list[dict], chat_model: ChatModelProtocol | None
     ) -> None:
         """事件数量达到阈值时生成日常摘要."""
         count = len(events)
@@ -156,7 +156,9 @@ class SummaryManager:
         if needs_overall_update:
             await self.update_overall_summary(chat_model)
 
-    async def update_overall_summary(self, chat_model: ChatModel | None) -> None:
+    async def update_overall_summary(
+        self, chat_model: ChatModelProtocol | None
+    ) -> None:
         """根据日常摘要更新总体摘要."""
         if not chat_model:
             return

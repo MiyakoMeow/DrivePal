@@ -11,7 +11,7 @@ from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.personality import PersonalityManager
 from app.memory.stores.memory_bank.summarization import SummaryManager
 from app.memory.utils import cosine_similarity
-from app.models.chat import ChatModel
+from app.models.protocol import ChatModelProtocol
 from app.models.embedding import EmbeddingModel
 from app.storage.toml_store import TOMLStore
 
@@ -31,7 +31,7 @@ class MemoryBankEngine:
         data_dir: Path,
         storage: EventStorage,
         embedding_model: Optional[EmbeddingModel] = None,
-        chat_model: Optional[ChatModel] = None,
+        chat_model: Optional[ChatModelProtocol] = None,
     ) -> None:
         """初始化记忆库引擎."""
         self.data_dir = data_dir

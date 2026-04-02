@@ -9,7 +9,7 @@ from app.memory.stores.memory_bank.engine import MemoryBankEngine
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
-    from app.models.chat import ChatModel
+    from app.models.protocol import ChatModelProtocol
     from app.models.embedding import EmbeddingModel
 
 
@@ -25,7 +25,7 @@ class MemoryBankStore:
         self,
         data_dir: Path,
         embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model: Optional["ChatModel"] = None,
+        chat_model: Optional["ChatModelProtocol"] = None,
         **kwargs: dict,
     ) -> None:
         """初始化记忆库存储."""

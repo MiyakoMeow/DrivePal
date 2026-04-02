@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.models.chat import ChatModel
+    from app.models.protocol import ChatModelProtocol
     from app.models.embedding import EmbeddingModel
 
 
@@ -228,7 +228,7 @@ def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
     )
 
 
-def get_chat_model(temperature: float | None = None) -> "ChatModel":
+def get_chat_model(temperature: float | None = None) -> "ChatModelProtocol":
     """从配置创建 ChatModel 实例."""
     from app.models.chat import ChatModel
 
@@ -264,7 +264,7 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
     return None
 
 
-def get_judge_model() -> "ChatModel":
+def get_judge_model() -> "ChatModelProtocol":
     """从配置创建 judge ChatModel 实例."""
     from app.models.chat import ChatModel
 
