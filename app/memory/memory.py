@@ -2,14 +2,14 @@
 
 import asyncio
 import logging
-from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 
-from app.memory.interfaces import MemoryStore
-from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
+    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+    from app.memory.interfaces import MemoryStore
+    from pathlib import Path
     from app.models.embedding import EmbeddingModel
     from app.models.chat import ChatModel
 

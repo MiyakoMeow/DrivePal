@@ -7,8 +7,11 @@ from pathlib import Path
 
 from app.memory.components import forgetting_curve, SUMMARY_WEIGHT
 from app.memory.schemas import SearchResult
-from app.models.chat import ChatModel
 from app.storage.toml_store import TOMLStore
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.chat import ChatModel
 
 PERSONALITY_SUMMARY_THRESHOLD = 2
 OVERALL_PERSONALITY_THRESHOLD = 3
@@ -52,7 +55,7 @@ class PersonalityManager:
                 try:
                     last_date = date.fromisoformat(last_recall)
                     days_elapsed = (today - last_date).days
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     days_elapsed = 0
                 retention = forgetting_curve(days_elapsed, strength)
                 score = retention * SUMMARY_WEIGHT * 0.8

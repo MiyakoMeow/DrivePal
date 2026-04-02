@@ -61,7 +61,7 @@ class SummaryManager:
                 try:
                     last_date = date.fromisoformat(str(last_recall))
                     days_elapsed = (today - last_date).days
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     days_elapsed = 0
                 retention = forgetting_curve(days_elapsed, strength)
                 score = retention * SUMMARY_WEIGHT

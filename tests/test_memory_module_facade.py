@@ -1,12 +1,14 @@
 """Tests for MemoryModule Facade."""
 
-from pathlib import Path
-
 import pytest
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
-from app.models.settings import LLMProviderConfig
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.settings import LLMProviderConfig
+    from pathlib import Path
 
 
 @pytest.fixture

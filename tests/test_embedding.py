@@ -1,7 +1,5 @@
 """嵌入模型测试."""
 
-from pathlib import Path
-
 import pytest
 
 from app.memory.memory import MemoryModule
@@ -9,6 +7,10 @@ from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.models.embedding import EmbeddingModel
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture(scope="module")

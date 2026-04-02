@@ -4,16 +4,18 @@ import asyncio
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from app.memory.components import EventStorage, forgetting_curve
 from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.personality import PersonalityManager
 from app.memory.stores.memory_bank.summarization import SummaryManager
 from app.memory.utils import cosine_similarity
-from app.models.chat import ChatModel
-from app.models.embedding import EmbeddingModel
 from app.storage.toml_store import TOMLStore
+
+if TYPE_CHECKING:
+    from app.models.embedding import EmbeddingModel
+    from app.models.chat import ChatModel
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
 TOP_K = 3
@@ -141,7 +143,7 @@ class MemoryBankEngine:
             try:
                 last_date = date.fromisoformat(last_recall)
                 days_elapsed = (today - last_date).days
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 days_elapsed = 0
             retention = forgetting_curve(days_elapsed, strength)
             if retention <= 0:
@@ -168,7 +170,7 @@ class MemoryBankEngine:
             try:
                 last_date = date.fromisoformat(last_recall)
                 days_elapsed = (today - last_date).days
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 days_elapsed = 0
             retention = forgetting_curve(days_elapsed, strength)
             score = similarity * retention
@@ -210,7 +212,7 @@ class MemoryBankEngine:
                     try:
                         last_date = date.fromisoformat(last_recall)
                         days_elapsed = (today_date - last_date).days
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         days_elapsed = 0
                     retention = forgetting_curve(days_elapsed, strength)
                     if retention < SOFT_FORGET_THRESHOLD:

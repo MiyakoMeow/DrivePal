@@ -3,16 +3,16 @@
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.stores.memochat.engine import MemoChatEngine
 from app.memory.stores.memochat.retriever import RetrievalMode
-from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
+    from app.storage.toml_store import TOMLStore
+    from pathlib import Path
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 

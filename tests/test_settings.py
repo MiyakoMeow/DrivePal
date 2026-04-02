@@ -1,7 +1,5 @@
 """模型设置加载器测试."""
 
-from pathlib import Path
-
 import pytest
 import tomli_w
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -12,6 +10,10 @@ from app.models.settings import (
     EmbeddingProviderConfig,
     ProviderConfig,
 )
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestLLMProviderConfig:
