@@ -121,7 +121,7 @@ class AgentWorkflow:
             context["relevant_memories"] = relevant_memories
 
         if stages is not None:
-            stages["context"] = context
+            stages.context = context
 
         return {
             "context": context,
@@ -144,7 +144,7 @@ class AgentWorkflow:
 
         task = await self._call_llm_json(prompt)
         if stages is not None:
-            stages["task"] = task
+            stages.task = task
         return {
             "task": task,
             "messages": state["messages"]
@@ -174,7 +174,7 @@ class AgentWorkflow:
 
         decision = await self._call_llm_json(prompt)
         if stages is not None:
-            stages["decision"] = decision
+            stages.decision = decision
         return {
             "decision": decision,
             "messages": state["messages"]
@@ -207,7 +207,7 @@ class AgentWorkflow:
 
         result = f"提醒已发送: {content}"
         if stages is not None:
-            stages["execution"] = {
+            stages.execution = {
                 "content": content,
                 "event_id": event_id,
                 "result": result,
@@ -233,7 +233,7 @@ class AgentWorkflow:
             "result": None,
             "event_id": None,
             "driving_context": driving_context,
-            "stages": stages.__dict__,
+            "stages": stages,
         }
 
         for node_fn in self._nodes:

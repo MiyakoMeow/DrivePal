@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, TypedDict
+from typing import Optional, TypedDict
 
 
 class AgentState(TypedDict):
@@ -16,7 +16,7 @@ class AgentState(TypedDict):
     result: Optional[str]
     event_id: Optional[str]
     driving_context: Optional[dict]
-    stages: Optional[dict[str, Any]]
+    stages: Optional[WorkflowStages]
 
 
 @dataclass

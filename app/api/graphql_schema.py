@@ -121,7 +121,7 @@ class DriverStateGQL:
 class SpatioTemporalContextGQL:
     """时空上下文输出."""
 
-    current_location: GeoLocationGQL
+    current_location: Optional[GeoLocationGQL]
     destination: Optional[GeoLocationGQL]
     eta_minutes: Optional[float]
     heading: Optional[float]

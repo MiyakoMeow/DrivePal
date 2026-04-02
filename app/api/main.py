@@ -26,6 +26,8 @@ WEBUI_DIR = Path(os.getenv("WEBUI_DIR", Path(__file__).parent.parent.parent / "w
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_storage(DATA_DIR)
     logger.info("Data directory initialized: %s", DATA_DIR)
+    if not Path.exists(WEBUI_DIR):
+        logger.warning("WebUI directory not found: %s", WEBUI_DIR)
     yield
 
 
