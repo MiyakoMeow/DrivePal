@@ -204,3 +204,53 @@ details.stage summary:hover { background: #eee; }
     text-align: center;
     padding: 20px 0;
 }
+.clock-panel {
+    background: #1a1a2e;
+    color: #0f0;
+    padding: 16px;
+    border-radius: 8px;
+    font-family: "SF Mono", "Fira Code", Consolas, monospace;
+}
+.clock-display { font-size: 28px; text-align: center; letter-spacing: 2px; }
+.clock-date { font-size: 14px; text-align: center; margin-bottom: 12px; opacity: 0.8; }
+.clock-controls { display: flex; gap: 6px; margin-bottom: 10px; }
+.clock-controls input { background: #16213e; border: 1px solid #333; color: #0f0; padding: 4px 6px; border-radius: 4px; font-size: 12px; flex: 1; }
+.clock-controls input::-webkit-calendar-picker-indicator { filter: invert(1); }
+.btn-xs { padding: 4px 10px; font-size: 11px; }
+.scale-btn-group { display: flex; gap: 4px; margin-bottom: 10px; }
+.scale-btn {
+    flex: 1; padding: 4px 0; font-size: 11px; border: 1px solid #333; background: transparent;
+    color: #888; border-radius: 4px; cursor: pointer; transition: all .2s;
+}
+.scale-btn.active { background: #0f0; color: #1a1a2e; border-color: #0f0; font-weight: 600; }
+.clock-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-danger { background: #dc3545; color: #fff; }
+.number-spinner { display: flex; align-items: center; gap: 0; }
+.number-spinner input[type="number"] { flex: 1; text-align: center; -moz-appearance: textfield; }
+.number-spinner input[type="number"]::-webkit-inner-spin-button,
+.number-spinner input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.spin-btn {
+    width: 32px; height: 34px; border: 1px solid #ddd; background: #f5f5f5;
+    font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .2s; user-select: none;
+}
+.spin-btn:hover { background: #e0e0e0; }
+.spin-btn:first-child { border-radius: 5px 0 0 5px; }
+.spin-btn:last-child { border-radius: 0 5px 5px 0; }
+.number-spinner input { border-radius: 0 !important; }
+.notification-area { position: sticky; top: 0; z-index: 10; }
+.notification-banner {
+    background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px;
+    border-radius: 6px; display: flex; align-items: center; gap: 12px;
+    animation: slideIn 0.3s ease; box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+@keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.notification-content { flex: 1; font-size: 13px; color: #856404; }
+.notification-dismiss {
+    background: none; border: none; font-size: 16px; cursor: pointer; color: #856404; padding: 4px;
+}
+.notification-history { margin-top: 8px; }
+.notification-item {
+    background: #fff9e6; border-left: 3px solid #ffc107; padding: 8px 12px;
+    border-radius: 4px; margin-bottom: 4px; font-size: 12px; color: #666;
+}

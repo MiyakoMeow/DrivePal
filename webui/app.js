@@ -259,5 +259,121 @@ function escapeHtml(str) {
     return d.innerHTML;
 }
 
+class SimulationWS {
+    constructor() {
+        this.ws = null;
+        this.reconnectDelay = 1000;
+    }
+    connect() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.ws = new WebSocket(`${proto}//${location.host}/ws/sim`);
+        this.ws.onmessage = (e) => this._onMessage(JSON.parse(e.data));
+        this.ws.onclose = () => { setTimeout(() => this.connect(), this.reconnectDelay); };
+        this.ws.onerror = () => this.ws.close();
+    }
+    send(msg) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+    }
+    _onMessage(msg) {
+        if (msg.type === 'clock_tick') {
+            const dt = new Date(msg.current_time);
+            document.getElementById('clockDisplay').textContent = dt.toLocaleTimeString('zh-CN', {hour12: false});
+            document.getElementById('clockDate').textContent = dt.toLocaleDateString('zh-CN');
+        } else if (msg.type === 'context_snapshot') {
+        }
+    }
+}
+
+class NotifyWS {
+    constructor() {
+        this.ws = null;
+    }
+    connect() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.ws = new WebSocket(`${proto}//${location.host}/ws/notify`);
+        this.ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'proactive_reminder') showNotification(msg);
+        };
+        this.ws.onclose = () => { setTimeout(() => this.connect(), 2000); };
+        this.ws.onerror = () => this.ws.close();
+    }
+}
+
+const simWS = new SimulationWS();
+const notifyWS = new NotifyWS();
+
+function setSimClock() {
+    const date = document.getElementById('simDate').value;
+    const time = document.getElementById('simTime').value;
+    if (!date && !time) return;
+    const dt = date && time ? `${date}T${time}` : null;
+    simWS.send({ type: 'set_clock', datetime: dt });
+}
+
+function setScale(scale, btn) {
+    simWS.send({ type: 'set_time_scale', scale });
+    document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function advanceClock(seconds) { simWS.send({ type: 'advance', seconds }); }
+
+function resetClock() {
+    simWS.send({ type: 'set_clock', datetime: null });
+    document.getElementById('simDate').value = '';
+    document.getElementById('simTime').value = '';
+}
+
+const FIELD_TO_INPUT = {
+    'spatial.current_location.latitude': 'ctx-lat',
+    'spatial.current_location.longitude': 'ctx-lng',
+    'spatial.current_location.speed_kmh': 'ctx-speedKmh',
+    'spatial.eta_minutes': 'ctx-etaMinutes',
+    'traffic.estimated_delay_minutes': 'ctx-delayMinutes',
+    'driver.fatigue_level': 'ctx-fatigueLevel',
+};
+
+function adjustField(field, delta) {
+    const input = document.getElementById(FIELD_TO_INPUT[field]);
+    if (!input) return;
+    const step = parseFloat(input.step) || 1;
+    input.value = (parseFloat(input.value) || 0) + delta * step;
+    syncField(field, input.value);
+}
+
+function syncField(field, value) {
+    simWS.send({ type: 'update_context', field, value: parseFloat(value) || value });
+}
+
+function showNotification(msg) {
+    const area = document.getElementById('notificationArea');
+    area.style.display = 'block';
+    document.getElementById('notificationContent').innerHTML =
+        `<strong>\u4e3b\u52a8\u63d0\u9192</strong>: ${escapeHtml(msg.content)} <div style="font-size:11px;color:#999;margin-top:4px">${escapeHtml(msg.triggered_at || '')}</div>`;
+    const history = document.getElementById('notificationHistory');
+    const item = document.createElement('div');
+    item.className = 'notification-item';
+    item.textContent = `${msg.content} (${msg.triggered_at || ''})`;
+    history.prepend(item);
+}
+
+function dismissNotification() {
+    document.getElementById('notificationArea').style.display = 'none';
+}
+
+let schedulerRunning = false;
+function toggleScheduler() {
+    schedulerRunning = !schedulerRunning;
+    simWS.send({ type: schedulerRunning ? 'start_scheduler' : 'stop_scheduler' });
+    const btn = document.getElementById('schedulerBtn');
+    btn.textContent = schedulerRunning ? '\u505c\u6b62\u8c03\u5ea6' : '\u542f\u52a8\u8c03\u5ea6';
+    btn.classList.toggle('btn-success', !schedulerRunning);
+    btn.classList.toggle('btn-danger', schedulerRunning);
+}
+
+simWS.connect();
+notifyWS.connect();
+
 loadPresets();
 loadHistory();

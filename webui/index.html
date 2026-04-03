@@ -14,6 +14,28 @@
 
     <div class="main">
         <div class="panel-left">
+            <div class="clock-panel">
+                <div class="clock-display" id="clockDisplay">--:--:--</div>
+                <div class="clock-date" id="clockDate">----/--/--</div>
+                <div class="clock-controls">
+                    <input type="date" id="simDate">
+                    <input type="time" id="simTime" step="1">
+                    <button class="btn btn-primary btn-xs" onclick="setSimClock()">设置</button>
+                </div>
+                <div class="scale-btn-group">
+                    <button class="scale-btn active" onclick="setScale(1, this)">1x</button>
+                    <button class="scale-btn" onclick="setScale(2, this)">2x</button>
+                    <button class="scale-btn" onclick="setScale(5, this)">5x</button>
+                    <button class="scale-btn" onclick="setScale(10, this)">10x</button>
+                    <button class="scale-btn" onclick="setScale(60, this)">60x</button>
+                </div>
+                <div class="clock-actions">
+                    <button class="btn btn-secondary btn-xs" onclick="advanceClock(3600)">快进 1h</button>
+                    <button class="btn btn-secondary btn-xs" onclick="resetClock()">重置</button>
+                    <button class="btn btn-success btn-xs" id="schedulerBtn" onclick="toggleScheduler()">启动调度</button>
+                </div>
+            </div>
+
             <div>
                 <div class="section-title">场景预设</div>
                 <div class="preset-row">
@@ -59,7 +81,11 @@
                 </div>
                 <div class="field">
                     <label>疲劳程度: <span id="fatigueVal" class="range-val">0.0</span></label>
-                    <input type="range" id="ctx-fatigueLevel" min="0" max="1" step="0.1" value="0" oninput="document.getElementById('fatigueVal').textContent=parseFloat(this.value).toFixed(1)">
+                    <div class="number-spinner">
+                        <button class="spin-btn" onclick="adjustField('driver.fatigue_level', -0.1)">−</button>
+                        <input type="number" id="ctx-fatigueLevel" min="0" max="1" step="0.1" value="0" oninput="syncField('driver.fatigue_level', this.value); document.getElementById('fatigueVal').textContent=parseFloat(this.value).toFixed(1)">
+                        <button class="spin-btn" onclick="adjustField('driver.fatigue_level', 0.1)">+</button>
+                    </div>
                 </div>
             </div>
 
@@ -67,11 +93,19 @@
                 <div class="section-title">时空信息</div>
                 <div class="field">
                     <label>纬度</label>
-                    <input type="number" step="any" id="ctx-lat" placeholder="例: 39.9042">
+                    <div class="number-spinner">
+                        <button class="spin-btn" onclick="adjustField('spatial.current_location.latitude', -0.001)">−</button>
+                        <input type="number" id="ctx-lat" step="0.001" value="0" placeholder="例: 39.9042" oninput="syncField('spatial.current_location.latitude', this.value)">
+                        <button class="spin-btn" onclick="adjustField('spatial.current_location.latitude', 0.001)">+</button>
+                    </div>
                 </div>
                 <div class="field">
                     <label>经度</label>
-                    <input type="number" step="any" id="ctx-lng" placeholder="例: 116.4074">
+                    <div class="number-spinner">
+                        <button class="spin-btn" onclick="adjustField('spatial.current_location.longitude', -0.001)">−</button>
+                        <input type="number" id="ctx-lng" step="0.001" value="0" placeholder="例: 116.4074" oninput="syncField('spatial.current_location.longitude', this.value)">
+                        <button class="spin-btn" onclick="adjustField('spatial.current_location.longitude', 0.001)">+</button>
+                    </div>
                 </div>
                 <div class="field">
                     <label>地址</label>
@@ -79,7 +113,11 @@
                 </div>
                 <div class="field">
                     <label>车速 (km/h)</label>
-                    <input type="number" id="ctx-speedKmh" placeholder="0" min="0">
+                    <div class="number-spinner">
+                        <button class="spin-btn" onclick="adjustField('spatial.current_location.speed_kmh', -5)">−</button>
+                        <input type="number" id="ctx-speedKmh" step="5" value="0" min="0" oninput="syncField('spatial.current_location.speed_kmh', this.value)">
+                        <button class="spin-btn" onclick="adjustField('spatial.current_location.speed_kmh', 5)">+</button>
+                    </div>
                 </div>
                 <div class="field">
                     <label>目的地地址</label>
@@ -87,7 +125,11 @@
                 </div>
                 <div class="field">
                     <label>ETA (分钟)</label>
-                    <input type="number" id="ctx-etaMinutes" placeholder="预估到达时间" min="0">
+                    <div class="number-spinner">
+                        <button class="spin-btn" onclick="adjustField('spatial.eta_minutes', -1)">−</button>
+                        <input type="number" id="ctx-etaMinutes" step="1" value="0" min="0" placeholder="预估到达时间" oninput="syncField('spatial.eta_minutes', this.value)">
+                        <button class="spin-btn" onclick="adjustField('spatial.eta_minutes', 1)">+</button>
+                    </div>
                 </div>
             </div>
 
@@ -109,7 +151,11 @@
                 </div>
                 <div class="field">
                     <label>延误 (分钟)</label>
-                    <input type="number" id="ctx-delayMinutes" placeholder="0" min="0">
+                    <div class="number-spinner">
+                        <button class="spin-btn" onclick="adjustField('traffic.estimated_delay_minutes', -1)">−</button>
+                        <input type="number" id="ctx-delayMinutes" step="1" value="0" min="0" oninput="syncField('traffic.estimated_delay_minutes', this.value)">
+                        <button class="spin-btn" onclick="adjustField('traffic.estimated_delay_minutes', 1)">+</button>
+                    </div>
                 </div>
             </div>
 
@@ -134,6 +180,13 @@
         </div>
 
         <div class="panel-right">
+            <div class="notification-area" id="notificationArea" style="display:none;">
+                <div class="notification-banner" id="notificationBanner">
+                    <div class="notification-content" id="notificationContent"></div>
+                    <button class="notification-dismiss" onclick="dismissNotification()">&#x2715;</button>
+                </div>
+                <div class="notification-history" id="notificationHistory"></div>
+            </div>
             <div class="card">
                 <div class="query-bar">
                     <input type="text" id="queryInput" placeholder="输入驾驶相关的查询..." onkeydown="if(event.key==='Enter')sendQuery()">
