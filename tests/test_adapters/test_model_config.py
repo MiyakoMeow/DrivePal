@@ -43,7 +43,7 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
         "llm": [
             {
                 "model": "qwen3.5-2b",
-                "base_url": "http://127.0.0.1:50721/v1",
+                "base_url": "http://127.0.0.1:34567/v1",
                 "api_key": "none",
             }
         ],
@@ -69,7 +69,7 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
         "llm": [
             {
                 "model": "qwen3.5-2b",
-                "base_url": "http://127.0.0.1:50721/v1",
+                "base_url": "http://127.0.0.1:34567/v1",
                 "api_key": "none",
             }
         ],
@@ -101,7 +101,7 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         },
         "model_providers": {
             "local": {
-                "base_url": "http://127.0.0.1:50721",
+                "base_url": "http://127.0.0.1:34567",
                 "api_key": "none",
             },
         },

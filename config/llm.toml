@@ -14,7 +14,7 @@ models = ["zhipuai-coding-plan/glm-4.7-flashx?temperature=0.1"]
 models = ["minimax-cn/MiniMax-M2.5"]
 
 [model_providers.local]
-base_url = "http://127.0.0.1:50721/v1"
+base_url = "http://127.0.0.1:34567/v1"
 api_key = "none"
 concurrency = 4
 

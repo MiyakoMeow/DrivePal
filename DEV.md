@@ -17,7 +17,7 @@ models = ["local/qwen3.5-2b"]
 models = ["minimax-cn/MiniMax-M2.7?temperature=0.0"]
 
 [model_providers.local]
-base_url = "http://127.0.0.1:50721/v1"
+base_url = "http://127.0.0.1:34567/v1"
 api_key = "none"
 concurrency = 4  # provider 级别最大并发数
 
