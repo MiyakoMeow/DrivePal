@@ -19,14 +19,20 @@ models = ["minimax-cn/MiniMax-M2.7?temperature=0.0"]
 [model_providers.local]
 base_url = "http://127.0.0.1:50721/v1"
 api_key = "none"
+concurrency = 4  # provider 级别最大并发数
 
 [model_providers.minimax-cn]
 base_url = "https://api.minimaxi.com/v1"
 api_key_env = "MINIMAX_API_KEY"
+concurrency = 4
 
 [embedding]
 model = "huggingface/BAAI/bge-small-zh-v1.5"
 ```
+
+**Provider 并发控制：**
+- `concurrency`：每个 provider 的最大并发请求数（默认 1），使用 semaphore 实现
+- 当同一 provider 被多个 model_groups 引用时，共享同一个 semaphore
 
 **环境变量覆盖：**
 
