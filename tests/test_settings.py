@@ -42,6 +42,23 @@ class TestLLMProviderConfig:
         assert cfg.provider.api_key is None
         assert cfg.temperature == 0.7
 
+    def test_llm_provider_config_with_concurrency(self) -> None:
+        """验证 concurrency 字段被正确解析."""
+        cfg = LLMProviderConfig.from_dict(
+            {
+                "model": "gpt-4",
+                "base_url": "https://api.openai.com/v1",
+                "api_key": "sk-test",
+                "concurrency": 8,
+            }
+        )
+        assert cfg.concurrency == 8
+
+    def test_llm_provider_config_concurrency_defaults(self) -> None:
+        """验证 concurrency 默认值为 4."""
+        cfg = LLMProviderConfig.from_dict({"model": "test"})
+        assert cfg.concurrency == 4
+
 
 class TestEmbeddingProviderConfig:
     """EmbeddingProviderConfig 测试."""
@@ -239,6 +256,34 @@ class TestLLMSettingsLoad:
         providers = settings.get_model_group_providers("default")
         assert len(providers) == 1
         assert providers[0].provider.model == "gpt-4"
+        _load_config.cache_clear()
+
+    def test_get_model_group_providers_includes_concurrency(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """验证 get_model_group_providers 返回的配置包含 concurrency."""
+        config = {
+            "model_groups": {
+                "default": {"models": ["openai/gpt-4"]},
+            },
+            "model_providers": {
+                "openai": {
+                    "base_url": "https://api.openai.com/v1",
+                    "api_key": "sk-a",
+                    "concurrency": 16,
+                },
+            },
+        }
+        config_file = tmp_path / "config" / "llm.toml"
+        config_file.parent.mkdir(parents=True)
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        from adapters.model_config import _load_config
+
+        _load_config.cache_clear()
+        settings = LLMSettings.load()
+        providers = settings.get_model_group_providers("default")
+        assert providers[0].concurrency == 16
         _load_config.cache_clear()
 
 

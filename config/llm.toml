@@ -16,18 +16,22 @@ models = ["minimax-cn/MiniMax-M2.5"]
 [model_providers.local]
 base_url = "http://127.0.0.1:50721/v1"
 api_key = "none"
+concurrency = 4
 
 [model_providers.minimax-cn]
 base_url = "https://api.minimaxi.com/v1"
 api_key_env = "MINIMAX_API_KEY"
+concurrency = 4
 
 [model_providers.zhipuai-coding-plan]
 base_url = "https://open.bigmodel.cn/api/paas/v4"
 api_key_env = "ZHIPU_API_KEY"
+concurrency = 4
 
 [model_providers.deepseek]
 base_url = "https://api.deepseek.com/v1"
 api_key_env = "DEEPSEEK_API_KEY"
+concurrency = 8
 
 [embedding]
 model = "huggingface/BAAI/bge-small-zh-v1.5"
