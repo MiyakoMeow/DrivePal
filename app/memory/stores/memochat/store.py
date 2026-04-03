@@ -126,6 +126,7 @@ class MemoChatStore:
             "response": response,
             "timestamp": now.isoformat(),
             "event_type": event_type,
+            "remind_at": remind_at,
         }
         async with self._write_lock:
             await self._engine.append_interaction(interaction)

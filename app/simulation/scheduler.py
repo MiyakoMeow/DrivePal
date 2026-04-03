@@ -56,8 +56,8 @@ class EventScheduler:
         while self._running:
             try:
                 await self.tick()
-            except Exception as e:
-                logger.warning("Scheduler tick error: %s", e)
+            except Exception:
+                logger.exception("Scheduler tick error")
             await asyncio.sleep(self._poll_interval)
 
     async def tick(self) -> None:

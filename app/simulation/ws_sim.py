@@ -114,4 +114,8 @@ async def simulation_ws(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        global _clock_task
         _manager.disconnect(websocket)
+        if not _manager.active_connections and _clock_task and not _clock_task.done():
+            _clock_task.cancel()
+            _clock_task = None

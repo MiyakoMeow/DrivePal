@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from typing import Callable, cast
+
+logger = logging.getLogger(__name__)
 
 _instance: SimulationClock | None = None
 _created: bool = False
@@ -81,6 +85,8 @@ class SimulationClock:
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
+            with suppress(asyncio.CancelledError, RuntimeError):
+                asyncio.get_event_loop().run_until_complete(self._task)
         self._task = None
 
     async def _tick_loop(self) -> None:
@@ -91,7 +97,10 @@ class SimulationClock:
                 elapsed = now_wall - self._last_wall
                 self.advance(seconds=elapsed * self._time_scale)
                 if self._on_tick is not None:
-                    self._on_tick(self._simulated_time)
+                    try:
+                        self._on_tick(self._simulated_time)
+                    except Exception:
+                        logger.exception("Tick callback error")
             self._last_wall = now_wall
 
     @classmethod
