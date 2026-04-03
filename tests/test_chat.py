@@ -183,8 +183,8 @@ class TestProviderConcurrency:
         ]
         ChatModel(providers=providers)
 
-        sem_a = await _get_provider_semaphore("model-a", 2)
-        sem_b = await _get_provider_semaphore("model-b", 3)
+        sem_a = await _get_provider_semaphore("http://a:8000", 2)
+        sem_b = await _get_provider_semaphore("http://b:8000", 3)
 
         assert sem_a._value == 2
         assert sem_b._value == 3
