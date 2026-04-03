@@ -135,7 +135,7 @@ class TestProviderConcurrency:
         active_count = 0
         max_active = 0
 
-        async def mock_create(*args, **kwargs):
+        async def mock_create(*args: object, **kwargs: object) -> MagicMock:
             nonlocal active_count, max_active
             active_count += 1
             max_active = max(max_active, active_count)
@@ -181,7 +181,7 @@ class TestProviderConcurrency:
                 concurrency=3,
             ),
         ]
-        chat = ChatModel(providers=providers)
+        ChatModel(providers=providers)
 
         sem_a = await _get_provider_semaphore("model-a", 2)
         sem_b = await _get_provider_semaphore("model-b", 3)
