@@ -124,14 +124,6 @@ class FeedbackInput:
     modified_content: Optional[str] = None
 
 
-@strawberry.input
-class ScenarioPresetInput:
-    """场景预设输入."""
-
-    name: str
-    context: DrivingContextInput
-
-
 JSONScalar = strawberry.scalar(
     name="JSON",
     serialize=lambda v: v,
@@ -222,16 +214,6 @@ class ExperimentReport:
     """实验报告."""
 
     report: str
-
-
-@strawberry.type
-class ScenarioPresetGQL:
-    """场景预设."""
-
-    id: str
-    name: str
-    context: DrivingContextGQL
-    created_at: str
 
 
 @strawberry.type

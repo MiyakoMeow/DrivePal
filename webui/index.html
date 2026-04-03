@@ -13,10 +13,11 @@
     </div>
 
     <div class="main">
+        <!-- 左侧面板: 上下文配置 -->
         <div class="panel-left">
             <div class="clock-panel">
-<div class="clock-display" id="clockDisplay"></div>
-<div class="clock-date" id="clockDate"></div>
+                <div class="clock-display" id="clockDisplay"></div>
+                <div class="clock-date" id="clockDate"></div>
                 <div class="clock-controls">
                     <input type="date" id="simDate">
                     <input type="time" id="simTime" step="1">
@@ -32,27 +33,6 @@
                 <div class="clock-actions">
                     <button class="btn btn-secondary btn-xs" onclick="advanceClock(3600)">快进 1h</button>
                     <button class="btn btn-secondary btn-xs" onclick="resetClock()">重置</button>
-                    <button class="btn btn-success btn-xs" id="schedulerBtn" onclick="toggleScheduler()">启动调度</button>
-                </div>
-            </div>
-
-            <div>
-                <div class="section-title">场景预设</div>
-                <div class="preset-row">
-                    <select id="presetSelect" onchange="loadPreset(this.value)">
-                        <option value="">-- 选择预设 --</option>
-                    </select>
-                </div>
-            </div>
-
-            <div>
-                <div class="section-title">记忆模式</div>
-                <div class="memory-row">
-                    <label>模式</label>
-                    <select id="memoryMode">
-                        <option value="MEMORY_BANK">MEMORY_BANK</option>
-                        <option value="MEMOCHAT">MEMOCHAT</option>
-                    </select>
                 </div>
             </div>
 
@@ -174,11 +154,18 @@
             </div>
 
             <div class="btn-group">
-                <button class="btn btn-primary btn-sm" onclick="savePreset()">保存预设</button>
                 <button class="btn btn-secondary btn-sm" onclick="clearForm()">清空表单</button>
             </div>
         </div>
 
+        <!-- 中间面板: 文本输入 -->
+        <div class="panel-middle">
+            <div class="section-title">内容输入</div>
+            <textarea id="contentInput" placeholder="输入要处理的内容..." onkeydown="if(event.key==='Enter' && event.ctrlKey) sendContent()"></textarea>
+            <button class="btn btn-primary" id="sendBtn" onclick="sendContent()">发送</button>
+        </div>
+
+        <!-- 右侧面板: Agent状态+历史记录 -->
         <div class="panel-right">
             <div class="notification-area" id="notificationArea" style="display:none;">
                 <div class="notification-banner" id="notificationBanner">
@@ -186,12 +173,6 @@
                     <button class="notification-dismiss" onclick="dismissNotification()">&#x2715;</button>
                 </div>
                 <div class="notification-history" id="notificationHistory"></div>
-            </div>
-            <div class="card">
-                <div class="query-bar">
-                    <input type="text" id="queryInput" placeholder="输入驾驶相关的查询..." onkeydown="if(event.key==='Enter')sendQuery()">
-                    <button class="btn btn-primary" id="sendBtn" onclick="sendQuery()">发送</button>
-                </div>
             </div>
 
             <details class="stage" id="stage-context" open>

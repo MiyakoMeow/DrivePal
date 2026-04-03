@@ -8,7 +8,6 @@ from app.api.graphql_schema import (
     ExperimentReport,
     MemoryEventGQL,
     MemoryModeEnum,
-    ScenarioPresetGQL,
 )
 from app.memory.types import MemoryMode
 
@@ -42,12 +41,3 @@ class Query:
     def experiment_report(self) -> ExperimentReport:
         """获取实验报告."""
         return ExperimentReport(report="Experiment runner migrated to CLI pipeline")
-
-    @strawberry.field
-    async def scenario_presets(self) -> list[ScenarioPresetGQL]:
-        """查询所有场景预设."""
-        from app.api.resolvers.mutation import _preset_store, _to_gql_preset
-
-        store = _preset_store()
-        presets = await store.read()
-        return [_to_gql_preset(p) for p in presets]

@@ -54,62 +54,6 @@ def test_experiment_report_query(isolated_app: TestClient) -> None:
     assert result["data"]["experimentReport"]["report"] is not None
 
 
-def test_scenario_presets_query(isolated_app: TestClient) -> None:
-    result = _graphql_query(isolated_app, "{ scenarioPresets { id name } }")
-    assert "data" in result
-    assert isinstance(result["data"]["scenarioPresets"], list)
-
-
-def test_save_scenario_preset(isolated_app: TestClient) -> None:
-    result = _graphql_query(
-        isolated_app,
-        """
-        mutation($name: String!, $ctx: DrivingContextInput!) {
-            saveScenarioPreset(input: { name: $name, context: $ctx }) {
-                id name
-            }
-        }
-    """,
-        {"name": "test-highway", "ctx": {"scenario": "HIGHWAY"}},
-    )
-    assert "data" in result
-    preset = result["data"]["saveScenarioPreset"]
-    assert preset["name"] == "test-highway"
-    assert preset["id"] != ""
-
-
-def test_delete_scenario_preset(isolated_app: TestClient) -> None:
-    result = _graphql_query(
-        isolated_app,
-        """
-        mutation($name: String!, $ctx: DrivingContextInput!) {
-            saveScenarioPreset(input: { name: $name, context: $ctx }) { id }
-        }
-    """,
-        {"name": "to-delete", "ctx": {"scenario": "PARKED"}},
-    )
-    preset_id = result["data"]["saveScenarioPreset"]["id"]
-
-    del_result = _graphql_query(
-        isolated_app,
-        """
-        mutation($presetId: String!) { deleteScenarioPreset(presetId: $presetId) }
-    """,
-        {"presetId": preset_id},
-    )
-    assert del_result["data"]["deleteScenarioPreset"] is True
-
-
-def test_delete_nonexistent_preset(isolated_app: TestClient) -> None:
-    result = _graphql_query(
-        isolated_app,
-        """
-        mutation { deleteScenarioPreset(presetId: "nonexistent") }
-    """,
-    )
-    assert result["data"]["deleteScenarioPreset"] is False
-
-
 def test_feedback_invalid_action(isolated_app: TestClient) -> None:
     result = _graphql_query(
         isolated_app,

@@ -62,35 +62,6 @@ function getContextInput() {
     return Object.keys(ctx).length ? ctx : null;
 }
 
-function fillForm(preset) {
-    if (!preset) return;
-    const ctx = preset.context || {};
-    const d = ctx.driver || {};
-    const s = ctx.spatial || {};
-    const t = ctx.traffic || {};
-
-    document.getElementById('ctx-emotion').value = d.emotion || '';
-    document.getElementById('ctx-workload').value = d.workload || '';
-    document.getElementById('ctx-fatigueLevel').value = d.fatigueLevel ?? 0;
-    document.getElementById('fatigueVal').textContent = (d.fatigueLevel ?? 0).toFixed(1);
-
-    const cl = s.currentLocation || {};
-    document.getElementById('ctx-lat').value = cl.latitude ?? '';
-    document.getElementById('ctx-lng').value = cl.longitude ?? '';
-    document.getElementById('ctx-address').value = cl.address || '';
-    document.getElementById('ctx-speedKmh').value = cl.speedKmh ?? '';
-
-    const dest = s.destination || {};
-    document.getElementById('ctx-dest-address').value = dest.address || '';
-    document.getElementById('ctx-etaMinutes').value = s.etaMinutes ?? '';
-
-    document.getElementById('ctx-congestionLevel').value = t.congestionLevel || '';
-    document.getElementById('ctx-incidents').value = t.incidents || '';
-    document.getElementById('ctx-delayMinutes').value = t.estimatedDelayMinutes ?? '';
-
-    document.getElementById('ctx-scenario').value = ctx.scenario || '';
-}
-
 function clearForm() {
     document.getElementById('ctx-emotion').value = '';
     document.getElementById('ctx-workload').value = '';
@@ -123,52 +94,10 @@ function setLoading(on) {
     btn.innerHTML = on ? '<span class="spinner"></span>处理中...' : '发送';
 }
 
-async function loadPresets() {
-    try {
-        const data = await graphql(`{ scenarioPresets { id name context { driver { emotion workload fatigueLevel } spatial { currentLocation { latitude longitude address speedKmh } destination { latitude longitude address speedKmh } etaMinutes } traffic { congestionLevel incidents estimatedDelayMinutes } scenario } } }`);
-        const sel = document.getElementById('presetSelect');
-        sel.innerHTML = '<option value="">-- 选择预设 --</option>';
-        (data.scenarioPresets || []).forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            opt.textContent = p.name;
-            opt.dataset.preset = JSON.stringify(p);
-            sel.appendChild(opt);
-        });
-    } catch (e) {
-        console.error('Failed to load presets:', e);
-    }
-}
+async function sendContent() {
+    const content = document.getElementById('contentInput').value.trim();
+    if (!content) return;
 
-function loadPreset(id) {
-    const sel = document.getElementById('presetSelect');
-    const opt = sel.selectedOptions[0];
-    if (!opt || !opt.dataset.preset) return;
-    fillForm(JSON.parse(opt.dataset.preset));
-}
-
-async function savePreset() {
-    const name = prompt('请输入预设名称:');
-    if (!name) return;
-    const context = getContextInput();
-    if (!context) { alert('请至少填写一项上下文信息'); return; }
-    try {
-        await graphql(
-            `mutation SavePreset($name: String!, $context: DrivingContextInput!) { saveScenarioPreset(input: { name: $name, context: $context }) { id name } }`,
-            { name, context }
-        );
-        alert('预设已保存');
-        loadPresets();
-    } catch (e) {
-        alert('保存失败: ' + e.message);
-    }
-}
-
-async function sendQuery() {
-    const query = document.getElementById('queryInput').value.trim();
-    if (!query) return;
-
-    const memoryMode = document.getElementById('memoryMode').value;
     const context = getContextInput();
 
     setLoading(true);
@@ -184,7 +113,7 @@ async function sendQuery() {
                     result eventId stages { context task decision execution }
                 }
             }`,
-            { query, memoryMode, context }
+            { query: content, memoryMode: 'MEMORY_BANK', context }
         );
 
         const res = data.processQuery;
@@ -228,12 +157,11 @@ async function submitFeedback(action) {
 
 async function loadHistory() {
     try {
-        const mode = document.getElementById('memoryMode').value;
         const data = await graphql(
             `query GetHistory($limit: Int!, $memoryMode: MemoryModeEnum!) {
                 history(limit: $limit, memoryMode: $memoryMode) { id content createdAt }
             }`,
-            { limit: 10, memoryMode: mode }
+            { limit: 10, memoryMode: 'MEMORY_BANK' }
         );
         const container = document.getElementById('historyList');
         const items = data.history || [];
@@ -390,16 +318,6 @@ function dismissNotification() {
     document.getElementById('notificationArea').style.display = 'none';
 }
 
-let schedulerRunning = false;
-function toggleScheduler() {
-    schedulerRunning = !schedulerRunning;
-    simWS.send({ type: schedulerRunning ? 'start_scheduler' : 'stop_scheduler' });
-    const btn = document.getElementById('schedulerBtn');
-    btn.textContent = schedulerRunning ? '\u505c\u6b62\u8c03\u5ea6' : '\u542f\u52a8\u8c03\u5ea6';
-    btn.classList.toggle('btn-success', !schedulerRunning);
-    btn.classList.toggle('btn-danger', schedulerRunning);
-}
-
 simWS.connect();
 notifyWS.connect();
 
@@ -413,5 +331,4 @@ document.getElementById('ctx-congestionLevel').value = 'smooth';
 document.getElementById('ctx-delayMinutes').value = '0';
 document.getElementById('ctx-scenario').value = 'city_driving';
 
-loadPresets();
 loadHistory();

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any, Literal, cast
 
 import strawberry
@@ -18,27 +17,15 @@ from app.api.graphql_schema import (
     GeoLocationGQL,
     ProcessQueryInput,
     ProcessQueryResult,
-    ScenarioPresetGQL,
-    ScenarioPresetInput,
     SpatioTemporalContextGQL,
     TrafficConditionGQL,
     WorkflowStagesGQL,
 )
 from app.memory.schemas import FeedbackData
 from app.memory.types import MemoryMode
-from app.schemas.context import (
-    DrivingContext,
-    ScenarioPreset,
-)
-from app.storage.toml_store import TOMLStore
+from app.schemas.context import DrivingContext
 
 logger = logging.getLogger(__name__)
-
-
-def _preset_store() -> TOMLStore:
-    from app.api.main import DATA_DIR
-
-    return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
 
 
 def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
@@ -133,23 +120,6 @@ def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
     )
 
 
-def _to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
-    ctx_raw = p.get("context", {})
-    safe = {k: v for k, v in ctx_raw.items() if k in DrivingContext.model_fields}
-    sp = safe.get("spatial", {})
-    if isinstance(sp, dict):
-        for key in ("destination", "eta_minutes", "heading"):
-            if sp.get(key) == "":
-                sp[key] = None
-    ctx = DrivingContext(**safe)
-    return ScenarioPresetGQL(
-        id=p.get("id", ""),
-        name=p.get("name", ""),
-        context=_dict_to_gql_context(ctx.model_dump()),
-        created_at=p.get("created_at", ""),
-    )
-
-
 @strawberry.type
 class Mutation:
     """GraphQL Mutation 集合."""
@@ -212,26 +182,3 @@ class Mutation:
         except Exception as e:
             logger.exception("submitFeedback failed: %s", e)
             raise GraphQLError("Internal server error")
-
-    @strawberry.mutation
-    async def save_scenario_preset(
-        self, input: ScenarioPresetInput
-    ) -> ScenarioPresetGQL:
-        """保存场景预设."""
-        store = _preset_store()
-        preset = ScenarioPreset(name=input.name)
-        if input.context:
-            preset.context = DrivingContext(**_input_to_context_dict(input.context))
-        await store.append(preset.model_dump())
-        return _to_gql_preset(preset.model_dump())
-
-    @strawberry.mutation
-    async def delete_scenario_preset(self, preset_id: str) -> bool:
-        """删除场景预设."""
-        store = _preset_store()
-        presets = await store.read()
-        new_presets = [p for p in presets if p.get("id") != preset_id]
-        if len(new_presets) == len(presets):
-            return False
-        await store.write(new_presets)
-        return True
