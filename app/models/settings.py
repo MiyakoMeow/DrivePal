@@ -38,11 +38,14 @@ class LLMProviderConfig:
 
     provider: ProviderConfig
     temperature: float = 0.7
+    concurrency: int = 4
 
     @classmethod
     def from_dict(cls, d: dict) -> "LLMProviderConfig":
         """从字典创建配置实例."""
-        provider, extra = _build_provider_config_from_dict(d, {"temperature": 0.7})
+        provider, extra = _build_provider_config_from_dict(
+            d, {"temperature": 0.7, "concurrency": 4}
+        )
         return cls(provider=provider, **extra)
 
 
@@ -256,6 +259,7 @@ def _build_provider_config_from_ref(
         api_key: str | None = os.environ.get(api_key_env, "")
     else:
         api_key = provider_config.get("api_key")
+    concurrency = provider_config.get("concurrency", 4)
     return LLMProviderConfig(
         provider=ProviderConfig(
             model=resolved.model_name,
@@ -263,6 +267,7 @@ def _build_provider_config_from_ref(
             api_key=api_key,
         ),
         temperature=resolved.params.get("temperature", 0.7),
+        concurrency=concurrency,
     )
 
 
