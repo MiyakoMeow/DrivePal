@@ -267,7 +267,13 @@ class SimulationWS {
     connect() {
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         this.ws = new WebSocket(`${proto}//${location.host}/ws/sim`);
-        this.ws.onmessage = (e) => this._onMessage(JSON.parse(e.data));
+        this.ws.onmessage = (e) => {
+            try {
+                this._onMessage(JSON.parse(e.data));
+            } catch (err) {
+                console.error('Failed to parse WS message:', err);
+            }
+        };
         this.ws.onclose = () => { setTimeout(() => this.connect(), this.reconnectDelay); };
         this.ws.onerror = () => this.ws.close();
     }
@@ -276,7 +282,7 @@ class SimulationWS {
     }
     _onMessage(msg) {
         if (msg.type === 'clock_tick') {
-            const dt = new Date(msg.current_time);
+            const dt = new Date(msg.time);
             document.getElementById('clockDisplay').textContent = dt.toLocaleTimeString('zh-CN', {hour12: false});
             document.getElementById('clockDate').textContent = dt.toLocaleDateString('zh-CN');
         } else if (msg.type === 'context_snapshot') {
@@ -292,8 +298,12 @@ class NotifyWS {
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         this.ws = new WebSocket(`${proto}//${location.host}/ws/notify`);
         this.ws.onmessage = (e) => {
-            const msg = JSON.parse(e.data);
-            if (msg.type === 'proactive_reminder') showNotification(msg);
+            try {
+                const msg = JSON.parse(e.data);
+                if (msg.type === 'proactive_reminder') showNotification(msg);
+            } catch (err) {
+                console.error('Failed to parse notify message:', err);
+            }
         };
         this.ws.onclose = () => { setTimeout(() => this.connect(), 2000); };
         this.ws.onerror = () => this.ws.close();

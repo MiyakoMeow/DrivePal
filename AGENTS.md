@@ -14,6 +14,10 @@
   - 注意：
     1. 本项目的类型检查器，使用`ty`，而不是`mypy`、`pyright`等。[官方文档](https://docs.astral.sh/ty/)。
 
+## Python风格
+
+- 异常处理：支持Python 3.14新语法 `except (ValueError, TypeError) as e:` 和旧式逗号语法 `except ValueError, e:`，两者皆可。
+
 ## Skill流程特定配置
 
 ### brainstorming
