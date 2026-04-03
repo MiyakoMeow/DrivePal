@@ -12,12 +12,59 @@
 
 ## File Structure
 
-- **Modify:** `webui/app.js:262-291` (SimulationWS class)
-- **Modify:** `webui/app.js:385-389` (initialization section)
+- **Modify:** `webui/app.js` (行号需在实施时验证)
+  - SimulationWS class 区域
+  - 初始化区域
+- **Modify:** `webui/index.html:18-19` (时钟初始值)
 
 ---
 
-## Task 1: 添加后端时间同步标志
+## Task 1: 添加后端时间同步标志和本地时间初始化
+
+**Files:**
+- Modify: `webui/app.js` (在 SimulationWS class 前添加变量和本地时间初始化)
+- Modify: `webui/index.html:18-19` (删除静态初始值)
+
+注意：行号需在实施时验证。
+
+- [ ] **Step 1: 添加 hasReceivedBackendTime 标志和初始化本地时间**
+
+在 `class SimulationWS {` 之前添加：
+
+```javascript
+let hasReceivedBackendTime = false;
+function initLocalTime() {
+    const now = new Date();
+    document.getElementById('clockDisplay').textContent = now.toLocaleTimeString('zh-CN', {hour12: false});
+    document.getElementById('clockDate').textContent = now.toLocaleDateString('zh-CN');
+}
+initLocalTime();
+```
+
+- [ ] **Step 2: 修改 HTML 删除静态初始值**
+
+将 `webui/index.html` 第 18-19 行：
+```html
+<div class="clock-display" id="clockDisplay">--:--:--</div>
+<div class="clock-date" id="clockDate">----/--/--</div>
+```
+
+替换为：
+```html
+<div class="clock-display" id="clockDisplay"></div>
+<div class="clock-date" id="clockDate"></div>
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add webui/app.js webui/index.html
+git commit -m "feat(webui): show local time on page load before backend connects"
+```
+
+---
+
+## Task 2: 修改 clock_tick 处理逻辑
 
 **Files:**
 - Modify: `webui/app.js` (在 SimulationWS class 前添加变量)
@@ -42,7 +89,7 @@ git commit -m "feat(webui): add hasReceivedBackendTime flag"
 ## Task 2: 修改 clock_tick 处理逻辑
 
 **Files:**
-- Modify: `webui/app.js:283-290`
+- Modify: `webui/app.js` (SimulationWS._onMessage 方法)
 
 - [ ] **Step 1: 修改 _onMessage 中 clock_tick 分支**
 
@@ -86,10 +133,7 @@ git commit -m "feat(webui): sync simDate/simTime from backend on first clock_tic
 ## Task 3: 添加表单字段默认值
 
 **Files:**
-- Modify: `webui/app.js:385-389` (initialization section)
-- Modify: `webui/index.html:18-19` (确认初始值)
-
-注意：HTML 中 clockDisplay 和 clockDate 已设置为 `--:--:--` 和 `----/--/--`，无需修改。
+- Modify: `webui/app.js` (初始化区域，在 simWS.connect() 和 notifyWS.connect() 之后)
 
 - [ ] **Step 1: 在 loadPresets(); 之前添加默认值设置（WebSocket 连接之后）**
 
@@ -143,11 +187,11 @@ uv run python main.py
 ```
 
 验证项：
-1. 页面加载后时钟显示 `--:--:--` 和 `----/--/--`
+1. 页面加载后立即显示本地当前时间（秒级精度）
 2. WebSocket 连接后时钟切换到后端时间
-3. `simDate` 和 `simTime` 输入框被填充
+3. `simDate` 和 `simTime` 输入框被填充（仅在空时填充）
 4. 表单字段默认值正确：emotion=neutral, workload=normal, fatigueLevel=0, lat/lng=北京坐标, speedKmh=0, congestionLevel=smooth, delayMinutes=0, scenario=city_driving
-5. 断开 WebSocket 后时钟保持不变（不切换回 `--:--:--`）
+5. 断开 WebSocket 后时钟保持不变
 
 - [ ] **Step 3: 运行测试（如有）**
 
