@@ -87,8 +87,11 @@ git commit -m "feat(webui): sync simDate/simTime from backend on first clock_tic
 
 **Files:**
 - Modify: `webui/app.js:385-389` (initialization section)
+- Modify: `webui/index.html:18-19` (确认初始值)
 
-- [ ] **Step 1: 在 loadPresets(); 之前添加默认值设置**
+注意：HTML 中 clockDisplay 和 clockDate 已设置为 `--:--:--` 和 `----/--/--`，无需修改。
+
+- [ ] **Step 1: 在 loadPresets(); 之前添加默认值设置（WebSocket 连接之后）**
 
 将第 388-389 行：
 ```javascript
@@ -100,9 +103,12 @@ loadHistory();
 ```javascript
 document.getElementById('ctx-emotion').value = 'neutral';
 document.getElementById('ctx-workload').value = 'normal';
+document.getElementById('ctx-fatigueLevel').value = '0';
 document.getElementById('ctx-lat').value = '39.9042';
 document.getElementById('ctx-lng').value = '116.4074';
+document.getElementById('ctx-speedKmh').value = '0';
 document.getElementById('ctx-congestionLevel').value = 'smooth';
+document.getElementById('ctx-delayMinutes').value = '0';
 document.getElementById('ctx-scenario').value = 'city_driving';
 
 loadPresets();
@@ -137,10 +143,11 @@ uv run python main.py
 ```
 
 验证项：
-1. 页面加载后时钟显示本地时间
+1. 页面加载后时钟显示 `--:--:--` 和 `----/--/--`
 2. WebSocket 连接后时钟切换到后端时间
 3. `simDate` 和 `simTime` 输入框被填充
-4. 表单字段（emotion=neutral, workload=normal, lat/lng=北京坐标等）显示默认值
+4. 表单字段默认值正确：emotion=neutral, workload=normal, fatigueLevel=0, lat/lng=北京坐标, speedKmh=0, congestionLevel=smooth, delayMinutes=0, scenario=city_driving
+5. 断开 WebSocket 后时钟保持不变（不切换回 `--:--:--`）
 
 - [ ] **Step 3: 运行测试（如有）**
 
