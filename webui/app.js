@@ -259,6 +259,14 @@ function escapeHtml(str) {
     return d.innerHTML;
 }
 
+let hasReceivedBackendTime = false;
+function initLocalTime() {
+    const now = new Date();
+    document.getElementById('clockDisplay').textContent = now.toLocaleTimeString('zh-CN', {hour12: false});
+    document.getElementById('clockDate').textContent = now.toLocaleDateString('zh-CN');
+}
+initLocalTime();
+
 class SimulationWS {
     constructor() {
         this.ws = null;
