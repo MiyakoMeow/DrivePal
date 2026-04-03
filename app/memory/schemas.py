@@ -34,6 +34,7 @@ class InteractionRecord(BaseModel):
     timestamp: str = ""
     memory_strength: int = 1
     last_recall_date: str = ""
+    remind_at: str | None = None
 
 
 class FeedbackData(BaseModel):

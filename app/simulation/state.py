@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import ValidationError
 
 from app.schemas.context import DrivingContext
 
@@ -24,23 +23,23 @@ class _SimulationState:
         if not parts:
             raise ValueError("field_path must not be empty")
 
-        obj: Any = self._context
-        for part in parts[:-1]:
-            obj = getattr(obj, part)
-
-        attr_name = parts[-1]
-        current_model = type(obj)
-        try:
-            validated = current_model.model_validate(
-                {**obj.model_dump(), attr_name: value}
+        if len(parts) == 1:
+            validated = type(self._context).model_validate(
+                {**self._context.model_dump(), parts[0]: value}
             )
-        except ValidationError:
-            raise
+            self._context = validated
+            return
 
         new_root = self._context.model_copy(deep=True)
         parent = new_root
         for part in parts[:-1]:
             parent = getattr(parent, part)
+
+        attr_name = parts[-1]
+        current_model = type(parent)
+        validated = current_model.model_validate(
+            {**parent.model_dump(), attr_name: value}
+        )
         setattr(parent, attr_name, getattr(validated, attr_name))
         self._context = new_root
 

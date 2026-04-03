@@ -77,7 +77,12 @@ async def test_store_client_delegates_to_store() -> None:
             pass
 
         async def write_interaction(
-            self, query: str, response: str, event_type: str = "reminder"
+            self,
+            query: str,
+            response: str,
+            event_type: str = "reminder",
+            *,
+            remind_at: str | None = None,
         ) -> str:
             return "fake_interaction_id"
 

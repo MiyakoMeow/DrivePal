@@ -219,8 +219,11 @@ class AgentWorkflow:
             content = decision.get("content") or "无提醒内容"
         remind_at = None
         task_data = state.get("task") or {}
+        decision_data = state.get("decision") or {}
         if isinstance(task_data, dict):
             remind_at = task_data.get("remind_at")
+        if remind_at is None and isinstance(decision_data, dict):
+            remind_at = decision_data.get("remind_at")
 
         event_id = await self.memory_module.write_interaction(
             user_input, content, mode=self._memory_mode, remind_at=remind_at

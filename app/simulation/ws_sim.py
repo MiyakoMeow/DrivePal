@@ -85,6 +85,8 @@ async def simulation_ws(websocket: WebSocket) -> None:
                 simulation_state.set_preset(msg["context"])
 
             elif msg_type == "start_scheduler":
+                if _scheduler is not None:
+                    _scheduler.stop()
                 from app.agents.workflow import AgentWorkflow
                 from app.api.main import DATA_DIR, get_memory_module
                 from app.memory.components import EventStorage
@@ -116,6 +118,11 @@ async def simulation_ws(websocket: WebSocket) -> None:
     finally:
         global _clock_task
         _manager.disconnect(websocket)
-        if not _manager.active_connections and _clock_task and not _clock_task.done():
-            _clock_task.cancel()
+        if not _manager.active_connections:
+            if _scheduler is not None:
+                _scheduler.stop()
+                _scheduler = None
+            if _clock_task and not _clock_task.done():
+                _clock_task.cancel()
+                await _clock_task
             _clock_task = None

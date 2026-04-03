@@ -80,13 +80,29 @@ class SimulationClock:
         self._last_wall = time.monotonic()
         self._task = asyncio.create_task(self._tick_loop())
 
-    def stop(self) -> None:
-        """停止后台 tick 任务."""
+    async def stop_async(self) -> None:
+        """异步停止后台 tick 任务."""
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
-            with suppress(asyncio.CancelledError, RuntimeError):
-                asyncio.get_event_loop().run_until_complete(self._task)
+            with suppress(asyncio.CancelledError, asyncio.InvalidStateError):
+                await self._task
+        self._task = None
+
+    def stop(self) -> None:
+        """停止后台 tick 任务（同步版本，尝试调用异步版本）."""
+        self._running = False
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    loop.call_soon(self._task.cancel)
+            except RuntimeError:
+                with suppress(asyncio.CancelledError, RuntimeError):
+                    asyncio.get_event_loop().run_until_complete(self._task)
+            except AttributeError:
+                pass
         self._task = None
 
     async def _tick_loop(self) -> None:
