@@ -293,6 +293,16 @@ class SimulationWS {
             const dt = new Date(msg.time);
             document.getElementById('clockDisplay').textContent = dt.toLocaleTimeString('zh-CN', {hour12: false});
             document.getElementById('clockDate').textContent = dt.toLocaleDateString('zh-CN');
+            
+            if (!hasReceivedBackendTime) {
+                hasReceivedBackendTime = true;
+                const dateStr = dt.toISOString().split('T')[0];
+                const timeStr = dt.toTimeString().split(' ')[0];
+                const simDateInput = document.getElementById('simDate');
+                const simTimeInput = document.getElementById('simTime');
+                if (!simDateInput.value) simDateInput.value = dateStr;
+                if (!simTimeInput.value) simTimeInput.value = timeStr;
+            }
         } else if (msg.type === 'context_snapshot') {
         }
     }
