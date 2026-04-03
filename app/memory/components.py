@@ -145,12 +145,18 @@ class SimpleInteractionWriter:
         self._storage = storage
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
+        *,
+        remind_at: str | None = None,
     ) -> str:
         """写入交互记录."""
         event = MemoryEvent(
             content=query,
             type=event_type,
             description=response,
+            remind_at=remind_at,
         )
         return await self._storage.append_event(event)

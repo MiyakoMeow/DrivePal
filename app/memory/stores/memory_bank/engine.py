@@ -237,7 +237,12 @@ class MemoryBankEngine:
                 await self._interactions_store.write(all_interactions)
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
+        *,
+        remind_at: str | None = None,
     ) -> str:
         """写入交互记录并关联事件."""
         interaction_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -270,6 +275,7 @@ class MemoryBankEngine:
                     "memory_strength": 1,
                     "last_recall_date": today,
                     "date_group": today,
+                    "remind_at": remind_at,
                 }
                 interaction["event_id"] = event_id
 

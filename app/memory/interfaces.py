@@ -32,7 +32,12 @@ class MemoryStore(Protocol):
         ...
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
+        *,
+        remind_at: str | None = None,
     ) -> str:
         """写入交互记录."""
         ...

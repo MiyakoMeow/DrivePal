@@ -77,7 +77,14 @@ class MemoryBankStore:
         await self._feedback.update_feedback(event_id, feedback)
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
+        *,
+        remind_at: str | None = None,
     ) -> str:
         """写入交互记录."""
-        return await self._engine.write_interaction(query, response, event_type)
+        return await self._engine.write_interaction(
+            query, response, event_type, remind_at=remind_at
+        )

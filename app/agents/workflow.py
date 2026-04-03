@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -96,7 +95,9 @@ class AgentWorkflow:
                 [e.to_public() for e in related_events] if related_events else []
             )
 
-        current_datetime = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        from app.simulation.clock import SimulationClock
+
+        current_datetime = SimulationClock().now().strftime("%Y-%m-%d %H:%M:%S")
         driving_context = state.get("driving_context")
 
         if driving_context:
@@ -216,8 +217,13 @@ class AgentWorkflow:
             content = remind_content
         else:
             content = decision.get("content") or "无提醒内容"
+        remind_at = None
+        task_data = state.get("task") or {}
+        if isinstance(task_data, dict):
+            remind_at = task_data.get("remind_at")
+
         event_id = await self.memory_module.write_interaction(
-            user_input, content, mode=self._memory_mode
+            user_input, content, mode=self._memory_mode, remind_at=remind_at
         )
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")

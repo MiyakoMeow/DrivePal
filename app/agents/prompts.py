@@ -19,6 +19,7 @@ TASK_SYSTEM_PROMPT = """你是任务理解Agent，负责事件抽取和任务归
 - 事件列表（时间、地点、类型、约束）
 - 任务归因（meeting/travel/shopping/contact/other）
 - 置信度
+- remind_at（ISO 8601格式）：如果事件包含未来时间（如"明天9点"、"下周一"），解析为绝对时间
 
 输出JSON格式的任务对象. """
 

@@ -20,6 +20,7 @@ class MemoryEvent(BaseModel):
     date_group: str = ""
     interaction_ids: list[str] = Field(default_factory=list)
     updated_at: str = ""
+    remind_at: str | None = None
     model_config = ConfigDict(extra="allow")
 
 

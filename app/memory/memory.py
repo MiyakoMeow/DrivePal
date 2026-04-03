@@ -105,6 +105,7 @@ class MemoryModule:
         event_type: str = "reminder",
         *,
         mode: MemoryMode | None = None,
+        remind_at: str | None = None,
     ) -> str:
         """写入交互记录."""
         store = await self._get_store(self._resolve_mode(mode))
@@ -112,7 +113,9 @@ class MemoryModule:
             raise NotImplementedError(
                 f"Store '{store.store_name}' does not support write_interaction"
             )
-        return await store.write_interaction(query, response, event_type)
+        return await store.write_interaction(
+            query, response, event_type, remind_at=remind_at
+        )
 
     async def search(
         self, query: str, top_k: int = 10, *, mode: MemoryMode | None = None
