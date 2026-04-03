@@ -403,5 +403,15 @@ function toggleScheduler() {
 simWS.connect();
 notifyWS.connect();
 
+document.getElementById('ctx-emotion').value = 'neutral';
+document.getElementById('ctx-workload').value = 'normal';
+document.getElementById('ctx-fatigueLevel').value = '0';
+document.getElementById('ctx-lat').value = '39.9042';
+document.getElementById('ctx-lng').value = '116.4074';
+document.getElementById('ctx-speedKmh').value = '0';
+document.getElementById('ctx-congestionLevel').value = 'smooth';
+document.getElementById('ctx-delayMinutes').value = '0';
+document.getElementById('ctx-scenario').value = 'city_driving';
+
 loadPresets();
 loadHistory();
