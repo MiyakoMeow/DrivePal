@@ -33,7 +33,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Data directory initialized: %s", DATA_DIR)
     if not Path.exists(WEBUI_DIR):
         logger.warning("WebUI directory not found: %s", WEBUI_DIR)
+    from app.simulation.clock import SimulationClock
+
+    SimulationClock().start()
     yield
+    SimulationClock().stop()
 
 
 app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
@@ -86,6 +90,17 @@ def _mount_graphql() -> None:
 
 
 _mount_graphql()
+
+
+def _mount_ws() -> None:
+    from app.simulation.ws_notify import notify_ws
+    from app.simulation.ws_sim import simulation_ws
+
+    app.websocket("/ws/sim")(simulation_ws)
+    app.websocket("/ws/notify")(notify_ws)
+
+
+_mount_ws()
 
 
 @app.get("/")
