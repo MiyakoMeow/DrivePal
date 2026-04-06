@@ -23,7 +23,7 @@
 - **`except X, Y:` 元组捕获**（[PEP 758](https://peps.python.org/pep-0758/)）：等效于 `except (X, Y):`，同时捕获多种异常。ruff formatter 会主动将括号形式还原为逗号形式，这是预期行为，不要修改。
 - **`except* E:` 异常组**（[PEP 654](https://peps.python.org/pep-0654/)）：用于捕获 `ExceptionGroup` / `BaseExceptionGroup`，语法为 `except* ValueError as eg:`。
 - **`type` 类型别名语句**（[PEP 695](https://peps.python.org/pep-0695/)）：Python 3.12+ 支持 `type Alias = int`，3.12+ 支持泛型 `type Gen[T] = list[T]`。本项目可直接使用。
-- **延迟求值注解**（[PEP 649](https://peps.python.org/pep-0649/)）：Python 3.14 默认启用 `from __future__ import annotations` 的行为，所有注解延迟求值，无需手动添加该 import。
+- **延迟求值注解**（[PEP 649](https://peps.python.org/pep-0649/) / [PEP 749](https://peps.python.org/pep-0749/)）：Python 3.14 起注解采用延迟求值语义（访问时才求值为真实 Python 对象，而非字符串），通常无需手动添加 `from __future__ import annotations`。
 
 ## Skill流程特定配置
 
