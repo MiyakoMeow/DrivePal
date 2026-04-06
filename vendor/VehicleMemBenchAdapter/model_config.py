@@ -22,7 +22,7 @@ def _get_config_path() -> Path:
     env_path = os.environ.get("CONFIG_PATH", "config/llm.toml")
     if Path(env_path).is_absolute():
         return Path(env_path)
-    return Path(__file__).resolve().parent.parent.parent.parent / env_path
+    return Path(__file__).resolve().parent.parent.parent / env_path
 
 
 def _normalize_llm_config(config: dict) -> list[dict]:
