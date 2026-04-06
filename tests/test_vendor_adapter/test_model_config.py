@@ -25,10 +25,10 @@ def test_get_benchmark_client_returns_openai_instance(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from adapters.model_config import _load_config
+    from vendor.VehicleMemBenchAdapter.model_config import _load_config
 
     _load_config.cache_clear()
-    from adapters.model_config import get_benchmark_client
+    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
@@ -51,10 +51,10 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from adapters.model_config import _load_config
+    from vendor.VehicleMemBenchAdapter.model_config import _load_config
 
     _load_config.cache_clear()
-    from adapters.model_config import get_benchmark_client
+    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
@@ -84,10 +84,10 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from adapters.model_config import _load_config
+    from vendor.VehicleMemBenchAdapter.model_config import _load_config
 
     _load_config.cache_clear()
-    from adapters.model_config import get_benchmark_client
+    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
@@ -109,10 +109,10 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from adapters.model_config import _load_config
+    from vendor.VehicleMemBenchAdapter.model_config import _load_config
 
     _load_config.cache_clear()
-    from adapters.model_config import get_store_chat_model
+    from vendor.VehicleMemBenchAdapter.model_config import get_store_chat_model
 
     model = get_store_chat_model()
     assert model is not None
@@ -120,7 +120,7 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 def test_resolve_model_string_simple() -> None:
     """测试简单模型引用解析."""
-    from adapters.model_config import resolve_model_string
+    from app.models.model_string import resolve_model_string
 
     result = resolve_model_string("deepseek/deepseek-chat")
     assert result.provider_name == "deepseek"
@@ -130,7 +130,7 @@ def test_resolve_model_string_simple() -> None:
 
 def test_resolve_model_string_with_params() -> None:
     """测试带参数的模型引用解析."""
-    from adapters.model_config import resolve_model_string
+    from app.models.model_string import resolve_model_string
 
     result = resolve_model_string(
         "zhipuai-coding-plan/glm-4.7-flashx?temperature=0.1&max_tokens=1000"
@@ -142,7 +142,7 @@ def test_resolve_model_string_with_params() -> None:
 
 def test_resolve_model_string_invalid_format() -> None:
     """测试无效格式."""
-    from adapters.model_config import resolve_model_string
+    from app.models.model_string import resolve_model_string
 
     with pytest.raises(ValueError, match="Invalid model string format"):
         resolve_model_string("invalid-format")

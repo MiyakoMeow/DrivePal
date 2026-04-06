@@ -143,7 +143,7 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "llm.toml"
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from adapters.model_config import _load_config
+        from app.models.model_string import _load_config
 
         _load_config.cache_clear()
         settings = LLMSettings.load()
@@ -172,7 +172,7 @@ class TestLLMSettingsLoad:
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        from adapters.model_config import _load_config
+        from app.models.model_string import _load_config
 
         _load_config.cache_clear()
         settings = LLMSettings.load()
@@ -197,7 +197,7 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "llm.toml"
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from adapters.model_config import _load_config
+        from app.models.model_string import _load_config
 
         _load_config.cache_clear()
         settings = LLMSettings.load()
@@ -219,7 +219,7 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "llm.toml"
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from adapters.model_config import _load_config
+        from app.models.model_string import _load_config
 
         _load_config.cache_clear()
         settings = LLMSettings.load()
@@ -248,7 +248,7 @@ class TestLLMSettingsLoad:
             )
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from adapters.model_config import _load_config
+        from app.models.model_string import _load_config
 
         _load_config.cache_clear()
         settings = LLMSettings.load()
@@ -278,7 +278,7 @@ class TestLLMSettingsLoad:
         config_file.parent.mkdir(parents=True)
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from adapters.model_config import _load_config
+        from app.models.model_string import _load_config
 
         _load_config.cache_clear()
         settings = LLMSettings.load()

@@ -29,28 +29,28 @@ async def main() -> None:
     args = parser.parse_args()
 
     if args.command == "prepare":
-        from adapters.runner import prepare as do_prepare
+        from vendor.VehicleMemBenchAdapter.runner import prepare as do_prepare
 
         await do_prepare(args.file_range, args.memory_types)
     elif args.command == "run":
-        from adapters.runner import run as do_run
+        from vendor.VehicleMemBenchAdapter.runner import run as do_run
 
         await do_run(args.file_range, args.memory_types)
     elif args.command == "report":
-        from adapters.runner import report as do_report
+        from vendor.VehicleMemBenchAdapter.runner import report as do_report
 
         do_report(args.output)
     elif args.command == "all":
         failed = False
         try:
-            from adapters.runner import prepare as do_prepare
+            from vendor.VehicleMemBenchAdapter.runner import prepare as do_prepare
 
             await do_prepare(args.file_range, args.memory_types)
         except Exception as e:
             print(f"[prepare] failed: {e}")
             failed = True
         try:
-            from adapters.runner import run as do_run
+            from vendor.VehicleMemBenchAdapter.runner import run as do_run
 
             await do_run(args.file_range, args.memory_types)
         except Exception as e:
@@ -61,7 +61,7 @@ async def main() -> None:
                 "[all] aborted due to failures, skipping report (use --allow-partial to force)"
             )
             return
-        from adapters.runner import report as do_report
+        from vendor.VehicleMemBenchAdapter.runner import report as do_report
 
         do_report()
     else:
