@@ -3,7 +3,7 @@
 
 def test_setup_vehiclemembench_path() -> None:
     """测试 setup_vehiclemembench_path 将 vendor 添加到 sys.path."""
-    from adapters.runner import setup_vehiclemembench_path
+    from vendor.VehicleMemBenchAdapter.runner import setup_vehiclemembench_path
 
     setup_vehiclemembench_path()
     import importlib.util
@@ -14,7 +14,7 @@ def test_setup_vehiclemembench_path() -> None:
 
 def test_parse_file_range() -> None:
     """测试解析文件范围字符串."""
-    from adapters.runner import parse_file_range
+    from vendor.VehicleMemBenchAdapter.runner import parse_file_range
 
     assert parse_file_range("1-5") == [1, 2, 3, 4, 5]
     assert parse_file_range("1,3,5") == [1, 3, 5]
@@ -23,7 +23,7 @@ def test_parse_file_range() -> None:
 
 def test_parse_file_range_dedup_and_sort() -> None:
     """测试 parse_file_range 去重和排序结果."""
-    from adapters.runner import parse_file_range
+    from vendor.VehicleMemBenchAdapter.runner import parse_file_range
 
     assert parse_file_range("5,3,3,1") == [1, 3, 5]
     assert parse_file_range("3-1") == [1, 2, 3]
@@ -31,7 +31,11 @@ def test_parse_file_range_dedup_and_sort() -> None:
 
 def test_paths_exist() -> None:
     """测试 vendor 路径存在."""
-    from adapters.runner import VENDOR_DIR, BENCHMARK_DIR, OUTPUT_DIR
+    from vendor.VehicleMemBenchAdapter.runner import (
+        VENDOR_DIR,
+        BENCHMARK_DIR,
+        OUTPUT_DIR,
+    )
 
     assert VENDOR_DIR.exists()
     assert (BENCHMARK_DIR / "qa_data").exists()

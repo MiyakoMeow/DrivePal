@@ -161,7 +161,7 @@ class LLMSettings:
         """解析 embedding_model 配置字符串，返回 EmbeddingProviderConfig."""
         if not self.embedding_model:
             return None
-        from adapters.model_config import resolve_model_string
+        from app.models.model_string import resolve_model_string
 
         resolved = resolve_model_string(self.embedding_model)
         if resolved.provider_name not in self.model_providers:
@@ -246,7 +246,7 @@ def _build_provider_config_from_ref(
         ValueError: 提供商不存在或引用格式无效
 
     """
-    from adapters.model_config import resolve_model_string
+    from app.models.model_string import resolve_model_string
 
     resolved = resolve_model_string(ref)
     if resolved.provider_name not in model_providers:

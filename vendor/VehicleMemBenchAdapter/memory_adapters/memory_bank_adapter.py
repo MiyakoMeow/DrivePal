@@ -1,7 +1,13 @@
 """结合嵌入向量和LLM的记忆库适配器."""
 
-from adapters.memory_adapters.common import StoreClient, history_to_interaction_records
-from adapters.model_config import get_store_chat_model, get_store_embedding_model
+from vendor.VehicleMemBenchAdapter.memory_adapters.common import (
+    StoreClient,
+    history_to_interaction_records,
+)
+from vendor.VehicleMemBenchAdapter.model_config import (
+    get_store_chat_model,
+    get_store_embedding_model,
+)
 from app.memory.stores.memory_bank import MemoryBankStore
 from typing import TYPE_CHECKING
 

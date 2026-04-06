@@ -7,16 +7,16 @@ from typing import Optional
 
 import aiofiles
 
-from adapters.memory_adapters import ADAPTERS
-from adapters.memory_adapters.common import format_search_results
-from adapters.model_config import (
+from vendor.VehicleMemBenchAdapter.memory_adapters import ADAPTERS
+from vendor.VehicleMemBenchAdapter.memory_adapters.common import format_search_results
+from vendor.VehicleMemBenchAdapter.model_config import (
     get_benchmark_client,
     get_benchmark_model_name,
     get_benchmark_temperature,
     get_benchmark_max_tokens,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 VENDOR_DIR = PROJECT_ROOT / "vendor" / "VehicleMemBench"
 BENCHMARK_DIR = VENDOR_DIR / "benchmark"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"

@@ -27,7 +27,7 @@ def test_model_groups_basic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
 
-    from adapters.model_config import _load_config, get_model_group_providers
+    from app.models.model_string import _load_config, get_model_group_providers
 
     _load_config.cache_clear()
 
@@ -57,7 +57,7 @@ def test_model_groups_with_query_params(
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     monkeypatch.setenv("ZHIPU_API_KEY", "sk-test")
 
-    from adapters.model_config import _load_config, get_model_group_providers
+    from app.models.model_string import _load_config, get_model_group_providers
 
     _load_config.cache_clear()
 
@@ -76,7 +76,7 @@ def test_model_groups_not_found(
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
 
-    from adapters.model_config import _load_config, get_model_group_providers
+    from app.models.model_string import _load_config, get_model_group_providers
 
     _load_config.cache_clear()
 
@@ -97,7 +97,7 @@ def test_empty_model_group_returns_empty_list(
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
 
-    from adapters.model_config import _load_config, get_model_group_providers
+    from app.models.model_string import _load_config, get_model_group_providers
 
     _load_config.cache_clear()
 
