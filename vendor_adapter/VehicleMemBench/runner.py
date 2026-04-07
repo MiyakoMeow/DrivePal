@@ -338,7 +338,7 @@ async def _run_single(
     reflect_num: int,
     query_semaphore: asyncio.Semaphore,
 ) -> dict:
-    search_client = _build_search_client(prep_data, memory_type)
+    search_client = await _build_search_client(prep_data, memory_type)
 
     kv_store = None
     if memory_type == "kv":
@@ -389,7 +389,7 @@ async def _run_single(
     return {"results": results, "failed_count": failed_count}
 
 
-def _build_search_client(prep_data: dict, memory_type: str) -> StoreClient | None:
+async def _build_search_client(prep_data: dict, memory_type: str) -> StoreClient | None:
     """为自定义适配器预构建搜索客户端（按 file+type 复用）."""
     if memory_type not in ADAPTERS:
         return None
@@ -399,7 +399,7 @@ def _build_search_client(prep_data: dict, memory_type: str) -> StoreClient | Non
     adapter_cls = ADAPTERS[memory_type]
     data_dir = Path(data_dir_str)
     adapter = adapter_cls(data_dir=data_dir)
-    store = adapter.load()
+    store = await asyncio.to_thread(adapter.load)
     return adapter.get_search_client(store)
 
 
