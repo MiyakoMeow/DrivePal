@@ -221,7 +221,6 @@ async def prepare(
         try:
             history_text = history_cache.get(fnum, "")
             if mtype in ADAPTERS:
-                fdir.mkdir(parents=True, exist_ok=True)
                 store_dir = fdir / "store"
                 store_dir.mkdir(parents=True, exist_ok=True)
                 adapter_cls = ADAPTERS[mtype]
@@ -256,8 +255,6 @@ async def _prepare_single(
     file_num: int,
     memory_type: str,
 ) -> dict | None:
-    if memory_type == "gold":
-        return {"type": "gold"}
     if memory_type == "summary":
         daily = split_history_by_day(history_text)
         mem_text, _, _ = await asyncio.to_thread(
@@ -331,13 +328,6 @@ async def run(
         fdir = file_output_dir(mtype, fnum)
         fdir.mkdir(parents=True, exist_ok=True)
 
-        all_exist = all(
-            query_result_path(mtype, fnum, i).exists() for i in range(len(events))
-        )
-        if all_exist:
-            print(f"[skip] {mtype} file {fnum} all queries already done")
-            return
-
         print(f"[run] {mtype} file {fnum}: {len(events)} queries...")
         await _run_single(
             agent_client,
@@ -387,7 +377,15 @@ async def _run_single(
     async def _eval_and_save(idx: int, event: dict) -> None:
         qp = query_result_path(memory_type, file_num, idx)
         if qp.exists():
-            return
+            try:
+                async with aiofiles.open(qp, encoding="utf-8") as f:
+                    existing = json.loads(await f.read())
+                if not existing.get("failed"):
+                    return
+            except json.JSONDecodeError:
+                pass
+            except OSError:
+                return
 
         query = event.get("query", "")
         reasoning_type = event.get("reasoning_type", "")
@@ -407,8 +405,6 @@ async def _run_single(
                 result["memory_type"] = memory_type
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
-        except asyncio.CancelledError:
-            raise
         except Exception as e:
             print(f"  [error] query {idx}: {e}")
             fail_record = {
