@@ -3,6 +3,7 @@
 import os
 
 import tomllib
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -15,6 +16,17 @@ if TYPE_CHECKING:
     from app.models.chat import ChatModel
 
 from app.models.settings import ResolvedModel
+
+
+@dataclass(frozen=True)
+class BenchmarkConfig:
+    """基准测试配置（一次性提取所有字段）."""
+
+    base_url: str
+    api_key: str
+    model: str
+    temperature: float
+    max_tokens: int
 
 
 def _get_config_path() -> Path:
@@ -48,15 +60,23 @@ def _load_config() -> dict:
         return tomllib.load(f)
 
 
-def get_benchmark_client() -> OpenAI:
-    """获取配置好的基准测试 OpenAI 客户端."""
+@lru_cache(maxsize=1)
+def get_benchmark_config() -> BenchmarkConfig:
+    """从配置中一次性提取所有基准测试参数."""
     config = _load_config()
     if "benchmark" in config:
         bc = config["benchmark"]
-        api_key = os.environ.get(bc.get("api_key_env", ""), bc.get("api_key", ""))
-        return OpenAI(
+        api_key_env = bc.get("api_key_env", "")
+        if api_key_env:
+            api_key = os.environ.get(api_key_env, bc.get("api_key", ""))
+        else:
+            api_key = bc.get("api_key", "")
+        return BenchmarkConfig(
             base_url=bc["base_url"],
             api_key=api_key,
+            model=bc["model"],
+            temperature=bc.get("temperature", 0.0),
+            max_tokens=bc.get("max_tokens", 8192),
         )
     llm_providers = _normalize_llm_config(config)
     if not llm_providers:
@@ -64,40 +84,20 @@ def get_benchmark_client() -> OpenAI:
             "Configuration must contain at least one LLM provider in 'llm' array"
         )
     llm = llm_providers[0]
-    return OpenAI(
-        base_url=llm.get("base_url"),
+    return BenchmarkConfig(
+        base_url=llm.get("base_url", ""),
         api_key=llm.get("api_key", ""),
+        model=llm["model"],
+        temperature=llm.get("temperature", 0.0),
+        max_tokens=8192,
     )
 
 
-def get_benchmark_model_name() -> str:
-    """从配置中获取基准测试模型名称."""
-    config = _load_config()
-    if "benchmark" in config:
-        return config["benchmark"]["model"]
-    llm_providers = _normalize_llm_config(config)
-    if not llm_providers:
-        raise ValueError("No LLM provider configured")
-    return llm_providers[0]["model"]
-
-
-def get_benchmark_temperature() -> float:
-    """从配置中获取基准测试温度参数."""
-    config = _load_config()
-    if "benchmark" in config:
-        return config["benchmark"].get("temperature", 0.0)
-    llm_providers = _normalize_llm_config(config)
-    if not llm_providers:
-        return 0.7
-    return llm_providers[0].get("temperature", 0.7)
-
-
-def get_benchmark_max_tokens() -> int:
-    """从配置中获取基准测试最大 token 数."""
-    config = _load_config()
-    if "benchmark" in config:
-        return config["benchmark"].get("max_tokens", 8192)
-    return 8192
+@lru_cache(maxsize=1)
+def get_benchmark_client() -> OpenAI:
+    """获取配置好的基准测试 OpenAI 客户端."""
+    cfg = get_benchmark_config()
+    return OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
 
 
 def get_store_chat_model() -> "ChatModel":
@@ -155,9 +155,9 @@ def get_model_group_providers(name: str) -> list[dict]:
         provider_config = _resolve_provider(resolved.provider_name)
         api_key_env = provider_config.get("api_key_env")
         if api_key_env:
-            api_key: str | None = os.environ.get(api_key_env, "")
+            api_key: str = os.environ.get(api_key_env, "")
         else:
-            api_key = provider_config.get("api_key")
+            api_key = provider_config.get("api_key", "")
         result.append(
             {
                 "model": resolved.model_name,
