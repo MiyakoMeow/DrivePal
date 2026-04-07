@@ -1,5 +1,7 @@
 """VehicleMemBench 评估基准的测试运行器."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -8,7 +10,10 @@ import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from concurrent.futures import Future
 
 import aiofiles
 
@@ -453,23 +458,27 @@ async def _evaluate_query(
 
 
 def _make_sync_memory_search(
-    search_client: StoreClient, loop: asyncio.AbstractEventLoop
+    search_client: StoreClient,
 ) -> Callable[[str, int], dict]:
     """为同步 vendor 代码创建同步的 memory_search 包装器.
 
-    通过 run_coroutine_threadsafe 将异步搜索桥接到主事件循环.
+    使用 run_coroutine_threadsafe 将异步搜索调度到主事件循环.
+    需要在主事件循环所在线程中调用此函数返回的 _search().
     """
 
     def _search(query: str, top_k: int = 5) -> dict:
-        future = asyncio.run_coroutine_threadsafe(
-            search_client.search(query=query, top_k=top_k), loop
-        )
+        loop = asyncio.get_running_loop()
+        future: Future | None = None
         try:
+            future = asyncio.run_coroutine_threadsafe(
+                search_client.search(query=query, top_k=top_k), loop
+            )
             results = future.result(timeout=_SEARCH_TIMEOUT)
             text, count = format_search_results(results)
             return {"success": True, "results": text, "count": count}
         except TimeoutError:
-            future.cancel()
+            if future is not None:
+                future.cancel()
             print(f"  [warn] memory_search timeout: {query!r}")
             return {
                 "success": False,
@@ -477,6 +486,11 @@ def _make_sync_memory_search(
                 "results": "",
                 "count": 0,
             }
+        except RuntimeError as e:
+            if "event loop" in str(e).lower():
+                print(f"  [warn] memory_search: event loop error: {e}")
+                return {"success": False, "error": str(e), "results": "", "count": 0}
+            raise
         except Exception as e:
             print(f"  [warn] memory_search failed: {e}")
             return {"success": False, "error": str(e), "results": "", "count": 0}
@@ -492,10 +506,13 @@ async def _run_custom_adapter_with_client(
     reflect_num: int,
     search_client: StoreClient,
 ) -> dict | None:
-    """使用预构建的搜索客户端运行自定义适配器评估."""
-    loop = asyncio.get_running_loop()
+    """使用预构建的搜索客户端运行自定义适配器评估.
+
+    _run_vehicle_task_evaluation 是同步函数，通过 asyncio.to_thread 在线程池中执行。
+    其调用的 memory_search 回调通过 run_coroutine_threadsafe 调度到主事件循环。
+    """
     memory_funcs = {
-        "memory_search": _make_sync_memory_search(search_client, loop),
+        "memory_search": _make_sync_memory_search(search_client),
     }
 
     return await asyncio.to_thread(
