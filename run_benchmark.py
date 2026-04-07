@@ -1,13 +1,10 @@
 """Command-line interface for VehicleMemBench evaluation."""
 
-import argparse
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from argparse import ArgumentParser
+from pathlib import Path
 
 
-def _add_common_args(parser: argparse.ArgumentParser, default_types: str) -> None:
+def _add_common_args(parser: ArgumentParser, default_types: str) -> None:
     parser.add_argument("--file-range", default="1-50")
     parser.add_argument("--memory-types", default=default_types)
 
@@ -24,7 +21,7 @@ async def _do_run(file_range: str, memory_types: str, reflect_num: int = 10) -> 
     await run(file_range, memory_types, reflect_num)
 
 
-def _do_report(output: "Path | None" = None) -> None:
+def _do_report(output: Path | None = None) -> None:
     from vendor_adapter.VehicleMemBench.runner import report
 
     report(output)
@@ -32,7 +29,7 @@ def _do_report(output: "Path | None" = None) -> None:
 
 async def main() -> None:
     """Entry point for benchmark CLI."""
-    parser = argparse.ArgumentParser(description="VehicleMemBench evaluation")
+    parser = ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
 
     _default_memory_types = "gold,summary,kv,memory_bank"
@@ -52,10 +49,10 @@ async def main() -> None:
         default=False,
         help="Generate report even if some steps failed",
     )
-    p_all.add_argument("--output", default=None)
+    p_all.add_argument("--output", type=Path, default=None)
 
     rp = subparsers.add_parser("report")
-    rp.add_argument("--output", default=None)
+    rp.add_argument("--output", type=Path, default=None)
 
     args = parser.parse_args()
 
