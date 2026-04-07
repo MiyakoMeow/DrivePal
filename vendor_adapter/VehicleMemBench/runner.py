@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 import aiofiles
 
@@ -21,7 +21,10 @@ VENDOR_DIR = PROJECT_ROOT / "vendor" / "VehicleMemBench"
 BENCHMARK_DIR = VENDOR_DIR / "benchmark"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"
 
-_QUERY_CONCURRENCY_LIMIT = int(os.environ.get("BENCHMARK_QUERY_CONCURRENCY", "4"))
+try:
+    _QUERY_CONCURRENCY_LIMIT = int(os.environ.get("BENCHMARK_QUERY_CONCURRENCY", "4"))
+except ValueError:
+    _QUERY_CONCURRENCY_LIMIT = 4
 try:
     _SEARCH_TIMEOUT = int(os.environ.get("BENCHMARK_SEARCH_TIMEOUT", "60"))
 except ValueError:
@@ -268,13 +271,10 @@ async def run(
 
     async def _load_prep(fnum: int, mtype: str) -> tuple[str, int, dict | None]:
         path = output_dir / f"{mtype}_file_{fnum}.json"
-        if not path.exists():
-            return mtype, fnum, None
         try:
             async with aiofiles.open(path, encoding="utf-8") as f:
                 return mtype, fnum, json.loads(await f.read())
         except FileNotFoundError:
-            print(f"[warn] prep file {mtype} {fnum} disappeared")
             return mtype, fnum, None
         except Exception as e:
             print(f"[error] load prep {mtype} file {fnum}: {e}")
@@ -398,8 +398,11 @@ def _build_search_client(prep_data: dict, memory_type: str) -> StoreClient | Non
     """为自定义适配器预构建搜索客户端（按 file+type 复用）."""
     if memory_type not in ADAPTERS:
         return None
+    data_dir_str = prep_data.get("data_dir")
+    if not data_dir_str:
+        return None
     adapter_cls = ADAPTERS[memory_type]
-    data_dir = Path(prep_data["data_dir"])
+    data_dir = Path(data_dir_str)
     adapter = adapter_cls(data_dir=data_dir)
     store = adapter.load()
     return adapter.get_search_client(store)
@@ -413,9 +416,12 @@ async def _evaluate_query(
 ) -> dict | None:
     """执行单个 query 的评估，同步 vendor 调用通过 asyncio.to_thread 包装."""
     if ctx.memory_type == "gold":
-        task["history_text"] = gold_memory
         return await asyncio.to_thread(
-            process_task_direct, task, idx, ctx.agent_client, ctx.reflect_num
+            process_task_direct,
+            {**task, "history_text": gold_memory},
+            idx,
+            ctx.agent_client,
+            ctx.reflect_num,
         )
 
     if ctx.memory_type == "summary":
@@ -512,13 +518,13 @@ async def _run_custom_adapter_with_client(
     )
 
 
-def report(output_path: Optional[Path] = None) -> None:
+def report(output_path: Path | None = None) -> None:
     """从结果生成并打印基准测试报告."""
     output_dir = _ensure_output_dir()
     all_results: dict[str, list[dict]] = {}
     failed_counts: dict[str, int] = {}
 
-    mtype_pattern = re.compile(r"^(.+)_file_\d+_results$")
+    mtype_pattern = re.compile(r"^(.+?)_file_\d+_results$")
     for path in sorted(output_dir.glob("*_results.json")):
         m = mtype_pattern.match(path.stem)
         if not m:
@@ -526,7 +532,9 @@ def report(output_path: Optional[Path] = None) -> None:
         mtype = m.group(1)
         with path.open(encoding="utf-8") as f:
             data = json.load(f)
-        results = data.get("results", data) if isinstance(data, dict) else data
+        results = data.get("results", []) if isinstance(data, dict) else data
+        if not isinstance(results, list):
+            continue
         if isinstance(data, dict) and "failed_count" in data:
             failed_counts[mtype] = failed_counts.get(mtype, 0) + data["failed_count"]
         if mtype not in all_results:

@@ -66,7 +66,11 @@ def get_benchmark_config() -> BenchmarkConfig:
     config = _load_config()
     if "benchmark" in config:
         bc = config["benchmark"]
-        api_key = os.environ.get(bc.get("api_key_env", ""), bc.get("api_key", ""))
+        api_key_env = bc.get("api_key_env", "")
+        if api_key_env:
+            api_key = os.environ.get(api_key_env, bc.get("api_key", ""))
+        else:
+            api_key = bc.get("api_key", "")
         return BenchmarkConfig(
             base_url=bc["base_url"],
             api_key=api_key,

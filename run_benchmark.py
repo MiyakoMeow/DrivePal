@@ -1,7 +1,7 @@
 """Command-line interface for VehicleMemBench evaluation."""
 
 import argparse
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -24,7 +24,7 @@ async def _do_run(file_range: str, memory_types: str) -> None:
     await run(file_range, memory_types)
 
 
-def _do_report(output: Optional[Path] = None) -> None:
+def _do_report(output: "Path | None" = None) -> None:
     from vendor_adapter.VehicleMemBench.runner import report
 
     report(output)
