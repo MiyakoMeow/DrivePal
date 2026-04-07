@@ -25,10 +25,10 @@ def test_get_benchmark_client_returns_openai_instance(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
+    from vendor_adapter.VehicleMemBench.model_config import _load_config
 
     _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
+    from vendor_adapter.VehicleMemBench.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
@@ -51,10 +51,10 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
+    from vendor_adapter.VehicleMemBench.model_config import _load_config
 
     _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
+    from vendor_adapter.VehicleMemBench.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
@@ -84,10 +84,10 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
+    from vendor_adapter.VehicleMemBench.model_config import _load_config
 
     _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
+    from vendor_adapter.VehicleMemBench.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
@@ -109,10 +109,10 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
+    from vendor_adapter.VehicleMemBench.model_config import _load_config
 
     _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_store_chat_model
+    from vendor_adapter.VehicleMemBench.model_config import get_store_chat_model
 
     model = get_store_chat_model()
     assert model is not None
