@@ -222,10 +222,11 @@ async def prepare(
             history_text = history_cache.get(fnum, "")
             if mtype in ADAPTERS:
                 store_dir = fdir / "store"
-                store_dir.mkdir(parents=True, exist_ok=True)
-                adapter_cls = ADAPTERS[mtype]
-                adapter = adapter_cls(data_dir=store_dir)
-                await adapter.add(history_text)
+                async with semaphore:
+                    store_dir.mkdir(parents=True, exist_ok=True)
+                    adapter_cls = ADAPTERS[mtype]
+                    adapter = adapter_cls(data_dir=store_dir)
+                    await adapter.add(history_text)
                 result = {"type": mtype, "data_dir": str(store_dir)}
             else:
                 async with semaphore:
@@ -302,6 +303,9 @@ async def run(
                 return mtype, fnum, json.loads(await f.read())
         except FileNotFoundError:
             return mtype, fnum, None
+        except json.JSONDecodeError:
+            print(f"[warn] corrupt prep file for {mtype} file {fnum}, skipping")
+            return mtype, fnum, None
 
     prep_raw = await asyncio.gather(
         *(_load_prep(f, t) for f in file_nums for t in types)
@@ -376,27 +380,26 @@ async def _run_single(
 
     async def _eval_and_save(idx: int, event: dict) -> None:
         qp = query_result_path(memory_type, file_num, idx)
-        if qp.exists():
-            try:
-                async with aiofiles.open(qp, encoding="utf-8") as f:
-                    existing = json.loads(await f.read())
-                if not existing.get("failed"):
-                    return
-            except json.JSONDecodeError:
-                pass
-            except OSError:
-                return
-
-        query = event.get("query", "")
-        reasoning_type = event.get("reasoning_type", "")
-        ref_calls = parse_answer_to_tools(event.get("new_answer", []))
-        gold_memory = event.get("gold_memory", "")
-        task: dict = {
-            "query": query,
-            "tools": ref_calls,
-            "reasoning_type": reasoning_type,
-        }
         try:
+            async with aiofiles.open(qp, encoding="utf-8") as f:
+                existing = json.loads(await f.read())
+            if isinstance(existing, dict) and not existing.get("failed"):
+                return
+        except FileNotFoundError:
+            pass
+        except json.JSONDecodeError:
+            pass
+
+        try:
+            query = event.get("query", "")
+            reasoning_type = event.get("reasoning_type", "")
+            ref_calls = parse_answer_to_tools(event.get("new_answer", []))
+            gold_memory = event.get("gold_memory", "")
+            task: dict = {
+                "query": query,
+                "tools": ref_calls,
+                "reasoning_type": reasoning_type,
+            }
             async with query_semaphore:
                 result = await _evaluate_query(ctx, task, idx, gold_memory)
             if result is not None:
@@ -414,13 +417,21 @@ async def _run_single(
                 "event_index": idx,
                 "memory_type": memory_type,
             }
-            async with aiofiles.open(qp, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
+            try:
+                async with aiofiles.open(qp, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
+            except OSError as write_err:
+                print(
+                    f"  [error] failed to write error record for query {idx}: {write_err}"
+                )
 
-    await asyncio.gather(
+    gather_results = await asyncio.gather(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
         return_exceptions=True,
     )
+    silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
+    if silent_failures:
+        print(f"  [warn] {len(silent_failures)} queries failed silently")
 
 
 async def _build_search_client(prep_data: dict, memory_type: str) -> StoreClient | None:
@@ -568,12 +579,16 @@ def report(output_path: Path | None = None) -> None:
 
     for path in sorted(output_dir.glob("*/*/query_*.json")):
         mtype = path.parent.parent.name
-        with path.open(encoding="utf-8") as f:
-            data = json.load(f)
-        if data.get("failed"):
-            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
+        try:
+            with path.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[warn] skipping {path}: {exc}")
             continue
         if not isinstance(data, dict):
+            continue
+        if data.get("failed"):
+            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
             continue
         if mtype not in all_results:
             all_results[mtype] = []
