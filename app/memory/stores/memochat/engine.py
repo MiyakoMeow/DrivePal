@@ -275,6 +275,8 @@ class MemoChatEngine:
         memos = await self.read_memos()
         if not memos:
             return []
+        if len(memos.keys()) <= 1:
+            return []
         if not self.chat:
             return []
         if self.retrieval_mode == RetrievalMode.HYBRID:
