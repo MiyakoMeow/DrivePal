@@ -88,7 +88,7 @@ def get_benchmark_config() -> BenchmarkConfig:
         base_url=llm.get("base_url", ""),
         api_key=llm.get("api_key", ""),
         model=llm["model"],
-        temperature=llm.get("temperature", 0.7),
+        temperature=llm.get("temperature", 0.0),
         max_tokens=8192,
     )
 

@@ -1,7 +1,5 @@
 """VehicleMemBench 评估基准的测试运行器."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import os
