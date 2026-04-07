@@ -18,10 +18,10 @@ async def _do_prepare(file_range: str, memory_types: str) -> None:
     await prepare(file_range, memory_types)
 
 
-async def _do_run(file_range: str, memory_types: str) -> None:
+async def _do_run(file_range: str, memory_types: str, reflect_num: int = 10) -> None:
     from vendor_adapter.VehicleMemBench.runner import run
 
-    await run(file_range, memory_types)
+    await run(file_range, memory_types, reflect_num)
 
 
 def _do_report(output: "Path | None" = None) -> None:
@@ -38,10 +38,14 @@ async def main() -> None:
     _default_memory_types = "gold,summary,kv,memory_bank"
 
     for cmd in ["prepare", "run"]:
-        _add_common_args(subparsers.add_parser(cmd), _default_memory_types)
+        p = subparsers.add_parser(cmd)
+        _add_common_args(p, _default_memory_types)
+        if cmd == "run":
+            p.add_argument("--reflect-num", type=int, default=10)
 
     p_all = subparsers.add_parser("all")
     _add_common_args(p_all, _default_memory_types)
+    p_all.add_argument("--reflect-num", type=int, default=10)
     p_all.add_argument(
         "--allow-partial",
         action="store_true",
@@ -58,7 +62,7 @@ async def main() -> None:
     if args.command == "prepare":
         await _do_prepare(args.file_range, args.memory_types)
     elif args.command == "run":
-        await _do_run(args.file_range, args.memory_types)
+        await _do_run(args.file_range, args.memory_types, args.reflect_num)
     elif args.command == "report":
         _do_report(args.output)
     elif args.command == "all":
@@ -69,7 +73,7 @@ async def main() -> None:
             print(f"[prepare] failed: {e}")
             failed = True
         try:
-            await _do_run(args.file_range, args.memory_types)
+            await _do_run(args.file_range, args.memory_types, args.reflect_num)
         except Exception as e:
             print(f"[run] failed: {e}")
             failed = True
