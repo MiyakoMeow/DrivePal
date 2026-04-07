@@ -461,11 +461,11 @@ def _make_sync_memory_search(
     """为同步 vendor 代码创建同步的 memory_search 包装器.
 
     使用 run_coroutine_threadsafe 将异步搜索调度到主事件循环.
-    需要在主事件循环所在线程中调用此函数返回的 _search().
+    在主事件循环线程中调用此工厂函数以捕获事件循环引用.
     """
+    loop = asyncio.get_running_loop()
 
     def _search(query: str, top_k: int = 5) -> dict:
-        loop = asyncio.get_running_loop()
         future: Future | None = None
         try:
             future = asyncio.run_coroutine_threadsafe(
