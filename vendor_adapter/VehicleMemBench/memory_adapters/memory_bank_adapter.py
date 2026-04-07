@@ -42,6 +42,8 @@ class MemoryBankAdapter:
         """从已有数据目录加载记忆库存储（无需重放写入）."""
         return MemoryBankStore(
             data_dir=self.data_dir,
+            chat_model=get_store_chat_model(),
+            embedding_model=get_store_embedding_model(),
         )
 
     def get_search_client(self, store: MemoryStore) -> StoreClient:

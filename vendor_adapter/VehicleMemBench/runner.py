@@ -181,9 +181,6 @@ async def prepare(
         except FileNotFoundError:
             print(f"[warn] history file {fnum} not found, using empty")
             return fnum, ""
-        except Exception as e:
-            print(f"[error] load history {fnum}: {e}")
-            return fnum, ""
 
     history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
     history_cache = dict(history_pairs)
@@ -241,6 +238,7 @@ async def _prepare_single(
         adapter = adapter_cls(data_dir=data_dir)
         await adapter.add(history_text)
         return {"type": memory_type, "data_dir": str(data_dir)}
+    print(f"[warn] unknown memory_type: {memory_type}")
     return None
 
 
@@ -262,9 +260,6 @@ async def run(
         except FileNotFoundError:
             print(f"[warn] qa file {fnum} not found")
             return fnum, None
-        except Exception as e:
-            print(f"[error] load qa {fnum}: {e}")
-            return fnum, None
 
     qa_pairs = await asyncio.gather(*(_load_qa_safe(f) for f in file_nums))
     qa_cache = dict(qa_pairs)
@@ -275,9 +270,6 @@ async def run(
             async with aiofiles.open(path, encoding="utf-8") as f:
                 return mtype, fnum, json.loads(await f.read())
         except FileNotFoundError:
-            return mtype, fnum, None
-        except Exception as e:
-            print(f"[error] load prep {mtype} file {fnum}: {e}")
             return mtype, fnum, None
 
     prep_raw = await asyncio.gather(
@@ -477,6 +469,7 @@ def _make_sync_memory_search(
             text, count = format_search_results(results)
             return {"success": True, "results": text, "count": count}
         except TimeoutError:
+            future.cancel()
             print(f"  [warn] memory_search timeout: {query!r}")
             return {
                 "success": False,
