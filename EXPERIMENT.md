@@ -53,11 +53,12 @@ uv run python run_benchmark.py report
 
 ```text
 data/benchmark/
-├── qa_{n}.json           # QA 测试用例
-├── history_{n}.txt       # 历史交互记录
-└── results/              # 运行结果
-    └── {memory_type}/
-        └── ...
+├── {memory_type}/               # gold | summary | kv | memory_bank
+│   └── file_{n}/
+│       ├── prep.json            # prepare 阶段产物（如有）
+│       ├── query_{i}.json       # 单个 query 评估结果
+│       └── store/               # 仅 memory_bank：MemoryBank 存储数据
+└── report.json                  # 最终聚合报告
 ```
 
 ## VehicleMemBench 子模块
