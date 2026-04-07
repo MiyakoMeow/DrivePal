@@ -32,6 +32,7 @@ exclude = [".agents/**", "vendor/**"]
 
 [lint.per-file-ignores]
 "adapters/runner.py" = ["E402"]
+"vendor_adapter/VehicleMemBench/runner.py" = ["E402"]
 "tests/**" = ["D"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
 

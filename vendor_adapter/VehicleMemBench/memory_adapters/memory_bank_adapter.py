@@ -1,10 +1,10 @@
 """结合嵌入向量和LLM的记忆库适配器."""
 
-from vendor.VehicleMemBenchAdapter.memory_adapters.common import (
+from .common import (
     StoreClient,
     history_to_interaction_records,
 )
-from vendor.VehicleMemBenchAdapter.model_config import (
+from ..model_config import (
     get_store_chat_model,
     get_store_embedding_model,
 )

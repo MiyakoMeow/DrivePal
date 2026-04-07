@@ -9,8 +9,16 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+@pytest.fixture
+def clear_config_cache() -> None:
+    """清理配置缓存的 fixture."""
+    from vendor_adapter.VehicleMemBench.model_config import _load_config
+
+    _load_config.cache_clear()
+
+
 def test_get_benchmark_client_returns_openai_instance(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_config_cache: None
 ) -> None:
     """测试 get_benchmark_client 返回 OpenAI 实例."""
     config = {
@@ -25,10 +33,7 @@ def test_get_benchmark_client_returns_openai_instance(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
-
-    _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
+    from vendor_adapter.VehicleMemBench.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
@@ -36,7 +41,7 @@ def test_get_benchmark_client_returns_openai_instance(
 
 
 def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_config_cache: None
 ) -> None:
     """测试无 benchmark 配置时 get_benchmark_client 使用 LLM 配置."""
     config = {
@@ -51,17 +56,14 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
-
-    _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
+    from vendor_adapter.VehicleMemBench.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
 
 
 def test_get_benchmark_client_uses_benchmark_config_with_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_config_cache: None
 ) -> None:
     """测试 get_benchmark_client 使用带环境变量的 benchmark 配置."""
     monkeypatch.setenv("TEST_API_KEY", "sk-test123")
@@ -84,16 +86,15 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
-
-    _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_benchmark_client
+    from vendor_adapter.VehicleMemBench.model_config import get_benchmark_client
 
     client = get_benchmark_client()
     assert client is not None
 
 
-def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_store_chat_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_config_cache: None
+) -> None:
     """测试 get_store_chat_model 返回聊天模型."""
     config = {
         "model_groups": {
@@ -109,10 +110,7 @@ def test_get_store_chat_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-    from vendor.VehicleMemBenchAdapter.model_config import _load_config
-
-    _load_config.cache_clear()
-    from vendor.VehicleMemBenchAdapter.model_config import get_store_chat_model
+    from vendor_adapter.VehicleMemBench.model_config import get_store_chat_model
 
     model = get_store_chat_model()
     assert model is not None

@@ -7,9 +7,9 @@ from typing import Optional
 
 import aiofiles
 
-from vendor.VehicleMemBenchAdapter.memory_adapters import ADAPTERS
-from vendor.VehicleMemBenchAdapter.memory_adapters.common import format_search_results
-from vendor.VehicleMemBenchAdapter.model_config import (
+from .memory_adapters import ADAPTERS
+from .memory_adapters.common import format_search_results
+from .model_config import (
     get_benchmark_client,
     get_benchmark_model_name,
     get_benchmark_temperature,

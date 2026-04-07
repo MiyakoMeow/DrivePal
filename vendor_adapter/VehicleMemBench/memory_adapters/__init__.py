@@ -1,6 +1,6 @@
 """不同存储策略的记忆适配器实现."""
 
-from vendor.VehicleMemBenchAdapter.memory_adapters.memory_bank_adapter import (
+from .memory_bank_adapter import (
     MemoryBankAdapter,
 )
 

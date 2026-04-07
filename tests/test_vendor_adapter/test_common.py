@@ -2,7 +2,7 @@
 
 import pytest
 
-from vendor.VehicleMemBenchAdapter.memory_adapters.common import (
+from vendor_adapter.VehicleMemBench.memory_adapters.common import (
     history_to_interaction_records,
     format_search_results,
     StoreClient,
