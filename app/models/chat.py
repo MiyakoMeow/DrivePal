@@ -163,7 +163,7 @@ class ChatModel:
     async def batch_generate(
         self,
         prompts: list[str],
-        system_prompt: str | None | None = None,
+        system_prompt: str | None = None,
     ) -> list[str]:
         """批量生成回复."""
         return [await self.generate(p, system_prompt) for p in prompts]
