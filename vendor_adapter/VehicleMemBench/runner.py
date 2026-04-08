@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-import re
 import sys
 from dataclasses import dataclass
 from functools import lru_cache
@@ -167,6 +166,21 @@ def _ensure_output_dir() -> Path:
     return OUTPUT_DIR
 
 
+def file_output_dir(memory_type: str, file_num: int) -> Path:
+    """返回指定记忆类型和文件编号的输出目录路径."""
+    return OUTPUT_DIR / memory_type / f"file_{file_num}"
+
+
+def prep_path(memory_type: str, file_num: int) -> Path:
+    """返回指定记忆类型和文件编号的 prep 数据路径."""
+    return file_output_dir(memory_type, file_num) / "prep.json"
+
+
+def query_result_path(memory_type: str, file_num: int, event_index: int) -> Path:
+    """返回指定记忆类型、文件编号和事件索引的查询结果路径."""
+    return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"
+
+
 async def prepare(
     file_range: str = "1-50",
     memory_types: str = "gold,summary,kv,memory_bank",
@@ -175,7 +189,7 @@ async def prepare(
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
     agent_client = _get_agent_client()
-    output_dir = _ensure_output_dir()
+    _ensure_output_dir()
     semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
 
     async def _load_or_empty(fnum: int) -> tuple[int, str]:
@@ -189,18 +203,39 @@ async def prepare(
     history_cache = dict(history_pairs)
 
     async def _task(fnum: int, mtype: str) -> None:
-        result_path = output_dir / f"{mtype}_file_{fnum}.json"
-        if result_path.exists():
+        fdir = file_output_dir(mtype, fnum)
+        if mtype == "gold":
+            if fdir.exists():
+                print(f"[skip] {mtype} file {fnum} already prepared")
+                return
+            fdir.mkdir(parents=True, exist_ok=True)
+            print(f"[prepare] {mtype} file {fnum}...")
+            return
+
+        pp = prep_path(mtype, fnum)
+        if pp.exists():
             print(f"[skip] {mtype} file {fnum} already prepared")
             return
 
         print(f"[prepare] {mtype} file {fnum}...")
         try:
-            history_text = "" if mtype == "gold" else history_cache.get(fnum, "")
-            async with semaphore:
-                result = await _prepare_single(agent_client, history_text, fnum, mtype)
+            history_text = history_cache.get(fnum, "")
+            if mtype in ADAPTERS:
+                store_dir = fdir / "store"
+                async with semaphore:
+                    store_dir.mkdir(parents=True, exist_ok=True)
+                    adapter_cls = ADAPTERS[mtype]
+                    adapter = adapter_cls(data_dir=store_dir)
+                    await adapter.add(history_text)
+                result = {"type": mtype, "data_dir": str(store_dir)}
+            else:
+                async with semaphore:
+                    result = await _prepare_single(
+                        agent_client, history_text, fnum, mtype
+                    )
             if result is not None:
-                async with aiofiles.open(result_path, "w", encoding="utf-8") as f:
+                fdir.mkdir(parents=True, exist_ok=True)
+                async with aiofiles.open(pp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
         except Exception as e:
             print(f"[error] {mtype} file {fnum}: {e}")
@@ -221,8 +256,6 @@ async def _prepare_single(
     file_num: int,
     memory_type: str,
 ) -> dict | None:
-    if memory_type == "gold":
-        return {"type": "gold"}
     if memory_type == "summary":
         daily = split_history_by_day(history_text)
         mem_text, _, _ = await asyncio.to_thread(
@@ -235,12 +268,6 @@ async def _prepare_single(
             build_memory_key_value, agent_client, daily
         )
         return {"type": "kv", "store": store.to_dict()}
-    if memory_type in ADAPTERS:
-        adapter_cls = ADAPTERS[memory_type]
-        data_dir = _ensure_output_dir() / f"store_{memory_type}_{file_num}"
-        adapter = adapter_cls(data_dir=data_dir)
-        await adapter.add(history_text)
-        return {"type": memory_type, "data_dir": str(data_dir)}
     print(f"[warn] unknown memory_type: {memory_type}")
     return None
 
@@ -254,7 +281,7 @@ async def run(
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
     agent_client = _get_agent_client()
-    output_dir = _ensure_output_dir()
+    _ensure_output_dir()
     query_semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
 
     async def _load_qa_safe(fnum: int) -> tuple[int, dict | None]:
@@ -268,11 +295,16 @@ async def run(
     qa_cache = dict(qa_pairs)
 
     async def _load_prep(fnum: int, mtype: str) -> tuple[str, int, dict | None]:
-        path = output_dir / f"{mtype}_file_{fnum}.json"
+        if mtype == "gold":
+            return mtype, fnum, {"type": "gold"}
+        pp = prep_path(mtype, fnum)
         try:
-            async with aiofiles.open(path, encoding="utf-8") as f:
+            async with aiofiles.open(pp, encoding="utf-8") as f:
                 return mtype, fnum, json.loads(await f.read())
         except FileNotFoundError:
+            return mtype, fnum, None
+        except json.JSONDecodeError:
+            print(f"[warn] corrupt prep file for {mtype} file {fnum}, skipping")
             return mtype, fnum, None
 
     prep_raw = await asyncio.gather(
@@ -283,11 +315,6 @@ async def run(
     }
 
     async def _task(fnum: int, mtype: str) -> None:
-        result_path = output_dir / f"{mtype}_file_{fnum}_results.json"
-        if result_path.exists():
-            print(f"[skip] {mtype} file {fnum} already has results")
-            return
-
         prep_data = prep_cache.get((mtype, fnum))
         if prep_data is None:
             print(f"[skip] {mtype} file {fnum} not prepared")
@@ -299,26 +326,22 @@ async def run(
             return
 
         events = qa_data.get("related_to_vehicle_preference", [])
-        print(f"[run] {mtype} file {fnum}: {len(events)} queries...")
+        if not events:
+            return
 
-        try:
-            run_output = await _run_single(
-                agent_client,
-                events,
-                prep_data,
-                fnum,
-                mtype,
-                reflect_num,
-                query_semaphore,
-            )
-            async with aiofiles.open(result_path, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(run_output, ensure_ascii=False, indent=2))
-            failed = run_output.get("failed_count", 0)
-            if failed:
-                print(f"  [warn] {mtype} file {fnum}: {failed} queries failed")
-        except Exception as e:
-            print(f"[error] {mtype} file {fnum}: {e}")
-            raise
+        fdir = file_output_dir(mtype, fnum)
+        fdir.mkdir(parents=True, exist_ok=True)
+
+        print(f"[run] {mtype} file {fnum}: {len(events)} queries...")
+        await _run_single(
+            agent_client,
+            events,
+            prep_data,
+            fnum,
+            mtype,
+            reflect_num,
+            query_semaphore,
+        )
 
     run_results = await asyncio.gather(
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
@@ -337,7 +360,7 @@ async def _run_single(
     memory_type: str,
     reflect_num: int,
     query_semaphore: asyncio.Semaphore,
-) -> dict:
+) -> None:
     search_client = await _build_search_client(prep_data, memory_type)
 
     kv_store = None
@@ -355,38 +378,60 @@ async def _run_single(
         kv_store=kv_store,
     )
 
-    async def _eval_event(idx: int, event: dict) -> dict | None:
-        query = event.get("query", "")
-        reasoning_type = event.get("reasoning_type", "")
-        ref_calls = parse_answer_to_tools(event.get("new_answer", []))
-        gold_memory = event.get("gold_memory", "")
-        task: dict = {
-            "query": query,
-            "tools": ref_calls,
-            "reasoning_type": reasoning_type,
-        }
-        async with query_semaphore:
-            result = await _evaluate_query(ctx, task, idx, gold_memory)
-        if result is not None:
-            result["source_file"] = file_num
-            result["event_index"] = idx
-            result["memory_type"] = memory_type
-        return result
+    async def _eval_and_save(idx: int, event: dict) -> None:
+        qp = query_result_path(memory_type, file_num, idx)
+        try:
+            async with aiofiles.open(qp, encoding="utf-8") as f:
+                existing = json.loads(await f.read())
+            if isinstance(existing, dict) and not existing.get("failed"):
+                return
+        except FileNotFoundError:
+            pass
+        except json.JSONDecodeError:
+            pass
 
-    coros = [_eval_event(i, e) for i, e in enumerate(events)]
-    raw = await asyncio.gather(*coros, return_exceptions=True)
-    results = []
-    failed_count = 0
-    for r in raw:
-        if isinstance(r, asyncio.CancelledError):
-            raise r
-        if isinstance(r, BaseException):
-            print(f"  [error] query: {r}")
-            failed_count += 1
-            continue
-        if r is not None:
-            results.append(r)
-    return {"results": results, "failed_count": failed_count}
+        try:
+            query = event.get("query", "")
+            reasoning_type = event.get("reasoning_type", "")
+            ref_calls = parse_answer_to_tools(event.get("new_answer", []))
+            gold_memory = event.get("gold_memory", "")
+            task: dict = {
+                "query": query,
+                "tools": ref_calls,
+                "reasoning_type": reasoning_type,
+            }
+            async with query_semaphore:
+                result = await _evaluate_query(ctx, task, idx, gold_memory)
+            if result is not None:
+                result["source_file"] = file_num
+                result["event_index"] = idx
+                result["memory_type"] = memory_type
+                async with aiofiles.open(qp, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(result, ensure_ascii=False, indent=2))
+        except Exception as e:
+            print(f"  [error] query {idx}: {e}")
+            fail_record = {
+                "failed": True,
+                "error": str(e),
+                "source_file": file_num,
+                "event_index": idx,
+                "memory_type": memory_type,
+            }
+            try:
+                async with aiofiles.open(qp, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
+            except OSError as write_err:
+                print(
+                    f"  [error] failed to write error record for query {idx}: {write_err}"
+                )
+
+    gather_results = await asyncio.gather(
+        *(_eval_and_save(i, e) for i, e in enumerate(events)),
+        return_exceptions=True,
+    )
+    silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
+    if silent_failures:
+        print(f"  [warn] {len(silent_failures)} queries failed silently")
 
 
 async def _build_search_client(prep_data: dict, memory_type: str) -> StoreClient | None:
@@ -532,22 +577,22 @@ def report(output_path: Path | None = None) -> None:
     all_results: dict[str, list[dict]] = {}
     failed_counts: dict[str, int] = {}
 
-    mtype_pattern = re.compile(r"^(.+?)_file_\d+_results$")
-    for path in sorted(output_dir.glob("*_results.json")):
-        m = mtype_pattern.match(path.stem)
-        if not m:
+    for path in sorted(output_dir.glob("*/*/query_*.json")):
+        mtype = path.parent.parent.name
+        try:
+            with path.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[warn] skipping {path}: {exc}")
             continue
-        mtype = m.group(1)
-        with path.open(encoding="utf-8") as f:
-            data = json.load(f)
-        results = data.get("results", []) if isinstance(data, dict) else data
-        if not isinstance(results, list):
+        if not isinstance(data, dict):
             continue
-        if isinstance(data, dict) and "failed_count" in data:
-            failed_counts[mtype] = failed_counts.get(mtype, 0) + data["failed_count"]
+        if data.get("failed"):
+            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
+            continue
         if mtype not in all_results:
             all_results[mtype] = []
-        all_results[mtype].extend(results)
+        all_results[mtype].append(data)
 
     cfg = get_benchmark_config()
     report_data = {}
