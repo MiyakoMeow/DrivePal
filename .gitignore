@@ -43,3 +43,6 @@ logs/
 
 # Model configuration (contains API keys)
 config/llm.json
+
+# Nix
+result
