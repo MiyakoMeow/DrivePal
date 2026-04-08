@@ -14,6 +14,15 @@
   - 注意：
     1. 本项目的类型检查器，使用`ty`，而不是`mypy`、`pyright`等。[官方文档](https://docs.astral.sh/ty/)。
 
+## Nix 开发环境
+
+项目提供了 `flake.nix`，包含 Python 3.14、uv 和 CUDA 12.8 依赖。
+
+```bash
+# 直接运行命令（避免进入 shell）
+nix develop -c uv run main.py
+```
+
 ## 注意事项
 
 ### Python 3.14+ 语法差异
