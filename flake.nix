@@ -44,7 +44,9 @@
         shellHook = ''
           unset PYTHONPATH
           export REPO_ROOT=$(git rev-parse --show-toplevel)
-          export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath cudaLibs}:$LD_LIBRARY_PATH"
+          export LD_LIBRARY_PATH="${
+            pkgs.lib.makeLibraryPath (cudaLibs ++ [ pkgs.stdenv.cc.cc.lib ])
+          }:$LD_LIBRARY_PATH"
         '';
       };
     };
