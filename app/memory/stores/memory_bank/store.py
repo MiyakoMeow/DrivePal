@@ -1,6 +1,6 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -24,8 +24,8 @@ class MemoryBankStore:
     def __init__(
         self,
         data_dir: Path,
-        embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model: Optional["ChatModel"] = None,
+        embedding_model: EmbeddingModel | None = None,
+        chat_model: ChatModel | None = None,
         **kwargs: dict,
     ) -> None:
         """初始化记忆库存储."""

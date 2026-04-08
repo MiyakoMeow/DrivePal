@@ -100,7 +100,7 @@ def get_benchmark_client() -> OpenAI:
     return OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
 
 
-def get_store_chat_model() -> "ChatModel":
+def get_store_chat_model() -> ChatModel:
     """获取用于记忆存储操作的聊天模型."""
     from app.models.settings import get_chat_model
 
@@ -169,7 +169,7 @@ def get_model_group_providers(name: str) -> list[dict]:
     return result
 
 
-def get_store_embedding_model() -> "EmbeddingModel":
+def get_store_embedding_model() -> EmbeddingModel:
     """获取用于记忆存储操作的嵌入模型."""
     from app.models.settings import get_embedding_model
 

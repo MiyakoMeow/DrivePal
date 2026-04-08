@@ -3,8 +3,10 @@
 import os
 
 import pytest
+from typing import TYPE_CHECKING
 
-from typing import Generator
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 from app.models.embedding import EmbeddingModel, get_cached_embedding_model
 from app.models.settings import LLMSettings, LLMProviderConfig
@@ -103,7 +105,7 @@ def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProvider
 
 
 @pytest.fixture(scope="session")
-def embedding() -> Generator[EmbeddingModel, None, None]:
+def embedding() -> Generator[EmbeddingModel]:
     """Session-level embedding instance, each pytest-xdist worker is independent."""
     from app.models.embedding import reset_embedding_singleton
 

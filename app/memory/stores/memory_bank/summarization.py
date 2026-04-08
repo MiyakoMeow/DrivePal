@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -46,7 +46,7 @@ class SummaryManager:
         if not daily_summaries:
             return []
         query_lower = query.lower()
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         results = []
         for date_group, summary_data in daily_summaries.items():
             if isinstance(summary_data, dict):
@@ -84,7 +84,7 @@ class SummaryManager:
         """强化匹配到的摘要的记忆强度."""
         if not matched_keys:
             return
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(UTC).date().isoformat()
         async with self._lock:
             summaries = await self._summaries_store.read()
             current_daily = summaries.get("daily_summaries", {})

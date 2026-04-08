@@ -41,7 +41,7 @@ class LLMProviderConfig:
     concurrency: int = 4
 
     @classmethod
-    def from_dict(cls, d: dict) -> "LLMProviderConfig":
+    def from_dict(cls, d: dict) -> LLMProviderConfig:
         """从字典创建配置实例."""
         provider, extra = _build_provider_config_from_dict(
             d, {"temperature": 0.7, "concurrency": 4}
@@ -57,7 +57,7 @@ class EmbeddingProviderConfig:
     device: str | None = None
 
     @classmethod
-    def from_dict(cls, d: dict) -> "EmbeddingProviderConfig":
+    def from_dict(cls, d: dict) -> EmbeddingProviderConfig:
         """从字典创建配置实例."""
         provider, extra = _build_provider_config_from_dict(d, {"device": None})
         return cls(provider=provider, **extra)
@@ -71,7 +71,7 @@ class JudgeProviderConfig:
     temperature: float = 0.1
 
     @classmethod
-    def from_dict(cls, d: dict) -> "JudgeProviderConfig":
+    def from_dict(cls, d: dict) -> JudgeProviderConfig:
         """从字典创建配置实例."""
         provider, extra = _build_provider_config_from_dict(d, {"temperature": 0.1})
         return cls(provider=provider, **extra)
@@ -88,7 +88,7 @@ class LLMSettings:
     model_providers: dict[str, dict] = field(default_factory=dict)
 
     @classmethod
-    def load(cls) -> "LLMSettings":
+    def load(cls) -> LLMSettings:
         """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
         config_data: dict = {}
         config_path_env = os.environ.get("CONFIG_PATH", "config/llm.toml")
@@ -271,10 +271,10 @@ def _build_provider_config_from_ref(
     )
 
 
-_settings_cache: "LLMSettings | None" = None
+_settings_cache: LLMSettings | None = None
 
 
-def get_chat_model(temperature: float | None = None) -> "ChatModel":
+def get_chat_model(temperature: float | None = None) -> ChatModel:
     """从配置创建 ChatModel 实例（使用缓存避免重复加载）."""
     global _settings_cache
     from app.models.chat import ChatModel
@@ -287,7 +287,7 @@ def get_chat_model(temperature: float | None = None) -> "ChatModel":
     return ChatModel(providers=providers, temperature=temperature)
 
 
-def get_embedding_model() -> "EmbeddingModel":
+def get_embedding_model() -> EmbeddingModel:
     """从配置创建 EmbeddingModel 实例（使用缓存避免重复加载）."""
     from app.models.embedding import get_cached_embedding_model
 
@@ -312,7 +312,7 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
     return None
 
 
-def get_judge_model() -> "ChatModel":
+def get_judge_model() -> ChatModel:
     """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
     global _settings_cache
     from app.models.chat import ChatModel

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -58,6 +58,4 @@ class ScenarioPreset(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     name: str = ""
     context: DrivingContext = Field(default_factory=DrivingContext)
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())

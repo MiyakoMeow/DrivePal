@@ -2,7 +2,10 @@
 
 import asyncio
 import tomllib
-from typing import Any, Callable, TypeVar, TYPE_CHECKING
+from typing import Any, TypeVar, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import aiofiles
 import tomli_w

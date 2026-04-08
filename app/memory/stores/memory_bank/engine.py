@@ -2,9 +2,9 @@
 
 import asyncio
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, forgetting_curve
 from app.memory.schemas import MemoryEvent, SearchResult
@@ -32,8 +32,8 @@ class MemoryBankEngine:
         self,
         data_dir: Path,
         storage: EventStorage,
-        embedding_model: Optional[EmbeddingModel] = None,
-        chat_model: Optional[ChatModel] = None,
+        embedding_model: EmbeddingModel | None = None,
+        chat_model: ChatModel | None = None,
     ) -> None:
         """初始化记忆库引擎."""
         self.data_dir = data_dir
@@ -59,8 +59,8 @@ class MemoryBankEngine:
         """写入事件并触发摘要."""
         event = event.model_copy(deep=True)
         event.id = self._storage.generate_id()
-        event.created_at = datetime.now(timezone.utc).isoformat()
-        today = datetime.now(timezone.utc).date().isoformat()
+        event.created_at = datetime.now(UTC).isoformat()
+        today = datetime.now(UTC).date().isoformat()
         event.memory_strength = 1
         event.last_recall_date = today
         event.date_group = today
@@ -132,7 +132,7 @@ class MemoryBankEngine:
         self, query: str, events: list[dict], top_k: int
     ) -> list[SearchResult]:
         query_lower = query.lower()
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         results = []
         for event in events:
             searchable_text = self._get_searchable_text(event).lower()
@@ -161,7 +161,7 @@ class MemoryBankEngine:
         query_vector = await self.embedding_model.encode(query)
         event_texts = [self._get_searchable_text(event) for event in events]
         all_event_vectors = await self.embedding_model.batch_encode(event_texts)
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         results = []
         for event, event_vector in zip(events, all_event_vectors):
             similarity = cosine_similarity(query_vector, event_vector)
@@ -198,8 +198,8 @@ class MemoryBankEngine:
     async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
         if not matched_ids:
             return
-        today = datetime.now(timezone.utc).date().isoformat()
-        today_date = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date().isoformat()
+        today_date = datetime.now(UTC).date()
         async with self._lock:
             all_events = await self._storage.read_events()
             updated = False
@@ -240,14 +240,16 @@ class MemoryBankEngine:
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录并关联事件."""
-        interaction_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-        today = datetime.now(timezone.utc).date().isoformat()
+        interaction_id = (
+            f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        )
+        today = datetime.now(UTC).date().isoformat()
         interaction = {
             "id": interaction_id,
             "event_id": "",
             "query": query,
             "response": response,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "memory_strength": 1,
             "last_recall_date": today,
         }
@@ -258,8 +260,8 @@ class MemoryBankEngine:
             if append_event_id:
                 interaction["event_id"] = append_event_id
             else:
-                event_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-                now_iso = datetime.now(timezone.utc).isoformat()
+                event_id = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                now_iso = datetime.now(UTC).isoformat()
                 event = {
                     "id": event_id,
                     "content": query,
@@ -280,7 +282,7 @@ class MemoryBankEngine:
                 for ev in all_events:
                     if ev.get("id") == append_event_id:
                         ev.setdefault("interaction_ids", []).append(interaction_id)
-                        ev["updated_at"] = datetime.now(timezone.utc).isoformat()
+                        ev["updated_at"] = datetime.now(UTC).isoformat()
                         break
                 await self._storage.write_events(all_events)
             else:
@@ -299,11 +301,11 @@ class MemoryBankEngine:
         )
         return interaction_id
 
-    async def _should_append_to_event(self, interaction: dict) -> Optional[str]:
+    async def _should_append_to_event(self, interaction: dict) -> str | None:
         events = await self._storage.read_events()
         if not events:
             return None
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(UTC).date().isoformat()
         recent = events[-1]
         if recent.get("date_group") != today:
             return None
@@ -345,6 +347,6 @@ class MemoryBankEngine:
             for event in all_events:
                 if event.get("id") == event_id:
                     event["content"] = summary_text
-                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    event["updated_at"] = datetime.now(UTC).isoformat()
                     break
             await self._storage.write_events(all_events)

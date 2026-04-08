@@ -16,6 +16,7 @@ extend-select = [
     "N",      # pep8-naming - 命名规范检查
     "PERF",   # Perflint - 性能检查
     "FAST",   # FastAPI - FastAPI特定检查
+    "UP",     # pyupgrade - 现代Python语法
 ]
 # 忽略的规则：
 # D211/D213/D203: docstring空行规则互相冲突
