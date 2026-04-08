@@ -1,7 +1,10 @@
 """GraphQL 端点测试."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 from unittest.mock import patch
 
 if TYPE_CHECKING:
@@ -11,7 +14,7 @@ import pytest
 
 
 @pytest.fixture
-def isolated_app(tmp_path: Path) -> Generator[TestClient, None, None]:
+def isolated_app(tmp_path: Path) -> Generator[TestClient]:
     """Each test gets an independent FastAPI app instance."""
     import os
 

@@ -3,7 +3,7 @@
 import logging
 import re
 from enum import StrEnum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from app.memory.utils import cosine_similarity
 
@@ -38,7 +38,7 @@ def _parse_selection(output: str, total: int) -> list[int]:
 
 
 async def retrieve_full_llm(
-    chat_model: "ChatModel",
+    chat_model: ChatModel,
     query: str,
     memos: dict[str, list[dict]],
     top_k: int,
@@ -80,8 +80,8 @@ async def retrieve_full_llm(
 
 
 async def retrieve_hybrid(
-    chat_model: "ChatModel",
-    embedding_model: Optional["EmbeddingModel"],
+    chat_model: ChatModel,
+    embedding_model: EmbeddingModel | None,
     query: str,
     memos: dict[str, list[dict]],
     top_k: int,
@@ -100,7 +100,7 @@ async def retrieve_hybrid(
 
 
 async def _coarse_filter(
-    embedding_model: Optional["EmbeddingModel"],
+    embedding_model: EmbeddingModel | None,
     query: str,
     flat: list[tuple[str, dict]],
     top_k: int,
@@ -140,7 +140,7 @@ def _keyword_filter(
 
 
 async def _embedding_filter(
-    embedding_model: "EmbeddingModel",
+    embedding_model: EmbeddingModel,
     query: str,
     flat: list[tuple[str, dict]],
     top_k: int,

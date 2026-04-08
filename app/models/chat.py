@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import openai
 
@@ -76,7 +76,7 @@ class ChatModel:
     def _build_messages(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
     ) -> list[ChatCompletionMessageParam]:
         """构建消息列表."""
         messages: list[ChatCompletionMessageParam] = []
@@ -163,7 +163,7 @@ class ChatModel:
     async def batch_generate(
         self,
         prompts: list[str],
-        system_prompt: Optional[str] | None = None,
+        system_prompt: str | None | None = None,
     ) -> list[str]:
         """批量生成回复."""
         return [await self.generate(p, system_prompt) for p in prompts]

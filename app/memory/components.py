@@ -3,7 +3,7 @@
 import asyncio
 import math
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Literal
 
@@ -37,7 +37,7 @@ class EventStorage:
 
     def generate_id(self) -> str:
         """生成唯一事件 ID."""
-        return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        return f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     async def read_events(self) -> list[dict]:
         """读取所有事件."""
@@ -51,7 +51,7 @@ class EventStorage:
         """追加事件并返回 ID."""
         event = event.model_copy(deep=True)
         event.id = self.generate_id()
-        event.created_at = datetime.now(timezone.utc).isoformat()
+        event.created_at = datetime.now(UTC).isoformat()
         await self._store.append(event.model_dump())
         return event.id
 
@@ -128,7 +128,7 @@ class FeedbackManager:
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """记录反馈并更新策略权重."""
         feedback.event_id = event_id
-        feedback.timestamp = datetime.now(timezone.utc).isoformat()
+        feedback.timestamp = datetime.now(UTC).isoformat()
         if feedback.action is None:
             raise ValueError("action is required")
         lock = await self._get_lock()

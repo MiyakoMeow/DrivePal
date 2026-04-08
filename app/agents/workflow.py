@@ -6,9 +6,8 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Optional
 
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints
@@ -28,7 +27,7 @@ class AgentWorkflow:
         self,
         data_dir: Path = Path("data"),
         memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
-        memory_module: Optional[MemoryModule] = None,
+        memory_module: MemoryModule | None = None,
     ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
@@ -96,7 +95,7 @@ class AgentWorkflow:
                 [e.to_public() for e in related_events] if related_events else []
             )
 
-        current_datetime = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        current_datetime = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         driving_context = state.get("driving_context")
 
         if driving_context:
@@ -240,7 +239,7 @@ class AgentWorkflow:
         self,
         user_input: str,
         driving_context: dict | None = None,
-    ) -> tuple[str, Optional[str], WorkflowStages]:
+    ) -> tuple[str, str | None, WorkflowStages]:
         """运行完整工作流并返回结果、事件ID和各阶段输出."""
         stages = WorkflowStages()
         state: AgentState = {

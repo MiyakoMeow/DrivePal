@@ -2,8 +2,8 @@
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING
+from datetime import datetime, UTC
+from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -28,8 +28,8 @@ class MemoChatStore:
     def __init__(
         self,
         data_dir: Path,
-        embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model: Optional["ChatModel"] = None,
+        embedding_model: EmbeddingModel | None = None,
+        chat_model: ChatModel | None = None,
         retrieval_mode: RetrievalMode = RetrievalMode.FULL_LLM,
     ) -> None:
         """初始化 MemoChat 存储."""
@@ -54,7 +54,7 @@ class MemoChatStore:
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件，创建 memo 条目."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         memo_entry = {
             "id": self._storage.generate_id(),
             "summary": event.content,
@@ -98,7 +98,7 @@ class MemoChatStore:
                     last_recall_date=entry.get("last_recall_date", ""),
                     date_group=entry.get("created_at", "")[:10]
                     if entry.get("created_at")
-                    else datetime.now(timezone.utc).date().isoformat(),
+                    else datetime.now(UTC).date().isoformat(),
                     created_at=entry.get("created_at", ""),
                 )
             )
@@ -112,7 +112,7 @@ class MemoChatStore:
         self, query: str, response: str, event_type: str = "reminder"
     ) -> str:
         """写入交互记录."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         interaction_id = f"{now.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         interaction = {
             "id": interaction_id,

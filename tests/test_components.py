@@ -1,7 +1,7 @@
 """app.memory.components 可组合组件测试."""
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -372,7 +372,7 @@ class TestPersonalitySummary:
         self, engine: MemoryBankEngine
     ) -> None:
         """验证无 chat_model 时跳过人格摘要."""
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(UTC).date().isoformat()
         await engine._personality_mgr.maybe_summarize(today, [], [], None)
         personality_data = await engine.personality_store.read()
         assert personality_data["daily_personality"] == {}

@@ -6,10 +6,10 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from random import sample
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from app.memory.stores.memochat.prompts import WRITING_INSTRUCTION, WRITING_SYSTEM
 from app.memory.stores.memochat.retriever import RetrievalMode
@@ -105,8 +105,8 @@ class MemoChatEngine:
     def __init__(
         self,
         data_dir: Path,
-        chat: Optional["ChatModel"],
-        embedding: Optional["EmbeddingModel"],
+        chat: ChatModel | None,
+        embedding: EmbeddingModel | None,
         retrieval_mode: RetrievalMode,
     ) -> None:
         """初始化 MemoChatEngine."""
@@ -184,7 +184,7 @@ class MemoChatEngine:
         return total_chars > SUMMARIZATION_CHAR_THRESHOLD
 
     def _generate_id(self) -> str:
-        return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        return f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     async def _summarize_if_needed(self) -> None:
         async with self._summary_lock:
@@ -232,9 +232,9 @@ class MemoChatEngine:
                         "id": self._generate_id(),
                         "summary": entry.get("summary", ""),
                         "dialogs": related,
-                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                         "memory_strength": 1,
-                        "last_recall_date": datetime.now(timezone.utc).isoformat(),
+                        "last_recall_date": datetime.now(UTC).isoformat(),
                     }
                     if topic not in memos:
                         memos[topic] = []
@@ -249,9 +249,9 @@ class MemoChatEngine:
                     "id": self._generate_id(),
                     "summary": f"Partial dialogs about: {' or '.join(sampled)}.",
                     "dialogs": conversation_lines,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                     "memory_strength": 1,
-                    "last_recall_date": datetime.now(timezone.utc).isoformat(),
+                    "last_recall_date": datetime.now(UTC).isoformat(),
                 }
                 if "NOTO" not in memos:
                     memos["NOTO"] = []
@@ -262,7 +262,7 @@ class MemoChatEngine:
             kept = dialogs[-RECENT_DIALOGS_KEEP_AFTER_SUMMARY:]
             await self._dialogs_store.write(kept)
 
-    async def search(self, query: str, top_k: int = 10) -> list["SearchResult"]:
+    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """检索与查询相关的记忆条目."""
         from app.memory.schemas import SearchResult
         from app.memory.stores.memochat.retriever import (

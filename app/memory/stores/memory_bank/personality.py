@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 from pathlib import Path
 
 from app.memory.components import forgetting_curve, SUMMARY_WEIGHT
@@ -43,7 +43,7 @@ class PersonalityManager:
         if not daily_personality:
             return []
         query_lower = query.lower()
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         results = []
         for date_group, data in daily_personality.items():
             if not isinstance(data, dict):
@@ -78,7 +78,7 @@ class PersonalityManager:
         """强化匹配到的人格摘要的 memory_strength 和 last_recall_date."""
         if not matched_date_groups:
             return
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(UTC).date().isoformat()
         async with self._personality_lock:
             personality_data = await self._store.read()
             current_daily = personality_data.get("daily_personality", {})
