@@ -1,8 +1,9 @@
 """记忆适配器通用工具函数."""
 
 import re
-from app.memory.schemas import MemoryEvent, SearchResult
 from typing import TYPE_CHECKING
+
+from app.memory.schemas import MemoryEvent, SearchResult
 
 if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore

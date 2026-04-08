@@ -2,19 +2,21 @@
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.memory.components import forgetting_curve, SUMMARY_WEIGHT
 from app.memory.schemas import SearchResult
+from app.memory.utils import days_elapsed_since
 from app.storage.toml_store import TOMLStore
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
 
 PERSONALITY_SUMMARY_THRESHOLD = 2
 OVERALL_PERSONALITY_THRESHOLD = 3
+
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +54,7 @@ class PersonalityManager:
             if query_lower in content.lower():
                 strength = data.get("memory_strength", 1)
                 last_recall = data.get("last_recall_date", date_group)
-                try:
-                    last_date = date.fromisoformat(last_recall)
-                    days_elapsed = (today - last_date).days
-                except ValueError, TypeError:
-                    days_elapsed = 0
+                days_elapsed = days_elapsed_since(last_recall, today)
                 retention = forgetting_curve(days_elapsed, strength)
                 score = retention * SUMMARY_WEIGHT * 0.8
                 results.append(
@@ -135,17 +133,19 @@ class PersonalityManager:
             )
         if not should_generate:
             return
-        prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
-        and devise response strategies based on your speculation. Dialogue content:
+        prompt = f"""根据以下对话内容，请总结用户的人格特征和情绪状态，
+        并据此推测合适的回应策略。对话内容：
         {combined}
 
-        User's personality traits, emotions, and response strategy are:
+        用户的人格特征、情绪和回应策略：
         """
         try:
             summary_text = await chat_model.generate(prompt)
-        except Exception:
-            logger.exception(
-                "Failed to generate personality summary for date_group=%s", date_group
+        except (RuntimeError, OSError) as e:
+            logger.warning(
+                "Failed to generate personality summary for date_group=%s: %s",
+                date_group,
+                e,
             )
             return
         needs_overall_update = False
@@ -186,15 +186,14 @@ class PersonalityManager:
             if isinstance(data, dict)
         ]
         combined = "\n".join(all_summaries)
-        prompt = f"""The following are the user's exhibited personality traits and emotions throughout multiple dialogues,
-        along with appropriate response strategies for the current situation:
+        prompt = f"""以下是对话中表现出的用户人格特征和情绪状态，
+        以及适合当前场景的回应策略：
         {combined}
 
-        Please provide a highly concise and general summary of the user's personality and the most appropriate
-        response strategy for the AI lover, summarized as:
+        请用简练的语言总结用户的整体人格特征，以及 AI 助手最适合采用的回应策略：
         """
         try:
             return await chat_model.generate(prompt)
-        except Exception:
-            logger.exception("Failed to generate overall personality summary")
+        except (RuntimeError, OSError) as e:
+            logger.warning("Failed to generate overall personality summary: %s", e)
             return None

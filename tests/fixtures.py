@@ -13,5 +13,4 @@ def reset_all_singletons() -> None:
     reset_embedding_singleton()
     with suppress(AttributeError):
         app.models.settings._settings_cache = None
-    with suppress(AttributeError):
-        app.api.main._memory_module = None
+    app.api.main.reset_memory_module()

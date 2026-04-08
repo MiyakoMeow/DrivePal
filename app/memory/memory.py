@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from app.memory.types import MemoryMode
 
@@ -42,8 +42,8 @@ class MemoryModule:
     def __init__(
         self,
         data_dir: Path,
-        embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model: Optional["ChatModel"] = None,
+        embedding_model: "EmbeddingModel | None" = None,
+        chat_model: "ChatModel | None" = None,
     ) -> None:
         """初始化记忆模块."""
         self._stores: dict[MemoryMode, MemoryStore] = {}
@@ -86,11 +86,7 @@ class MemoryModule:
                 self._embedding_model = get_embedding_model()
             kwargs["embedding_model"] = self._embedding_model
         if getattr(store_cls, "requires_chat", False):
-            if self._chat_model is None:
-                from app.models.settings import get_chat_model
-
-                self._chat_model = get_chat_model()
-            kwargs["chat_model"] = self._chat_model
+            kwargs["chat_model"] = self.chat_model
         return store_cls(**kwargs)
 
     async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:

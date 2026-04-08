@@ -1,16 +1,14 @@
-# ruff: noqa: TC003
 """MemoryBank 摘要管理器."""
-
-from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.memory.components import SUMMARY_WEIGHT, forgetting_curve
 from app.memory.schemas import SearchResult
+from app.memory.utils import days_elapsed_since
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
@@ -18,6 +16,7 @@ if TYPE_CHECKING:
 
 DAILY_SUMMARY_THRESHOLD = 2
 OVERALL_SUMMARY_THRESHOLD = 3
+
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +57,7 @@ class SummaryManager:
                 strength = 1
                 last_recall = date_group
             if query_lower in content.lower():
-                try:
-                    last_date = date.fromisoformat(str(last_recall))
-                    days_elapsed = (today - last_date).days
-                except ValueError, TypeError:
-                    days_elapsed = 0
+                days_elapsed = days_elapsed_since(last_recall, today)
                 retention = forgetting_curve(days_elapsed, strength)
                 score = retention * SUMMARY_WEIGHT
                 results.append(
@@ -136,7 +131,12 @@ class SummaryManager:
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
         try:
             summary_text = await chat_model.generate(prompt)
-        except Exception:
+        except (RuntimeError, OSError) as e:
+            logger.warning(
+                "Failed to generate daily summary for date_group=%s: %s",
+                date_group,
+                e,
+            )
             return
         needs_overall_update = False
         async with self._lock:
@@ -174,7 +174,8 @@ class SummaryManager:
         prompt = f"请简洁总结以下每日摘要（两到三句话）：\n{combined}"
         try:
             overall = await chat_model.generate(prompt)
-        except Exception:
+        except (RuntimeError, OSError) as e:
+            logger.warning("Failed to generate overall summary: %s", e)
             return
         async with self._lock:
             summaries = await self._summaries_store.read()

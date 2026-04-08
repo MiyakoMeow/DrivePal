@@ -1,21 +1,24 @@
 """MemoryBankEngine: 记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
 
 import asyncio
+import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, forgetting_curve
 from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.personality import PersonalityManager
 from app.memory.stores.memory_bank.summarization import SummaryManager
-from app.memory.utils import cosine_similarity
+from app.memory.utils import cosine_similarity, days_elapsed_since
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
     from app.models.chat import ChatModel
+
+logger = logging.getLogger(__name__)
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
 TOP_K = 3
@@ -32,8 +35,8 @@ class MemoryBankEngine:
         self,
         data_dir: Path,
         storage: EventStorage,
-        embedding_model: Optional[EmbeddingModel] = None,
-        chat_model: Optional[ChatModel] = None,
+        embedding_model: "EmbeddingModel | None" = None,
+        chat_model: "ChatModel | None" = None,
     ) -> None:
         """初始化记忆库引擎."""
         self.data_dir = data_dir
@@ -54,6 +57,11 @@ class MemoryBankEngine:
     def personality_store(self) -> TOMLStore:
         """人格存储."""
         return self._personality_mgr.personality_store
+
+    @property
+    def interactions_store(self) -> TOMLStore:
+        """交互存储."""
+        return self._interactions_store
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件并触发摘要."""
@@ -140,11 +148,7 @@ class MemoryBankEngine:
                 continue
             strength = event.get("memory_strength", 1)
             last_recall = event.get("last_recall_date", today.isoformat())
-            try:
-                last_date = date.fromisoformat(last_recall)
-                days_elapsed = (today - last_date).days
-            except ValueError, TypeError:
-                days_elapsed = 0
+            days_elapsed = days_elapsed_since(last_recall, today)
             retention = forgetting_curve(days_elapsed, strength)
             if retention <= 0:
                 continue
@@ -167,11 +171,7 @@ class MemoryBankEngine:
             similarity = cosine_similarity(query_vector, event_vector)
             strength = event.get("memory_strength", 1)
             last_recall = event.get("last_recall_date", today.isoformat())
-            try:
-                last_date = date.fromisoformat(last_recall)
-                days_elapsed = (today - last_date).days
-            except ValueError, TypeError:
-                days_elapsed = 0
+            days_elapsed = days_elapsed_since(last_recall, today)
             retention = forgetting_curve(days_elapsed, strength)
             score = similarity * retention
             if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
@@ -198,24 +198,21 @@ class MemoryBankEngine:
     async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
         if not matched_ids:
             return
-        today = datetime.now(timezone.utc).date().isoformat()
-        today_date = datetime.now(timezone.utc).date()
+        today = datetime.now(timezone.utc)
+        today_iso = today.date().isoformat()
+        today_date = today.date()
         async with self._lock:
             all_events = await self._storage.read_events()
             updated = False
             for event in all_events:
                 if event.get("id") in matched_ids:
                     event["memory_strength"] = event.get("memory_strength", 1) + 1
-                    event["last_recall_date"] = today
+                    event["last_recall_date"] = today_iso
                     updated = True
                 else:
                     strength = event.get("memory_strength", 1)
                     last_recall = event.get("last_recall_date", today_date.isoformat())
-                    try:
-                        last_date = date.fromisoformat(last_recall)
-                        days_elapsed = (today_date - last_date).days
-                    except ValueError, TypeError:
-                        days_elapsed = 0
+                    days_elapsed = days_elapsed_since(last_recall, today_date)
                     retention = forgetting_curve(days_elapsed, strength)
                     if retention < SOFT_FORGET_THRESHOLD:
                         event["memory_strength"] = SOFT_FORGET_STRENGTH
@@ -225,15 +222,15 @@ class MemoryBankEngine:
                 await self._storage.write_events(all_events)
 
             all_interactions = await self._interactions_store.read()
-            updated = False
+            interactions_updated = False
             for interaction in all_interactions:
                 if interaction.get("event_id") in matched_ids:
                     interaction["memory_strength"] = (
                         interaction.get("memory_strength", 1) + 1
                     )
-                    interaction["last_recall_date"] = today
-                    updated = True
-            if updated:
+                    interaction["last_recall_date"] = today_iso
+                    interactions_updated = True
+            if interactions_updated:
                 await self._interactions_store.write(all_interactions)
 
     async def write_interaction(
@@ -252,6 +249,7 @@ class MemoryBankEngine:
             "last_recall_date": today,
         }
 
+        append_event_id: str | None = None
         async with self._lock:
             append_event_id = await self._should_append_to_event(interaction)
             event = None
@@ -287,8 +285,8 @@ class MemoryBankEngine:
                 assert event is not None
                 await self._storage.append_raw(event)
 
-        if append_event_id:
-            await self._update_event_summary(append_event_id)
+            if append_event_id:
+                await self._update_event_summary_locked(append_event_id)
 
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
@@ -299,7 +297,7 @@ class MemoryBankEngine:
         )
         return interaction_id
 
-    async def _should_append_to_event(self, interaction: dict) -> Optional[str]:
+    async def _should_append_to_event(self, interaction: dict) -> str | None:
         events = await self._storage.read_events()
         if not events:
             return None
@@ -324,7 +322,7 @@ class MemoryBankEngine:
             return recent["id"]
         return None
 
-    async def _update_event_summary(self, event_id: str) -> None:
+    async def _update_event_summary_locked(self, event_id: str) -> None:
         if not self.chat_model:
             return
         interactions = await self._interactions_store.read()
@@ -338,13 +336,17 @@ class MemoryBankEngine:
         prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
         try:
             summary_text = await self.chat_model.generate(prompt)
-        except Exception:
+        except (RuntimeError, OSError) as e:
+            logger.warning(
+                "Failed to generate event summary for event_id=%s: %s",
+                event_id,
+                e,
+            )
             return
-        async with self._lock:
-            all_events = await self._storage.read_events()
-            for event in all_events:
-                if event.get("id") == event_id:
-                    event["content"] = summary_text
-                    event["updated_at"] = datetime.now(timezone.utc).isoformat()
-                    break
-            await self._storage.write_events(all_events)
+        all_events = await self._storage.read_events()
+        for event in all_events:
+            if event.get("id") == event_id:
+                event["content"] = summary_text
+                event["updated_at"] = datetime.now(timezone.utc).isoformat()
+                break
+        await self._storage.write_events(all_events)

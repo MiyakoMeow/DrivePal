@@ -1,8 +1,7 @@
 """文本嵌入模型封装，支持 HuggingFace 本地模型和 OpenAI 兼容远程接口."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Union
+import asyncio
+from typing import TYPE_CHECKING
 
 import openai
 
@@ -66,10 +65,10 @@ class EmbeddingModel:
                 device=_auto_detect_device(),
             )
         self.provider = provider
-        self._client: Union[openai.AsyncOpenAI, SentenceTransformer, None] = None
+        self._client: openai.AsyncOpenAI | SentenceTransformer | None = None
 
     @property
-    def client(self) -> Union[openai.AsyncOpenAI, SentenceTransformer]:
+    def client(self) -> openai.AsyncOpenAI | SentenceTransformer:
         """获取或延迟创建嵌入模型客户端."""
         if self._client is not None:
             return self._client
@@ -79,7 +78,7 @@ class EmbeddingModel:
     def _create_client(
         self,
         provider: EmbeddingProviderConfig,
-    ) -> Union[openai.AsyncOpenAI, SentenceTransformer]:
+    ) -> openai.AsyncOpenAI | SentenceTransformer:
         """创建嵌入模型客户端."""
         device = provider.device or _auto_detect_device()
         if provider.provider.base_url:
@@ -137,7 +136,7 @@ class EmbeddingModel:
             return await self._async_encode_with_openai(
                 cl, self.provider.provider.model, text
             )
-        return self._encode_with_local(cl, text)
+        return await asyncio.to_thread(self._encode_with_local, cl, text)
 
     async def batch_encode(self, texts: list[str]) -> list[list[float]]:
         """批量编码文本为向量."""
@@ -146,7 +145,7 @@ class EmbeddingModel:
             return await self._async_batch_encode_with_openai(
                 cl, self.provider.provider.model, texts
             )
-        return self._batch_encode_with_local(cl, texts)
+        return await asyncio.to_thread(self._batch_encode_with_local, cl, texts)
 
 
 def reset_embedding_singleton() -> None:

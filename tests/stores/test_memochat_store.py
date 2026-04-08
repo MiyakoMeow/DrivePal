@@ -72,7 +72,7 @@ class TestUpdateFeedback:
         await store.update_feedback(
             event_id, FeedbackData(action="accept", type="meeting")
         )
-        strategies = await store._feedback._strategies_store.read()
+        strategies = await store.strategies_store.read()
         assert "reminder_weights" in strategies
 
 

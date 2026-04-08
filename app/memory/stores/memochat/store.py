@@ -3,7 +3,7 @@
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -11,10 +11,10 @@ from app.memory.stores.memochat.engine import MemoChatEngine
 from app.memory.stores.memochat.retriever import RetrievalMode
 
 if TYPE_CHECKING:
-    from app.storage.toml_store import TOMLStore
     from pathlib import Path
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+    from app.storage.toml_store import TOMLStore
 
 
 class MemoChatStore:
@@ -28,8 +28,8 @@ class MemoChatStore:
     def __init__(
         self,
         data_dir: Path,
-        embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model: Optional["ChatModel"] = None,
+        embedding_model: "EmbeddingModel | None" = None,
+        chat_model: "ChatModel | None" = None,
         retrieval_mode: RetrievalMode = RetrievalMode.FULL_LLM,
     ) -> None:
         """初始化 MemoChat 存储."""
@@ -38,8 +38,6 @@ class MemoChatStore:
             data_dir, chat_model, embedding_model, retrieval_mode
         )
         self._feedback = FeedbackManager(data_dir)
-        self.embedding_model = embedding_model
-        self.chat_model = chat_model
         self._write_lock = asyncio.Lock()
 
     @property

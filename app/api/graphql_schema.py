@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
 
 import strawberry
 from strawberry.scalars import JSON
@@ -81,10 +80,10 @@ class DriverStateInput:
 class SpatioTemporalContextInput:
     """时空上下文输入."""
 
-    current_location: Optional[GeoLocationInput] = None
-    destination: Optional[GeoLocationInput] = None
-    eta_minutes: Optional[float] = None
-    heading: Optional[float] = None
+    current_location: GeoLocationInput | None = None
+    destination: GeoLocationInput | None = None
+    eta_minutes: float | None = None
+    heading: float | None = None
 
 
 @strawberry.input
@@ -100,9 +99,9 @@ class TrafficConditionInput:
 class DrivingContextInput:
     """驾驶上下文输入."""
 
-    driver: Optional[DriverStateInput] = None
-    spatial: Optional[SpatioTemporalContextInput] = None
-    traffic: Optional[TrafficConditionInput] = None
+    driver: DriverStateInput | None = None
+    spatial: SpatioTemporalContextInput | None = None
+    traffic: TrafficConditionInput | None = None
     scenario: ScenarioEnum = ScenarioEnum.PARKED
 
 
@@ -112,7 +111,7 @@ class ProcessQueryInput:
 
     query: str
     memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
-    context: Optional[DrivingContextInput] = None
+    context: DrivingContextInput | None = None
 
 
 @strawberry.input
@@ -121,7 +120,7 @@ class FeedbackInput:
 
     event_id: str
     action: str
-    modified_content: Optional[str] = None
+    modified_content: str | None = None
 
 
 @strawberry.input
@@ -162,10 +161,10 @@ class DriverStateGQL:
 class SpatioTemporalContextGQL:
     """时空上下文输出."""
 
-    current_location: Optional[GeoLocationGQL]
-    destination: Optional[GeoLocationGQL]
-    eta_minutes: Optional[float]
-    heading: Optional[float]
+    current_location: GeoLocationGQL | None
+    destination: GeoLocationGQL | None
+    eta_minutes: float | None
+    heading: float | None
 
 
 @strawberry.type
@@ -202,8 +201,8 @@ class ProcessQueryResult:
     """处理查询结果."""
 
     result: str
-    event_id: Optional[str]
-    stages: Optional[WorkflowStagesGQL]
+    event_id: str | None
+    stages: WorkflowStagesGQL | None
 
 
 @strawberry.type

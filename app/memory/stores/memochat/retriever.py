@@ -3,7 +3,7 @@
 import logging
 import re
 from enum import StrEnum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from app.memory.utils import cosine_similarity
 
@@ -65,8 +65,8 @@ async def retrieve_full_llm(
     prompt = system + task_case
     try:
         raw = await chat_model.generate(prompt)
-    except Exception:
-        logger.warning("Retrieval LLM call failed: query=%s", query, exc_info=True)
+    except (RuntimeError, OSError) as e:
+        logger.warning("Retrieval LLM call failed: query=%s, error=%s", query, e)
         return []
     selected_indices = _parse_selection(raw, len(flat))
     results = []
@@ -81,7 +81,7 @@ async def retrieve_full_llm(
 
 async def retrieve_hybrid(
     chat_model: "ChatModel",
-    embedding_model: Optional["EmbeddingModel"],
+    embedding_model: "EmbeddingModel | None",
     query: str,
     memos: dict[str, list[dict]],
     top_k: int,
@@ -100,7 +100,7 @@ async def retrieve_hybrid(
 
 
 async def _coarse_filter(
-    embedding_model: Optional["EmbeddingModel"],
+    embedding_model: "EmbeddingModel | None",
     query: str,
     flat: list[tuple[str, dict]],
     top_k: int,
@@ -109,12 +109,11 @@ async def _coarse_filter(
         return _keyword_filter(query, flat, top_k)
     try:
         return await _embedding_filter(embedding_model, query, flat, top_k)
-    except Exception:
+    except (RuntimeError, OSError) as e:
         logger.warning(
-            "Embedding filter failed, falling back to keyword filter: query=%s, top_k=%s",
+            "Embedding filter failed, falling back to keyword filter: query=%s, error=%s",
             query,
-            top_k,
-            exc_info=True,
+            e,
         )
         return _keyword_filter(query, flat, top_k)
 

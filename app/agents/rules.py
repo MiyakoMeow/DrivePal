@@ -1,7 +1,5 @@
 """轻量规则引擎 — 安全约束规则定义与合并."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any, Callable
 

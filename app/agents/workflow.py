@@ -1,14 +1,12 @@
 """Agent工作流编排模块."""
 
-from __future__ import annotations
-
-import hashlib
 import json
 import logging
 import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints
@@ -16,6 +14,9 @@ from app.agents.state import AgentState, WorkflowStages
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
+
+if TYPE_CHECKING:
+    from app.memory.schemas import SearchResult
 
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class AgentWorkflow:
         self,
         data_dir: Path = Path("data"),
         memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
-        memory_module: Optional[MemoryModule] = None,
+        memory_module: MemoryModule | None = None,
     ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
@@ -61,24 +62,26 @@ class AgentWorkflow:
             if not isinstance(parsed, dict):
                 parsed = {"raw": result}
         except json.JSONDecodeError:
+            logger.warning(
+                "LLM output is not valid JSON, using raw output: %s",
+                cleaned[:200],
+            )
             parsed = {"raw": result}
         parsed["raw"] = result
         return parsed
 
     async def _context_node(self, state: AgentState) -> dict:
-        messages = state.get("messages", [])
-        user_input = "" if not messages else str(messages[-1].get("content", ""))
+        user_input = state["user_input"]
         stages = state.get("stages")
 
+        related_events: list[SearchResult] = []
         try:
-            related_events = (
-                await self.memory_module.search(user_input, mode=self._memory_mode)
-                if user_input
-                else []
-            )
-        except Exception as e:
-            logger.warning("Memory search failed: %s", e)
-            related_events = []
+            if user_input:
+                related_events = await self.memory_module.search(
+                    user_input, mode=self._memory_mode
+                )
+        except (RuntimeError, ValueError, OSError) as e:
+            logger.warning("Memory search failed: %s", e, exc_info=True)
 
         try:
             if related_events:
@@ -90,8 +93,8 @@ class AgentWorkflow:
                         mode=self._memory_mode
                     )
                 ]
-        except Exception as e:
-            logger.warning("Memory get_history failed: %s", e)
+        except (RuntimeError, ValueError, OSError) as e:
+            logger.warning("Memory get_history failed: %s", e, exc_info=True)
             relevant_memories = (
                 [e.to_public() for e in related_events] if related_events else []
             )
@@ -123,15 +126,10 @@ class AgentWorkflow:
         if stages is not None:
             stages.context = context
 
-        return {
-            "context": context,
-            "messages": state["messages"]
-            + [{"role": "user", "content": f"Context: {json.dumps(context)}"}],
-        }
+        return {"context": context}
 
     async def _task_node(self, state: AgentState) -> dict:
-        messages = state.get("messages", [])
-        user_input = messages[-1].get("content", "") if messages else ""
+        user_input = state["user_input"]
         context = state.get("context", {})
         stages = state.get("stages")
 
@@ -145,11 +143,7 @@ class AgentWorkflow:
         task = await self._call_llm_json(prompt)
         if stages is not None:
             stages.task = task
-        return {
-            "task": task,
-            "messages": state["messages"]
-            + [{"role": "user", "content": f"Task: {json.dumps(task)}"}],
-        }
+        return {"task": task}
 
     async def _strategy_node(self, state: AgentState) -> dict:
         context = state.get("context", {})
@@ -178,36 +172,24 @@ class AgentWorkflow:
         decision["postpone"] = postpone
         if stages is not None:
             stages.decision = decision
-        return {
-            "decision": decision,
-            "messages": state["messages"]
-            + [{"role": "user", "content": f"Decision: {json.dumps(decision)}"}],
-        }
+        return {"decision": decision}
 
     async def _execution_node(self, state: AgentState) -> dict:
         decision = state.get("decision") or {}
-        messages = state.get("messages", [])
-        user_input = str(messages[-1].get("content", "")) if messages else ""
+        user_input = state["user_input"]
         stages = state.get("stages")
 
         if decision.get("postpone"):
             result = "提醒已延后：当前驾驶状态不适合发送提醒"
-            event_id = None
             if stages is not None:
                 stages.execution = {
                     "content": None,
                     "event_id": None,
                     "result": result,
                 }
-            return {
-                "result": result,
-                "event_id": None,
-                "messages": state["messages"] + [{"role": "user", "content": result}],
-            }
+            return {"result": result, "event_id": None}
 
-        remind_content = decision.get("reminder_content") or decision.get(
-            "remind_content"
-        )
+        remind_content = decision.get("reminder_content") or decision.get("content")
         if isinstance(remind_content, dict):
             content = remind_content.get("text") or remind_content.get(
                 "content", "无提醒内容"
@@ -221,7 +203,7 @@ class AgentWorkflow:
         )
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
-            event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
+            event_id = f"unknown_{uuid.uuid4().hex[:8]}"
 
         result = f"提醒已发送: {content}"
         if stages is not None:
@@ -230,21 +212,17 @@ class AgentWorkflow:
                 "event_id": event_id,
                 "result": result,
             }
-        return {
-            "result": result,
-            "event_id": event_id,
-            "messages": state["messages"] + [{"role": "user", "content": result}],
-        }
+        return {"result": result, "event_id": event_id}
 
     async def run_with_stages(
         self,
         user_input: str,
         driving_context: dict | None = None,
-    ) -> tuple[str, Optional[str], WorkflowStages]:
+    ) -> tuple[str, str | None, WorkflowStages]:
         """运行完整工作流并返回结果、事件ID和各阶段输出."""
         stages = WorkflowStages()
         state: AgentState = {
-            "messages": [{"role": "user", "content": user_input}],
+            "user_input": user_input,
             "context": {},
             "task": None,
             "decision": None,

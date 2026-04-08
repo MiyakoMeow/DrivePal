@@ -339,7 +339,7 @@ class TestMemoryBankEngineWriteInteraction:
         """验证 write_interaction 同时创建事件和交互."""
         await engine.write_interaction("提醒我开会", "好的")
         events = await storage.read_events()
-        interactions = await engine._interactions_store.read()
+        interactions = await engine.interactions_store.read()
         assert len(events) == 1
         assert len(interactions) == 1
         assert interactions[0]["event_id"] == events[0]["id"]

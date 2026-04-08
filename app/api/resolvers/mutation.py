@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from enum import Enum
 from typing import Any, Literal, cast
 
 import strawberry
@@ -35,17 +35,21 @@ from app.storage.toml_store import TOMLStore
 logger = logging.getLogger(__name__)
 
 
-def _preset_store() -> TOMLStore:
-    from app.api.main import DATA_DIR
+def _enum_str(v: object) -> str:
+    """将 Enum 或字符串值统一转换为字符串."""
+    return v.value if isinstance(v, Enum) else str(v)
 
-    return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
+
+def _preset_store(info: strawberry.Info) -> TOMLStore:
+    from pathlib import Path
+
+    data_dir = info.context["data_dir"]
+    return TOMLStore(data_dir, Path("scenario_presets.toml"), list)
 
 
 def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
     result: dict[str, Any] = {
-        "scenario": input_obj.scenario.value
-        if hasattr(input_obj.scenario, "value")
-        else input_obj.scenario,
+        "scenario": _enum_str(input_obj.scenario),
         "driver": {},
         "spatial": {},
         "traffic": {},
@@ -53,12 +57,8 @@ def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
     if input_obj.driver:
         driver = input_obj.driver
         result["driver"] = {
-            "emotion": driver.emotion.value
-            if hasattr(driver.emotion, "value")
-            else driver.emotion,
-            "workload": driver.workload.value
-            if hasattr(driver.workload, "value")
-            else driver.workload,
+            "emotion": _enum_str(driver.emotion),
+            "workload": _enum_str(driver.workload),
             "fatigue_level": driver.fatigue_level,
         }
     if input_obj.spatial:
@@ -85,9 +85,7 @@ def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
     if input_obj.traffic:
         traffic = input_obj.traffic
         result["traffic"] = {
-            "congestion_level": traffic.congestion_level.value
-            if hasattr(traffic.congestion_level, "value")
-            else traffic.congestion_level,
+            "congestion_level": _enum_str(traffic.congestion_level),
             "incidents": traffic.incidents,
             "estimated_delay_minutes": traffic.estimated_delay_minutes,
         }
@@ -155,15 +153,17 @@ class Mutation:
     """GraphQL Mutation 集合."""
 
     @strawberry.mutation
-    async def process_query(self, input: ProcessQueryInput) -> ProcessQueryResult:
+    async def process_query(
+        self, info: strawberry.Info, input: ProcessQueryInput
+    ) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
-        from app.api.main import DATA_DIR, get_memory_module
         from app.agents.workflow import AgentWorkflow
 
         try:
-            mm = get_memory_module()
+            mm = info.context["memory_module"]
+            data_dir = info.context["data_dir"]
             workflow = AgentWorkflow(
-                data_dir=DATA_DIR,
+                data_dir=data_dir,
                 memory_mode=MemoryMode(input.memory_mode.value),
                 memory_module=mm,
             )
@@ -191,16 +191,17 @@ class Mutation:
             raise GraphQLError("Internal server error")
 
     @strawberry.mutation
-    async def submit_feedback(self, input: FeedbackInput) -> FeedbackResult:
+    async def submit_feedback(
+        self, info: strawberry.Info, input: FeedbackInput
+    ) -> FeedbackResult:
         """提交用户反馈."""
         if input.action not in ("accept", "ignore"):
             raise GraphQLError(
                 f"Invalid action: {input.action!r}. Must be 'accept' or 'ignore'"
             )
-        from app.api.main import get_memory_module
 
         try:
-            mm = get_memory_module()
+            mm = info.context["memory_module"]
             safe_action: Literal["accept", "ignore"]
             safe_action = "accept" if input.action == "accept" else "ignore"
             feedback = FeedbackData(
@@ -215,10 +216,10 @@ class Mutation:
 
     @strawberry.mutation
     async def save_scenario_preset(
-        self, input: ScenarioPresetInput
+        self, info: strawberry.Info, input: ScenarioPresetInput
     ) -> ScenarioPresetGQL:
         """保存场景预设."""
-        store = _preset_store()
+        store = _preset_store(info)
         preset = ScenarioPreset(name=input.name)
         if input.context:
             preset.context = DrivingContext(**_input_to_context_dict(input.context))
@@ -226,9 +227,11 @@ class Mutation:
         return _to_gql_preset(preset.model_dump())
 
     @strawberry.mutation
-    async def delete_scenario_preset(self, preset_id: str) -> bool:
+    async def delete_scenario_preset(
+        self, info: strawberry.Info, preset_id: str
+    ) -> bool:
         """删除场景预设."""
-        store = _preset_store()
+        store = _preset_store(info)
         presets = await store.read()
         new_presets = [p for p in presets if p.get("id") != preset_id]
         if len(new_presets) == len(presets):

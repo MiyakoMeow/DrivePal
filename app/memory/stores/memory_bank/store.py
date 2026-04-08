@@ -1,16 +1,16 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.engine import MemoryBankEngine
 
 if TYPE_CHECKING:
-    from app.storage.toml_store import TOMLStore
     from pathlib import Path
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+    from app.storage.toml_store import TOMLStore
 
 
 class MemoryBankStore:
@@ -24,9 +24,8 @@ class MemoryBankStore:
     def __init__(
         self,
         data_dir: Path,
-        embedding_model: Optional["EmbeddingModel"] = None,
-        chat_model: Optional["ChatModel"] = None,
-        **kwargs: dict,
+        embedding_model: "EmbeddingModel | None" = None,
+        chat_model: "ChatModel | None" = None,
     ) -> None:
         """初始化记忆库存储."""
         self._storage = EventStorage(data_dir)
@@ -34,18 +33,16 @@ class MemoryBankStore:
             data_dir, self._storage, embedding_model, chat_model
         )
         self._feedback = FeedbackManager(data_dir)
-        self.embedding_model = embedding_model
-        self.chat_model = chat_model
 
     @property
     def events_store(self) -> TOMLStore:
         """事件存储."""
-        return self._storage._store
+        return self._storage.store
 
     @property
     def strategies_store(self) -> TOMLStore:
         """策略存储."""
-        return self._feedback._strategies_store
+        return self._feedback.strategies_store
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -55,7 +52,7 @@ class MemoryBankStore:
     @property
     def interactions_store(self) -> TOMLStore:
         """交互存储."""
-        return self._engine._interactions_store
+        return self._engine.interactions_store
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件."""

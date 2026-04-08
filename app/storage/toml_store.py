@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 _LOCK_REGISTRY: dict[str, asyncio.Lock] = {}
-_LOCK_REGISTRY_LOCK = asyncio.Lock()
 
 _LIST_WRAPPER_KEY = "_list"
 

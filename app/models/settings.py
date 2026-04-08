@@ -90,7 +90,7 @@ class LLMSettings:
     @classmethod
     def load(cls) -> "LLMSettings":
         """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
-        config_data: dict = {}
+        config_data: dict[str, Any] = {}
         config_path_env = os.environ.get("CONFIG_PATH", "config/llm.toml")
         if Path(config_path_env).is_absolute():
             config_path = Path(config_path_env)
@@ -169,11 +169,7 @@ class LLMSettings:
                 f"Provider '{resolved.provider_name}' not found in model_providers"
             )
         provider_config = self.model_providers[resolved.provider_name]
-        api_key_env = provider_config.get("api_key_env")
-        if api_key_env:
-            api_key: str | None = os.environ.get(api_key_env, "")
-        else:
-            api_key = provider_config.get("api_key")
+        api_key = _resolve_api_key(provider_config)
         return EmbeddingProviderConfig(
             provider=ProviderConfig(
                 model=resolved.model_name,
@@ -215,18 +211,12 @@ def _build_provider_config_from_dict(
     return provider, result
 
 
-def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
-    """从环境变量构建 provider 配置."""
-    model = os.getenv(f"{prefix}_MODEL")
-    if not model:
-        return None
-    return LLMProviderConfig(
-        provider=ProviderConfig(
-            model=model,
-            base_url=os.getenv(f"{prefix}_BASE_URL"),
-            api_key=os.getenv(f"{prefix}_API_KEY"),
-        ),
-    )
+def _resolve_api_key(provider_config: dict[str, Any]) -> str | None:
+    """从提供商配置中解析 API Key，优先使用 api_key_env 环境变量."""
+    api_key_env = provider_config.get("api_key_env")
+    if api_key_env:
+        return os.environ.get(api_key_env, "")
+    return provider_config.get("api_key")
 
 
 def _build_provider_config_from_ref(
@@ -254,11 +244,7 @@ def _build_provider_config_from_ref(
             f"Provider '{resolved.provider_name}' not found in model_providers"
         )
     provider_config = model_providers[resolved.provider_name]
-    api_key_env = provider_config.get("api_key_env")
-    if api_key_env:
-        api_key: str | None = os.environ.get(api_key_env, "")
-    else:
-        api_key = provider_config.get("api_key")
+    api_key = _resolve_api_key(provider_config)
     concurrency = provider_config.get("concurrency", 4)
     return LLMProviderConfig(
         provider=ProviderConfig(

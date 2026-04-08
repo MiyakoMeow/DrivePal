@@ -4,9 +4,9 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,7 +31,7 @@ if not WEBUI_DIR.exists():
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_storage(DATA_DIR)
     logger.info("Data directory initialized: %s", DATA_DIR)
-    if not Path.exists(WEBUI_DIR):
+    if not WEBUI_DIR.exists():
         logger.warning("WebUI directory not found: %s", WEBUI_DIR)
     yield
 
@@ -46,26 +46,30 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
-
-def _ensure_memory_module() -> MemoryModule:
-    from app.models.settings import get_chat_model, get_embedding_model
-
-    return MemoryModule(
-        data_dir=DATA_DIR,
-        embedding_model=get_embedding_model(),
-        chat_model=get_chat_model(),
-    )
-
-
 _memory_module: MemoryModule | None = None
 
 
-def get_memory_module() -> MemoryModule:
-    """获取或初始化记忆模块单例."""
+def _get_memory_module() -> MemoryModule:
     global _memory_module
     if _memory_module is None:
-        _memory_module = _ensure_memory_module()
+        from app.models.settings import get_chat_model, get_embedding_model
+
+        _memory_module = MemoryModule(
+            data_dir=DATA_DIR,
+            embedding_model=get_embedding_model(),
+            chat_model=get_chat_model(),
+        )
     return _memory_module
+
+
+def reset_memory_module() -> None:
+    """重置记忆模块单例（仅用于测试隔离）."""
+    global _memory_module
+    _memory_module = None
+
+
+async def _graphql_context(request: Request) -> dict[str, Any]:
+    return {"memory_module": _get_memory_module(), "data_dir": DATA_DIR}
 
 
 def _mount_graphql() -> None:
@@ -81,7 +85,9 @@ def _mount_graphql() -> None:
         mutation=MutationImpl,
         config=StrawberryConfig(scalar_map={JSON: JSONScalar}),
     )
-    graphql_app = strawberry.fastapi.GraphQLRouter(schema)
+    graphql_app = strawberry.fastapi.GraphQLRouter(
+        schema, context_getter=_graphql_context
+    )
     app.include_router(graphql_app, prefix="/graphql")
 
 

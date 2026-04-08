@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING, TypeVar
-
-import openai
+from typing import TYPE_CHECKING, TypeVar
 
 import asyncio
+
+import openai
 
 from app.models.settings import LLMProviderConfig, LLMSettings
 
@@ -52,15 +52,6 @@ class ChatModel:
         self.providers = providers
         self.temperature = temperature
 
-    def _create_client(self, provider: LLMProviderConfig) -> openai.OpenAI:
-        """创建openai同步客户端."""
-        kwargs: dict = {
-            "api_key": provider.provider.api_key or "not-needed",
-        }
-        if provider.provider.base_url:
-            kwargs["base_url"] = provider.provider.base_url
-        return openai.OpenAI(**kwargs)
-
     def _create_async_client(
         self,
         provider: LLMProviderConfig,
@@ -76,7 +67,7 @@ class ChatModel:
     def _build_messages(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
     ) -> list[ChatCompletionMessageParam]:
         """构建消息列表."""
         messages: list[ChatCompletionMessageParam] = []
@@ -134,10 +125,18 @@ class ChatModel:
         system_prompt: str | None = None,
         **_kwargs: object,
     ) -> AsyncIterator[str]:
-        """流式生成回复."""
-        messages = self._build_messages(prompt, system_prompt)
+        """流式生成回复.
 
+        Note:
+            首次 yield 前会尝试所有 provider fallback；
+            一旦开始 yield，后续异常将直接抛出而不再切换 provider，
+            避免混用不同 provider 的输出。
+
+        """
+        messages = self._build_messages(prompt, system_prompt)
         errors = []
+        stream_started = False
+
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
             try:
@@ -152,18 +151,22 @@ class ChatModel:
                     async for chunk in stream:
                         delta = chunk.choices[0].delta
                         if delta.content:
+                            stream_started = True
                             yield delta.content
                     return
             except Exception as e:
+                if stream_started:
+                    raise
                 errors.append(f"{provider.provider.model}: {e}")
-                continue
 
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
 
     async def batch_generate(
         self,
         prompts: list[str],
-        system_prompt: Optional[str] | None = None,
+        system_prompt: str | None = None,
     ) -> list[str]:
-        """批量生成回复."""
-        return [await self.generate(p, system_prompt) for p in prompts]
+        """批量并行生成回复."""
+        return list(
+            await asyncio.gather(*(self.generate(p, system_prompt) for p in prompts))
+        )

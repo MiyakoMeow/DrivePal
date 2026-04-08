@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from random import sample
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from app.memory.stores.memochat.prompts import WRITING_INSTRUCTION, WRITING_SYSTEM
 from app.memory.stores.memochat.retriever import RetrievalMode
@@ -105,8 +105,8 @@ class MemoChatEngine:
     def __init__(
         self,
         data_dir: Path,
-        chat: Optional["ChatModel"],
-        embedding: Optional["EmbeddingModel"],
+        chat: "ChatModel | None",
+        embedding: "EmbeddingModel | None",
         retrieval_mode: RetrievalMode,
     ) -> None:
         """初始化 MemoChatEngine."""
