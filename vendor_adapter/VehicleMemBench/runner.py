@@ -59,7 +59,7 @@ from evaluation.model_evaluation import (
 from evaluation.agent_client import AgentClient
 
 
-SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(set(BenchMemoryMode))
+SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 _PREP_FREE_TYPES: frozenset[BenchMemoryMode] = frozenset(
     {BenchMemoryMode.NONE, BenchMemoryMode.GOLD}
 )

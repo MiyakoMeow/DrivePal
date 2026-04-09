@@ -12,8 +12,8 @@ if TYPE_CHECKING:
 @pytest.fixture
 def clear_config_cache() -> None:
     """清理配置缓存的 fixture."""
+    from app.models.model_string import _load_config
     from vendor_adapter.VehicleMemBench.model_config import (
-        _load_config,
         get_benchmark_client,
         get_benchmark_config,
     )
