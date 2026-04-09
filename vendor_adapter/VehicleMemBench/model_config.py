@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING
 
 from openai import OpenAI
 
-from app.models.model_string import get_model_group_providers
-
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
@@ -27,6 +25,8 @@ class BenchmarkConfig:
 @lru_cache(maxsize=1)
 def get_benchmark_config() -> BenchmarkConfig:
     """从 model_groups.benchmark 配置中提取基准测试参数."""
+    from app.models.model_string import get_model_group_providers
+
     try:
         providers = get_model_group_providers("benchmark")
     except KeyError:

@@ -277,9 +277,8 @@ class MemoryBankEngine:
                 }
                 interaction["event_id"] = event_id
 
-            await self._interactions_store.append(interaction)
-
             if append_event_id:
+                await self._interactions_store.append(interaction)
                 all_events = await self._storage.read_events()
                 for ev in all_events:
                     if ev.get("id") == append_event_id:
@@ -292,6 +291,7 @@ class MemoryBankEngine:
                     msg = "event 不应为 None（逻辑不一致）"
                     raise RuntimeError(msg)
                 await self._storage.append_raw(event)
+                await self._interactions_store.append(interaction)
 
         if append_event_id:
             await self._update_event_summary(append_event_id)

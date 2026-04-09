@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from functools import lru_cache
@@ -60,6 +61,8 @@ from evaluation.agent_client import AgentClient
 
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
+# 无需 prepare 阶段写入 prep.json 的记忆类型。
+# 约定：prepare() 中跳过这些类型的 prep.json 写入，run() 中 _load_prep() 直接返回合成数据。
 _PREP_FREE_TYPES: frozenset[BenchMemoryMode] = frozenset(
     {BenchMemoryMode.NONE, BenchMemoryMode.GOLD}
 )
@@ -235,6 +238,8 @@ async def prepare(
             if mtype in ADAPTERS:
                 store_dir = fdir / "store"
                 async with semaphore:
+                    if store_dir.exists():
+                        shutil.rmtree(store_dir)
                     store_dir.mkdir(parents=True, exist_ok=True)
                     adapter_cls = ADAPTERS[mtype]
                     adapter = adapter_cls(data_dir=store_dir)
@@ -373,6 +378,13 @@ async def _run_single(
     query_semaphore: asyncio.Semaphore,
 ) -> None:
     search_client = await _build_search_client(prep_data, memory_type)
+
+    if memory_type in ADAPTERS and search_client is None:
+        print(
+            f"[skip] {memory_type} file {file_num}: "
+            f"search client unavailable (missing data_dir in prep data)"
+        )
+        return
 
     kv_store = None
     if memory_type == BenchMemoryMode.KV:
