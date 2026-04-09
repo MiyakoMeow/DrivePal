@@ -50,23 +50,26 @@ def test_paths_exist() -> None:
 
 
 def test_file_output_dir() -> None:
+    from vendor_adapter.VehicleMemBench import BenchMemoryMode
     from vendor_adapter.VehicleMemBench.runner import OUTPUT_DIR, file_output_dir
 
-    d = file_output_dir("memory_bank", 3)
+    d = file_output_dir(BenchMemoryMode.MEMORY_BANK, 3)
     assert d == OUTPUT_DIR / "memory_bank" / "file_3"
 
 
 def test_prep_path() -> None:
+    from vendor_adapter.VehicleMemBench import BenchMemoryMode
     from vendor_adapter.VehicleMemBench.runner import OUTPUT_DIR, prep_path
 
-    p = prep_path("summary", 7)
-    assert p == OUTPUT_DIR / "summary" / "file_7" / "prep.json"
+    p = prep_path(BenchMemoryMode.KV, 7)
+    assert p == OUTPUT_DIR / "kv" / "file_7" / "prep.json"
 
 
 def test_query_result_path() -> None:
+    from vendor_adapter.VehicleMemBench import BenchMemoryMode
     from vendor_adapter.VehicleMemBench.runner import OUTPUT_DIR, query_result_path
 
-    p = query_result_path("kv", 12, 4)
+    p = query_result_path(BenchMemoryMode.KV, 12, 4)
     assert p == OUTPUT_DIR / "kv" / "file_12" / "query_4.json"
 
 
@@ -95,6 +98,29 @@ def test_prepare_gold_creates_dir_and_skips(
     assert gold_dir.is_dir()
 
 
+def test_prepare_none_creates_dir_and_skips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """验证 none 类型 prepare 创建目录并支持重复调用."""
+    from unittest.mock import MagicMock
+
+    from vendor_adapter.VehicleMemBench.runner import prepare
+
+    monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(
+        "vendor_adapter.VehicleMemBench.runner._get_agent_client",
+        lambda: MagicMock(),
+    )
+    import asyncio
+
+    asyncio.run(prepare(file_range="1", memory_types="none"))
+    none_dir = tmp_path / "none" / "file_1"
+    assert none_dir.is_dir()
+
+    asyncio.run(prepare(file_range="1", memory_types="none"))
+    assert none_dir.is_dir()
+
+
 def test_run_skips_existing_query_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -102,11 +128,12 @@ def test_run_skips_existing_query_files(
     import json
     from unittest.mock import AsyncMock, MagicMock
 
+    from vendor_adapter.VehicleMemBench import BenchMemoryMode
     from vendor_adapter.VehicleMemBench.runner import query_result_path, run
 
     monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
 
-    mtype = "gold"
+    mtype = BenchMemoryMode.GOLD
     fnum = 99
     fdir = tmp_path / mtype / f"file_{fnum}"
     fdir.mkdir(parents=True)

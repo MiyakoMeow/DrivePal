@@ -2,7 +2,7 @@
 models = ["local/qwen3.5-2b"]
 
 [model_groups.benchmark]
-models = ["minimax-cn/MiniMax-M2.7?temperature=0.0"]
+models = ["local/qwen3.5-2b?temperature=0.0"]
 
 [model_groups.smart]
 models = ["deepseek/deepseek-chat"]
