@@ -154,9 +154,7 @@ class PersonalityManager:
             async with self._personality_lock:
                 personality_data = await self._store.read()
                 daily_personality = personality_data.get("daily_personality", {})
-                if isinstance(daily_personality.get(date_group), dict):
-                    pass
-                else:
+                if not isinstance(daily_personality.get(date_group), dict):
                     daily_personality[date_group] = {
                         "content": summary_text,
                         "memory_strength": 1,

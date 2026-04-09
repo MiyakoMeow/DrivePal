@@ -147,9 +147,7 @@ class SummaryManager:
             async with self._lock:
                 summaries = await self._summaries_store.read()
                 daily_summaries = summaries.get("daily_summaries", {})
-                if isinstance(daily_summaries.get(date_group), dict):
-                    pass
-                else:
+                if not isinstance(daily_summaries.get(date_group), dict):
                     daily_summaries[date_group] = {
                         "content": summary_text,
                         "memory_strength": 1,
@@ -162,6 +160,7 @@ class SummaryManager:
                     if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
                         needs_overall_update = True
         except Exception:
+            logger.exception("Failed to generate summary for date_group=%s", date_group)
             return
         finally:
             async with self._lock:
