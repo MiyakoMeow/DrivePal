@@ -417,8 +417,8 @@ async def _run_single(
                 return
         except FileNotFoundError:
             pass
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            print(f"[warn] corrupt query file {qp}: {e}, will re-evaluate")
 
         try:
             query = event.get("query", "")
