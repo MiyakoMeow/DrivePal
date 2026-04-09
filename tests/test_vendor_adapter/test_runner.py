@@ -59,8 +59,8 @@ def test_file_output_dir() -> None:
 def test_prep_path() -> None:
     from vendor_adapter.VehicleMemBench.runner import OUTPUT_DIR, prep_path
 
-    p = prep_path("summary", 7)
-    assert p == OUTPUT_DIR / "summary" / "file_7" / "prep.json"
+    p = prep_path("kv", 7)
+    assert p == OUTPUT_DIR / "kv" / "file_7" / "prep.json"
 
 
 def test_query_result_path() -> None:
