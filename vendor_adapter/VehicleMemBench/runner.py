@@ -270,6 +270,9 @@ async def prepare(
     failed = sum(1 for r in prep_results if isinstance(r, BaseException))
     if failed:
         print(f"[prepare] done with {failed} failures")
+    if failed == len(prep_results) and failed > 0:
+        msg = f"[prepare] all {failed} tasks failed"
+        raise RuntimeError(msg)
 
 
 async def _prepare_single(
@@ -368,6 +371,9 @@ async def run(
     failed = sum(1 for r in run_results if isinstance(r, BaseException))
     if failed:
         print(f"[run] done with {failed} file-level failures")
+    if failed == len(run_results) and failed > 0:
+        msg = f"[run] all {failed} tasks failed"
+        raise RuntimeError(msg)
 
 
 async def _run_single(
@@ -559,7 +565,7 @@ def _make_sync_memory_search(
                 print(f"  [warn] memory_search: event loop error: {e}")
                 return {"success": False, "error": str(e), "results": "", "count": 0}
             raise
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError) as e:
             print(f"  [warn] memory_search failed: {e}")
             return {"success": False, "error": str(e), "results": "", "count": 0}
 
