@@ -288,7 +288,9 @@ class MemoryBankEngine:
                         break
                 await self._storage.write_events(all_events)
             else:
-                assert event is not None
+                if event is None:
+                    msg = "event 不应为 None（逻辑不一致）"
+                    raise RuntimeError(msg)
                 await self._storage.append_raw(event)
 
         if append_event_id:
