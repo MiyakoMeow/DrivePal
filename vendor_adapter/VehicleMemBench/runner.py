@@ -261,12 +261,12 @@ async def _prepare_single(
     file_num: int,
     memory_type: BenchMemoryMode,
 ) -> dict | None:
-    if memory_type == "kv":
+    if memory_type == BenchMemoryMode.KV:
         daily = split_history_by_day(history_text)
         store, _, _ = await asyncio.to_thread(
             build_memory_key_value, agent_client, daily
         )
-        return {"type": "kv", "store": store.to_dict()}
+        return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
     print(f"[warn] unknown memory_type: {memory_type}")
     return None
 
@@ -605,10 +605,11 @@ def report(output_path: Path | None = None) -> None:
         if mtype in report_data:
             report_data[mtype]["total_failed"] = fc
 
-    if "gold" in report_data:
-        gold_esm = report_data["gold"].get("exact_match_rate", 0)
+    gold_key = BenchMemoryMode.GOLD
+    if gold_key in report_data:
+        gold_esm = report_data[gold_key].get("exact_match_rate", 0)
         for mtype in report_data:
-            if mtype != "gold":
+            if mtype != gold_key:
                 auto_esm = report_data[mtype].get("exact_match_rate", 0)
                 report_data[mtype]["memory_score"] = (
                     auto_esm / gold_esm if gold_esm > 0 else 0.0
