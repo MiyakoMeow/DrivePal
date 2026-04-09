@@ -6,7 +6,6 @@ import os
 import shutil
 import sys
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -144,7 +143,6 @@ def parse_file_range(range_str: str) -> list[int]:
     return sorted(set(result))
 
 
-@lru_cache(maxsize=1)
 def _get_agent_client() -> AgentClient:
     cfg = get_benchmark_config()
     return AgentClient(
