@@ -650,6 +650,15 @@ def report(output_path: Path | None = None) -> None:
     report_data: dict[BenchMemoryMode, dict] = {}
     for mtype, results in all_results.items():
         metric = _build_metric(results, model=cfg.model, memory_type=mtype)
+        # vendor _build_metric 使用 system_return 长度计算 avg_pred_calls，
+        # 但 system_return 包含 memory 调用输出。
+        # 对使用 memory adapter 的类型，使用已过滤的 num_pred_calls 重新计算。
+        if mtype in ADAPTERS:
+            valid = [r for r in results if not r.get("skipped", False)]
+            if valid:
+                metric["avg_pred_calls"] = sum(
+                    r.get("num_pred_calls", 0) for r in valid
+                ) / len(valid)
         report_data[mtype] = metric
 
     for mtype, fc in failed_counts.items():
