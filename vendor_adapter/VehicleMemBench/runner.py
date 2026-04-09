@@ -323,8 +323,8 @@ async def run(
                 return mtype, fnum, json.loads(await f.read())
         except FileNotFoundError:
             return mtype, fnum, None
-        except json.JSONDecodeError:
-            print(f"[warn] corrupt prep file for {mtype} file {fnum}, skipping")
+        except json.JSONDecodeError as e:
+            print(f"[warn] corrupt prep file for {mtype} file {fnum}: {e}, skipping")
             return mtype, fnum, None
 
     prep_raw = await asyncio.gather(
@@ -388,8 +388,8 @@ async def _run_single(
 
     if memory_type in ADAPTERS and search_client is None:
         print(
-            f"[skip] {memory_type} file {file_num}: "
-            f"search client unavailable (missing data_dir in prep data)"
+            f"[warn] {memory_type} file {file_num}: "
+            f"search client unavailable (missing data_dir in prep data), skipping"
         )
         return
 

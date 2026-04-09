@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 @pytest.fixture
 def clear_config_cache() -> None:
     """清理配置缓存的 fixture."""
+    import app.models.embedding as embedding_module
+    import app.models.settings as settings_module
     from app.models.model_string import _load_config
     from vendor_adapter.VehicleMemBench.model_config import (
         get_benchmark_client,
@@ -21,6 +23,9 @@ def clear_config_cache() -> None:
     _load_config.cache_clear()
     get_benchmark_config.cache_clear()
     get_benchmark_client.cache_clear()
+    embedding_module._EMBEDDING_MODEL_CACHE.clear()
+    embedding_module.reset_embedding_singleton()
+    settings_module._settings_cache = None
 
 
 def test_get_benchmark_client_returns_openai_instance(
