@@ -7,8 +7,8 @@
 - 检查配置：[详见CI](.github/workflows/python.yml)
   - 每次修改后：
     1. `uv run ruff check --fix`
-    3. `uv run ruff format`
-    2. `uv run ty check`
+    2. `uv run ruff format`
+    3. `uv run ty check`
   - 任务完成后：
   - 注意：
     1. 额外运行CI中的 `test` 检查，详细验证无功能破坏。
