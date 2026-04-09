@@ -579,7 +579,10 @@ def report(output_path: Path | None = None) -> None:
     failed_counts: dict[BenchMemoryMode, int] = {}
 
     for path in sorted(output_dir.glob("*/*/query_*.json")):
-        mtype = BenchMemoryMode(path.parent.parent.name)
+        try:
+            mtype = BenchMemoryMode(path.parent.parent.name)
+        except ValueError:
+            continue
         try:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
