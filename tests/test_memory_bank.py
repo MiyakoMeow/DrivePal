@@ -139,6 +139,19 @@ class TestHierarchicalSummarization:
         sources = [r.source for r in results]
         assert "daily_summary" in sources
 
+    async def test_summary_immutability_no_regen(
+        self, tmp_path: Path, mock_chat_model: MagicMock
+    ) -> None:
+        """验证已有摘要不会被重新生成（不可变语义）."""
+        mock_chat_model.generate.return_value = "初始摘要"
+        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
+        for i in range(DAILY_SUMMARY_THRESHOLD):
+            await backend.write(MemoryEvent(content=f"事件{i}"))
+        assert mock_chat_model.generate.call_count == 1
+        for i in range(DAILY_SUMMARY_THRESHOLD):
+            await backend.write(MemoryEvent(content=f"额外事件{i}"))
+        assert mock_chat_model.generate.call_count == 1
+
 
 class TestUpdateEventSummary:
     """基于 LLM 的事件摘要更新测试."""

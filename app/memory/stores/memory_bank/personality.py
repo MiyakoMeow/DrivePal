@@ -30,6 +30,7 @@ class PersonalityManager:
             lambda: {"daily_personality": {}, "overall_personality": ""},
         )
         self._personality_lock = asyncio.Lock()
+        self._inflight_daily_personality: set[str] = set()
 
     @property
     def personality_store(self) -> TOMLStore:
@@ -127,10 +128,13 @@ class PersonalityManager:
         async with self._personality_lock:
             personality_data = await self._store.read()
             daily_personality = personality_data.get("daily_personality", {})
+            if date_group in self._inflight_daily_personality:
+                return
             if date_group in daily_personality:
                 existing = daily_personality[date_group]
                 if isinstance(existing, dict):
                     return
+            self._inflight_daily_personality.add(date_group)
             should_generate = True
             combined = "\n".join(
                 f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
@@ -147,6 +151,8 @@ class PersonalityManager:
         try:
             summary_text = await chat_model.generate(prompt)
         except Exception:
+            async with self._personality_lock:
+                self._inflight_daily_personality.discard(date_group)
             logger.exception(
                 "Failed to generate personality summary for date_group=%s", date_group
             )
@@ -155,6 +161,9 @@ class PersonalityManager:
         async with self._personality_lock:
             personality_data = await self._store.read()
             daily_personality = personality_data.get("daily_personality", {})
+            if isinstance(daily_personality.get(date_group), dict):
+                self._inflight_daily_personality.discard(date_group)
+                return
             daily_personality[date_group] = {
                 "content": summary_text,
                 "memory_strength": 1,
@@ -162,6 +171,7 @@ class PersonalityManager:
                 "interaction_count": len(group_interactions),
                 "source_updated_at": latest_source_ts,
             }
+            self._inflight_daily_personality.discard(date_group)
             personality_data["daily_personality"] = daily_personality
             await self._store.write(personality_data)
             if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:

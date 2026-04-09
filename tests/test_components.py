@@ -435,6 +435,38 @@ class TestPersonalitySummary:
         assert len(personality_results) == 1
         assert "天气" in personality_results[0].event["content"]
 
+    async def test_personality_immutability_no_regen(self, tmp_path: Path) -> None:
+        """验证已有人格摘要不会被重新生成（不可变语义）."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.memory.stores.memory_bank.personality import (
+            PERSONALITY_SUMMARY_THRESHOLD,
+            PersonalityManager,
+        )
+
+        chat_model = MagicMock()
+        chat_model.generate = AsyncMock(return_value="初始人格摘要")
+        mgr = PersonalityManager(tmp_path)
+        date_group = "2026-04-09"
+        events = [
+            {"id": f"e{i}", "date_group": date_group}
+            for i in range(PERSONALITY_SUMMARY_THRESHOLD)
+        ]
+        interactions = [
+            {"event_id": f"e{i}", "query": f"q{i}", "response": f"r{i}"}
+            for i in range(PERSONALITY_SUMMARY_THRESHOLD)
+        ]
+        await mgr.maybe_summarize(date_group, events, interactions, chat_model)
+        assert chat_model.generate.call_count == 1
+        more_events = events + [{"id": "e99", "date_group": date_group}]
+        more_interactions = interactions + [
+            {"event_id": "e99", "query": "q99", "response": "r99"}
+        ]
+        await mgr.maybe_summarize(
+            date_group, more_events, more_interactions, chat_model
+        )
+        assert chat_model.generate.call_count == 1
+
 
 class TestSoftForgetConstants:
     """软遗忘常量测试."""

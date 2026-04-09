@@ -33,6 +33,7 @@ class SummaryManager:
             lambda: {"daily_summaries": {}, "overall_summary": ""},
         )
         self._lock = asyncio.Lock()
+        self._inflight_daily_summaries: set[str] = set()
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -126,10 +127,13 @@ class SummaryManager:
         async with self._lock:
             summaries = await self._summaries_store.read()
             daily_summaries = summaries.get("daily_summaries", {})
+            if date_group in self._inflight_daily_summaries:
+                return
             if date_group in daily_summaries:
                 existing = daily_summaries[date_group]
                 if isinstance(existing, dict):
                     return
+            self._inflight_daily_summaries.add(date_group)
             should_generate = True
             content = "\n".join(
                 e.get("content", "") for e in events if e.get("content")
@@ -140,11 +144,16 @@ class SummaryManager:
         try:
             summary_text = await chat_model.generate(prompt)
         except Exception:
+            async with self._lock:
+                self._inflight_daily_summaries.discard(date_group)
             return
         needs_overall_update = False
         async with self._lock:
             summaries = await self._summaries_store.read()
             daily_summaries = summaries.get("daily_summaries", {})
+            if isinstance(daily_summaries.get(date_group), dict):
+                self._inflight_daily_summaries.discard(date_group)
+                return
             daily_summaries[date_group] = {
                 "content": summary_text,
                 "memory_strength": 1,
@@ -152,6 +161,7 @@ class SummaryManager:
                 "event_count": count,
                 "source_updated_at": latest_source_ts,
             }
+            self._inflight_daily_summaries.discard(date_group)
             summaries["daily_summaries"] = daily_summaries
             await self._summaries_store.write(summaries)
             if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
