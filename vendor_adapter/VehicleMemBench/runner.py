@@ -365,7 +365,7 @@ async def _run_single(
     search_client = await _build_search_client(prep_data, memory_type)
 
     kv_store = None
-    if memory_type == "kv":
+    if memory_type == BenchMemoryMode.KV:
         kv_store = VMBMemoryStore()
         kv_store.store = prep_data.get("store", {})
 
@@ -458,7 +458,7 @@ async def _evaluate_query(
     gold_memory: str,
 ) -> dict | None:
     """执行单个 query 的评估，同步 vendor 调用通过 asyncio.to_thread 包装."""
-    if ctx.memory_type == "none":
+    if ctx.memory_type == BenchMemoryMode.NONE:
         return await asyncio.to_thread(
             process_task_direct,
             {**task, "history_text": ""},
@@ -467,7 +467,7 @@ async def _evaluate_query(
             ctx.reflect_num,
         )
 
-    if ctx.memory_type == "gold":
+    if ctx.memory_type == BenchMemoryMode.GOLD:
         return await asyncio.to_thread(
             process_task_direct,
             {**task, "history_text": gold_memory},
@@ -476,7 +476,7 @@ async def _evaluate_query(
             ctx.reflect_num,
         )
 
-    if ctx.memory_type == "kv":
+    if ctx.memory_type == BenchMemoryMode.KV:
         if ctx.kv_store is None:
             return None
         return await asyncio.to_thread(
