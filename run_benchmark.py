@@ -28,7 +28,7 @@ def _do_report(output: Path | None = None) -> None:
 
 
 async def main() -> None:
-    """Entry point for benchmark CLI."""
+    """Benchmark CLI 的入口函数."""
     parser = ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
 

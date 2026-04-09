@@ -1,1 +1,1 @@
-"""Vendor adapter package."""
+"""第三方库适配层."""

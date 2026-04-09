@@ -157,7 +157,9 @@ class MemoryBankEngine:
     async def _search_by_embedding(
         self, query: str, events: list[dict], top_k: int
     ) -> list[SearchResult]:
-        assert self.embedding_model is not None
+        if self.embedding_model is None:
+            msg = "embedding_model 未初始化，无法进行向量搜索"
+            raise RuntimeError(msg)
         query_vector = await self.embedding_model.encode(query)
         event_texts = [self._get_searchable_text(event) for event in events]
         all_event_vectors = await self.embedding_model.batch_encode(event_texts)
