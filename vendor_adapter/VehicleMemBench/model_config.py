@@ -49,7 +49,7 @@ def get_benchmark_config() -> BenchmarkConfig:
         api_key=api_key,
         model=provider["model"],
         temperature=provider.get("temperature", 0.0),
-        max_tokens=8192,
+        max_tokens=provider.get("max_tokens", 8192),
     )
 
 
