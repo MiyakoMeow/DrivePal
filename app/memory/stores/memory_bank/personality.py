@@ -101,7 +101,12 @@ class PersonalityManager:
         interactions: list[dict],
         chat_model: ChatModel | None,
     ) -> None:
-        """每日对话达到阈值时，生成人格分析摘要."""
+        """每日对话达到阈值时，生成人格分析摘要.
+
+        注意：人格摘要一旦创建将不可变。这是有意的设计选择，用于避免批量导入时的冗余 LLM 调用。
+        如果稍后向同一 date_group 添加交互，现有摘要不会重新生成。
+        如需强制重新生成，请从存储中删除人格条目。
+        """
         if not chat_model:
             return
         group_events = [e for e in events if e.get("date_group") == date_group]
@@ -112,10 +117,12 @@ class PersonalityManager:
         ]
         if len(group_interactions) < PERSONALITY_SUMMARY_THRESHOLD:
             return
+
         latest_source_ts = max(
             (e.get("updated_at") or e.get("created_at", "") for e in group_events),
             default="",
         )
+        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（人格摘要不可变）
         should_generate = False
         async with self._personality_lock:
             personality_data = await self._store.read()

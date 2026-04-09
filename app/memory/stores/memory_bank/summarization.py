@@ -105,16 +105,23 @@ class SummaryManager:
     async def maybe_summarize(
         self, date_group: str, events: list[dict], chat_model: ChatModel | None
     ) -> None:
-        """事件数量达到阈值时生成日常摘要."""
+        """事件数量达到阈值时生成日常摘要.
+
+        注意：摘要一旦创建将不可变。这是有意的设计选择，用于避免批量导入（如 benchmark prepare 阶段）
+        时的冗余 LLM 调用。如果稍后向同一 date_group 添加事件，现有摘要不会重新生成。
+        如需强制重新生成，请从存储中删除摘要条目。
+        """
         count = len(events)
         if count < DAILY_SUMMARY_THRESHOLD:
             return
         if not chat_model:
             return
+
         latest_source_ts = max(
             (e.get("updated_at") or e.get("created_at", "") for e in events),
             default="",
         )
+        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（摘要不可变）
         should_generate = False
         async with self._lock:
             summaries = await self._summaries_store.read()

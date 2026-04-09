@@ -7,12 +7,16 @@
 - 检查配置：[详见CI](.github/workflows/python.yml)
   - 每次修改后：
     1. `uv run ruff check --fix`
-    2. `uv run ty check`
     3. `uv run ruff format`
+    2. `uv run ty check`
   - 任务完成后：
-    1. 额外运行CI中的`test`检查，详细验证无功能破坏。
   - 注意：
-    1. 本项目的类型检查器，使用`ty`，而不是`mypy`、`pyright`等。[官方文档](https://docs.astral.sh/ty/)。
+    1. 额外运行CI中的 `test` 检查，详细验证无功能破坏。
+    1. 本项目的类型检查器，使用 `ty` 。[官方文档](https://docs.astral.sh/ty/)
+
+- 代码规范：
+  - **代码注释必须使用中文**（包括 docstring、行内注释）
+  - **提交信息必须使用英文；必须遵循 Convention Commits 规范**：[参考](https://www.conventionalcommits.org/)
 
 ## Nix 开发环境
 
