@@ -76,12 +76,16 @@ thesis-cockpit-memo/
 │   ├── storage/                  # 存储模块
 │   │   ├── toml_store.py         # TOML文件存储引擎
 │   │   └── init_data.py          # 数据目录初始化
-│   └── experiment/               # 实验模块
-├── adapters/                     # VehicleMemBench适配器层
-│   ├── __init__.py               # 适配器注册表
-│   ├── model_config.py           # 模型字符串解析（provider/model?params）
-│   ├── runner.py                 # VehicleMemBench运行器
-│   └── memory_adapters/          # 记忆存储策略适配器
+├── models/
+│   └── model_string.py           # 模型字符串解析工具
+├── memory/
+│   └── utils.py                  # 记忆模块共享工具函数
+├── vendor_adapter/               # VehicleMemBench适配器层
+│   └── VehicleMemBench/
+│       ├── __init__.py           # 适配器注册表
+│       ├── model_config.py       # 模型字符串解析（provider/model?params）
+│       ├── runner.py             # VehicleMemBench运行器
+│       └── memory_adapters/      # 记忆存储策略适配器
 ├── config/                       # 配置文件
 │   └── llm.toml                  # 模型组+Provider配置
 ├── data/                         # 数据目录（运行时生成）
@@ -334,7 +338,7 @@ python main.py
 
 ### 环境要求
 
-- Python 3.13+
+- Python 3.14+
 - 本地部署 vLLM（Qwen3.5-2B）或 OpenAI 兼容 API
 
 ### 1. 安装依赖

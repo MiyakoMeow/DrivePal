@@ -7,8 +7,8 @@
 ```mermaid
 flowchart TD
     CLI[run_benchmark.py<br>CLI 入口，分发命令]
-    Runner[adapters/runner.py<br>VehicleMemBench 评估运行器]
-    Adapters[adapters/memory_adapters<br>记忆存储适配器]
+    Runner[vendor_adapter/VehicleMemBench/runner.py<br>VehicleMemBench 评估运行器]
+    Adapters[vendor_adapter/VehicleMemBench/memory_adapters<br>记忆存储适配器]
     Stores[app/memory/stores<br>原生记忆存储后端实现]
     
     CLI --> Runner
@@ -22,7 +22,7 @@ flowchart TD
 
 ## 适配器模式
 
-`adapters/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用（当前仅支持 MemoryBank，MemoChat 尚未添加适配器）：
+`vendor_adapter/VehicleMemBench/memory_adapters/` 通过统一接口封装 `app/memory/stores/`，使 VehicleMemBench 能以适配器方式调用（当前仅支持 MemoryBank，MemoChat 尚未添加适配器）：
 
 | 适配器 | 封装 | 原理 |
 |--------|------|------|

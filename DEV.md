@@ -156,9 +156,9 @@ INTEGRATION_TESTS=1 uv run pytest tests/ -v
 
 | 文件 | 说明 |
 |------|------|
-| `tests/test_adapters/test_common.py` | 适配器通用工具函数 |
-| `tests/test_adapters/test_model_config.py` | 模型字符串解析 |
-| `tests/test_adapters/test_runner.py` | VehicleMemBench 运行器 |
+| `tests/test_vendor_adapter/test_common.py` | 适配器通用工具函数 |
+| `tests/test_vendor_adapter/test_model_config.py` | 模型字符串解析 |
+| `tests/test_vendor_adapter/test_runner.py` | VehicleMemBench 运行器 |
 | `tests/stores/test_memory_bank_store.py` | MemoryBank 后端 |
 | `tests/stores/test_memochat_engine.py` | MemoChat 摘要引擎 |
 | `tests/stores/test_memochat_prompts.py` | MemoChat 提示词 |
