@@ -12,23 +12,31 @@ if TYPE_CHECKING:
 @pytest.fixture
 def clear_config_cache() -> None:
     """清理配置缓存的 fixture."""
-    from vendor_adapter.VehicleMemBench.model_config import _load_config
+    from vendor_adapter.VehicleMemBench.model_config import (
+        _load_config,
+        get_benchmark_client,
+        get_benchmark_config,
+    )
 
     _load_config.cache_clear()
+    get_benchmark_config.cache_clear()
+    get_benchmark_client.cache_clear()
 
 
 def test_get_benchmark_client_returns_openai_instance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_config_cache: None
 ) -> None:
-    """测试 get_benchmark_client 返回 OpenAI 实例."""
+    """测试 get_benchmark_client 从 model_groups.benchmark 返回 OpenAI 实例."""
     config = {
-        "llm": [
-            {
-                "model": "test-model",
+        "model_groups": {
+            "benchmark": {"models": ["test-provider/test-model?temperature=0.0"]},
+        },
+        "model_providers": {
+            "test-provider": {
                 "base_url": "http://localhost:1234/v1",
                 "api_key": "test",
-            }
-        ],
+            },
+        },
     }
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
@@ -40,19 +48,22 @@ def test_get_benchmark_client_returns_openai_instance(
     assert hasattr(client, "chat")
 
 
-def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
+def test_get_benchmark_client_uses_model_groups_benchmark(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_config_cache: None
 ) -> None:
-    """测试无 benchmark 配置时 get_benchmark_client 使用 LLM 配置."""
+    """测试 get_benchmark_client 使用 model_groups.benchmark 配置."""
     config = {
-        "llm": [
-            {
-                "model": "qwen3.5-2b",
-                "base_url": "http://127.0.0.1:50721/v1",
-                "api_key": "none",
-            }
-        ],
+        "model_groups": {
+            "benchmark": {"models": ["minimax-cn/MiniMax-M2.7?temperature=0.0"]},
+        },
+        "model_providers": {
+            "minimax-cn": {
+                "base_url": "https://api.minimaxi.com/v1",
+                "api_key_env": "TEST_API_KEY",
+            },
+        },
     }
+    monkeypatch.setenv("TEST_API_KEY", "sk-test123")
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
@@ -62,25 +73,19 @@ def test_get_benchmark_client_uses_llm_config_when_no_benchmark(
     assert client is not None
 
 
-def test_get_benchmark_client_uses_benchmark_config_with_env(
+def test_get_benchmark_client_raises_error_without_benchmark_group(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clear_config_cache: None
 ) -> None:
-    """测试 get_benchmark_client 使用带环境变量的 benchmark 配置."""
-    monkeypatch.setenv("TEST_API_KEY", "sk-test123")
+    """测试无 model_groups.benchmark 时 get_benchmark_client 抛出错误."""
     config = {
-        "llm": [
-            {
-                "model": "qwen3.5-2b",
+        "model_groups": {
+            "default": {"models": ["local/qwen3.5-2b"]},
+        },
+        "model_providers": {
+            "local": {
                 "base_url": "http://127.0.0.1:50721/v1",
                 "api_key": "none",
-            }
-        ],
-        "benchmark": {
-            "model": "MiniMax-M2.7",
-            "base_url": "https://api.minimaxi.com/v1",
-            "api_key_env": "TEST_API_KEY",
-            "temperature": 0.0,
-            "max_tokens": 8192,
+            },
         },
     }
     config_file = tmp_path / "llm.toml"
@@ -88,8 +93,8 @@ def test_get_benchmark_client_uses_benchmark_config_with_env(
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     from vendor_adapter.VehicleMemBench.model_config import get_benchmark_client
 
-    client = get_benchmark_client()
-    assert client is not None
+    with pytest.raises(ValueError, match="model_groups.benchmark must be configured"):
+        get_benchmark_client()
 
 
 def test_get_store_chat_model(
