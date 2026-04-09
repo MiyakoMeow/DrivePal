@@ -33,6 +33,7 @@ class SummaryManager:
             lambda: {"daily_summaries": {}, "overall_summary": ""},
         )
         self._lock = asyncio.Lock()
+        self._inflight_daily_summaries: set[str] = set()
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -105,28 +106,34 @@ class SummaryManager:
     async def maybe_summarize(
         self, date_group: str, events: list[dict], chat_model: ChatModel | None
     ) -> None:
-        """事件数量达到阈值时生成日常摘要."""
+        """事件数量达到阈值时生成日常摘要.
+
+        注意：摘要一旦创建将不可变。这是有意的设计选择，用于避免批量导入（如 benchmark prepare 阶段）
+        时的冗余 LLM 调用。如果稍后向同一 date_group 添加事件，现有摘要不会重新生成。
+        如需强制重新生成，请从存储中删除摘要条目。
+        """
         count = len(events)
         if count < DAILY_SUMMARY_THRESHOLD:
             return
         if not chat_model:
             return
+
         latest_source_ts = max(
             (e.get("updated_at") or e.get("created_at", "") for e in events),
             default="",
         )
+        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（摘要不可变）
         should_generate = False
         async with self._lock:
             summaries = await self._summaries_store.read()
             daily_summaries = summaries.get("daily_summaries", {})
+            if date_group in self._inflight_daily_summaries:
+                return
             if date_group in daily_summaries:
                 existing = daily_summaries[date_group]
-                if (
-                    isinstance(existing, dict)
-                    and existing.get("event_count", 0) >= count
-                    and existing.get("source_updated_at", "") >= latest_source_ts
-                ):
+                if isinstance(existing, dict):
                     return
+            self._inflight_daily_summaries.add(date_group)
             should_generate = True
             content = "\n".join(
                 e.get("content", "") for e in events if e.get("content")
@@ -134,25 +141,29 @@ class SummaryManager:
         if not should_generate:
             return
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
+        needs_overall_update = False
         try:
             summary_text = await chat_model.generate(prompt)
+            async with self._lock:
+                summaries = await self._summaries_store.read()
+                daily_summaries = summaries.get("daily_summaries", {})
+                if not isinstance(daily_summaries.get(date_group), dict):
+                    daily_summaries[date_group] = {
+                        "content": summary_text,
+                        "memory_strength": 1,
+                        "last_recall_date": date_group,
+                        "event_count": count,
+                        "source_updated_at": latest_source_ts,
+                    }
+                    summaries["daily_summaries"] = daily_summaries
+                    await self._summaries_store.write(summaries)
+                    if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
+                        needs_overall_update = True
         except Exception:
+            logger.exception("Failed to generate summary for date_group=%s", date_group)
             return
-        needs_overall_update = False
-        async with self._lock:
-            summaries = await self._summaries_store.read()
-            daily_summaries = summaries.get("daily_summaries", {})
-            daily_summaries[date_group] = {
-                "content": summary_text,
-                "memory_strength": 1,
-                "last_recall_date": date_group,
-                "event_count": count,
-                "source_updated_at": latest_source_ts,
-            }
-            summaries["daily_summaries"] = daily_summaries
-            await self._summaries_store.write(summaries)
-            if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
-                needs_overall_update = True
+        finally:
+            self._inflight_daily_summaries.discard(date_group)
         if needs_overall_update:
             await self.update_overall_summary(chat_model)
 
