@@ -629,6 +629,7 @@ def report(output_path: Path | None = None) -> None:
                 )
 
     out = output_path if output_path is not None else output_dir / "report.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
     print(f"Report written to {out}")
