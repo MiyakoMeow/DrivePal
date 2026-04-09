@@ -69,11 +69,17 @@ async def main() -> None:
         except Exception as e:
             print(f"[prepare] failed: {e}")
             failed = True
-        try:
-            await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except Exception as e:
-            print(f"[run] failed: {e}")
-            failed = True
+            if not args.allow_partial:
+                print(
+                    "[all] aborted due to failures, skipping report (use --allow-partial to force)"
+                )
+                return
+        if not failed:
+            try:
+                await _do_run(args.file_range, args.memory_types, args.reflect_num)
+            except Exception as e:
+                print(f"[run] failed: {e}")
+                failed = True
         if failed and not args.allow_partial:
             print(
                 "[all] aborted due to failures, skipping report (use --allow-partial to force)"

@@ -58,6 +58,7 @@ from evaluation.model_evaluation import (
     MemoryStore as VMBMemoryStore,
 )
 from evaluation.agent_client import AgentClient
+from evaluation.eval_utils import score_tool_calls
 
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
@@ -565,7 +566,7 @@ def _make_sync_memory_search(
                 print(f"  [warn] memory_search: event loop error: {e}")
                 return {"success": False, "error": str(e), "results": "", "count": 0}
             raise
-        except (ConnectionError, TimeoutError, OSError) as e:
+        except (ConnectionError, OSError) as e:
             print(f"  [warn] memory_search failed: {e}")
             return {"success": False, "error": str(e), "results": "", "count": 0}
 
@@ -589,7 +590,8 @@ async def _run_custom_adapter_with_client(
         "memory_search": _make_sync_memory_search(search_client),
     }
 
-    return await asyncio.to_thread(
+    memory_func_names = frozenset(memory_funcs)
+    result = await asyncio.to_thread(
         _run_vehicle_task_evaluation,
         task=task,
         task_id=task_id,
@@ -600,6 +602,22 @@ async def _run_custom_adapter_with_client(
         initial_tools=_CUSTOM_ADAPTER_INITIAL_TOOLS,
         memory_funcs=memory_funcs,
     )
+
+    if result is None:
+        return None
+
+    # vendor 实现将 memory_funcs 调用混入 pred_calls，导致 tool_score 被膨胀。
+    # 此处过滤掉 memory 调用，重新计算 tool 相关指标。
+    vehicle_pred_calls = [
+        c
+        for c in result.get("pred_calls", [])
+        if c.get("name") not in memory_func_names
+    ]
+    result["pred_calls"] = vehicle_pred_calls
+    result["num_pred_calls"] = len(vehicle_pred_calls)
+    ref_calls = result.get("ref_calls", [])
+    result["tool_score"] = score_tool_calls(vehicle_pred_calls, ref_calls)
+    return result
 
 
 def report(output_path: Path | None = None) -> None:
