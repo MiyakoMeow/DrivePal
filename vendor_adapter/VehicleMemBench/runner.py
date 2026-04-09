@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 import aiofiles
 
+from . import BenchMemoryMode
 from .memory_adapters import ADAPTERS
 from .memory_adapters.common import StoreClient, format_search_results
 from .model_config import get_benchmark_config
@@ -57,12 +58,11 @@ from evaluation.model_evaluation import (
 )
 from evaluation.agent_client import AgentClient
 
-type MemoryType = Literal["none", "gold", "kv", "memory_bank"]
 
-SUPPORTED_MEMORY_TYPES: frozenset[MemoryType] = frozenset(
-    {"none", "gold", "kv", "memory_bank"}
+SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(set(BenchMemoryMode))
+_PREP_FREE_TYPES: frozenset[BenchMemoryMode] = frozenset(
+    {BenchMemoryMode.NONE, BenchMemoryMode.GOLD}
 )
-_PREP_FREE_TYPES: frozenset[MemoryType] = frozenset({"gold", "none"})
 
 
 @dataclass
@@ -72,7 +72,7 @@ class EvalContext:
     agent_client: AgentClient
     prep_data: dict
     file_num: int
-    memory_type: MemoryType
+    memory_type: BenchMemoryMode
     reflect_num: int
     search_client: StoreClient | None
     kv_store: VMBMemoryStore | None = None
@@ -115,7 +115,7 @@ _CUSTOM_ADAPTER_INITIAL_TOOLS = [
 ]
 
 
-def _parse_memory_types(memory_types: str) -> list[MemoryType]:
+def _parse_memory_types(memory_types: str) -> list[BenchMemoryMode]:
     types = [t.strip() for t in memory_types.split(",") if t.strip()]
     invalid = [t for t in types if t not in SUPPORTED_MEMORY_TYPES]
     if invalid:
@@ -123,7 +123,7 @@ def _parse_memory_types(memory_types: str) -> list[MemoryType]:
             f"Unsupported memory_types: {invalid}. "
             f"Supported: {sorted(SUPPORTED_MEMORY_TYPES)}"
         )
-    return cast("list[MemoryType]", types)
+    return [BenchMemoryMode(t) for t in types]
 
 
 def parse_file_range(range_str: str) -> list[int]:
@@ -169,17 +169,19 @@ def _ensure_output_dir() -> Path:
     return OUTPUT_DIR
 
 
-def file_output_dir(memory_type: MemoryType, file_num: int) -> Path:
+def file_output_dir(memory_type: BenchMemoryMode, file_num: int) -> Path:
     """返回指定记忆类型和文件编号的输出目录路径."""
     return OUTPUT_DIR / memory_type / f"file_{file_num}"
 
 
-def prep_path(memory_type: MemoryType, file_num: int) -> Path:
+def prep_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
     """返回指定记忆类型和文件编号的 prep 数据路径."""
     return file_output_dir(memory_type, file_num) / "prep.json"
 
 
-def query_result_path(memory_type: MemoryType, file_num: int, event_index: int) -> Path:
+def query_result_path(
+    memory_type: BenchMemoryMode, file_num: int, event_index: int
+) -> Path:
     """返回指定记忆类型、文件编号和事件索引的查询结果路径."""
     return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"
 
@@ -205,7 +207,7 @@ async def prepare(
     history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
     history_cache = dict(history_pairs)
 
-    async def _task(fnum: int, mtype: MemoryType) -> None:
+    async def _task(fnum: int, mtype: BenchMemoryMode) -> None:
         fdir = file_output_dir(mtype, fnum)
         if mtype in _PREP_FREE_TYPES:
             if fdir.exists():
@@ -257,7 +259,7 @@ async def _prepare_single(
     agent_client: AgentClient,
     history_text: str,
     file_num: int,
-    memory_type: MemoryType,
+    memory_type: BenchMemoryMode,
 ) -> dict | None:
     if memory_type == "kv":
         daily = split_history_by_day(history_text)
@@ -292,8 +294,8 @@ async def run(
     qa_cache = dict(qa_pairs)
 
     async def _load_prep(
-        fnum: int, mtype: MemoryType
-    ) -> tuple[MemoryType, int, dict | None]:
+        fnum: int, mtype: BenchMemoryMode
+    ) -> tuple[BenchMemoryMode, int, dict | None]:
         if mtype in _PREP_FREE_TYPES:
             return mtype, fnum, {"type": mtype}
         pp = prep_path(mtype, fnum)
@@ -309,11 +311,11 @@ async def run(
     prep_raw = await asyncio.gather(
         *(_load_prep(f, t) for f in file_nums for t in types)
     )
-    prep_cache: dict[tuple[MemoryType, int], dict | None] = {
+    prep_cache: dict[tuple[BenchMemoryMode, int], dict | None] = {
         (mt, fn): data for mt, fn, data in prep_raw
     }
 
-    async def _task(fnum: int, mtype: MemoryType) -> None:
+    async def _task(fnum: int, mtype: BenchMemoryMode) -> None:
         prep_data = prep_cache.get((mtype, fnum))
         if prep_data is None:
             print(f"[skip] {mtype} file {fnum} not prepared")
@@ -356,7 +358,7 @@ async def _run_single(
     events: list[dict],
     prep_data: dict,
     file_num: int,
-    memory_type: MemoryType,
+    memory_type: BenchMemoryMode,
     reflect_num: int,
     query_semaphore: asyncio.Semaphore,
 ) -> None:
@@ -434,7 +436,7 @@ async def _run_single(
 
 
 async def _build_search_client(
-    prep_data: dict, memory_type: MemoryType
+    prep_data: dict, memory_type: BenchMemoryMode
 ) -> StoreClient | None:
     """为自定义适配器预构建搜索客户端（按 file+type 复用）."""
     if memory_type not in ADAPTERS:
@@ -544,7 +546,7 @@ async def _run_custom_adapter_with_client(
     agent_client: AgentClient,
     task: dict,
     task_id: int,
-    memory_type: MemoryType,
+    memory_type: BenchMemoryMode,
     reflect_num: int,
     search_client: StoreClient,
 ) -> dict | None:
