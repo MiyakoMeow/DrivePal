@@ -238,3 +238,10 @@ def test_report_reads_hierarchical_queries(
 
 def test_imports_available() -> None:
     """测试 vendor 导入可用."""
+    from vendor_adapter.VehicleMemBench.runner import (
+        AgentClient,
+        parse_answer_to_tools,
+    )
+
+    assert callable(AgentClient)
+    assert callable(parse_answer_to_tools)

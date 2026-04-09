@@ -142,11 +142,11 @@ class PersonalityManager:
             )
         if not should_generate:
             return
-        prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
-        and devise response strategies based on your speculation. Dialogue content:
+        prompt = f"""基于以下对话内容，请总结用户的性格特征和情绪，
+        并根据推测制定相应的回复策略。对话内容：
         {combined}
 
-        User's personality traits, emotions, and response strategy are:
+        用户的性格特征、情绪及回复策略为：
         """
         needs_overall_update = False
         try:
@@ -196,12 +196,12 @@ class PersonalityManager:
             if isinstance(data, dict)
         ]
         combined = "\n".join(all_summaries)
-        prompt = f"""The following are the user's exhibited personality traits and emotions throughout multiple dialogues,
-        along with appropriate response strategies for the current situation:
+        prompt = f"""以下是用户在多轮对话中展现出的性格特征和情绪，
+        以及针对当前情境的回复策略：
         {combined}
 
-        Please provide a highly concise and general summary of the user's personality and the most appropriate
-        response strategy for the AI lover, summarized as:
+        请用高度简洁的方式，总结用户的整体性格特征和最适合的
+        AI助手回复策略，总结如下：
         """
         try:
             return await chat_model.generate(prompt)
