@@ -163,8 +163,7 @@ class SummaryManager:
             logger.exception("Failed to generate summary for date_group=%s", date_group)
             return
         finally:
-            async with self._lock:
-                self._inflight_daily_summaries.discard(date_group)
+            self._inflight_daily_summaries.discard(date_group)
         if needs_overall_update:
             await self.update_overall_summary(chat_model)
 

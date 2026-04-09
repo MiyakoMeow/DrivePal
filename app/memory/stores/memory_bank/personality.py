@@ -172,8 +172,7 @@ class PersonalityManager:
             )
             return
         finally:
-            async with self._personality_lock:
-                self._inflight_daily_personality.discard(date_group)
+            self._inflight_daily_personality.discard(date_group)
         if needs_overall_update:
             overall_text = await self.generate_overall_text(
                 personality_data, chat_model
