@@ -242,7 +242,9 @@ async def prepare(
                 result = {"type": mtype, "data_dir": str(store_dir)}
             else:
                 async with semaphore:
-                    assert agent_client is not None
+                    if agent_client is None:
+                        msg = f"agent_client not initialized for {mtype}"
+                        raise RuntimeError(msg)
                     result = await _prepare_single(
                         agent_client, history_text, fnum, mtype
                     )
@@ -506,6 +508,7 @@ async def _evaluate_query(
             ctx.search_client,
         )
 
+    print(f"  [warn] query {idx}: no search client for {ctx.memory_type}, skipping")
     return None
 
 
