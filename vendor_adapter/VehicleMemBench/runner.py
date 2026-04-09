@@ -238,9 +238,11 @@ async def prepare(
             if mtype in ADAPTERS:
                 store_dir = fdir / "store"
                 async with semaphore:
-                    if store_dir.exists():
-                        shutil.rmtree(store_dir)
-                    store_dir.mkdir(parents=True, exist_ok=True)
+                    if await asyncio.to_thread(store_dir.exists):
+                        await asyncio.to_thread(shutil.rmtree, store_dir)
+                    await asyncio.to_thread(
+                        store_dir.mkdir, parents=True, exist_ok=True
+                    )
                     adapter_cls = ADAPTERS[mtype]
                     adapter = adapter_cls(data_dir=store_dir)
                     await adapter.add(history_text)

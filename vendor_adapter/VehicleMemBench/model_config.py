@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 class BenchmarkConfig:
     """基准测试配置（一次性提取所有字段）."""
 
-    base_url: str | None
-    api_key: str | None
+    base_url: str
+    api_key: str
     model: str
     temperature: float
     max_tokens: int
@@ -38,11 +38,17 @@ def get_benchmark_config() -> BenchmarkConfig:
             "model_groups.benchmark must be configured with at least one model reference"
         )
     provider = providers[0]
+    base_url = provider["base_url"]
+    api_key = provider["api_key"]
+    if not base_url or not api_key:
+        raise ValueError(
+            "model_groups.benchmark must have non-empty base_url and api_key"
+        )
     return BenchmarkConfig(
-        base_url=provider["base_url"],
-        api_key=provider["api_key"],
+        base_url=base_url,
+        api_key=api_key,
         model=provider["model"],
-        temperature=provider["temperature"],
+        temperature=provider.get("temperature", 0.0),
         max_tokens=8192,
     )
 
