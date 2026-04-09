@@ -53,6 +53,7 @@ thesis-cockpit-memo/
 │   ├── models/                   # AI模型封装
 │   │   ├── chat.py               # LLM调用封装（多provider自动fallback）
 │   │   ├── embedding.py          # 嵌入模型封装
+│   │   ├── model_string.py       # 模型字符串解析工具
 │   │   └── settings.py           # 模型组/Provider配置加载
 │   ├── memory/                   # 记忆模块
 │   │   ├── memory.py             # MemoryModule Facade（工厂注册表）
@@ -60,6 +61,7 @@ thesis-cockpit-memo/
 │   │   ├── components.py         # 可组合组件（EventStorage等）
 │   │   ├── types.py              # MemoryMode枚举（memory_bank/memochat）
 │   │   ├── schemas.py            # 记忆数据模型定义
+│   │   ├── utils.py              # 记忆模块共享工具函数
 │   │   └── stores/               # 各记忆后端实现
 │   │       ├── memory_bank/      # MemoryBank后端
 │   │       │   ├── store.py      #   薄Facade
@@ -76,10 +78,6 @@ thesis-cockpit-memo/
 │   ├── storage/                  # 存储模块
 │   │   ├── toml_store.py         # TOML文件存储引擎
 │   │   └── init_data.py          # 数据目录初始化
-├── models/
-│   └── model_string.py           # 模型字符串解析工具
-├── memory/
-│   └── utils.py                  # 记忆模块共享工具函数
 ├── vendor_adapter/               # VehicleMemBench适配器层
 │   └── VehicleMemBench/
 │       ├── __init__.py           # 适配器注册表
