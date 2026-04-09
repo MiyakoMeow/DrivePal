@@ -148,34 +148,34 @@ class PersonalityManager:
 
         User's personality traits, emotions, and response strategy are:
         """
+        needs_overall_update = False
         try:
             summary_text = await chat_model.generate(prompt)
-        except Exception:
             async with self._personality_lock:
-                self._inflight_daily_personality.discard(date_group)
+                personality_data = await self._store.read()
+                daily_personality = personality_data.get("daily_personality", {})
+                if isinstance(daily_personality.get(date_group), dict):
+                    pass
+                else:
+                    daily_personality[date_group] = {
+                        "content": summary_text,
+                        "memory_strength": 1,
+                        "last_recall_date": date_group,
+                        "interaction_count": len(group_interactions),
+                        "source_updated_at": latest_source_ts,
+                    }
+                    personality_data["daily_personality"] = daily_personality
+                    await self._store.write(personality_data)
+                    if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
+                        needs_overall_update = True
+        except Exception:
             logger.exception(
                 "Failed to generate personality summary for date_group=%s", date_group
             )
             return
-        needs_overall_update = False
-        async with self._personality_lock:
-            personality_data = await self._store.read()
-            daily_personality = personality_data.get("daily_personality", {})
-            if isinstance(daily_personality.get(date_group), dict):
+        finally:
+            async with self._personality_lock:
                 self._inflight_daily_personality.discard(date_group)
-                return
-            daily_personality[date_group] = {
-                "content": summary_text,
-                "memory_strength": 1,
-                "last_recall_date": date_group,
-                "interaction_count": len(group_interactions),
-                "source_updated_at": latest_source_ts,
-            }
-            self._inflight_daily_personality.discard(date_group)
-            personality_data["daily_personality"] = daily_personality
-            await self._store.write(personality_data)
-            if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
-                needs_overall_update = True
         if needs_overall_update:
             overall_text = await self.generate_overall_text(
                 personality_data, chat_model

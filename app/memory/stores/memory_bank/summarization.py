@@ -141,31 +141,31 @@ class SummaryManager:
         if not should_generate:
             return
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
+        needs_overall_update = False
         try:
             summary_text = await chat_model.generate(prompt)
+            async with self._lock:
+                summaries = await self._summaries_store.read()
+                daily_summaries = summaries.get("daily_summaries", {})
+                if isinstance(daily_summaries.get(date_group), dict):
+                    pass
+                else:
+                    daily_summaries[date_group] = {
+                        "content": summary_text,
+                        "memory_strength": 1,
+                        "last_recall_date": date_group,
+                        "event_count": count,
+                        "source_updated_at": latest_source_ts,
+                    }
+                    summaries["daily_summaries"] = daily_summaries
+                    await self._summaries_store.write(summaries)
+                    if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
+                        needs_overall_update = True
         except Exception:
+            return
+        finally:
             async with self._lock:
                 self._inflight_daily_summaries.discard(date_group)
-            return
-        needs_overall_update = False
-        async with self._lock:
-            summaries = await self._summaries_store.read()
-            daily_summaries = summaries.get("daily_summaries", {})
-            if isinstance(daily_summaries.get(date_group), dict):
-                self._inflight_daily_summaries.discard(date_group)
-                return
-            daily_summaries[date_group] = {
-                "content": summary_text,
-                "memory_strength": 1,
-                "last_recall_date": date_group,
-                "event_count": count,
-                "source_updated_at": latest_source_ts,
-            }
-            self._inflight_daily_summaries.discard(date_group)
-            summaries["daily_summaries"] = daily_summaries
-            await self._summaries_store.write(summaries)
-            if len(daily_summaries) >= OVERALL_SUMMARY_THRESHOLD:
-                needs_overall_update = True
         if needs_overall_update:
             await self.update_overall_summary(chat_model)
 
