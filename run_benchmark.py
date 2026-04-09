@@ -32,7 +32,7 @@ async def main() -> None:
     parser = ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
 
-    _default_memory_types = "gold,summary,kv,memory_bank"
+    _default_memory_types = "none,gold,kv,memory_bank"
 
     for cmd in ["prepare", "run"]:
         p = subparsers.add_parser(cmd)
