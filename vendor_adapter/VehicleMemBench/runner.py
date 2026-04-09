@@ -509,6 +509,7 @@ async def _evaluate_query(
 
     if ctx.memory_type == BenchMemoryMode.KV:
         if ctx.kv_store is None:
+            print(f"  [warn] query {idx}: kv_store is None for file {ctx.file_num}")
             return None
         return await asyncio.to_thread(
             process_task_with_kv_memory,
@@ -659,10 +660,23 @@ def report(output_path: Path | None = None) -> None:
                 metric["avg_pred_calls"] = sum(
                     r.get("num_pred_calls", 0) for r in valid
                 ) / len(valid)
+            if "by_reasoning_type" in metric:
+                for rtype_str, rtype_data in metric["by_reasoning_type"].items():
+                    type_results = [
+                        r
+                        for r in valid
+                        if r.get("reasoning_type", "unknown") == rtype_str
+                    ]
+                    if type_results:
+                        rtype_data["avg_pred_calls"] = sum(
+                            r.get("num_pred_calls", 0) for r in type_results
+                        ) / len(type_results)
         report_data[mtype] = metric
 
     for mtype, fc in failed_counts.items():
-        if mtype in report_data:
+        if mtype not in report_data:
+            report_data[mtype] = {"total_failed": fc, "valid_tasks": 0}
+        else:
             report_data[mtype]["total_failed"] = fc
 
     if BenchMemoryMode.GOLD in report_data:
