@@ -508,8 +508,7 @@ async def _evaluate_query(
             ctx.search_client,
         )
 
-    print(f"  [warn] query {idx}: no search client for {ctx.memory_type}, skipping")
-    return None
+    raise RuntimeError(f"query {idx}: no search client for {ctx.memory_type}")
 
 
 def _make_sync_memory_search(
