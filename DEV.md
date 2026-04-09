@@ -112,9 +112,6 @@ data/
 │   ├── daily_summaries: {}   # {date → {content, memory_strength, event_count}}
 │   └── overall_summary: ""   # 总摘要
 ├── memorybank_personality.toml # MemoryBank 个性分析
-├── memochat_recent_dialogs.toml # MemoChat 短期对话缓冲
-├── memochat_memos.toml       # MemoChat 主题Memo（{topic → [entries]}）
-├── memochat_interactions.toml # MemoChat 交互记录
 ├── contexts.toml            # 上下文缓存
 ├── preferences.toml         # 用户偏好
 ├── feedback.toml            # 用户反馈记录
@@ -160,10 +157,6 @@ INTEGRATION_TESTS=1 uv run pytest tests/ -v
 | `tests/test_vendor_adapter/test_model_config.py` | 模型字符串解析 |
 | `tests/test_vendor_adapter/test_runner.py` | VehicleMemBench 运行器 |
 | `tests/stores/test_memory_bank_store.py` | MemoryBank 后端 |
-| `tests/stores/test_memochat_engine.py` | MemoChat 摘要引擎 |
-| `tests/stores/test_memochat_prompts.py` | MemoChat 提示词 |
-| `tests/stores/test_memochat_retriever.py` | MemoChat 检索策略 |
-| `tests/stores/test_memochat_store.py` | MemoChat 后端 |
 | `tests/test_context_schemas.py` | 驾驶上下文数据模型 |
 | `tests/test_graphql.py` | GraphQL 端点测试 |
 | `tests/test_rules.py` | 规则引擎测试 |
@@ -190,7 +183,7 @@ INTEGRATION_TESTS=1 uv run pytest tests/ -v
 | **LLM支持** | Qwen3.5-2B (vLLM, 默认), MiniMax-M2.7, DeepSeek-chat, GLM-4.7-flashx |
 | **LLM推理** | vLLM (本地部署), OpenAI兼容接口（多provider自动fallback） |
 | **嵌入模型** | BGE-small-zh-v1.5 (HuggingFace) |
-| **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线+分层摘要+个性分析), MemoChat (对话缓冲+LLM主题摘要) |
+| **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线+分层摘要+个性分析) |
 | **数据存储** | TOML文件 (tomllib + tomli-w) |
 | **数据集** | HuggingFace Datasets |
 | **基准测试** | VehicleMemBench (vendor 子模块) |

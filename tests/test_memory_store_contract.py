@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def _get_store_params() -> list[str]:
-    return ["memory_bank", "memochat"]
+    return ["memory_bank"]
 
 
 @pytest.mark.integration
@@ -36,12 +36,6 @@ class TestMemoryStoreContract:
         from app.memory.types import MemoryMode
 
         mm = MemoryModule(tmp_path)
-        if request.param == "memochat":
-            if llm_provider is None:
-                pytest.skip("No LLM provider available")
-            from app.models.chat import ChatModel
-
-            mm._chat_model = ChatModel(providers=[llm_provider])
         return await mm._get_store(MemoryMode(request.param))
 
     async def test_write_returns_string_id(self, store: MemoryStore) -> None:

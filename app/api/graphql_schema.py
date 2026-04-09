@@ -13,7 +13,6 @@ class MemoryModeEnum(Enum):
     """记忆模式枚举."""
 
     MEMORY_BANK = "memory_bank"
-    MEMOCHAT = "memochat"
 
 
 @strawberry.enum
