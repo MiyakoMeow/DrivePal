@@ -37,19 +37,6 @@ def _get_config_path() -> Path:
     return Path(__file__).resolve().parent.parent.parent / env_path
 
 
-def _normalize_llm_config(config: dict) -> list[dict]:
-    """规范化 LLM 配置，支持 dict 或 list 格式."""
-    llm_data = config.get("llm", [])
-    if isinstance(llm_data, dict):
-        return [llm_data]
-    if isinstance(llm_data, list):
-        if not all(isinstance(item, dict) for item in llm_data):
-            msg = "Each item in 'llm' must be a table/object"
-            raise ValueError(msg)
-        return llm_data
-    return []
-
-
 @lru_cache(maxsize=1)
 def _load_config() -> dict:
     """从 TOML 文件加载配置（已缓存）."""
@@ -62,33 +49,23 @@ def _load_config() -> dict:
 
 @lru_cache(maxsize=1)
 def get_benchmark_config() -> BenchmarkConfig:
-    """从配置中一次性提取所有基准测试参数."""
-    config = _load_config()
-    if "benchmark" in config:
-        bc = config["benchmark"]
-        api_key_env = bc.get("api_key_env", "")
-        if api_key_env:
-            api_key = os.environ.get(api_key_env, bc.get("api_key", ""))
-        else:
-            api_key = bc.get("api_key", "")
-        return BenchmarkConfig(
-            base_url=bc["base_url"],
-            api_key=api_key,
-            model=bc["model"],
-            temperature=bc.get("temperature", 0.0),
-            max_tokens=bc.get("max_tokens", 8192),
-        )
-    llm_providers = _normalize_llm_config(config)
-    if not llm_providers:
+    """从 model_groups.benchmark 配置中提取基准测试参数."""
+    try:
+        providers = get_model_group_providers("benchmark")
+    except KeyError:
         raise ValueError(
-            "Configuration must contain at least one LLM provider in 'llm' array"
+            "model_groups.benchmark must be configured with at least one model reference"
+        ) from None
+    if not providers:
+        raise ValueError(
+            "model_groups.benchmark must be configured with at least one model reference"
         )
-    llm = llm_providers[0]
+    provider = providers[0]
     return BenchmarkConfig(
-        base_url=llm.get("base_url", ""),
-        api_key=llm.get("api_key", ""),
-        model=llm["model"],
-        temperature=llm.get("temperature", 0.0),
+        base_url=provider["base_url"],
+        api_key=provider["api_key"],
+        model=provider["model"],
+        temperature=provider["temperature"],
         max_tokens=8192,
     )
 
