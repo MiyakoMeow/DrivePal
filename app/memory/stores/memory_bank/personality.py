@@ -122,11 +122,7 @@ class PersonalityManager:
             daily_personality = personality_data.get("daily_personality", {})
             if date_group in daily_personality:
                 existing = daily_personality[date_group]
-                if (
-                    isinstance(existing, dict)
-                    and existing.get("interaction_count", 0) >= len(group_interactions)
-                    and existing.get("source_updated_at", "") >= latest_source_ts
-                ):
+                if isinstance(existing, dict):
                     return
             should_generate = True
             combined = "\n".join(

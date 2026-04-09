@@ -121,11 +121,7 @@ class SummaryManager:
             daily_summaries = summaries.get("daily_summaries", {})
             if date_group in daily_summaries:
                 existing = daily_summaries[date_group]
-                if (
-                    isinstance(existing, dict)
-                    and existing.get("event_count", 0) >= count
-                    and existing.get("source_updated_at", "") >= latest_source_ts
-                ):
+                if isinstance(existing, dict):
                     return
             should_generate = True
             content = "\n".join(
