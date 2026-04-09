@@ -67,8 +67,25 @@ data/benchmark/
 
 ## 实验报告
 
-通过 GraphQL 查询获取实验报告：
+实验报告主要通过 CLI pipeline 生成，运行 `report` 命令即可：
+
+```bash
+uv run python run_benchmark.py report
+```
+
+GraphQL API 保留 `experimentReport` 查询接口，但仅返回迁移提示信息：
 
 ```graphql
 query { experimentReport { report } }
+```
+
+返回示例：
+```json
+{
+  "data": {
+    "experimentReport": {
+      "report": "Experiment runner migrated to CLI pipeline"
+    }
+  }
+}
 ```
