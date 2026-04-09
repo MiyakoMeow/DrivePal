@@ -193,19 +193,26 @@ async def prepare(
     """为指定文件范围和记忆类型准备基准测试数据."""
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
-    agent_client = _get_agent_client()
     _ensure_output_dir()
     semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
 
-    async def _load_or_empty(fnum: int) -> tuple[int, str]:
-        try:
-            return fnum, await _load_history(fnum)
-        except FileNotFoundError:
-            print(f"[warn] history file {fnum} not found, using empty")
-            return fnum, ""
+    need_history = any(mtype not in _PREP_FREE_TYPES for mtype in types)
+    agent_client: AgentClient | None = None
+    if any(mtype not in _PREP_FREE_TYPES and mtype not in ADAPTERS for mtype in types):
+        agent_client = _get_agent_client()
 
-    history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
-    history_cache = dict(history_pairs)
+    history_cache: dict[int, str] = {}
+    if need_history:
+
+        async def _load_or_empty(fnum: int) -> tuple[int, str]:
+            try:
+                return fnum, await _load_history(fnum)
+            except FileNotFoundError:
+                print(f"[warn] history file {fnum} not found, using empty")
+                return fnum, ""
+
+        history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
+        history_cache = dict(history_pairs)
 
     async def _task(fnum: int, mtype: BenchMemoryMode) -> None:
         fdir = file_output_dir(mtype, fnum)
@@ -235,6 +242,7 @@ async def prepare(
                 result = {"type": mtype, "data_dir": str(store_dir)}
             else:
                 async with semaphore:
+                    assert agent_client is not None
                     result = await _prepare_single(
                         agent_client, history_text, fnum, mtype
                     )
