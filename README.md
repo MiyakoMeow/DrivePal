@@ -23,7 +23,7 @@
 
 ## 项目概述
 
-知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于多Agent协作工作流（Context → Task → Strategy → Execution），支持 MemoryBank 和 MemoChat 两种长期记忆管理策略，并通过请求级上下文注入实现外部数据（驾驶员状态、时空信息、交通状况）的集成。
+知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于多Agent协作工作流（Context → Task → Strategy → Execution），支持 MemoryBank 长期记忆管理策略，并通过请求级上下文注入实现外部数据（驾驶员状态、时空信息、交通状况）的集成。
 
 ### 设计目标
 
@@ -59,20 +59,15 @@ thesis-cockpit-memo/
 │   │   ├── memory.py             # MemoryModule Facade（工厂注册表）
 │   │   ├── interfaces.py         # MemoryStore Protocol定义
 │   │   ├── components.py         # 可组合组件（EventStorage等）
-│   │   ├── types.py              # MemoryMode枚举（memory_bank/memochat）
+│   │   ├── types.py              # MemoryMode枚举（memory_bank）
 │   │   ├── schemas.py            # 记忆数据模型定义
 │   │   ├── utils.py              # 记忆模块共享工具函数
 │   │   └── stores/               # 各记忆后端实现
-│   │       ├── memory_bank/      # MemoryBank后端
-│   │       │   ├── store.py      #   薄Facade
-│   │       │   ├── engine.py     #   核心引擎（遗忘曲线+聚合+摘要）
-│   │       │   ├── personality.py #  个性分析管理器
-│   │       │   └── summarization.py # 分层摘要管理器
-│   │       └── memochat/         # MemoChat后端
+│   │       └── memory_bank/      # MemoryBank后端
 │   │           ├── store.py      #   薄Facade
-│   │           ├── engine.py     #   对话缓冲+LLM摘要引擎
-│   │           ├── retriever.py  #   检索策略（Full LLM / Hybrid）
-│   │           └── prompts.py    #   车载场景提示词
+│   │           ├── engine.py     #   核心引擎（遗忘曲线+聚合+摘要）
+│   │           ├── personality.py #  个性分析管理器
+│   │           └── summarization.py # 分层摘要管理器
 │   ├── schemas/                  # 通用数据模型
 │   │   └── context.py            # 驾驶上下文数据模型（DrivingContext等）
 │   ├── storage/                  # 存储模块
@@ -166,8 +161,6 @@ result, event_id, stages = await workflow.run_with_stages(
 
 ### 3. 记忆检索系统
 
-通过 `memoryMode` 参数切换记忆策略（当前支持 `MEMORY_BANK` 和 `MEMOCHAT`）：
-
 #### MemoryBank（遗忘曲线 + 分层摘要）
 
 基于 MemoryBank 论文实现的三层记忆架构，核心引擎委托 `PersonalityManager` 和 `SummaryManager`：
@@ -190,23 +183,8 @@ flowchart TD
 - **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存
 - **自动聚合**：语义相似的交互自动聚合为同一事件（余弦相似度 ≥ 0.8 或关键词重叠 ≥ 50%）
 - **层级摘要**：`SummaryManager` 管理事件数达到日阈值后生成 daily_summary，达到总阈值后生成 overall_summary
-- **个性分析**：`PersonalityManager` 管理每日个性摘要和总体个性画像
+ - **个性分析**：`PersonalityManager` 管理每日个性摘要和总体个性画像
 - **结果展开**：检索命中事件时，自动附加其关联的原始交互记录
-
-#### MemoChat（对话缓冲 + LLM摘要）
-
-基于 MemoChat 论文实现的三阶段 pipeline：
-
-```mermaid
-flowchart LR
-    A[对话缓冲] -->|达到阈值| B[LLM摘要]
-    B -->|主题分组| C[主题Memo]
-    C -->|检索| D[LLM选主题]
-```
-
-- **滚动对话缓冲**：维护 `memochat_recent_dialogs.toml`，对话轮次 ≥ 10 或总字符 > 1024 时触发摘要
-- **LLM主题摘要**：LLM 将对话解析为 `{topic, summary, start, end}` JSON，写入 `memochat_memos.toml`
-- **检索策略**：`RetrievalMode.FULL_LLM` / `RetrievalMode.HYBRID`（Embedding/关键词粗筛 + LLM精排）
 
 #### 可组合组件架构
 
