@@ -98,6 +98,29 @@ def test_prepare_gold_creates_dir_and_skips(
     assert gold_dir.is_dir()
 
 
+def test_prepare_none_creates_dir_and_skips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """验证 none 类型 prepare 创建目录并支持重复调用."""
+    from unittest.mock import MagicMock
+
+    from vendor_adapter.VehicleMemBench.runner import prepare
+
+    monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(
+        "vendor_adapter.VehicleMemBench.runner._get_agent_client",
+        lambda: MagicMock(),
+    )
+    import asyncio
+
+    asyncio.run(prepare(file_range="1", memory_types="none"))
+    none_dir = tmp_path / "none" / "file_1"
+    assert none_dir.is_dir()
+
+    asyncio.run(prepare(file_range="1", memory_types="none"))
+    assert none_dir.is_dir()
+
+
 def test_run_skips_existing_query_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

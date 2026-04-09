@@ -575,11 +575,11 @@ async def _run_custom_adapter_with_client(
 def report(output_path: Path | None = None) -> None:
     """从结果生成并打印基准测试报告."""
     output_dir = _ensure_output_dir()
-    all_results: dict[str, list[dict]] = {}
-    failed_counts: dict[str, int] = {}
+    all_results: dict[BenchMemoryMode, list[dict]] = {}
+    failed_counts: dict[BenchMemoryMode, int] = {}
 
     for path in sorted(output_dir.glob("*/*/query_*.json")):
-        mtype = path.parent.parent.name
+        mtype = BenchMemoryMode(path.parent.parent.name)
         try:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
@@ -596,7 +596,7 @@ def report(output_path: Path | None = None) -> None:
         all_results[mtype].append(data)
 
     cfg = get_benchmark_config()
-    report_data = {}
+    report_data: dict[BenchMemoryMode, dict] = {}
     for mtype, results in all_results.items():
         metric = _build_metric(results, model=cfg.model, memory_type=mtype)
         report_data[mtype] = metric
@@ -605,11 +605,10 @@ def report(output_path: Path | None = None) -> None:
         if mtype in report_data:
             report_data[mtype]["total_failed"] = fc
 
-    gold_key = BenchMemoryMode.GOLD
-    if gold_key in report_data:
-        gold_esm = report_data[gold_key].get("exact_match_rate", 0)
+    if BenchMemoryMode.GOLD in report_data:
+        gold_esm = report_data[BenchMemoryMode.GOLD].get("exact_match_rate", 0)
         for mtype in report_data:
-            if mtype != gold_key:
+            if mtype != BenchMemoryMode.GOLD:
                 auto_esm = report_data[mtype].get("exact_match_rate", 0)
                 report_data[mtype]["memory_score"] = (
                     auto_esm / gold_esm if gold_esm > 0 else 0.0
