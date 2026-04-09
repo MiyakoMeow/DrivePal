@@ -1,4 +1,4 @@
-"""Command-line interface for VehicleMemBench evaluation."""
+"""VehicleMemBench 评估基准的命令行入口."""
 
 from argparse import ArgumentParser
 from pathlib import Path

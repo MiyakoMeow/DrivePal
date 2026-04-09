@@ -1,19 +1,16 @@
 """结合嵌入向量和LLM的记忆库适配器."""
 
-from .common import (
-    StoreClient,
-    history_to_interaction_records,
-)
-from ..model_config import (
-    get_store_chat_model,
-    get_store_embedding_model,
-)
-from app.memory.stores.memory_bank import MemoryBankStore
 from typing import TYPE_CHECKING
 
+from app.memory.stores.memory_bank import MemoryBankStore
+
+from ..model_config import get_store_chat_model, get_store_embedding_model
+from .common import StoreClient, history_to_interaction_records
+
 if TYPE_CHECKING:
-    from app.memory.interfaces import MemoryStore
     from pathlib import Path
+
+    from app.memory.interfaces import MemoryStore
 
 
 class MemoryBankAdapter:

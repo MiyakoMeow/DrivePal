@@ -59,7 +59,7 @@ from evaluation.model_evaluation import (
 from evaluation.agent_client import AgentClient
 
 
-SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(set(BenchMemoryMode))
+SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 _PREP_FREE_TYPES: frozenset[BenchMemoryMode] = frozenset(
     {BenchMemoryMode.NONE, BenchMemoryMode.GOLD}
 )
@@ -242,7 +242,9 @@ async def prepare(
                 result = {"type": mtype, "data_dir": str(store_dir)}
             else:
                 async with semaphore:
-                    assert agent_client is not None
+                    if agent_client is None:
+                        msg = f"agent_client not initialized for {mtype}"
+                        raise RuntimeError(msg)
                     result = await _prepare_single(
                         agent_client, history_text, fnum, mtype
                     )
@@ -506,7 +508,7 @@ async def _evaluate_query(
             ctx.search_client,
         )
 
-    return None
+    raise RuntimeError(f"query {idx}: no search client for {ctx.memory_type}")
 
 
 def _make_sync_memory_search(
@@ -626,6 +628,7 @@ def report(output_path: Path | None = None) -> None:
                 )
 
     out = output_path if output_path is not None else output_dir / "report.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
     print(f"Report written to {out}")
