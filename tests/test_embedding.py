@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
     from app.models.embedding import EmbeddingModel
 
-SIMILARITY_THRESHOLD = 0.5
+SIMILARITY_THRESHOLD = 0.6
 
 
 class TestEmbeddingForMemorySearch:
