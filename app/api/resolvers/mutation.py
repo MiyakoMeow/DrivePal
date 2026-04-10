@@ -41,7 +41,7 @@ class InternalServerError(GraphQLError):
         super().__init__("Internal server error")
 
 
-class InvalidActionError(GraphQLError):
+class GraphQLInvalidActionError(GraphQLError):
     """无效的操作类型."""
 
     def __init__(self, action: str) -> None:
@@ -203,6 +203,8 @@ class Mutation:
                     execution=cast("Any", stages.execution),
                 ),
             )
+        except GraphQLError:
+            raise
         except Exception:
             logger.exception("processQuery failed")
             raise InternalServerError
@@ -211,7 +213,7 @@ class Mutation:
     async def submit_feedback(self, input: FeedbackInput) -> FeedbackResult:
         """提交用户反馈."""
         if input.action not in ("accept", "ignore"):
-            raise InvalidActionError(input.action)
+            raise GraphQLInvalidActionError(input.action)
         from app.api.main import get_memory_module
 
         try:
@@ -224,6 +226,8 @@ class Mutation:
             )
             await mm.update_feedback(input.event_id, feedback)
             return FeedbackResult(status="success")
+        except GraphQLError:
+            raise
         except Exception:
             logger.exception("submitFeedback failed")
             raise InternalServerError

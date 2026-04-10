@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
+
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
@@ -20,44 +22,28 @@ class NoLLMConfigurationError(RuntimeError):
         super().__init__("No LLM configuration found")
 
 
-class ModelGroupNotFoundError(KeyError):
-    """模型组不存在时抛出."""
-
-    def __init__(self, name: str) -> None:
-        """初始化 ModelGroupNotFoundError.
-
-        Args:
-            name: 不存在的模型组名称
-
-        """
-        self.name = name
-        super().__init__(f"Model group '{name}' not found")
-
-
-class ProviderNotFoundError(ValueError):
-    """提供商不存在时抛出."""
-
-    def __init__(self, provider_name: str) -> None:
-        """初始化 ProviderNotFoundError.
-
-        Args:
-            provider_name: 不存在的提供商名称
-
-        """
-        self.provider_name = provider_name
-        super().__init__(f"Provider '{provider_name}' not found")
-
-
 class MissingModelFieldError(ValueError):
     """缺少必需字段 'model' 时抛出."""
+
+    def __init__(self) -> None:
+        """初始化错误."""
+        super().__init__("Missing required field 'model'")
 
 
 class NoDefaultModelGroupError(RuntimeError):
     """没有默认模型组时抛出."""
 
+    def __init__(self) -> None:
+        """初始化错误."""
+        super().__init__("No default model group configured")
+
 
 class NoJudgeModelConfiguredError(RuntimeError):
     """没有配置 judge 模型时抛出."""
+
+    def __init__(self) -> None:
+        """初始化错误."""
+        super().__init__("No judge model configured")
 
 
 @dataclass

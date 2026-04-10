@@ -81,7 +81,7 @@ class AgentWorkflow:
                 if user_input
                 else []
             )
-        except (OSError, ValueError, RuntimeError) as e:
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
             logger.warning("Memory search failed: %s", e)
             related_events = []
 
@@ -95,7 +95,7 @@ class AgentWorkflow:
                         mode=self._memory_mode
                     )
                 ]
-        except (OSError, ValueError, RuntimeError) as e:
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
             logger.warning("Memory get_history failed: %s", e)
             relevant_memories = (
                 [e.to_public() for e in related_events] if related_events else []

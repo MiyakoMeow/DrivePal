@@ -206,10 +206,11 @@ async def prepare(
     need_history = any(mtype not in _PREP_FREE_TYPES for mtype in types)
     agent_client: AgentClient | None = None
     if any(mtype not in _PREP_FREE_TYPES and mtype not in ADAPTERS for mtype in types):
-        agent_client = _get_agent_client()
-        if agent_client is None:
+        try:
+            agent_client = _get_agent_client()
+        except Exception as e:
             msg = "agent_client not initialized but required by memory types"
-            raise VehicleMemBenchError(msg)
+            raise VehicleMemBenchError(msg) from e
 
     history_cache: dict[int, str] = {}
     if need_history:

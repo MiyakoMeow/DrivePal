@@ -8,23 +8,8 @@ from pathlib import Path
 
 from typing import Any
 
+from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
 from app.models.settings import ResolvedModel
-
-
-class ProviderNotFoundError(ValueError):
-    """Provider 未找到错误."""
-
-    def __init__(self, provider_name: str) -> None:
-        """初始化错误."""
-        super().__init__(f"Provider '{provider_name}' not found in model_providers")
-
-
-class ModelGroupNotFoundError(KeyError):
-    """模型组未找到错误."""
-
-    def __init__(self, name: str) -> None:
-        """初始化错误."""
-        super().__init__(f"Model group '{name}' not found")
 
 
 class InvalidModelStringError(ValueError):
