@@ -1,15 +1,23 @@
 """共享测试配置和 fixtures."""
 
 import os
+from typing import TYPE_CHECKING
 
 import pytest
-from typing import TYPE_CHECKING
+import requests
+
+from app.models.embedding import (
+    EmbeddingModel,
+    get_cached_embedding_model,
+    reset_embedding_singleton,
+)
+from app.models.settings import LLMProviderConfig, LLMSettings
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-from app.models.embedding import EmbeddingModel, get_cached_embedding_model
-from app.models.settings import LLMSettings, LLMProviderConfig
+# PLR2004: HTTP 状态码
+HTTP_OK = 200
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -28,7 +36,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
+    config: pytest.Config,
+    items: list[pytest.Item],
 ) -> None:
     """默认跳过 integration 测试，除非显式启用."""
     run_integration = (
@@ -38,7 +47,7 @@ def pytest_collection_modifyitems(
     if run_integration:
         return
     skip_integration = pytest.mark.skip(
-        reason="需要 --run-integration 标志或 INTEGRATION_TESTS=1 环境变量"
+        reason="需要 --run-integration 标志或 INTEGRATION_TESTS=1 环境变量",
     )
     for item in items:
         if "integration" in item.keywords:
@@ -50,11 +59,6 @@ def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
     if not provider.provider.base_url:
         return True
     try:
-        import requests
-    except ImportError:
-        return False
-
-    try:
         base = provider.provider.base_url.rstrip("/")
         resp = requests.get(
             f"{base}/models",
@@ -65,7 +69,7 @@ def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
         )
     except requests.RequestException:
         return False
-    return resp.status_code == 200
+    return resp.status_code == HTTP_OK
 
 
 def get_available_provider() -> LLMProviderConfig | None:
@@ -107,8 +111,6 @@ def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProvider
 @pytest.fixture(scope="session")
 def embedding() -> Generator[EmbeddingModel]:
     """会话级 embedding 实例，每个 pytest-xdist worker 独立."""
-    from app.models.embedding import reset_embedding_singleton
-
     reset_embedding_singleton()
     yield get_cached_embedding_model()
     reset_embedding_singleton()

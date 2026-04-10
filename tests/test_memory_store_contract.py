@@ -4,12 +4,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from app.memory.interfaces import MemoryStore
     from app.models.settings import LLMProviderConfig
-    from pathlib import Path
+
+LIMIT_HISTORY = 3
 
 
 def _get_store_params() -> list[str]:
@@ -25,12 +30,9 @@ class TestMemoryStoreContract:
         self,
         request: pytest.FixtureRequest,
         tmp_path: Path,
-        llm_provider: LLMProviderConfig | None,
+        _llm_provider: LLMProviderConfig | None,
     ) -> MemoryStore:
         """提供参数化的 MemoryStore 实例."""
-        from app.memory.memory import MemoryModule
-        from app.memory.types import MemoryMode
-
         mm = MemoryModule(tmp_path)
         return await mm._get_store(MemoryMode(request.param))
 
@@ -41,7 +43,8 @@ class TestMemoryStoreContract:
         assert len(event_id) > 0
 
     async def test_write_then_get_history_returns_same_event(
-        self, store: MemoryStore
+        self,
+        store: MemoryStore,
     ) -> None:
         """验证写入后能在历史记录中找到同一事件."""
         event_id = await store.write(MemoryEvent(content="唯一标识测试事件XYZ"))
@@ -49,7 +52,8 @@ class TestMemoryStoreContract:
         assert any(e.id == event_id for e in history)
 
     async def test_search_returns_list_of_search_result(
-        self, store: MemoryStore
+        self,
+        store: MemoryStore,
     ) -> None:
         """验证 search 返回 SearchResult 列表."""
         await store.write(MemoryEvent(content="测试事件"))
@@ -58,7 +62,8 @@ class TestMemoryStoreContract:
         assert all(isinstance(r, SearchResult) for r in results)
 
     async def test_get_history_returns_list_of_memory_event(
-        self, store: MemoryStore
+        self,
+        store: MemoryStore,
     ) -> None:
         """验证 get_history 返回 MemoryEvent 列表."""
         await store.write(MemoryEvent(content="事件1"))
@@ -71,13 +76,14 @@ class TestMemoryStoreContract:
         for i in range(5):
             await store.write(MemoryEvent(content=f"事件{i}"))
         history = await store.get_history(limit=3)
-        assert len(history) == 3
+        assert len(history) == LIMIT_HISTORY
 
     async def test_update_feedback_affects_history(self, store: MemoryStore) -> None:
         """验证 update_feedback 后历史记录中包含反馈的事件."""
         event_id = await store.write(MemoryEvent(content="可接受的事件"))
         await store.update_feedback(
-            event_id, FeedbackData(action="accept", type="meeting")
+            event_id,
+            FeedbackData(action="accept", type="meeting"),
         )
         history = await store.get_history(limit=10)
         assert any(e.id == event_id for e in history)

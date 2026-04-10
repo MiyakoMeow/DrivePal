@@ -20,6 +20,8 @@ class Rule:
 SCENARIO_HIGHWAY = "highway"
 SCENARIO_PARKED = "parked"
 WORKLOAD_OVERLOADED = "overloaded"
+# 疲劳阈值，超过此值触发疲劳抑制规则
+FATIGUE_THRESHOLD = 0.7
 
 
 SAFETY_RULES: list[Rule] = [
@@ -31,7 +33,9 @@ SAFETY_RULES: list[Rule] = [
     ),
     Rule(
         name="fatigue_suppress",
-        condition=lambda ctx: ctx.get("driver", {}).get("fatigue_level", 0) > 0.7,
+        condition=lambda ctx: (
+            ctx.get("driver", {}).get("fatigue_level", 0) > FATIGUE_THRESHOLD
+        ),
         constraint={"only_urgent": True, "allowed_channels": ["audio"]},
         priority=20,
     ),
@@ -53,7 +57,8 @@ SAFETY_RULES: list[Rule] = [
 
 
 def apply_rules(
-    driving_context: dict, rules: list[Rule] | None = None
+    driving_context: dict,
+    rules: list[Rule] | None = None,
 ) -> dict[str, Any]:
     """对驾驶上下文应用规则，返回合并后的约束."""
     matched = [r for r in (rules or SAFETY_RULES) if r.condition(driving_context)]

@@ -1,7 +1,6 @@
 """统一 LLM/Embedding 配置加载器."""
 
 import os
-
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -76,7 +75,8 @@ class LLMProviderConfig:
     def from_dict(cls, d: dict) -> LLMProviderConfig:
         """从字典创建配置实例."""
         provider, extra = _build_provider_config_from_dict(
-            d, {"temperature": 0.7, "concurrency": 4}
+            d,
+            {"temperature": 0.7, "concurrency": 4},
         )
         return cls(provider=provider, **extra)
 
@@ -191,7 +191,7 @@ class LLMSettings:
         """解析 embedding_model 配置字符串，返回 EmbeddingProviderConfig."""
         if not self.embedding_model:
             return None
-        from app.models.model_string import resolve_model_string
+        from app.models.model_string import resolve_model_string  # noqa: PLC0415
 
         resolved = resolve_model_string(self.embedding_model)
         if resolved.provider_name not in self.model_providers:
@@ -274,7 +274,7 @@ def _build_provider_config_from_ref(
         ValueError: 提供商不存在或引用格式无效
 
     """
-    from app.models.model_string import resolve_model_string
+    from app.models.model_string import resolve_model_string  # noqa: PLC0415
 
     resolved = resolve_model_string(ref)
     if resolved.provider_name not in model_providers:
@@ -302,8 +302,8 @@ _settings_cache: LLMSettings | None = None
 
 def get_chat_model(temperature: float | None = None) -> ChatModel:
     """从配置创建 ChatModel 实例（使用缓存避免重复加载）."""
-    global _settings_cache
-    from app.models.chat import ChatModel
+    global _settings_cache  # noqa: PLW0603
+    from app.models.chat import ChatModel  # noqa: PLC0415
 
     if _settings_cache is None:
         _settings_cache = LLMSettings.load()
@@ -315,7 +315,7 @@ def get_chat_model(temperature: float | None = None) -> ChatModel:
 
 def get_embedding_model() -> EmbeddingModel:
     """从配置创建 EmbeddingModel 实例（使用缓存避免重复加载）."""
-    from app.models.embedding import get_cached_embedding_model
+    from app.models.embedding import get_cached_embedding_model  # noqa: PLC0415
 
     return get_cached_embedding_model()
 
@@ -340,8 +340,8 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
 
 def get_judge_model() -> ChatModel:
     """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
-    global _settings_cache
-    from app.models.chat import ChatModel
+    global _settings_cache  # noqa: PLW0603
+    from app.models.chat import ChatModel  # noqa: PLC0415
 
     if _settings_cache is None:
         _settings_cache = LLMSettings.load()

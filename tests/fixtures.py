@@ -2,16 +2,15 @@
 
 from contextlib import suppress
 
+import app.memory.singleton
+import app.models.settings
 from app.models.embedding import reset_embedding_singleton
 
 
 def reset_all_singletons() -> None:
     """重置所有全局单例状态以隔离测试."""
-    import app.models.settings
-    import app.api.main
-
     reset_embedding_singleton()
     with suppress(AttributeError):
         app.models.settings._settings_cache = None
     with suppress(AttributeError):
-        app.api.main._memory_module = None
+        app.memory.singleton._memory_module = None

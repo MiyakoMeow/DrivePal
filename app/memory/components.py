@@ -3,7 +3,7 @@
 import asyncio
 import math
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -74,7 +74,10 @@ class KeywordSearch:
     """关键词大小写不敏感搜索."""
 
     def search(
-        self, query: str, events: list[dict], top_k: int = 10
+        self,
+        query: str,
+        events: list[dict],
+        top_k: int = 10,
     ) -> list[SearchResult]:
         """关键词搜索事件."""
         query_lower = query.lower()
@@ -116,7 +119,9 @@ class FeedbackManager:
         await self._feedback_store.append(feedback.model_dump())
 
     async def _update_strategy(
-        self, event_type: str, action: Literal["accept", "ignore"]
+        self,
+        event_type: str,
+        action: Literal["accept", "ignore"],
     ) -> None:
         """更新策略权重."""
         strategies = await self._strategies_store.read()
@@ -126,11 +131,13 @@ class FeedbackManager:
 
         if action == "accept":
             strategies["reminder_weights"][event_type] = min(
-                strategies["reminder_weights"].get(event_type, 0.5) + 0.1, 1.0
+                strategies["reminder_weights"].get(event_type, 0.5) + 0.1,
+                1.0,
             )
         elif action == "ignore":
             strategies["reminder_weights"][event_type] = max(
-                strategies["reminder_weights"].get(event_type, 0.5) - 0.1, 0.1
+                strategies["reminder_weights"].get(event_type, 0.5) - 0.1,
+                0.1,
             )
 
         await self._strategies_store.write(strategies)
@@ -140,7 +147,7 @@ class FeedbackManager:
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(UTC).isoformat()
         if feedback.action is None:
-            raise ActionRequiredError()
+            raise ActionRequiredError
         lock = await self._get_lock()
         async with lock:
             await self._write_feedback(feedback)
@@ -155,7 +162,10 @@ class SimpleInteractionWriter:
         self._storage = storage
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
     ) -> str:
         """写入交互记录."""
         event = MemoryEvent(

@@ -1,7 +1,6 @@
 """MemoryStore 结构化接口定义（Protocol）."""
 
-from typing import Protocol, TYPE_CHECKING
-
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
@@ -32,7 +31,10 @@ class MemoryStore(Protocol):
         ...
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
     ) -> str:
         """写入交互记录."""
         ...

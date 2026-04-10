@@ -1,11 +1,9 @@
 """模型引用字符串解析和配置加载."""
 
 import os
-
 import tomllib
 from functools import lru_cache
 from pathlib import Path
-
 from typing import Any
 
 from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
@@ -18,7 +16,7 @@ class InvalidModelStringError(ValueError):
     def __init__(self, model_str: str) -> None:
         """初始化错误."""
         super().__init__(
-            f"Invalid model string format: {model_str}. Expected 'provider/model'"
+            f"Invalid model string format: {model_str}. Expected 'provider/model'",
         )
 
 
@@ -110,7 +108,7 @@ def get_model_group_providers(name: str) -> list[dict]:
                 "base_url": provider_config.get("base_url"),
                 "api_key": api_key,
                 "temperature": resolved.params.get("temperature", 0.7),
-            }
+            },
         )
     return result
 
@@ -145,5 +143,7 @@ def resolve_model_string(model_str: str) -> ResolvedModel:
 
     provider_name, model_name = model_str.split("/", 1)
     return ResolvedModel(
-        provider_name=provider_name, model_name=model_name, params=params
+        provider_name=provider_name,
+        model_name=model_name,
+        params=params,
     )

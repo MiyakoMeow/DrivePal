@@ -5,6 +5,8 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
+from vendor_adapter.VehicleMemBench.runner import prepare, report, run
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,20 +16,14 @@ def _add_common_args(parser: ArgumentParser, default_types: str) -> None:
 
 
 async def _do_prepare(file_range: str, memory_types: str) -> None:
-    from vendor_adapter.VehicleMemBench.runner import prepare
-
     await prepare(file_range, memory_types)
 
 
 async def _do_run(file_range: str, memory_types: str, reflect_num: int = 10) -> None:
-    from vendor_adapter.VehicleMemBench.runner import run
-
     await run(file_range, memory_types, reflect_num)
 
 
 def _do_report(output: Path | None = None) -> None:
-    from vendor_adapter.VehicleMemBench.runner import report
-
     report(output)
 
 
@@ -80,7 +76,7 @@ async def main() -> None:
             failed = True
         if failed and not args.allow_partial:
             sys.stdout.write(
-                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n"
+                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
             )
             return
         _do_report(args.output)

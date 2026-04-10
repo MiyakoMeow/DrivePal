@@ -9,20 +9,20 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+import strawberry
+import strawberry.fastapi
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-import strawberry
-import strawberry.fastapi
+from strawberry.scalars import JSON
+from strawberry.schema.config import StrawberryConfig
 
-from app.memory.memory import MemoryModule
+from app.config import DATA_DIR
 from app.storage.init_data import init_storage
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
-DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
 
 _default_webui = Path(__file__).parent.parent.parent / "webui"
 WEBUI_DIR = Path(os.getenv("WEBUI_DIR", _default_webui)).resolve()
@@ -31,7 +31,7 @@ if not WEBUI_DIR.exists():
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_storage(DATA_DIR)
     logger.info("Data directory initialized: %s", DATA_DIR)
     if not Path.exists(WEBUI_DIR):
@@ -50,34 +50,10 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
 
-def _ensure_memory_module() -> MemoryModule:
-    from app.models.settings import get_chat_model, get_embedding_model
-
-    return MemoryModule(
-        data_dir=DATA_DIR,
-        embedding_model=get_embedding_model(),
-        chat_model=get_chat_model(),
-    )
-
-
-_memory_module: MemoryModule | None = None
-
-
-def get_memory_module() -> MemoryModule:
-    """获取或初始化记忆模块单例."""
-    global _memory_module
-    if _memory_module is None:
-        _memory_module = _ensure_memory_module()
-    return _memory_module
-
-
 def _mount_graphql() -> None:
-    from strawberry.scalars import JSON
-    from strawberry.schema.config import StrawberryConfig
-
-    from app.api.graphql_schema import JSONScalar
-    from app.api.resolvers.mutation import Mutation as MutationImpl
-    from app.api.resolvers.query import Query as QueryImpl
+    from app.api.graphql_schema import JSONScalar  # noqa: PLC0415
+    from app.api.resolvers.mutation import Mutation as MutationImpl  # noqa: PLC0415
+    from app.api.resolvers.query import Query as QueryImpl  # noqa: PLC0415
 
     schema = strawberry.Schema(
         query=QueryImpl,

@@ -1,10 +1,9 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
+import asyncio
 from typing import TYPE_CHECKING, TypeVar
 
 import openai
-
-import asyncio
 
 from app.models.settings import LLMProviderConfig, LLMSettings
 
@@ -40,10 +39,11 @@ class AllProviderFailedError(ChatError):
 
 
 async def _get_provider_semaphore(
-    provider_name: str, concurrency: int
+    provider_name: str,
+    concurrency: int,
 ) -> asyncio.Semaphore:
     """获取或创建 provider 级别的 semaphore."""
-    global _provider_semaphore_lock
+    global _provider_semaphore_lock  # noqa: PLW0603
     if _provider_semaphore_lock is None:
         _provider_semaphore_lock = asyncio.Lock()
 
@@ -55,6 +55,7 @@ async def _get_provider_semaphore(
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable
+
     from openai.types.chat import ChatCompletionMessageParam
 
 _T = TypeVar("_T")
@@ -73,7 +74,7 @@ class ChatModel:
             settings = LLMSettings.load()
             providers = settings.llm_providers
         if not providers:
-            raise NoProviderError()
+            raise NoProviderError
         self.providers = providers
         self.temperature = temperature
 
@@ -122,7 +123,9 @@ class ChatModel:
         return await _get_provider_semaphore(provider_key, provider.concurrency)
 
     async def _run_with_semaphore(
-        self, provider: LLMProviderConfig, coro: Awaitable[_T]
+        self,
+        provider: LLMProviderConfig,
+        coro: Awaitable[_T],
     ) -> _T:
         """使用 provider semaphore 执行协程."""
         sem = await self._acquire_slot(provider)

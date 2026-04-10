@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import date, datetime, UTC
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -38,7 +38,10 @@ class SummaryManager:
         return self._summaries_store
 
     async def search_summaries(
-        self, query: str, daily_summaries: dict, top_k: int = 1
+        self,
+        query: str,
+        daily_summaries: dict,
+        top_k: int = 1,
     ) -> list[SearchResult]:
         """搜索日常摘要并强化匹配结果."""
         if not daily_summaries:
@@ -73,7 +76,7 @@ class SummaryManager:
                         },
                         score=score,
                         source="daily_summary",
-                    )
+                    ),
                 )
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
@@ -100,8 +103,11 @@ class SummaryManager:
                 summaries["daily_summaries"] = current_daily
                 await self._summaries_store.write(summaries)
 
-    async def maybe_summarize(
-        self, date_group: str, events: list[dict], chat_model: ChatModel | None
+    async def maybe_summarize(  # noqa: C901
+        self,
+        date_group: str,
+        events: list[dict],
+        chat_model: ChatModel | None,
     ) -> None:
         """事件数量达到阈值时生成日常摘要.
 
@@ -174,7 +180,7 @@ class SummaryManager:
         for date_group, summary_data in daily_summaries.items():
             if isinstance(summary_data, dict):
                 all_summaries.append(
-                    f"[{date_group}] {summary_data.get('content', '')}"
+                    f"[{date_group}] {summary_data.get('content', '')}",
                 )
             else:
                 all_summaries.append(f"[{date_group}] {summary_data}")

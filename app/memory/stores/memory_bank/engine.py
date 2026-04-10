@@ -2,7 +2,7 @@
 
 import asyncio
 import uuid
-from datetime import date, datetime, UTC
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,8 +14,8 @@ from app.memory.utils import cosine_similarity
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
-    from app.models.embedding import EmbeddingModel
     from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
 
 class EmbeddingModelRequiredError(RuntimeError):
@@ -27,6 +27,7 @@ class EmbeddingModelRequiredError(RuntimeError):
 
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
+OVERLAP_RATIO_THRESHOLD = 0.5
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
@@ -102,7 +103,9 @@ class MemoryBankEngine:
             if not event_results:
                 event_results = await self._search_by_keyword(query, events, top_k)
         summary_results = await self._summary_mgr.search_summaries(
-            query, daily_summaries, top_k=1
+            query,
+            daily_summaries,
+            top_k=1,
         )
         personality_results = await self._personality_mgr.search(query, top_k=1)
         all_results = event_results + summary_results + personality_results
@@ -119,14 +122,14 @@ class MemoryBankEngine:
                 r.event["date_group"]
                 for r in top_results
                 if r.source == "daily_summary" and "date_group" in r.event
-            }
+            },
         )
         personality_keys: list[str] = list(
             {
                 r.event["date_group"]
                 for r in top_results
                 if r.source == "personality" and "date_group" in r.event
-            }
+            },
         )
 
         if event_ids:
@@ -143,7 +146,10 @@ class MemoryBankEngine:
         return "\n".join(p for p in parts if p)
 
     async def _search_by_keyword(
-        self, query: str, events: list[dict], top_k: int
+        self,
+        query: str,
+        events: list[dict],
+        top_k: int,
     ) -> list[SearchResult]:
         query_lower = query.lower()
         today = datetime.now(UTC).date()
@@ -163,22 +169,35 @@ class MemoryBankEngine:
             if retention <= 0:
                 continue
             results.append(
-                SearchResult(event=dict(event), score=retention, source="event")
+                SearchResult(event=dict(event), score=retention, source="event"),
             )
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
 
     async def _search_by_embedding(
-        self, query: str, events: list[dict], top_k: int
+        self,
+        query: str,
+        events: list[dict],
+        top_k: int,
     ) -> list[SearchResult]:
         if self.embedding_model is None:
-            raise EmbeddingModelRequiredError()
+            raise EmbeddingModelRequiredError
         query_vector = await self.embedding_model.encode(query)
-        event_texts = [self._get_searchable_text(event) for event in events]
-        all_event_vectors = await self.embedding_model.batch_encode(event_texts)
+        event_text_pairs = [
+            (event, text)
+            for event in events
+            if (text := self._get_searchable_text(event)).strip()
+        ]
+        if not event_text_pairs:
+            return []
+        all_event_vectors = await self.embedding_model.batch_encode(
+            [text for _, text in event_text_pairs]
+        )
         today = datetime.now(UTC).date()
         results = []
-        for event, event_vector in zip(events, all_event_vectors):
+        for (event, _text), event_vector in zip(
+            event_text_pairs, all_event_vectors, strict=True
+        ):
             similarity = cosine_similarity(query_vector, event_vector)
             strength = event.get("memory_strength", 1)
             last_recall = event.get("last_recall_date", today.isoformat())
@@ -191,13 +210,14 @@ class MemoryBankEngine:
             score = similarity * retention
             if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
                 results.append(
-                    SearchResult(event=dict(event), score=score, source="event")
+                    SearchResult(event=dict(event), score=score, source="event"),
                 )
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
 
     async def _expand_event_interactions(
-        self, results: list[SearchResult]
+        self,
+        results: list[SearchResult],
     ) -> list[SearchResult]:
         interactions = await self._interactions_store.read()
         interaction_by_event: dict[str, list[dict]] = {}
@@ -252,7 +272,10 @@ class MemoryBankEngine:
                 await self._interactions_store.write(all_interactions)
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
     ) -> str:
         """写入交互记录并关联事件."""
         interaction_id = (
@@ -311,7 +334,10 @@ class MemoryBankEngine:
         await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
         interactions = await self._interactions_store.read()
         await self._personality_mgr.maybe_summarize(
-            today, events, interactions, self.chat_model
+            today,
+            events,
+            interactions,
+            self.chat_model,
         )
         return interaction_id
 
@@ -327,16 +353,16 @@ class MemoryBankEngine:
             query_vec = await self.embedding_model.encode(interaction["query"])
             event_vec = await self.embedding_model.encode(recent.get("content", ""))
             similarity = cosine_similarity(query_vec, event_vec)
-            if similarity >= AGGREGATION_SIMILARITY_THRESHOLD:
-                return recent["id"]
-            return None
+            return (
+                recent["id"] if similarity >= AGGREGATION_SIMILARITY_THRESHOLD else None
+            )
         content_lower = recent.get("content", "").lower()
         query_lower = interaction["query"].lower()
         query_chars = list(set(query_lower))
         if not query_chars:
             return None
         overlap = sum(1 for c in query_chars if c in content_lower)
-        if overlap / len(query_chars) >= 0.5:
+        if overlap / len(query_chars) >= OVERLAP_RATIO_THRESHOLD:
             return recent["id"]
         return None
 

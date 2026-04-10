@@ -54,23 +54,24 @@ def setup_vehiclemembench_path() -> None:
 
 setup_vehiclemembench_path()
 
+from evaluation.agent_client import AgentClient
 from evaluation.model_evaluation import (
-    parse_answer_to_tools,
-    get_list_module_tools_schema,
-    split_history_by_day,
-    build_memory_key_value,
-    process_task_direct,
-    process_task_with_kv_memory,
-    _build_metric,
-    _run_vehicle_task_evaluation,
     MemoryStore as VMBMemoryStore,
 )
-from evaluation.agent_client import AgentClient
-
+from evaluation.model_evaluation import (
+    _build_metric,
+    _run_vehicle_task_evaluation,
+    build_memory_key_value,
+    get_list_module_tools_schema,
+    parse_answer_to_tools,
+    process_task_direct,
+    process_task_with_kv_memory,
+    split_history_by_day,
+)
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 _PREP_FREE_TYPES: frozenset[BenchMemoryMode] = frozenset(
-    {BenchMemoryMode.NONE, BenchMemoryMode.GOLD}
+    {BenchMemoryMode.NONE, BenchMemoryMode.GOLD},
 )
 
 
@@ -136,8 +137,8 @@ def _parse_memory_types(memory_types: str) -> list[BenchMemoryMode]:
 def parse_file_range(range_str: str) -> list[int]:
     """将形如 '1-5' 或 '1,3,5' 的文件范围字符串解析为整数列表."""
     result = []
-    for part in range_str.split(","):
-        part = part.strip()
+    for raw_part in range_str.split(","):
+        part = raw_part.strip()
         if "-" in part:
             a, b = part.split("-", 1)
             a, b = int(a), int(b)
@@ -187,13 +188,15 @@ def prep_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
 
 
 def query_result_path(
-    memory_type: BenchMemoryMode, file_num: int, event_index: int
+    memory_type: BenchMemoryMode,
+    file_num: int,
+    event_index: int,
 ) -> Path:
     """返回指定记忆类型、文件编号和事件索引的查询结果路径."""
     return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"
 
 
-async def prepare(
+async def prepare(  # noqa: C901, PLR0915
     file_range: str = "1-50",
     memory_types: str = "none,gold,kv,memory_bank",
 ) -> None:
@@ -254,7 +257,10 @@ async def prepare(
             else:
                 async with semaphore:
                     result = await _prepare_single(
-                        agent_client, history_text, fnum, mtype
+                        agent_client,
+                        history_text,
+                        fnum,
+                        mtype,
                     )
             if result is not None:
                 fdir.mkdir(parents=True, exist_ok=True)
@@ -276,20 +282,22 @@ async def prepare(
 async def _prepare_single(
     agent_client: AgentClient,
     history_text: str,
-    file_num: int,
+    _file_num: int,
     memory_type: BenchMemoryMode,
 ) -> dict | None:
     if memory_type == BenchMemoryMode.KV:
         daily = split_history_by_day(history_text)
         store, _, _ = await asyncio.to_thread(
-            build_memory_key_value, agent_client, daily
+            build_memory_key_value,
+            agent_client,
+            daily,
         )
         return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
     logger.warning("[warn] unknown memory_type: %s", memory_type)
     return None
 
 
-async def run(
+async def run(  # noqa: C901
     file_range: str = "1-50",
     memory_types: str = "none,gold,kv,memory_bank",
     reflect_num: int = 10,
@@ -312,7 +320,8 @@ async def run(
     qa_cache = dict(qa_pairs)
 
     async def _load_prep(
-        fnum: int, mtype: BenchMemoryMode
+        fnum: int,
+        mtype: BenchMemoryMode,
     ) -> tuple[BenchMemoryMode, int, dict | None]:
         if mtype in _PREP_FREE_TYPES:
             return mtype, fnum, {"type": mtype}
@@ -324,12 +333,14 @@ async def run(
             return mtype, fnum, None
         except json.JSONDecodeError:
             logger.warning(
-                "[warn] corrupt prep file for %s file %d, skipping", mtype, fnum
+                "[warn] corrupt prep file for %s file %d, skipping",
+                mtype,
+                fnum,
             )
             return mtype, fnum, None
 
     prep_raw = await asyncio.gather(
-        *(_load_prep(f, t) for f in file_nums for t in types)
+        *(_load_prep(f, t) for f in file_nums for t in types),
     )
     prep_cache: dict[tuple[BenchMemoryMode, int], dict | None] = {
         (mt, fn): data for mt, fn, data in prep_raw
@@ -373,7 +384,7 @@ async def run(
         logger.info("[run] done with %d file-level failures", failed)
 
 
-async def _run_single(
+async def _run_single(  # noqa: PLR0913
     agent_client: AgentClient,
     events: list[dict],
     prep_data: dict,
@@ -443,7 +454,8 @@ async def _run_single(
                     await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
             except OSError:
                 logger.exception(
-                    "  [error] failed to write error record for query %d", idx
+                    "  [error] failed to write error record for query %d",
+                    idx,
                 )
 
     gather_results = await asyncio.gather(
@@ -456,7 +468,8 @@ async def _run_single(
 
 
 async def _build_search_client(
-    prep_data: dict, memory_type: BenchMemoryMode
+    prep_data: dict,
+    memory_type: BenchMemoryMode,
 ) -> StoreClient | None:
     """为自定义适配器预构建搜索客户端（按 file+type 复用）."""
     if memory_type not in ADAPTERS:
@@ -536,7 +549,8 @@ def _make_sync_memory_search(
         future: Future | None = None
         try:
             future = asyncio.run_coroutine_threadsafe(
-                search_client.search(query=query, top_k=top_k), loop
+                search_client.search(query=query, top_k=top_k),
+                loop,
             )
             results = future.result(timeout=_SEARCH_TIMEOUT)
         except TimeoutError:
@@ -564,7 +578,7 @@ def _make_sync_memory_search(
     return _search
 
 
-async def _run_custom_adapter_with_client(
+async def _run_custom_adapter_with_client(  # noqa: PLR0913
     agent_client: AgentClient,
     task: dict,
     task_id: int,
@@ -594,7 +608,7 @@ async def _run_custom_adapter_with_client(
     )
 
 
-def report(output_path: Path | None = None) -> None:
+def report(output_path: Path | None = None) -> None:  # noqa: C901, PLR0912
     """从结果生成并打印基准测试报告."""
     output_dir = _ensure_output_dir()
     all_results: dict[BenchMemoryMode, list[dict]] = {}
@@ -632,12 +646,10 @@ def report(output_path: Path | None = None) -> None:
 
     if BenchMemoryMode.GOLD in report_data:
         gold_esm = report_data[BenchMemoryMode.GOLD].get("exact_match_rate", 0)
-        for mtype in report_data:
+        for mtype, metric in report_data.items():
             if mtype != BenchMemoryMode.GOLD:
-                auto_esm = report_data[mtype].get("exact_match_rate", 0)
-                report_data[mtype]["memory_score"] = (
-                    auto_esm / gold_esm if gold_esm > 0 else 0.0
-                )
+                auto_esm = metric.get("exact_match_rate", 0)
+                metric["memory_score"] = auto_esm / gold_esm if gold_esm > 0 else 0.0
 
     out = output_path if output_path is not None else output_dir / "report.json"
     out.parent.mkdir(parents=True, exist_ok=True)
