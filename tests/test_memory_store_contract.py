@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,9 +31,6 @@ class TestMemoryStoreContract:
         llm_provider: LLMProviderConfig | None,
     ) -> MemoryStore:
         """提供参数化的 MemoryStore 实例."""
-        from app.memory.memory import MemoryModule
-        from app.memory.types import MemoryMode
-
         mm = MemoryModule(tmp_path)
         return await mm._get_store(MemoryMode(request.param))
 

@@ -15,6 +15,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from strawberry.scalars import JSON
+from strawberry.schema.config import StrawberryConfig
 
 from app.memory.memory import MemoryModule
 from app.storage.init_data import init_storage
@@ -51,7 +53,7 @@ app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
 
 def _ensure_memory_module() -> MemoryModule:
-    from app.models.settings import get_chat_model, get_embedding_model
+    from app.models.settings import get_chat_model, get_embedding_model  # noqa: PLC0415
 
     return MemoryModule(
         data_dir=DATA_DIR,
@@ -72,12 +74,9 @@ def get_memory_module() -> MemoryModule:
 
 
 def _mount_graphql() -> None:
-    from strawberry.scalars import JSON
-    from strawberry.schema.config import StrawberryConfig
-
-    from app.api.graphql_schema import JSONScalar
-    from app.api.resolvers.mutation import Mutation as MutationImpl
-    from app.api.resolvers.query import Query as QueryImpl
+    from app.api.graphql_schema import JSONScalar  # noqa: PLC0415
+    from app.api.resolvers.mutation import Mutation as MutationImpl  # noqa: PLC0415
+    from app.api.resolvers.query import Query as QueryImpl  # noqa: PLC0415
 
     schema = strawberry.Schema(
         query=QueryImpl,

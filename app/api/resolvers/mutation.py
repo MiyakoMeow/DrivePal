@@ -7,6 +7,7 @@ from typing import Any, Literal, cast
 import strawberry
 from graphql.error import GraphQLError
 
+from app.agents.workflow import AgentWorkflow
 from app.api.graphql_schema import (
     DriverStateGQL,
     DrivingContextGQL,
@@ -51,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 
 def _preset_store() -> TOMLStore:
-    from app.api.main import DATA_DIR
+    from app.api.main import DATA_DIR  # noqa: PLC0415
 
     return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
 
@@ -172,8 +173,7 @@ class Mutation:
     @strawberry.mutation
     async def process_query(self, input: ProcessQueryInput) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
-        from app.agents.workflow import AgentWorkflow
-        from app.api.main import DATA_DIR, get_memory_module
+        from app.api.main import DATA_DIR, get_memory_module  # noqa: PLC0415
 
         try:
             mm = get_memory_module()
@@ -213,7 +213,7 @@ class Mutation:
         """提交用户反馈."""
         if input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(input.action)
-        from app.api.main import get_memory_module
+        from app.api.main import get_memory_module  # noqa: PLC0415
 
         try:
             mm = get_memory_module()

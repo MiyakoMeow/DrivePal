@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 import openai
+import torch
 
 from app.models.settings import EmbeddingProviderConfig, LLMSettings, ProviderConfig
 
@@ -13,15 +14,10 @@ _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
 
 
 def _auto_detect_device() -> str:
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            return "cuda"
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return "mps"
-    except ImportError:
-        pass
+    if torch.cuda.is_available():
+        return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
     return "cpu"
 
 
@@ -84,7 +80,7 @@ class EmbeddingModel:
             kwargs: dict = {"api_key": provider.provider.api_key or "not-needed"}
             kwargs["base_url"] = provider.provider.base_url
             return openai.AsyncOpenAI(**kwargs)
-        from sentence_transformers import SentenceTransformer
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
 
         return SentenceTransformer(
             provider.provider.model,

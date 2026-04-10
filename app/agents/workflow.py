@@ -12,6 +12,7 @@ from app.agents.rules import apply_rules, format_constraints
 from app.agents.state import AgentState, WorkflowStages
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
+from app.models.settings import get_chat_model
 from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,6 @@ class AgentWorkflow:
         if memory_module is not None:
             self.memory_module = memory_module
         else:
-            from app.models.settings import get_chat_model
-
             chat_model = get_chat_model()
             self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
 

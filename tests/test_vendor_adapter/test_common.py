@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from vendor_adapter.VehicleMemBench.memory_adapters.common import (
     StoreClient,
     format_search_results,
@@ -36,8 +37,6 @@ def test_format_search_results_empty() -> None:
 
 def test_format_search_results_with_events() -> None:
     """测试格式化带事件搜索结果."""
-    from app.memory.schemas import SearchResult
-
     results = [
         SearchResult(
             event={"content": "Gary prefers seat heating level 3", "id": "1"},
@@ -57,7 +56,6 @@ def test_format_search_results_with_events() -> None:
 @pytest.mark.asyncio
 async def test_store_client_delegates_to_store() -> None:
     """测试 StoreClient 将搜索委托给 store."""
-    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 
     class FakeStore:
         store_name = "fake"

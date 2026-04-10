@@ -1,8 +1,10 @@
 """app.memory.components 可组合组件测试."""
 
+import asyncio
 import math
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -19,6 +21,11 @@ from app.memory.stores.memory_bank.engine import (
     SOFT_FORGET_THRESHOLD,
     MemoryBankEngine,
 )
+from app.memory.stores.memory_bank.personality import (
+    PERSONALITY_SUMMARY_THRESHOLD,
+    PersonalityManager,
+)
+from app.storage.toml_store import TOMLStore
 
 
 class TestForgettingCurve:
@@ -164,8 +171,6 @@ class TestFeedbackManager:
         tmp_path: Path,
     ) -> None:
         """验证接受反馈增加策略权重."""
-        from app.storage.toml_store import TOMLStore
-
         await manager.update_feedback(
             "eid1",
             FeedbackData(action="accept", type="meeting"),
@@ -179,8 +184,6 @@ class TestFeedbackManager:
         tmp_path: Path,
     ) -> None:
         """验证忽略反馈降低策略权重."""
-        from app.storage.toml_store import TOMLStore
-
         await manager.update_feedback(
             "eid2",
             FeedbackData(action="ignore", type="general"),
@@ -194,8 +197,6 @@ class TestFeedbackManager:
         tmp_path: Path,
     ) -> None:
         """验证接受权重上限为 1.0."""
-        from app.storage.toml_store import TOMLStore
-
         for _ in range(20):
             await manager.update_feedback(
                 "eid",
@@ -210,8 +211,6 @@ class TestFeedbackManager:
         tmp_path: Path,
     ) -> None:
         """验证忽略权重下限为 0.1."""
-        from app.storage.toml_store import TOMLStore
-
         for _ in range(20):
             await manager.update_feedback(
                 "eid",
@@ -226,8 +225,6 @@ class TestFeedbackManager:
         tmp_path: Path,
     ) -> None:
         """验证每条反馈记录都追加到历史记录中."""
-        from app.storage.toml_store import TOMLStore
-
         await manager.update_feedback(
             "eid1",
             FeedbackData(action="accept", type="meeting"),
@@ -471,13 +468,6 @@ class TestPersonalitySummary:
 
     async def test_personality_immutability_no_regen(self, tmp_path: Path) -> None:
         """验证已有人格摘要不会被重新生成（不可变语义）."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from app.memory.stores.memory_bank.personality import (
-            PERSONALITY_SUMMARY_THRESHOLD,
-            PersonalityManager,
-        )
-
         chat_model = MagicMock()
         chat_model.generate = AsyncMock(return_value="初始人格摘要")
         mgr = PersonalityManager(tmp_path)
@@ -506,13 +496,6 @@ class TestPersonalitySummary:
 
     async def test_personality_concurrent_inflight_dedup(self, tmp_path: Path) -> None:
         """验证并发调用同一 date_group 时仅生成一次人格摘要."""
-        import asyncio
-        from unittest.mock import AsyncMock, MagicMock
-
-        from app.memory.stores.memory_bank.personality import (
-            PERSONALITY_SUMMARY_THRESHOLD,
-            PersonalityManager,
-        )
 
         async def slow_generate(prompt: str) -> str:
             await asyncio.sleep(0.1)

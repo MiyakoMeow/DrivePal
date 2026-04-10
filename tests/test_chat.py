@@ -1,19 +1,25 @@
 """聊天模型集成测试."""
 
+import asyncio
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.agents.state import AgentState, WorkflowStages
+from app.agents.workflow import AgentWorkflow
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
-from app.models.chat import ChatModel
+from app.models.chat import (
+    ChatModel,
+    _get_provider_semaphore,
+    _provider_semaphore_cache,
+)
+from app.models.settings import LLMProviderConfig, ProviderConfig
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from app.agents.state import AgentState
-    from app.models.settings import LLMProviderConfig
 
 
 @pytest.mark.integration
@@ -40,7 +46,6 @@ async def test_chat_feeds_workflow_context(
     """验证记忆上下文被注入到代理工作流状态中."""
     if llm_provider is None:
         pytest.skip("No LLM provider available")
-    from app.agents.workflow import AgentWorkflow
 
     memory = MemoryModule(tmp_path, chat_model=ChatModel(providers=[llm_provider]))
     await memory.write(MemoryEvent(content="下午三点开会", type="meeting"))
@@ -68,8 +73,6 @@ async def test_run_with_stages_returns_stages_object(
     """验证 run_with_stages 返回包含各阶段输出的 WorkflowStages 对象."""
     if llm_provider is None:
         pytest.skip("No LLM provider available")
-    from app.agents.state import WorkflowStages
-    from app.agents.workflow import AgentWorkflow
 
     chat_model = ChatModel(providers=[llm_provider])
     memory = MemoryModule(tmp_path, chat_model=chat_model)
@@ -98,7 +101,6 @@ async def test_run_with_stages_highway_scenario(
     """验证高速公路场景下规则引擎约束生效."""
     if llm_provider is None:
         pytest.skip("No LLM provider available")
-    from app.agents.workflow import AgentWorkflow
 
     chat_model = ChatModel(providers=[llm_provider])
     memory = MemoryModule(tmp_path, chat_model=chat_model)
@@ -120,12 +122,6 @@ class TestProviderConcurrency:
 
     async def test_concurrent_requests_respected(self) -> None:
         """验证并发请求受 provider semaphore 限制."""
-        import asyncio
-        from unittest.mock import MagicMock, patch
-
-        from app.models.chat import ChatModel, _provider_semaphore_cache
-        from app.models.settings import LLMProviderConfig, ProviderConfig
-
         _provider_semaphore_cache.clear()
         providers = [
             LLMProviderConfig(
@@ -166,13 +162,6 @@ class TestProviderConcurrency:
 
     async def test_different_providers_have_independent_semaphores(self) -> None:
         """验证不同 provider 的 semaphore 独立."""
-        from app.models.chat import (
-            ChatModel,
-            _get_provider_semaphore,
-            _provider_semaphore_cache,
-        )
-        from app.models.settings import LLMProviderConfig, ProviderConfig
-
         _provider_semaphore_cache.clear()
         providers = [
             LLMProviderConfig(

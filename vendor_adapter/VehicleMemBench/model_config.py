@@ -11,6 +11,8 @@ from app.models.model_string import get_model_group_providers
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+else:
+    from app.models.settings import get_chat_model, get_embedding_model
 
 
 class BenchmarkConfigError(ValueError):
@@ -62,13 +64,9 @@ def get_benchmark_client() -> OpenAI:
 
 def get_store_chat_model() -> ChatModel:
     """获取用于记忆存储操作的聊天模型."""
-    from app.models.settings import get_chat_model
-
     return get_chat_model()
 
 
 def get_store_embedding_model() -> EmbeddingModel:
     """获取用于记忆存储操作的嵌入模型."""
-    from app.models.settings import get_embedding_model
-
     return get_embedding_model()

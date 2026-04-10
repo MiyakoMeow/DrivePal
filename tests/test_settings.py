@@ -6,8 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import tomli_w
 
+from app.models.chat import ChatModel
+from app.models.embedding import EmbeddingModel
+from app.models.model_string import _load_config
 from app.models.settings import (
     EmbeddingProviderConfig,
+    JudgeProviderConfig,
     LLMProviderConfig,
     LLMSettings,
     ProviderConfig,
@@ -150,8 +154,6 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "llm.toml"
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from app.models.model_string import _load_config
-
         _load_config.cache_clear()
         settings = LLMSettings.load()
         provider = settings.get_embedding_provider()
@@ -181,8 +183,6 @@ class TestLLMSettingsLoad:
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        from app.models.model_string import _load_config
-
         _load_config.cache_clear()
         settings = LLMSettings.load()
         provider = settings.get_embedding_provider()
@@ -208,8 +208,6 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "llm.toml"
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from app.models.model_string import _load_config
-
         _load_config.cache_clear()
         settings = LLMSettings.load()
         provider = settings.get_embedding_provider()
@@ -232,8 +230,6 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "llm.toml"
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from app.models.model_string import _load_config
-
         _load_config.cache_clear()
         settings = LLMSettings.load()
         assert settings.get_embedding_provider() is None
@@ -263,8 +259,6 @@ class TestLLMSettingsLoad:
             ),
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from app.models.model_string import _load_config
-
         _load_config.cache_clear()
         settings = LLMSettings.load()
         assert "default" in settings.model_groups
@@ -295,8 +289,6 @@ class TestLLMSettingsLoad:
         config_file.parent.mkdir(parents=True)
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        from app.models.model_string import _load_config
-
         _load_config.cache_clear()
         settings = LLMSettings.load()
         providers = settings.get_model_group_providers("default")
@@ -309,8 +301,6 @@ class TestChatModelFallback:
 
     async def test_generate_with_single_provider(self) -> None:
         """验证单个提供者成功生成."""
-        from app.models.chat import ChatModel
-
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(
@@ -333,8 +323,6 @@ class TestChatModelFallback:
 
     async def test_generate_falls_back_on_error(self) -> None:
         """验证第一个失败时回退到下一个提供者."""
-        from app.models.chat import ChatModel
-
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(
@@ -377,8 +365,6 @@ class TestChatModelFallback:
 
     async def test_generate_all_providers_fail_raises(self) -> None:
         """验证所有提供者失败时抛出 RuntimeError."""
-        from app.models.chat import ChatModel
-
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(
@@ -413,8 +399,6 @@ class TestEmbeddingModelFallback:
 
     def test_local_provider_creates_sentence_transformer(self) -> None:
         """验证本地提供者使用 SentenceTransformer."""
-        from app.models.embedding import EmbeddingModel
-
         provider = EmbeddingProviderConfig(
             provider=ProviderConfig(model="fake-model"),
             device="cpu",
@@ -430,8 +414,6 @@ class TestEmbeddingModelFallback:
 
     def test_remote_provider_creates_async_openai(self) -> None:
         """验证远程提供者使用 openai.AsyncOpenAI."""
-        from app.models.embedding import EmbeddingModel
-
         provider = EmbeddingProviderConfig(
             provider=ProviderConfig(
                 model="text-embedding-3-small",
@@ -447,8 +429,6 @@ class TestEmbeddingModelFallback:
 
     async def test_encode_uses_client(self) -> None:
         """验证 encode 委托给缓存的客户端."""
-        from app.models.embedding import EmbeddingModel
-
         provider = EmbeddingProviderConfig(
             provider=ProviderConfig(model="fake-model"),
             device="cpu",
@@ -465,8 +445,6 @@ class TestEmbeddingModelFallback:
 
 def test_judge_provider_config_from_dict() -> None:
     """测试 JudgeProviderConfig.from_dict 创建正确的配置."""
-    from app.models.settings import JudgeProviderConfig
-
     d = {
         "model": "deepseek-chat",
         "base_url": "https://api.deepseek.com/v1",
@@ -482,8 +460,6 @@ def test_judge_provider_config_from_dict() -> None:
 
 def test_judge_provider_config_defaults() -> None:
     """测试 JudgeProviderConfig 默认值被正确应用."""
-    from app.models.settings import JudgeProviderConfig
-
     cfg = JudgeProviderConfig.from_dict({"model": "test"})
     assert cfg.provider.base_url is None
     assert cfg.provider.api_key is None
@@ -495,8 +471,6 @@ def test_llm_settings_loads_judge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """测试 LLMSettings 从配置加载 judge 提供者."""
-    from app.models.settings import LLMSettings
-
     config = {
         "model_groups": {
             "default": {"models": ["local/qwen"]},

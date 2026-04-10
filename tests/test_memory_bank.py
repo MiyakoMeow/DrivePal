@@ -1,5 +1,6 @@
 """记忆库后端和集成测试."""
 
+import asyncio
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -172,7 +173,6 @@ class TestHierarchicalSummarization:
         mock_chat_model: MagicMock,
     ) -> None:
         """验证并发调用同一 date_group 时仅生成一次摘要."""
-        import asyncio
 
         async def slow_generate(prompt: str) -> str:
             await asyncio.sleep(0.1)

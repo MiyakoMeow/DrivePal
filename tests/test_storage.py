@@ -5,6 +5,7 @@ from pathlib import Path
 from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent
 from app.storage.init_data import init_storage
+from app.storage.toml_store import TOMLStore
 
 
 async def test_events_persist_across_instances(tmp_path: Path) -> None:
@@ -20,8 +21,6 @@ async def test_events_persist_across_instances(tmp_path: Path) -> None:
 
 async def test_feedback_updates_strategies(tmp_path: Path) -> None:
     """验证接受反馈会增加对应策略权重."""
-    from app.storage.toml_store import TOMLStore
-
     memory = MemoryModule(tmp_path)
     event_id = await memory.write(MemoryEvent(content="团队周会", type="meeting"))
     await memory.update_feedback(
@@ -34,8 +33,6 @@ async def test_feedback_updates_strategies(tmp_path: Path) -> None:
 
 async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
     """验证忽略反馈会降低对应策略权重."""
-    from app.storage.toml_store import TOMLStore
-
     memory = MemoryModule(tmp_path)
     event_id = await memory.write(MemoryEvent(content="无关提醒", type="general"))
     await memory.update_feedback(
@@ -48,8 +45,6 @@ async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
 
 async def test_feedback_history_appended(tmp_path: Path) -> None:
     """验证每条反馈记录都追加到反馈历史."""
-    from app.storage.toml_store import TOMLStore
-
     memory = MemoryModule(tmp_path)
     eid1 = await memory.write(MemoryEvent(content="会议A", type="meeting"))
     eid2 = await memory.write(MemoryEvent(content="会议B", type="meeting"))

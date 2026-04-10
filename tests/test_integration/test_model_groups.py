@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 import pytest
 import tomli_w
 
+from app.models.model_string import _load_config, get_model_group_providers
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -26,8 +28,6 @@ def test_model_groups_basic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
-
-    from app.models.model_string import _load_config, get_model_group_providers
 
     _load_config.cache_clear()
 
@@ -58,8 +58,6 @@ def test_model_groups_with_query_params(
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
     monkeypatch.setenv("ZHIPU_API_KEY", "sk-test")
 
-    from app.models.model_string import _load_config, get_model_group_providers
-
     _load_config.cache_clear()
 
     providers = get_model_group_providers("fast")
@@ -77,8 +75,6 @@ def test_model_groups_not_found(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-
-    from app.models.model_string import _load_config, get_model_group_providers
 
     _load_config.cache_clear()
 
@@ -99,8 +95,6 @@ def test_empty_model_group_returns_empty_list(
     config_file = tmp_path / "llm.toml"
     config_file.write_bytes(tomli_w.dumps(config).encode())
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
-
-    from app.models.model_string import _load_config, get_model_group_providers
 
     _load_config.cache_clear()
 

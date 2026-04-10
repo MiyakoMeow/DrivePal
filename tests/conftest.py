@@ -4,12 +4,17 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
+import requests
+
+from app.models.embedding import (
+    EmbeddingModel,
+    get_cached_embedding_model,
+    reset_embedding_singleton,
+)
+from app.models.settings import LLMProviderConfig, LLMSettings
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-
-from app.models.embedding import EmbeddingModel, get_cached_embedding_model
-from app.models.settings import LLMProviderConfig, LLMSettings
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -50,11 +55,6 @@ def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
     """检查 provider 是否可达（发起真实 HTTP 请求）."""
     if not provider.provider.base_url:
         return True
-    try:
-        import requests
-    except ImportError:
-        return False
-
     try:
         base = provider.provider.base_url.rstrip("/")
         resp = requests.get(
@@ -108,8 +108,6 @@ def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProvider
 @pytest.fixture(scope="session")
 def embedding() -> Generator[EmbeddingModel]:
     """会话级 embedding 实例，每个 pytest-xdist worker 独立."""
-    from app.models.embedding import reset_embedding_singleton
-
     reset_embedding_singleton()
     yield get_cached_embedding_model()
     reset_embedding_singleton()

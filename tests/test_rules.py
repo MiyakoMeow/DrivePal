@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 def test_rule_dataclass() -> None:
+    """验证 Rule 数据类."""
     r = Rule(
         name="test",
         condition=lambda ctx: True,
@@ -20,6 +21,7 @@ def test_rule_dataclass() -> None:
 
 
 def test_no_matching_rules() -> None:
+    """验证无匹配规则时返回默认约束."""
     ctx: dict[str, Any] = {
         "scenario": "city_driving",
         "driver": {"fatigue_level": 0.1, "workload": "low"},
@@ -31,6 +33,7 @@ def test_no_matching_rules() -> None:
 
 
 def test_highway_rule() -> None:
+    """验证高速场景规则."""
     ctx: dict[str, Any] = {
         "scenario": "highway",
         "driver": {"fatigue_level": 0.1, "workload": "low"},
@@ -41,6 +44,7 @@ def test_highway_rule() -> None:
 
 
 def test_fatigue_rule() -> None:
+    """验证疲劳规则."""
     ctx: dict[str, Any] = {
         "scenario": "city_driving",
         "driver": {"fatigue_level": 0.8, "workload": "normal"},
@@ -51,6 +55,7 @@ def test_fatigue_rule() -> None:
 
 
 def test_overloaded_rule() -> None:
+    """验证高工作负载规则."""
     ctx: dict[str, Any] = {
         "scenario": "city_driving",
         "driver": {"fatigue_level": 0.3, "workload": "overloaded"},
@@ -141,6 +146,7 @@ def test_empty_intersection_fallback() -> None:
 
 
 def test_format_constraints() -> None:
+    """验证格式化约束输出."""
     ctx: dict[str, Any] = {
         "scenario": "highway",
         "driver": {"fatigue_level": 0.8, "workload": "normal"},
@@ -152,6 +158,7 @@ def test_format_constraints() -> None:
 
 
 def test_format_empty_constraints() -> None:
+    """验证格式化空约束输出."""
     text = format_constraints(
         {
             "only_urgent": False,
