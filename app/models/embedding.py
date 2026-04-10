@@ -15,7 +15,10 @@ def get_cached_embedding_model() -> EmbeddingModel:
         msg = "No embedding provider configured"
         raise RuntimeError(msg)
     model = provider.provider.model
-    base_url = provider.provider.base_url or ""
+    base_url = provider.provider.base_url
+    if not base_url:
+        msg = "No embedding base_url configured"
+        raise RuntimeError(msg)
     cache_key = f"{model}|{base_url}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
         _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(provider=provider)
@@ -28,22 +31,10 @@ def clear_embedding_model_cache() -> None:
 
 
 class EmbeddingModel:
-    """文本嵌入模型封装，支持单provider."""
+    """文本嵌入模型封装，仅使用 OpenAI 兼容远程接口."""
 
-    def __init__(
-        self,
-        provider: EmbeddingProviderConfig | None = None,
-    ) -> None:
+    def __init__(self, provider: EmbeddingProviderConfig) -> None:
         """初始化嵌入模型."""
-        if provider is None:
-            try:
-                settings = LLMSettings.load()
-                provider = settings.get_embedding_provider()
-            except RuntimeError:
-                pass
-        if provider is None:
-            msg = "Embedding provider is required (no local model fallback)"
-            raise RuntimeError(msg)
         self.provider = provider
         self._client: openai.AsyncOpenAI | None = None
 

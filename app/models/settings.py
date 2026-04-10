@@ -90,7 +90,7 @@ class EmbeddingProviderConfig:
     @classmethod
     def from_dict(cls, d: dict) -> EmbeddingProviderConfig:
         """从字典创建配置实例."""
-        provider, _extra = _build_provider_config_from_dict(d, {})
+        provider, _ = _build_provider_config_from_dict(d, {})
         return cls(provider=provider)
 
 

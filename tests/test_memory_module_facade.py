@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def mm(tmp_path: Path) -> MemoryModule:
+def mm(tmp_path: Path, embedding: EmbeddingModel) -> MemoryModule:
     """提供一个 MemoryModule 实例用于测试."""
-    return MemoryModule(tmp_path)
+    return MemoryModule(tmp_path, embedding_model=embedding)
 
 
 class TestMemoryModuleFacade:
@@ -49,14 +49,12 @@ class TestMemoryModuleFacade:
 
     async def test_search_routes_to_correct_store(
         self,
-        tmp_path: Path,
-        embedding: EmbeddingModel,
+        mm: MemoryModule,
         llm_provider: LLMProviderConfig | None,
     ) -> None:
         """验证 search 路由到正确的存储后端."""
         if llm_provider is None:
             pytest.skip("No LLM provider available")
-        mm = MemoryModule(tmp_path, embedding_model=embedding)
         await mm.write(MemoryEvent(content="测试事件"))
         results = await mm.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) == 1
@@ -87,14 +85,12 @@ class TestMemoryModuleFacade:
 
     async def test_search_returns_search_result_objects(
         self,
-        tmp_path: Path,
-        embedding: EmbeddingModel,
+        mm: MemoryModule,
         llm_provider: LLMProviderConfig | None,
     ) -> None:
         """验证 search 返回 SearchResult 对象列表."""
         if llm_provider is None:
             pytest.skip("No LLM provider available")
-        mm = MemoryModule(tmp_path, embedding_model=embedding)
         await mm.write(MemoryEvent(content="特殊关键词事件"))
         results = await mm.search("特殊关键词", mode=MemoryMode.MEMORY_BANK)
         assert all(isinstance(r, SearchResult) for r in results)

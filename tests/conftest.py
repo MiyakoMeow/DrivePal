@@ -121,10 +121,10 @@ def get_available_embedding() -> EmbeddingModel | None:
 def embedding() -> Generator[EmbeddingModel]:
     """会话级 embedding 实例，不可用时跳过."""
     reset_embedding_singleton()
-    model = get_available_embedding()
-    if model is None:
-        pytest.skip("No embedding provider available")
-        yield  # unreachable, for type checker
-    else:
+    try:
+        model = get_available_embedding()
+        if model is None:
+            pytest.skip("No embedding provider available")
         yield model
-    reset_embedding_singleton()
+    finally:
+        reset_embedding_singleton()
