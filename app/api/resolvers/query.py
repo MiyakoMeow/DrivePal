@@ -1,6 +1,4 @@
-"""Query resolvers."""
-
-from __future__ import annotations
+"""Query 解析器."""
 
 import strawberry
 

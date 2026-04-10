@@ -1,8 +1,6 @@
 # ruff: noqa: TC003
 """MemoryBank 摘要管理器."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 from datetime import date, datetime, UTC

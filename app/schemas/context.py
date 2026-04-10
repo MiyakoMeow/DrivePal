@@ -1,7 +1,5 @@
 """驾驶上下文数据模型定义."""
 
-from __future__ import annotations
-
 import uuid
 from datetime import datetime, UTC
 from typing import Literal

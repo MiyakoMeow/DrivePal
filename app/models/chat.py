@@ -1,7 +1,5 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, TypeVar
 
 import openai

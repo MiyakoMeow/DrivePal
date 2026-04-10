@@ -1,7 +1,5 @@
 """规则引擎测试."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from app.agents.rules import SAFETY_RULES, Rule, apply_rules, format_constraints

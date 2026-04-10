@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def mock_chat_model() -> MagicMock:
-    """Create a mock chat model."""
+    """创建 mock chat model."""
     chat = MagicMock()
     chat.generate.return_value = "测试摘要"
     return chat
@@ -21,23 +21,23 @@ def mock_chat_model() -> MagicMock:
 
 @pytest.fixture
 def store(tmp_path: Path) -> MemoryBankStore:
-    """Create a MemoryBankStore for testing."""
+    """创建用于测试的 MemoryBankStore."""
     return MemoryBankStore(tmp_path)
 
 
 @pytest.fixture
 def store_with_llm(tmp_path: Path, mock_chat_model: MagicMock) -> MemoryBankStore:
-    """Create a MemoryBankStore with chat model."""
+    """创建带 chat model 的 MemoryBankStore."""
     return MemoryBankStore(tmp_path, chat_model=mock_chat_model)
 
 
 class TestWriteInteraction:
-    """Tests for write_interaction functionality."""
+    """write_interaction 功能测试."""
 
     async def test_write_interaction_creates_record(
         self, store: MemoryBankStore
     ) -> None:
-        """Test that write_interaction creates an interaction record."""
+        """验证 write_interaction 创建交互记录."""
         interaction_id = await store.write_interaction("提醒我开会", "好的")
         assert isinstance(interaction_id, str)
         interactions = await store.interactions_store.read()
@@ -49,7 +49,7 @@ class TestWriteInteraction:
     async def test_write_interaction_aggregates_similar(
         self, store: MemoryBankStore
     ) -> None:
-        """Test that similar interactions are aggregated."""
+        """验证相似交互被聚合."""
         await store.write_interaction("提醒我明天上午开会", "好的")
         await store.write_interaction("明天下午也有会议", "已更新")
         events = await store.events_store.read()
