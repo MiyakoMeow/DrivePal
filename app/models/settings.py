@@ -1,7 +1,6 @@
 """统一 LLM/Embedding 配置加载器."""
 
 import os
-
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -76,7 +75,8 @@ class LLMProviderConfig:
     def from_dict(cls, d: dict) -> LLMProviderConfig:
         """从字典创建配置实例."""
         provider, extra = _build_provider_config_from_dict(
-            d, {"temperature": 0.7, "concurrency": 4}
+            d,
+            {"temperature": 0.7, "concurrency": 4},
         )
         return cls(provider=provider, **extra)
 

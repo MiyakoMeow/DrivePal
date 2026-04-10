@@ -1,9 +1,9 @@
 """model_groups 集成测试."""
 
-import tomli_w
+from typing import TYPE_CHECKING
 
 import pytest
-from typing import TYPE_CHECKING
+import tomli_w
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,7 +38,8 @@ def test_model_groups_basic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_model_groups_with_query_params(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """测试带 query 参数的 model_groups."""
     config = {
@@ -68,7 +69,8 @@ def test_model_groups_with_query_params(
 
 
 def test_model_groups_not_found(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """测试不存在的 model_group."""
     config = {"model_groups": {}}
@@ -85,7 +87,8 @@ def test_model_groups_not_found(
 
 
 def test_empty_model_group_returns_empty_list(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """测试空 model_group 返回空列表."""
     config = {

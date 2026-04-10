@@ -1,11 +1,11 @@
 """MemoryBankStore 测试 - 仅存储级别测试."""
 
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.memory.stores.memory_bank import MemoryBankStore
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,7 +35,8 @@ class TestWriteInteraction:
     """write_interaction 功能测试."""
 
     async def test_write_interaction_creates_record(
-        self, store: MemoryBankStore
+        self,
+        store: MemoryBankStore,
     ) -> None:
         """验证 write_interaction 创建交互记录."""
         interaction_id = await store.write_interaction("提醒我开会", "好的")
@@ -47,7 +48,8 @@ class TestWriteInteraction:
         )
 
     async def test_write_interaction_aggregates_similar(
-        self, store: MemoryBankStore
+        self,
+        store: MemoryBankStore,
     ) -> None:
         """验证相似交互被聚合."""
         await store.write_interaction("提醒我明天上午开会", "好的")

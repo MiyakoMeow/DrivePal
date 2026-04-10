@@ -1,16 +1,17 @@
 """模型设置加载器测试."""
 
+from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import tomli_w
-from unittest.mock import patch, MagicMock, AsyncMock
 
 from app.models.settings import (
-    LLMSettings,
-    LLMProviderConfig,
     EmbeddingProviderConfig,
+    LLMProviderConfig,
+    LLMSettings,
     ProviderConfig,
 )
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,7 +28,7 @@ class TestLLMProviderConfig:
                 "base_url": "https://api.openai.com/v1",
                 "api_key": "sk-test",
                 "temperature": 0.5,
-            }
+            },
         )
         assert cfg.provider.model == "gpt-4"
         assert cfg.provider.base_url == "https://api.openai.com/v1"
@@ -50,7 +51,7 @@ class TestLLMProviderConfig:
                 "base_url": "https://api.openai.com/v1",
                 "api_key": "sk-test",
                 "concurrency": 8,
-            }
+            },
         )
         assert cfg.concurrency == 8
 
@@ -69,7 +70,7 @@ class TestEmbeddingProviderConfig:
             {
                 "model": "BAAI/bge-small-zh-v1.5",
                 "device": "cuda",
-            }
+            },
         )
         assert cfg.provider.model == "BAAI/bge-small-zh-v1.5"
         assert cfg.device == "cuda"
@@ -83,7 +84,7 @@ class TestEmbeddingProviderConfig:
                 "model": "text-embedding-3-small",
                 "base_url": "https://api.openai.com/v1",
                 "api_key": "sk-test",
-            }
+            },
         )
         assert cfg.provider.model == "text-embedding-3-small"
         assert cfg.provider.base_url == "https://api.openai.com/v1"
@@ -93,7 +94,9 @@ class TestLLMSettingsLoad:
     """LLMSettings.load 配置加载测试."""
 
     def test_load_from_config_file(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证从 config/llm.toml 加载提供者."""
         config_file = tmp_path / "config" / "llm.toml"
@@ -112,8 +115,8 @@ class TestLLMSettingsLoad:
                         "huggingface": {},
                     },
                     "embedding": {"model": "huggingface/bge-test"},
-                }
-            )
+                },
+            ),
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         settings = LLMSettings.load()
@@ -121,7 +124,9 @@ class TestLLMSettingsLoad:
         assert settings.embedding_model == "huggingface/bge-test"
 
     def test_load_no_config_raises(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
         monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
@@ -129,7 +134,9 @@ class TestLLMSettingsLoad:
             LLMSettings.load()
 
     def test_get_embedding_provider_local(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证 get_embedding_provider 解析本地 embedding 模型."""
         config = {
@@ -154,7 +161,9 @@ class TestLLMSettingsLoad:
         _load_config.cache_clear()
 
     def test_get_embedding_provider_remote(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证 get_embedding_provider 解析远程 embedding 模型."""
         config = {
@@ -183,7 +192,9 @@ class TestLLMSettingsLoad:
         _load_config.cache_clear()
 
     def test_get_embedding_provider_with_device_override(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证 get_embedding_provider 解析 device 参数."""
         config = {
@@ -207,7 +218,9 @@ class TestLLMSettingsLoad:
         _load_config.cache_clear()
 
     def test_get_embedding_provider_none_when_not_configured(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证无 embedding 配置时返回 None."""
         config = {
@@ -227,7 +240,9 @@ class TestLLMSettingsLoad:
         _load_config.cache_clear()
 
     def test_load_with_model_groups(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证从 model_groups 加载配置."""
         config_file = tmp_path / "config" / "llm.toml"
@@ -244,8 +259,8 @@ class TestLLMSettingsLoad:
                             "api_key": "sk-a",
                         },
                     },
-                }
-            )
+                },
+            ),
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         from app.models.model_string import _load_config
@@ -259,7 +274,9 @@ class TestLLMSettingsLoad:
         _load_config.cache_clear()
 
     def test_get_model_group_providers_includes_concurrency(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证 get_model_group_providers 返回的配置包含 concurrency."""
         config = {
@@ -301,7 +318,7 @@ class TestChatModelFallback:
                     base_url="http://fake:8000/v1",
                     api_key="sk-test",
                 ),
-            )
+            ),
         ]
         chat = ChatModel(providers=providers)
         mock_response = MagicMock()
@@ -321,7 +338,9 @@ class TestChatModelFallback:
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(
-                    model="bad-model", base_url="http://fake1:8000/v1", api_key="sk-bad"
+                    model="bad-model",
+                    base_url="http://fake1:8000/v1",
+                    api_key="sk-bad",
                 ),
             ),
             LLMProviderConfig(
@@ -341,7 +360,7 @@ class TestChatModelFallback:
             if call_count == 1:
                 client = MagicMock()
                 client.chat.completions.create = AsyncMock(
-                    side_effect=RuntimeError("API error")
+                    side_effect=RuntimeError("API error"),
                 )
                 return client
             mock_response = MagicMock()
@@ -363,19 +382,23 @@ class TestChatModelFallback:
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(
-                    model="bad1", base_url="http://fake1:8000/v1", api_key="sk-1"
+                    model="bad1",
+                    base_url="http://fake1:8000/v1",
+                    api_key="sk-1",
                 ),
             ),
             LLMProviderConfig(
                 provider=ProviderConfig(
-                    model="bad2", base_url="http://fake2:8000/v1", api_key="sk-2"
+                    model="bad2",
+                    base_url="http://fake2:8000/v1",
+                    api_key="sk-2",
                 ),
             ),
         ]
         chat = ChatModel(providers=providers)
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("fail")
+            side_effect=RuntimeError("fail"),
         )
 
         with (
@@ -393,12 +416,14 @@ class TestEmbeddingModelFallback:
         from app.models.embedding import EmbeddingModel
 
         provider = EmbeddingProviderConfig(
-            provider=ProviderConfig(model="fake-model"), device="cpu"
+            provider=ProviderConfig(model="fake-model"),
+            device="cpu",
         )
         emb = EmbeddingModel(provider=provider)
         mock_st = MagicMock()
         with patch(
-            "sentence_transformers.SentenceTransformer", return_value=mock_st
+            "sentence_transformers.SentenceTransformer",
+            return_value=mock_st,
         ) as mock_cls:
             _ = emb.client
         mock_cls.assert_called_once_with("fake-model", device="cpu")
@@ -425,12 +450,13 @@ class TestEmbeddingModelFallback:
         from app.models.embedding import EmbeddingModel
 
         provider = EmbeddingProviderConfig(
-            provider=ProviderConfig(model="fake-model"), device="cpu"
+            provider=ProviderConfig(model="fake-model"),
+            device="cpu",
         )
         emb = EmbeddingModel(provider=provider)
         mock_client = MagicMock()
         mock_client.encode.return_value = MagicMock(
-            tolist=MagicMock(return_value=[0.1, 0.2, 0.3])
+            tolist=MagicMock(return_value=[0.1, 0.2, 0.3]),
         )
         emb._client = mock_client
         result = await emb.encode("test")
@@ -465,7 +491,8 @@ def test_judge_provider_config_defaults() -> None:
 
 
 def test_llm_settings_loads_judge(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """测试 LLMSettings 从配置加载 judge 提供者."""
     from app.models.settings import LLMSettings

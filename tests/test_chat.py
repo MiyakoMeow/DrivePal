@@ -1,21 +1,25 @@
 """聊天模型集成测试."""
 
+from typing import TYPE_CHECKING
+
 import pytest
+
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.models.chat import ChatModel
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.models.settings import LLMProviderConfig
     from pathlib import Path
+
     from app.agents.state import AgentState
+    from app.models.settings import LLMProviderConfig
 
 
 @pytest.mark.integration
 async def test_chat_drives_llm_memory_search(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
+    tmp_path: Path,
+    llm_provider: LLMProviderConfig | None,
 ) -> None:
     """验证聊天驱动的 LLM 记忆搜索能检索到相关事件."""
     if llm_provider is None:
@@ -30,7 +34,8 @@ async def test_chat_drives_llm_memory_search(
 
 @pytest.mark.integration
 async def test_chat_feeds_workflow_context(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
+    tmp_path: Path,
+    llm_provider: LLMProviderConfig | None,
 ) -> None:
     """验证记忆上下文被注入到代理工作流状态中."""
     if llm_provider is None:
@@ -57,7 +62,8 @@ async def test_chat_feeds_workflow_context(
 
 @pytest.mark.integration
 async def test_run_with_stages_returns_stages_object(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
+    tmp_path: Path,
+    llm_provider: LLMProviderConfig | None,
 ) -> None:
     """验证 run_with_stages 返回包含各阶段输出的 WorkflowStages 对象."""
     if llm_provider is None:
@@ -86,7 +92,8 @@ async def test_run_with_stages_returns_stages_object(
 
 @pytest.mark.integration
 async def test_run_with_stages_highway_scenario(
-    tmp_path: Path, llm_provider: LLMProviderConfig | None
+    tmp_path: Path,
+    llm_provider: LLMProviderConfig | None,
 ) -> None:
     """验证高速公路场景下规则引擎约束生效."""
     if llm_provider is None:
@@ -128,7 +135,7 @@ class TestProviderConcurrency:
                     api_key="sk-test",
                 ),
                 concurrency=2,
-            )
+            ),
         ]
         chat = ChatModel(providers=providers)
 
@@ -161,8 +168,8 @@ class TestProviderConcurrency:
         """验证不同 provider 的 semaphore 独立."""
         from app.models.chat import (
             ChatModel,
-            _provider_semaphore_cache,
             _get_provider_semaphore,
+            _provider_semaphore_cache,
         )
         from app.models.settings import LLMProviderConfig, ProviderConfig
 
@@ -170,13 +177,17 @@ class TestProviderConcurrency:
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(
-                    model="model-a", base_url="http://a:8000", api_key="sk-a"
+                    model="model-a",
+                    base_url="http://a:8000",
+                    api_key="sk-a",
                 ),
                 concurrency=2,
             ),
             LLMProviderConfig(
                 provider=ProviderConfig(
-                    model="model-b", base_url="http://b:8000", api_key="sk-b"
+                    model="model-b",
+                    base_url="http://b:8000",
+                    api_key="sk-b",
                 ),
                 concurrency=3,
             ),

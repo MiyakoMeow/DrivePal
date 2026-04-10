@@ -17,7 +17,9 @@ class Query:
 
     @strawberry.field
     async def history(
-        self, limit: int = 10, memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
+        self,
+        limit: int = 10,
+        memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK,
     ) -> list[MemoryEventGQL]:
         """查询历史记忆事件."""
         from app.api.main import get_memory_module

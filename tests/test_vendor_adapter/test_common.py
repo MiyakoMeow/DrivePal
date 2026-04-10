@@ -3,11 +3,10 @@
 import pytest
 
 from vendor_adapter.VehicleMemBench.memory_adapters.common import (
-    history_to_interaction_records,
-    format_search_results,
     StoreClient,
+    format_search_results,
+    history_to_interaction_records,
 )
-
 
 SAMPLE_HISTORY = "[2025-03-03 08:30] Gary Allen: I like the seat heating on level 3\n[2025-03-03 08:31] Justin Martinez: That sounds comfortable\n[2025-03-05 07:45] Gary Allen: When driving at night, I prefer the dashboard dim\n"
 
@@ -41,10 +40,12 @@ def test_format_search_results_with_events() -> None:
 
     results = [
         SearchResult(
-            event={"content": "Gary prefers seat heating level 3", "id": "1"}, score=0.9
+            event={"content": "Gary prefers seat heating level 3", "id": "1"},
+            score=0.9,
         ),
         SearchResult(
-            event={"content": "Gary likes dashboard dim at night", "id": "2"}, score=0.8
+            event={"content": "Gary likes dashboard dim at night", "id": "2"},
+            score=0.8,
         ),
     ]
     text, count = format_search_results(results)
@@ -77,7 +78,10 @@ async def test_store_client_delegates_to_store() -> None:
             pass
 
         async def write_interaction(
-            self, query: str, response: str, event_type: str = "reminder"
+            self,
+            query: str,
+            response: str,
+            event_type: str = "reminder",
         ) -> str:
             return "fake_interaction_id"
 

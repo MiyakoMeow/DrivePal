@@ -133,7 +133,9 @@ class EmbeddingModel:
         cl = self.client
         if isinstance(cl, openai.AsyncOpenAI):
             return await self._async_encode_with_openai(
-                cl, self.provider.provider.model, text
+                cl,
+                self.provider.provider.model,
+                text,
             )
         return self._encode_with_local(cl, text)
 
@@ -142,7 +144,9 @@ class EmbeddingModel:
         cl = self.client
         if isinstance(cl, openai.AsyncOpenAI):
             return await self._async_batch_encode_with_openai(
-                cl, self.provider.provider.model, texts
+                cl,
+                self.provider.provider.model,
+                texts,
             )
         return self._batch_encode_with_local(cl, texts)
 

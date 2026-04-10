@@ -39,9 +39,9 @@ def test_parse_file_range_dedup_and_sort() -> None:
 def test_paths_exist() -> None:
     """测试 vendor 路径存在."""
     from vendor_adapter.VehicleMemBench.runner import (
-        VENDOR_DIR,
         BENCHMARK_DIR,
         OUTPUT_DIR,
+        VENDOR_DIR,
     )
 
     assert VENDOR_DIR.exists()
@@ -74,7 +74,8 @@ def test_query_result_path() -> None:
 
 
 def test_prepare_gold_creates_dir_and_skips(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from unittest.mock import MagicMock
 
@@ -99,7 +100,8 @@ def test_prepare_gold_creates_dir_and_skips(
 
 
 def test_prepare_none_creates_dir_and_skips(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """验证 none 类型 prepare 创建目录并支持重复调用."""
     from unittest.mock import MagicMock
@@ -122,7 +124,8 @@ def test_prepare_none_creates_dir_and_skips(
 
 
 def test_run_skips_existing_query_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import asyncio
     import json
@@ -179,7 +182,8 @@ def test_run_skips_existing_query_files(
 
 
 def test_report_reads_hierarchical_queries(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import json
 
@@ -221,7 +225,7 @@ def test_report_reads_hierarchical_queries(
                 "source_file": 1,
                 "event_index": 0,
                 "memory_type": "memory_bank",
-            }
+            },
         ),
         encoding="utf-8",
     )

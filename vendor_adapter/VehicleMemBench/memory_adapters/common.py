@@ -34,7 +34,7 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
                 type="general",
                 date_group=date_group,
                 memory_strength=1,
-            )
+            ),
         )
     return records
 

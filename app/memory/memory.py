@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.memory.types import MemoryMode
 
@@ -18,11 +18,12 @@ class UnknownModeError(ValueError):
 
 
 if TYPE_CHECKING:
-    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
-    from app.memory.interfaces import MemoryStore
     from pathlib import Path
-    from app.models.embedding import EmbeddingModel
+
+    from app.memory.interfaces import MemoryStore
+    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
     from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -117,26 +118,37 @@ class MemoryModule:
         store = await self._get_store(self._resolve_mode(mode))
         if not getattr(store, "supports_interaction", False):
             raise NotImplementedError(
-                f"Store '{store.store_name}' does not support write_interaction"
+                f"Store '{store.store_name}' does not support write_interaction",
             )
         return await store.write_interaction(query, response, event_type)
 
     async def search(
-        self, query: str, top_k: int = 10, *, mode: MemoryMode | None = None
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        mode: MemoryMode | None = None,
     ) -> list[SearchResult]:
         """搜索记忆内容."""
         store = await self._get_store(self._resolve_mode(mode))
         return await store.search(query, top_k=top_k)
 
     async def get_history(
-        self, limit: int = 10, *, mode: MemoryMode | None = None
+        self,
+        limit: int = 10,
+        *,
+        mode: MemoryMode | None = None,
     ) -> list[MemoryEvent]:
         """获取历史记忆事件."""
         store = await self._get_store(self._resolve_mode(mode))
         return await store.get_history(limit)
 
     async def update_feedback(
-        self, event_id: str, feedback: FeedbackData, *, mode: MemoryMode | None = None
+        self,
+        event_id: str,
+        feedback: FeedbackData,
+        *,
+        mode: MemoryMode | None = None,
     ) -> None:
         """更新记忆反馈."""
         store = await self._get_store(self._resolve_mode(mode))

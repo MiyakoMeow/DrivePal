@@ -8,9 +8,9 @@ import strawberry
 from graphql.error import GraphQLError
 
 from app.api.graphql_schema import (
+    DriverStateGQL,
     DrivingContextGQL,
     DrivingContextInput,
-    DriverStateGQL,
     FeedbackInput,
     FeedbackResult,
     GeoLocationGQL,
@@ -23,8 +23,6 @@ from app.api.graphql_schema import (
     WorkflowStagesGQL,
 )
 from app.memory.schemas import FeedbackData
-
-
 from app.memory.types import MemoryMode
 from app.schemas.context import (
     DrivingContext,
@@ -174,8 +172,8 @@ class Mutation:
     @strawberry.mutation
     async def process_query(self, input: ProcessQueryInput) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
-        from app.api.main import DATA_DIR, get_memory_module
         from app.agents.workflow import AgentWorkflow
+        from app.api.main import DATA_DIR, get_memory_module
 
         try:
             mm = get_memory_module()
@@ -191,7 +189,8 @@ class Mutation:
                 driving_context = DrivingContext(**ctx_dict).model_dump()
 
             result, event_id, stages = await workflow.run_with_stages(
-                input.query, driving_context
+                input.query,
+                driving_context,
             )
             return ProcessQueryResult(
                 result=result,
@@ -234,7 +233,8 @@ class Mutation:
 
     @strawberry.mutation
     async def save_scenario_preset(
-        self, input: ScenarioPresetInput
+        self,
+        input: ScenarioPresetInput,
     ) -> ScenarioPresetGQL:
         """保存场景预设."""
         store = _preset_store()

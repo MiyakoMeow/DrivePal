@@ -7,10 +7,11 @@ from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.engine import MemoryBankEngine
 
 if TYPE_CHECKING:
-    from app.storage.toml_store import TOMLStore
     from pathlib import Path
+
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+    from app.storage.toml_store import TOMLStore
 
 
 class MemoryBankStore:
@@ -31,7 +32,10 @@ class MemoryBankStore:
         """初始化记忆库存储."""
         self._storage = EventStorage(data_dir)
         self._engine = MemoryBankEngine(
-            data_dir, self._storage, embedding_model, chat_model
+            data_dir,
+            self._storage,
+            embedding_model,
+            chat_model,
         )
         self._feedback = FeedbackManager(data_dir)
         self.embedding_model = embedding_model
@@ -77,7 +81,10 @@ class MemoryBankStore:
         await self._feedback.update_feedback(event_id, feedback)
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
     ) -> str:
         """写入交互记录."""
         return await self._engine.write_interaction(query, response, event_type)

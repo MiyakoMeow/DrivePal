@@ -37,7 +37,9 @@ GRAPHQL_ENDPOINT = "/graphql"
 
 
 def _graphql_query(
-    isolated_app: TestClient, query: str, variables: dict | None = None
+    isolated_app: TestClient,
+    query: str,
+    variables: dict | None = None,
 ) -> dict:
     payload: dict = {"query": query}
     if variables:
@@ -203,7 +205,7 @@ def test_process_query_with_context(isolated_app: TestClient) -> None:
                     },
                     "scenario": "PARKED",
                 },
-            }
+            },
         },
     )
     assert "data" in result

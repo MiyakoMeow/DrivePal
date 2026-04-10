@@ -1,15 +1,15 @@
 """共享测试配置和 fixtures."""
 
 import os
+from typing import TYPE_CHECKING
 
 import pytest
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
 from app.models.embedding import EmbeddingModel, get_cached_embedding_model
-from app.models.settings import LLMSettings, LLMProviderConfig
+from app.models.settings import LLMProviderConfig, LLMSettings
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -28,7 +28,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
+    config: pytest.Config,
+    items: list[pytest.Item],
 ) -> None:
     """默认跳过 integration 测试，除非显式启用."""
     run_integration = (
@@ -38,7 +39,7 @@ def pytest_collection_modifyitems(
     if run_integration:
         return
     skip_integration = pytest.mark.skip(
-        reason="需要 --run-integration 标志或 INTEGRATION_TESTS=1 环境变量"
+        reason="需要 --run-integration 标志或 INTEGRATION_TESTS=1 环境变量",
     )
     for item in items:
         if "integration" in item.keywords:

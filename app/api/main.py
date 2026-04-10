@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+import strawberry
+import strawberry.fastapi
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-import strawberry
-import strawberry.fastapi
 
 from app.memory.memory import MemoryModule
 from app.storage.init_data import init_storage

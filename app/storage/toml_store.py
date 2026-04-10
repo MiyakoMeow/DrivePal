@@ -2,7 +2,7 @@
 
 import asyncio
 import tomllib
-from typing import Any, TypeVar, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable

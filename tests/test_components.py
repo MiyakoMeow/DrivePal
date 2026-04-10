@@ -1,7 +1,7 @@
 """app.memory.components 可组合组件测试."""
 
 import math
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -13,12 +13,12 @@ from app.memory.components import (
     SimpleInteractionWriter,
     forgetting_curve,
 )
+from app.memory.schemas import FeedbackData, MemoryEvent
 from app.memory.stores.memory_bank.engine import (
-    MemoryBankEngine,
     SOFT_FORGET_STRENGTH,
     SOFT_FORGET_THRESHOLD,
+    MemoryBankEngine,
 )
-from app.memory.schemas import FeedbackData, MemoryEvent
 
 
 class TestForgettingCurve:
@@ -74,7 +74,8 @@ class TestEventStorage:
         assert await storage.read_events() == []
 
     async def test_append_event_assigns_id_and_created_at(
-        self, storage: EventStorage
+        self,
+        storage: EventStorage,
     ) -> None:
         """验证 append_event 分配 ID 和 created_at 时间戳."""
         event = MemoryEvent(content="测试事件")
@@ -158,66 +159,82 @@ class TestFeedbackManager:
         return FeedbackManager(tmp_path)
 
     async def test_accept_increases_weight(
-        self, manager: FeedbackManager, tmp_path: Path
+        self,
+        manager: FeedbackManager,
+        tmp_path: Path,
     ) -> None:
         """验证接受反馈增加策略权重."""
         from app.storage.toml_store import TOMLStore
 
         await manager.update_feedback(
-            "eid1", FeedbackData(action="accept", type="meeting")
+            "eid1",
+            FeedbackData(action="accept", type="meeting"),
         )
         strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
     async def test_ignore_decreases_weight(
-        self, manager: FeedbackManager, tmp_path: Path
+        self,
+        manager: FeedbackManager,
+        tmp_path: Path,
     ) -> None:
         """验证忽略反馈降低策略权重."""
         from app.storage.toml_store import TOMLStore
 
         await manager.update_feedback(
-            "eid2", FeedbackData(action="ignore", type="general")
+            "eid2",
+            FeedbackData(action="ignore", type="general"),
         )
         strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["general"] == pytest.approx(0.4)
 
     async def test_accept_capped_at_one(
-        self, manager: FeedbackManager, tmp_path: Path
+        self,
+        manager: FeedbackManager,
+        tmp_path: Path,
     ) -> None:
         """验证接受权重上限为 1.0."""
         from app.storage.toml_store import TOMLStore
 
         for _ in range(20):
             await manager.update_feedback(
-                "eid", FeedbackData(action="accept", type="meeting")
+                "eid",
+                FeedbackData(action="accept", type="meeting"),
             )
         strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["meeting"] <= 1.0
 
     async def test_ignore_floored_at_zero_point_one(
-        self, manager: FeedbackManager, tmp_path: Path
+        self,
+        manager: FeedbackManager,
+        tmp_path: Path,
     ) -> None:
         """验证忽略权重下限为 0.1."""
         from app.storage.toml_store import TOMLStore
 
         for _ in range(20):
             await manager.update_feedback(
-                "eid", FeedbackData(action="ignore", type="general")
+                "eid",
+                FeedbackData(action="ignore", type="general"),
             )
         strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["general"] >= 0.1
 
     async def test_feedback_appended_to_history(
-        self, manager: FeedbackManager, tmp_path: Path
+        self,
+        manager: FeedbackManager,
+        tmp_path: Path,
     ) -> None:
         """验证每条反馈记录都追加到历史记录中."""
         from app.storage.toml_store import TOMLStore
 
         await manager.update_feedback(
-            "eid1", FeedbackData(action="accept", type="meeting")
+            "eid1",
+            FeedbackData(action="accept", type="meeting"),
         )
         await manager.update_feedback(
-            "eid2", FeedbackData(action="ignore", type="general")
+            "eid2",
+            FeedbackData(action="ignore", type="general"),
         )
         feedback = await TOMLStore(tmp_path, Path("feedback.toml"), list).read()
         assert len(feedback) == 2
@@ -239,7 +256,9 @@ class TestSimpleInteractionWriter:
         assert len(iid) > 0
 
     async def test_write_stores_content_and_description(
-        self, writer: SimpleInteractionWriter, tmp_path: Path
+        self,
+        writer: SimpleInteractionWriter,
+        tmp_path: Path,
     ) -> None:
         """验证查询和响应存储为 content 和 description."""
         await writer.write_interaction("查询内容", "响应内容")
@@ -249,7 +268,9 @@ class TestSimpleInteractionWriter:
         assert events[0]["description"] == "响应内容"
 
     async def test_write_custom_event_type(
-        self, writer: SimpleInteractionWriter, tmp_path: Path
+        self,
+        writer: SimpleInteractionWriter,
+        tmp_path: Path,
     ) -> None:
         """验证自定义 event_type 被正确存储."""
         await writer.write_interaction("查询", "响应", event_type="meeting")
@@ -277,7 +298,9 @@ class TestMemoryBankEngineWrite:
         assert len(eid) > 0
 
     async def test_write_sets_defaults(
-        self, engine: MemoryBankEngine, storage: EventStorage
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
     ) -> None:
         """验证 write 设置 memory_strength、last_recall_date 和 date_group."""
         await engine.write(MemoryEvent(content="测试事件"))
@@ -291,7 +314,8 @@ class TestMemoryBankEngineWrite:
         assert await engine.search("测试") == []
 
     async def test_search_blank_query_returns_empty(
-        self, engine: MemoryBankEngine
+        self,
+        engine: MemoryBankEngine,
     ) -> None:
         """验证空白查询返回空列表."""
         await engine.write(MemoryEvent(content="测试"))
@@ -305,7 +329,9 @@ class TestMemoryBankEngineWrite:
         assert "天气" in results[0].event["content"]
 
     async def test_search_strengthens_matched_events(
-        self, engine: MemoryBankEngine, storage: EventStorage
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
     ) -> None:
         """验证搜索增强匹配事件的记忆."""
         await engine.write(MemoryEvent(content="重要会议"))
@@ -334,7 +360,9 @@ class TestMemoryBankEngineWriteInteraction:
         assert len(iid) > 0
 
     async def test_write_interaction_creates_event_and_interaction(
-        self, engine: MemoryBankEngine, storage: EventStorage
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
     ) -> None:
         """验证 write_interaction 同时创建事件和交互."""
         await engine.write_interaction("提醒我开会", "好的")
@@ -345,7 +373,9 @@ class TestMemoryBankEngineWriteInteraction:
         assert interactions[0]["event_id"] == events[0]["id"]
 
     async def test_similar_interactions_aggregate_to_same_event(
-        self, engine: MemoryBankEngine, storage: EventStorage
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
     ) -> None:
         """验证相似的交互聚合到同一事件."""
         await engine.write_interaction("明天上午开会", "好的")
@@ -369,7 +399,8 @@ class TestPersonalitySummary:
         return MemoryBankEngine(tmp_path, storage)
 
     async def test_maybe_summarize_personality_skips_without_chat_model(
-        self, engine: MemoryBankEngine
+        self,
+        engine: MemoryBankEngine,
     ) -> None:
         """验证无 chat_model 时跳过人格摘要."""
         today = datetime.now(UTC).date().isoformat()
@@ -378,7 +409,8 @@ class TestPersonalitySummary:
         assert personality_data["daily_personality"] == {}
 
     async def test_search_personality_returns_matching_summaries(
-        self, engine: MemoryBankEngine
+        self,
+        engine: MemoryBankEngine,
     ) -> None:
         """验证人格摘要搜索返回匹配结果."""
         personality_data = {
@@ -387,7 +419,7 @@ class TestPersonalitySummary:
                     "content": "用户喜欢讨论天气",
                     "memory_strength": 1,
                     "last_recall_date": "2026-04-01",
-                }
+                },
             },
             "overall_personality": "",
         }
@@ -398,7 +430,8 @@ class TestPersonalitySummary:
         assert "天气" in results[0].event["content"]
 
     async def test_search_personality_returns_empty_when_no_match(
-        self, engine: MemoryBankEngine
+        self,
+        engine: MemoryBankEngine,
     ) -> None:
         """验证无匹配时返回空结果."""
         personality_data = {
@@ -407,7 +440,7 @@ class TestPersonalitySummary:
                     "content": "用户喜欢讨论天气",
                     "memory_strength": 1,
                     "last_recall_date": "2026-04-01",
-                }
+                },
             },
             "overall_personality": "",
         }
@@ -416,7 +449,8 @@ class TestPersonalitySummary:
         assert len(results) == 0
 
     async def test_search_personality_via_public_interface(
-        self, engine: MemoryBankEngine
+        self,
+        engine: MemoryBankEngine,
     ) -> None:
         """验证通过 search() 公共接口能返回人格摘要."""
         personality_data = {
@@ -425,7 +459,7 @@ class TestPersonalitySummary:
                     "content": "用户喜欢讨论天气",
                     "memory_strength": 1,
                     "last_recall_date": "2026-04-01",
-                }
+                },
             },
             "overall_personality": "",
         }
@@ -460,17 +494,19 @@ class TestPersonalitySummary:
         assert chat_model.generate.call_count == 1
         more_events = events + [{"id": "e99", "date_group": date_group}]
         more_interactions = interactions + [
-            {"event_id": "e99", "query": "q99", "response": "r99"}
+            {"event_id": "e99", "query": "q99", "response": "r99"},
         ]
         await mgr.maybe_summarize(
-            date_group, more_events, more_interactions, chat_model
+            date_group,
+            more_events,
+            more_interactions,
+            chat_model,
         )
         assert chat_model.generate.call_count == 1
 
     async def test_personality_concurrent_inflight_dedup(self, tmp_path: Path) -> None:
         """验证并发调用同一 date_group 时仅生成一次人格摘要."""
         import asyncio
-
         from unittest.mock import AsyncMock, MagicMock
 
         from app.memory.stores.memory_bank.personality import (
@@ -528,7 +564,9 @@ class TestSoftForgetMechanism:
         return MemoryBankEngine(tmp_path, storage)
 
     async def test_soft_forget_reduces_low_retention_events(
-        self, engine: MemoryBankEngine, storage: EventStorage
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
     ) -> None:
         """验证 retention 过低的事件被软遗忘."""
         await engine.write(MemoryEvent(content="旧事件"))
@@ -546,7 +584,9 @@ class TestSoftForgetMechanism:
         assert forgotten["memory_strength"] == SOFT_FORGET_STRENGTH
 
     async def test_soft_forget_preserves_matched_events(
-        self, engine: MemoryBankEngine, storage: EventStorage
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
     ) -> None:
         """验证匹配的事件不被软遗忘."""
         await engine.write(MemoryEvent(content="重要事件"))
@@ -556,7 +596,9 @@ class TestSoftForgetMechanism:
         assert event.get("forgotten") is not True
 
     async def test_soft_forget_only_applies_to_unmatched(
-        self, engine: MemoryBankEngine, storage: EventStorage
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
     ) -> None:
         """验证软遗忘只应用于未匹配的记忆."""
         await engine.write(MemoryEvent(content="匹配事件"))

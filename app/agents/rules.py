@@ -53,7 +53,8 @@ SAFETY_RULES: list[Rule] = [
 
 
 def apply_rules(
-    driving_context: dict, rules: list[Rule] | None = None
+    driving_context: dict,
+    rules: list[Rule] | None = None,
 ) -> dict[str, Any]:
     """对驾驶上下文应用规则，返回合并后的约束."""
     matched = [r for r in (rules or SAFETY_RULES) if r.condition(driving_context)]

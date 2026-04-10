@@ -25,7 +25,8 @@ async def test_feedback_updates_strategies(tmp_path: Path) -> None:
     memory = MemoryModule(tmp_path)
     event_id = await memory.write(MemoryEvent(content="团队周会", type="meeting"))
     await memory.update_feedback(
-        event_id, FeedbackData(action="accept", type="meeting")
+        event_id,
+        FeedbackData(action="accept", type="meeting"),
     )
     strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
     assert strategies["reminder_weights"]["meeting"] == 0.6
@@ -38,7 +39,8 @@ async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
     memory = MemoryModule(tmp_path)
     event_id = await memory.write(MemoryEvent(content="无关提醒", type="general"))
     await memory.update_feedback(
-        event_id, FeedbackData(action="ignore", type="general")
+        event_id,
+        FeedbackData(action="ignore", type="general"),
     )
     strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
     assert strategies["reminder_weights"]["general"] < 0.5

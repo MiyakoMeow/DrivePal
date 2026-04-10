@@ -1,7 +1,7 @@
 """驾驶上下文数据模型定义."""
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field

@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.agents.prompts import SYSTEM_PROMPTS
@@ -13,7 +13,6 @@ from app.agents.state import AgentState, WorkflowStages
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
-
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +91,7 @@ class AgentWorkflow:
                 relevant_memories = [
                     e.model_dump()
                     for e in await self.memory_module.get_history(
-                        mode=self._memory_mode
+                        mode=self._memory_mode,
                     )
                 ]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
@@ -111,7 +110,7 @@ class AgentWorkflow:
             context["relevant_memories"] = relevant_memories
         else:
             system_prompt = SYSTEM_PROMPTS["context"].format(
-                current_datetime=current_datetime
+                current_datetime=current_datetime,
             )
 
             prompt = f"""{system_prompt}
@@ -211,18 +210,21 @@ class AgentWorkflow:
             }
 
         remind_content = decision.get("reminder_content") or decision.get(
-            "remind_content"
+            "remind_content",
         )
         if isinstance(remind_content, dict):
             content = remind_content.get("text") or remind_content.get(
-                "content", "无提醒内容"
+                "content",
+                "无提醒内容",
             )
         elif isinstance(remind_content, str):
             content = remind_content
         else:
             content = decision.get("content") or "无提醒内容"
         event_id = await self.memory_module.write_interaction(
-            user_input, content, mode=self._memory_mode
+            user_input,
+            content,
+            mode=self._memory_mode,
         )
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")

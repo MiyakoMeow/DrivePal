@@ -2,13 +2,13 @@
 
 import asyncio
 import logging
-from datetime import date, datetime, UTC
+from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from app.memory.components import forgetting_curve, SUMMARY_WEIGHT
+from app.memory.components import SUMMARY_WEIGHT, forgetting_curve
 from app.memory.schemas import SearchResult
 from app.storage.toml_store import TOMLStore
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
@@ -70,7 +70,7 @@ class PersonalityManager:
                         },
                         score=score,
                         source="personality",
-                    )
+                    ),
                 )
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
@@ -168,14 +168,16 @@ class PersonalityManager:
                         needs_overall_update = True
         except Exception:
             logger.exception(
-                "Failed to generate personality summary for date_group=%s", date_group
+                "Failed to generate personality summary for date_group=%s",
+                date_group,
             )
             return
         finally:
             self._inflight_daily_personality.discard(date_group)
         if needs_overall_update:
             overall_text = await self.generate_overall_text(
-                personality_data, chat_model
+                personality_data,
+                chat_model,
             )
             if overall_text:
                 async with self._personality_lock:
@@ -184,7 +186,9 @@ class PersonalityManager:
                     await self._store.write(personality_data)
 
     async def generate_overall_text(
-        self, personality_data: dict, chat_model: ChatModel | None
+        self,
+        personality_data: dict,
+        chat_model: ChatModel | None,
     ) -> str | None:
         """生成整体人格档案文本（不含锁，不写存储）."""
         if not chat_model:

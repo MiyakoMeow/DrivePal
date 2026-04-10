@@ -87,7 +87,8 @@ def test_max_frequency_minutes_takes_min() -> None:
         ),
     ]
     result = apply_rules(
-        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules
+        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}},
+        rules,
     )
     assert result["max_frequency_minutes"] == 10
 
@@ -109,7 +110,8 @@ def test_missing_field_not_constraining() -> None:
         ),
     ]
     result = apply_rules(
-        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules
+        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}},
+        rules,
     )
     assert result["allowed_channels"] == ["audio", "visual"]
     assert result["postpone"] is True
@@ -132,7 +134,8 @@ def test_empty_intersection_fallback() -> None:
         ),
     ]
     result = apply_rules(
-        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}}, rules
+        {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}},
+        rules,
     )
     assert result["allowed_channels"] == ["audio", "detailed", "visual"]
 
@@ -154,7 +157,7 @@ def test_format_empty_constraints() -> None:
             "only_urgent": False,
             "postpone": False,
             "allowed_channels": ["visual", "audio", "detailed"],
-        }
+        },
     )
     assert "audio" in text
 

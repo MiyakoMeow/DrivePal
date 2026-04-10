@@ -5,11 +5,11 @@ from pydantic import ValidationError
 
 from app.schemas.context import (
     DriverState,
+    DrivingContext,
     GeoLocation,
+    ScenarioPreset,
     SpatioTemporalContext,
     TrafficCondition,
-    DrivingContext,
-    ScenarioPreset,
 )
 
 

@@ -1,10 +1,10 @@
 """MemoryEvent, SearchResult, FeedbackData 模型测试."""
 
 from app.memory.schemas import (
-    MemoryEvent,
-    SearchResult,
     FeedbackData,
     InteractionRecord,
+    MemoryEvent,
+    SearchResult,
 )
 
 
@@ -21,8 +21,8 @@ class TestMemoryEvent:
     def test_extra_fields_allowed(self) -> None:
         """验证 extra='allow' 允许未知字段."""
         event = MemoryEvent(content="hello")
-        setattr(event, "custom_field", "value")
-        assert getattr(event, "custom_field") == "value"
+        event.custom_field = "value"
+        assert event.custom_field == "value"
 
     def test_model_dump(self) -> None:
         """验证 model_dump 序列化输出."""

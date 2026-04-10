@@ -80,7 +80,7 @@ async def main() -> None:
             failed = True
         if failed and not args.allow_partial:
             sys.stdout.write(
-                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n"
+                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
             )
             return
         _do_report(args.output)

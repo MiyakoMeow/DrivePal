@@ -39,7 +39,7 @@ def get_benchmark_config() -> BenchmarkConfig:
         providers = get_model_group_providers("benchmark")
     except KeyError:
         raise BenchmarkConfigError(
-            BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED
+            BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED,
         ) from None
     if not providers:
         raise BenchmarkConfigError(BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED)

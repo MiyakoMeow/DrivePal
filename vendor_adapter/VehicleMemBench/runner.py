@@ -54,23 +54,24 @@ def setup_vehiclemembench_path() -> None:
 
 setup_vehiclemembench_path()
 
+from evaluation.agent_client import AgentClient
 from evaluation.model_evaluation import (
-    parse_answer_to_tools,
-    get_list_module_tools_schema,
-    split_history_by_day,
-    build_memory_key_value,
-    process_task_direct,
-    process_task_with_kv_memory,
-    _build_metric,
-    _run_vehicle_task_evaluation,
     MemoryStore as VMBMemoryStore,
 )
-from evaluation.agent_client import AgentClient
-
+from evaluation.model_evaluation import (
+    _build_metric,
+    _run_vehicle_task_evaluation,
+    build_memory_key_value,
+    get_list_module_tools_schema,
+    parse_answer_to_tools,
+    process_task_direct,
+    process_task_with_kv_memory,
+    split_history_by_day,
+)
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 _PREP_FREE_TYPES: frozenset[BenchMemoryMode] = frozenset(
-    {BenchMemoryMode.NONE, BenchMemoryMode.GOLD}
+    {BenchMemoryMode.NONE, BenchMemoryMode.GOLD},
 )
 
 
@@ -187,7 +188,9 @@ def prep_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
 
 
 def query_result_path(
-    memory_type: BenchMemoryMode, file_num: int, event_index: int
+    memory_type: BenchMemoryMode,
+    file_num: int,
+    event_index: int,
 ) -> Path:
     """返回指定记忆类型、文件编号和事件索引的查询结果路径."""
     return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"
@@ -254,7 +257,10 @@ async def prepare(
             else:
                 async with semaphore:
                     result = await _prepare_single(
-                        agent_client, history_text, fnum, mtype
+                        agent_client,
+                        history_text,
+                        fnum,
+                        mtype,
                     )
             if result is not None:
                 fdir.mkdir(parents=True, exist_ok=True)
@@ -282,7 +288,9 @@ async def _prepare_single(
     if memory_type == BenchMemoryMode.KV:
         daily = split_history_by_day(history_text)
         store, _, _ = await asyncio.to_thread(
-            build_memory_key_value, agent_client, daily
+            build_memory_key_value,
+            agent_client,
+            daily,
         )
         return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
     logger.warning("[warn] unknown memory_type: %s", memory_type)
@@ -312,7 +320,8 @@ async def run(
     qa_cache = dict(qa_pairs)
 
     async def _load_prep(
-        fnum: int, mtype: BenchMemoryMode
+        fnum: int,
+        mtype: BenchMemoryMode,
     ) -> tuple[BenchMemoryMode, int, dict | None]:
         if mtype in _PREP_FREE_TYPES:
             return mtype, fnum, {"type": mtype}
@@ -324,12 +333,14 @@ async def run(
             return mtype, fnum, None
         except json.JSONDecodeError:
             logger.warning(
-                "[warn] corrupt prep file for %s file %d, skipping", mtype, fnum
+                "[warn] corrupt prep file for %s file %d, skipping",
+                mtype,
+                fnum,
             )
             return mtype, fnum, None
 
     prep_raw = await asyncio.gather(
-        *(_load_prep(f, t) for f in file_nums for t in types)
+        *(_load_prep(f, t) for f in file_nums for t in types),
     )
     prep_cache: dict[tuple[BenchMemoryMode, int], dict | None] = {
         (mt, fn): data for mt, fn, data in prep_raw
@@ -443,7 +454,8 @@ async def _run_single(
                     await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
             except OSError:
                 logger.exception(
-                    "  [error] failed to write error record for query %d", idx
+                    "  [error] failed to write error record for query %d",
+                    idx,
                 )
 
     gather_results = await asyncio.gather(
@@ -456,7 +468,8 @@ async def _run_single(
 
 
 async def _build_search_client(
-    prep_data: dict, memory_type: BenchMemoryMode
+    prep_data: dict,
+    memory_type: BenchMemoryMode,
 ) -> StoreClient | None:
     """为自定义适配器预构建搜索客户端（按 file+type 复用）."""
     if memory_type not in ADAPTERS:
@@ -536,7 +549,8 @@ def _make_sync_memory_search(
         future: Future | None = None
         try:
             future = asyncio.run_coroutine_threadsafe(
-                search_client.search(query=query, top_k=top_k), loop
+                search_client.search(query=query, top_k=top_k),
+                loop,
             )
             results = future.result(timeout=_SEARCH_TIMEOUT)
         except TimeoutError:
