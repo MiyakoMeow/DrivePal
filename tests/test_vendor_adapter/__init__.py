@@ -1,1 +1,1 @@
-"""Vendor adapter tests."""
+"""供应商适配器测试。"""
