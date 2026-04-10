@@ -2,7 +2,7 @@
 
 import asyncio
 import tomllib
-from typing import Any, TypeVar, TYPE_CHECKING
+from typing import Any, TypeVar, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,6 +21,22 @@ _LOCK_REGISTRY_LOCK = asyncio.Lock()
 _LIST_WRAPPER_KEY = "_list"
 
 
+class AppendError(TypeError):
+    """追加操作类型错误."""
+
+    def __init__(self, actual_type: str) -> None:
+        """初始化 AppendError."""
+        super().__init__(f"list required, got {actual_type}")
+
+
+class UpdateError(TypeError):
+    """更新操作类型错误."""
+
+    def __init__(self, actual_type: str) -> None:
+        """初始化 UpdateError."""
+        super().__init__(f"dict required, got {actual_type}")
+
+
 def _get_file_lock(filepath: Path) -> asyncio.Lock:
     """获取文件路径对应的锁，实现跨实例共享."""
     key = str(filepath.resolve())
@@ -34,10 +50,12 @@ class TOMLStore:
         self,
         data_dir: Path,
         filename: Path,
-        default_factory: Callable[[], T] = lambda: dict(),
+        default_factory: Callable[[], T] | None = None,
     ) -> None:
         """初始化TOML存储，指定数据目录和文件名."""
         self.filepath = filename if filename.is_absolute() else data_dir / filename
+        if default_factory is None:
+            default_factory = cast("Callable[[], T]", dict)
         self.default_factory: Callable[[], T] = default_factory
         self._lock = _get_file_lock(self.filepath)
 
@@ -49,15 +67,15 @@ class TOMLStore:
                 if isinstance(default_data, list):
                     tomli_w.dump({_LIST_WRAPPER_KEY: default_data}, f)
                 else:
-                    tomli_w.dump(default_data, f)  # type: ignore
+                    tomli_w.dump(cast("dict[str, Any]", default_data), f)
 
     def _clean_for_toml(self, obj: object) -> object:
         """递归清理对象中的 None 值，转换为空字符串."""
         if isinstance(obj, dict):
             return {k: self._clean_for_toml(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
+        if isinstance(obj, list):
             return [self._clean_for_toml(item) for item in obj]
-        elif obj is None:
+        if obj is None:
             return ""
         return obj
 
@@ -68,7 +86,7 @@ class TOMLStore:
             if isinstance(cleaned, list):
                 await f.write(tomli_w.dumps({_LIST_WRAPPER_KEY: cleaned}).encode())
             else:
-                await f.write(tomli_w.dumps(cleaned).encode())  # type: ignore
+                await f.write(tomli_w.dumps(cast("dict[str, Any]", cleaned)).encode())
 
     async def _read_unsafe(self) -> T:
         """读操作，不获取锁（调用方必须持有锁）."""
@@ -79,7 +97,7 @@ class TOMLStore:
         raw = tomllib.loads(content.decode("utf-8"))
         if _LIST_WRAPPER_KEY in raw and len(raw) == 1:
             return raw[_LIST_WRAPPER_KEY]
-        return raw  # type: ignore
+        return cast("T", raw)
 
     async def read(self) -> T:
         """读取TOML文件中的全部数据."""
@@ -91,24 +109,20 @@ class TOMLStore:
         async with self._lock:
             await self._async_write(data)
 
-    async def append(self, item: Any) -> None:  # noqa: ANN401
+    async def append(self, item: object) -> None:
         """向列表类型存储追加一个元素."""
         async with self._lock:
             data = await self._read_unsafe()
             if not isinstance(data, list):
-                raise TypeError(
-                    f"append() requires list factory, got {type(data).__name__}"
-                )
+                raise AppendError(type(data).__name__)
             data.append(item)
             await self._async_write(data)
 
-    async def update(self, key: str, value: Any) -> None:  # noqa: ANN401
+    async def update(self, key: str, value: object) -> None:
         """更新字典类型存储中指定键的值."""
         async with self._lock:
             data = await self._read_unsafe()
             if not isinstance(data, dict):
-                raise TypeError(
-                    f"update() requires dict factory, got {type(data).__name__}"
-                )
+                raise UpdateError(type(data).__name__)
             data[key] = value
             await self._async_write(data)

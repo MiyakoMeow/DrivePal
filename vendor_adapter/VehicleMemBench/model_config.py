@@ -13,6 +13,14 @@ if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
 
 
+class BenchmarkConfigError(ValueError):
+    """基准测试配置异常."""
+
+    BENCHMARK_MODEL_REQUIRED = (
+        "model_groups.benchmark must be configured with at least one model reference"
+    )
+
+
 @dataclass(frozen=True)
 class BenchmarkConfig:
     """基准测试配置（一次性提取所有字段）."""
@@ -30,13 +38,11 @@ def get_benchmark_config() -> BenchmarkConfig:
     try:
         providers = get_model_group_providers("benchmark")
     except KeyError:
-        raise ValueError(
-            "model_groups.benchmark must be configured with at least one model reference"
+        raise BenchmarkConfigError(
+            BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED
         ) from None
     if not providers:
-        raise ValueError(
-            "model_groups.benchmark must be configured with at least one model reference"
-        )
+        raise BenchmarkConfigError(BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED)
     provider = providers[0]
     return BenchmarkConfig(
         base_url=provider["base_url"],

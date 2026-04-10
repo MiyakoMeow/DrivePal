@@ -63,9 +63,9 @@ def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
             else {},
             timeout=5,
         )
-        return resp.status_code == 200
     except requests.RequestException:
         return False
+    return resp.status_code == 200
 
 
 def get_available_provider() -> LLMProviderConfig | None:
@@ -92,13 +92,13 @@ def get_available_provider() -> LLMProviderConfig | None:
 
 @pytest.fixture
 def llm_provider() -> LLMProviderConfig | None:
-    """返回可达的 LLM provider（若有），否则 None。"""
+    """返回可达的 LLM provider（若有），否则 None."""
     return get_available_provider()
 
 
 @pytest.fixture
 def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProviderConfig:
-    """返回可用 provider；不可用时直接 skip。"""
+    """返回可用 provider；不可用时直接 skip."""
     if llm_provider is None:
         pytest.skip("No LLM provider available")
     return llm_provider

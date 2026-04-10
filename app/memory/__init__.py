@@ -9,10 +9,10 @@ from app.memory.schemas import (
 )
 
 __all__ = [
-    "MemoryModule",
-    "register_store",
     "FeedbackData",
     "InteractionRecord",
     "MemoryEvent",
+    "MemoryModule",
     "SearchResult",
+    "register_store",
 ]

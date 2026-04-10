@@ -5,6 +5,16 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+class InvalidActionError(ValueError):
+    """无效 action 值的异常."""
+
+    MSG = "Invalid action: {action!r}"
+
+    def __init__(self, action: str) -> None:
+        """初始化异常，使用类常量消息格式化 action."""
+        super().__init__(self.MSG.format(action=action))
+
+
 class MemoryEvent(BaseModel):
     """记忆事件数据模型."""
 
@@ -48,7 +58,7 @@ class FeedbackData(BaseModel):
     def validate_action(cls, v: str | None) -> str | None:
         """验证 action 值."""
         if v is not None and v not in ("accept", "ignore"):
-            raise ValueError(f"Invalid action: {v!r}. Must be 'accept' or 'ignore'")
+            raise InvalidActionError(v)
         return v
 
 

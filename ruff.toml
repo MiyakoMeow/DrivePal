@@ -1,41 +1,84 @@
 [lint]
 extend-select = [
-    "ANN",    # flake8-annotations - 类型注解检查
-    "ASYNC",  # flake8-async - 异步代码检查
-    "DTZ",    # flake8-datetimez - 时区安全检查
-    "G",      # flake8-logging-format - 日志格式检查
-    "INP",    # flake8-no-pep420 - 命名空间包检查
-    "PIE",    # flake8-pie - Python最佳实践检查
-    "PT",     # flake8-pytest-style - pytest风格检查
-    "PTH",    # flake8-use-pathlib - pathlib替代检查
-    "SIM",    # flake8-simplify - 代码简化检查
-    "TC",     # flake8-type-checking - 类型检查优化
+    # 代码风格 (pycodestyle)
     "E",      # pycodestyle error - 代码风格错误
     "W",      # pycodestyle warning - 代码风格警告
-    "D",      # pydoclint - 文档字符串检查
-    "N",      # pep8-naming - 命名规范检查
-    "PERF",   # Perflint - 性能检查
-    "FAST",   # FastAPI - FastAPI特定检查
     "UP",     # pyupgrade - 现代Python语法
+    # 类型检查
+    "ANN",    # flake8-annotations - 类型注解检查
+    "FA",     # flake8-future-annotations - 过时类型注解检查
+    "TC",     # flake8-type-checking - 类型检查优化
+    # 导入
+    "INP",    # flake8-no-pep420 - 命名空间包检查
+    "ICN",    # flake8-import-conventions - 导入别名规范
+    "FURB",   # refurb - 代码重构建议
+    # 代码简化
+    "SIM",    # flake8-simplify - 代码简化检查
+    "RET",    # flake8-return - return语句优化
+    "SLF",    # flake8-self - 私有成员访问检查
+    "ISC",    # flake8-implicit-str-concat - 隐式字符串连接
+    # 最佳实践
+    "PIE",    # flake8-pie - Python最佳实践检查
+    "C4",     # flake8-comprehensions - 推导式优化
+    "PERF",   # Perflint - 性能检查
+    "PTH",    # flake8-use-pathlib - pathlib替代检查
+    # 异步
+    "ASYNC",  # flake8-async - 异步代码检查
+    # 时间安全
+    "DTZ",    # flake8-datetimez - 时区安全检查
+    # 日志
+    "G",      # flake8-logging-format - 日志格式检查
+    "LOG",    # flake8-logging - 日志配置检查
+    "T20",    # flake8-print - 禁止print语句，应使用logger
+    # 安全
+    "S",      # flake8-bandit - 安全检查
+    "BLE",    # flake8-blind-except - 静默异常捕获检查
+    # 测试
+    "PT",     # flake8-pytest-style - pytest风格检查
+    "TRY",    # tryceratops - 异常处理最佳实践
+    # 文档
+    "D",      # pydocstyle - 文档字符串检查
+    # 命名
+    "N",      # pep8-naming - 命名规范检查
+    # 框架
+    "FAST",   # FastAPI - FastAPI特定检查
+    # Ruff
+    "RUF",    # Ruff特有规则
+    # 额外检查
+    "PGH",    # pygrep-hooks - 额外检查
 ]
 # 忽略的规则：
-# D211/D213/D203: docstring空行规则互相冲突
+# D203/D211: class docstring前空行规则互相冲突
+# D213: 与D212冲突（多行docstring摘要位置）
 # D400: docstring首行句号
 # E501: 行长度限制由formatter处理
 ignore = [
-    "D203",  # pydoclint - docstring前应有1个空行(与D211冲突)
-    "D211",  # pydoclint - docstring前不应有空行(与D203冲突)
-    "D213",  # pydoclint - 多行docstring应在第二行开始
-    "D400",  # pydoclint - docstring首行应以句号结尾
+    "D203",  # pydocstyle - docstring前应有1个空行(与D211冲突)
+    "D211",  # pydocstyle - docstring前不应有空行(与D203冲突)
+    "D213",  # pydocstyle - 多行docstring应在第二行开始
+    "D400",  # pydocstyle - docstring首行应以句号结尾
     "E501",  # pycodestyle - 行长度限制
+    "RUF001",  # 全角字符检查（中文项目无需修改）
+    "RUF002",  # docstring全角字符检查（中文项目无需修改）
+    "RUF003",  # 注释全角字符检查（中文项目无需修改）
 ]
 exclude = [".agents/**", "vendor/**"]
 
 [lint.per-file-ignores]
 "adapters/runner.py" = ["E402"]
 "vendor_adapter/VehicleMemBench/runner.py" = ["E402"]
-"tests/**" = ["D"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
+"tests/**" = [
+    "S101",  # 测试中使用 assert 是标准做法
+    "SLF001",  # 测试中访问私有成员是常见做法
+    "D103",  # 测试函数不需要完整的 docstring
+    "D415",  # 测试描述不需要标点结尾
+    "RUF005",  # 测试中使用列表拼接是常见做法
+    "RUF015",  # 测试中使用列表切片是常见做法
+    "FURB171",  # 测试中成员测试是常见做法
+    "D104",  # 测试包不需要 docstring
+    "RUF043",  # pytest.raises match参数中正则模式常见
+]
 
 [format]
 exclude = ["vendor/**", ".agents/**"]

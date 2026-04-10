@@ -12,6 +12,33 @@ _provider_semaphore_cache: dict[str, asyncio.Semaphore] = {}
 _provider_semaphore_lock: asyncio.Lock | None = None
 
 
+class ChatError(RuntimeError):
+    """Chat模型错误基类."""
+
+    def __init__(self, message: str) -> None:
+        """初始化错误."""
+        super().__init__(message)
+
+
+class NoProviderError(ChatError):
+    """没有可用provider错误."""
+
+    def __init__(self) -> None:
+        """初始化错误."""
+        super().__init__("No LLM providers configured")
+
+
+class AllProviderFailedError(ChatError):
+    """所有provider都失败错误."""
+
+    def __init__(self, details: str = "") -> None:
+        """初始化错误."""
+        msg = "All LLM providers failed"
+        if details:
+            msg += f": {details}"
+        super().__init__(msg)
+
+
 async def _get_provider_semaphore(
     provider_name: str, concurrency: int
 ) -> asyncio.Semaphore:
@@ -46,7 +73,7 @@ class ChatModel:
             settings = LLMSettings.load()
             providers = settings.llm_providers
         if not providers:
-            raise RuntimeError("No LLM providers configured")
+            raise NoProviderError()
         self.providers = providers
         self.temperature = temperature
 
@@ -121,10 +148,10 @@ class ChatModel:
                 )
                 response = await self._run_with_semaphore(provider, coro)
                 return response.choices[0].message.content or ""
-            except Exception as e:
+            except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
                 continue
-        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
+        raise AllProviderFailedError("; ".join(errors))
 
     async def generate_stream(
         self,
@@ -152,11 +179,11 @@ class ChatModel:
                         if delta.content:
                             yield delta.content
                     return
-            except Exception as e:
+            except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
                 continue
 
-        raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
+        raise AllProviderFailedError("; ".join(errors))
 
     async def batch_generate(
         self,

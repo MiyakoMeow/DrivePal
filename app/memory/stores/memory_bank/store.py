@@ -40,12 +40,12 @@ class MemoryBankStore:
     @property
     def events_store(self) -> TOMLStore:
         """事件存储."""
-        return self._storage._store
+        return self._storage.store
 
     @property
     def strategies_store(self) -> TOMLStore:
         """策略存储."""
-        return self._feedback._strategies_store
+        return self._feedback.strategies_store
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -55,7 +55,7 @@ class MemoryBankStore:
     @property
     def interactions_store(self) -> TOMLStore:
         """交互存储."""
-        return self._engine._interactions_store
+        return self._engine.interactions_store
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件."""
