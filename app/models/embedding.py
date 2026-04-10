@@ -1,5 +1,7 @@
 """文本嵌入模型封装，仅支持 OpenAI 兼容远程接口."""
 
+import hashlib
+
 import openai
 
 from app.models.settings import EmbeddingProviderConfig, LLMSettings
@@ -20,7 +22,8 @@ def get_cached_embedding_model() -> EmbeddingModel:
         msg = "No embedding base_url configured"
         raise RuntimeError(msg)
     api_key = provider.provider.api_key or ""
-    cache_key = f"{model}|{base_url}|{api_key}"
+    key_fp = hashlib.sha256(api_key.encode()).hexdigest()[:12]
+    cache_key = f"{model}|{base_url}|{key_fp}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
         _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(provider=provider)
     return _EMBEDDING_MODEL_CACHE[cache_key]
