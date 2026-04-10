@@ -8,7 +8,7 @@ from app.storage.init_data import init_storage
 
 
 async def test_events_persist_across_instances(tmp_path: Path) -> None:
-    """Verify that events persist when creating a new MemoryModule instance."""
+    """验证创建新 MemoryModule 实例时事件持久化."""
     init_storage(tmp_path)
     m1 = MemoryModule(tmp_path)
     await m1.write(MemoryEvent(content="项目进度会议", type="meeting"))
@@ -19,7 +19,7 @@ async def test_events_persist_across_instances(tmp_path: Path) -> None:
 
 
 async def test_feedback_updates_strategies(tmp_path: Path) -> None:
-    """Verify that accepting feedback increases the corresponding strategy weight."""
+    """验证接受反馈会增加对应策略权重."""
     from app.storage.toml_store import TOMLStore
 
     memory = MemoryModule(tmp_path)
@@ -32,7 +32,7 @@ async def test_feedback_updates_strategies(tmp_path: Path) -> None:
 
 
 async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
-    """Verify that ignoring feedback decreases the corresponding strategy weight."""
+    """验证忽略反馈会降低对应策略权重."""
     from app.storage.toml_store import TOMLStore
 
     memory = MemoryModule(tmp_path)
@@ -45,7 +45,7 @@ async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
 
 
 async def test_feedback_history_appended(tmp_path: Path) -> None:
-    """Verify that each feedback entry is appended to the feedback history."""
+    """验证每条反馈记录都追加到反馈历史."""
     from app.storage.toml_store import TOMLStore
 
     memory = MemoryModule(tmp_path)

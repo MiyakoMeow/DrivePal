@@ -1,4 +1,4 @@
-"""Tests for MemoryModule Facade."""
+"""MemoryModule 门面模式测试."""
 
 import pytest
 from app.memory.memory import MemoryModule

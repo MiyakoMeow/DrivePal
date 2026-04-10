@@ -1,6 +1,4 @@
-"""Mutation resolvers."""
-
-from __future__ import annotations
+"""Mutation 解析器."""
 
 import logging
 from pathlib import Path

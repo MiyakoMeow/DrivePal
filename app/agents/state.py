@@ -1,7 +1,5 @@
 """Agent状态定义模块."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import TypedDict
 

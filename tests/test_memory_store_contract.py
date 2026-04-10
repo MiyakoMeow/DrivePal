@@ -1,7 +1,5 @@
 """MemoryStore 接口契约测试 - 验证所有实现满足统一接口."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 import pytest
@@ -9,10 +7,8 @@ import pytest
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 
 if TYPE_CHECKING:
-    from app.models.settings import LLMProviderConfig
-
-if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
+    from app.models.settings import LLMProviderConfig
     from pathlib import Path
 
 

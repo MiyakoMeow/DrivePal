@@ -1,7 +1,5 @@
 """Strawberry GraphQL Schema 定义."""
 
-from __future__ import annotations
-
 from enum import Enum
 
 import strawberry

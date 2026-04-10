@@ -1,4 +1,4 @@
-"""Memory module exports."""
+"""记忆模块导出."""
 
 from app.memory.memory import MemoryModule, register_store
 from app.memory.schemas import (

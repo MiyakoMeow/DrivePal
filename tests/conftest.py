@@ -106,7 +106,7 @@ def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProvider
 
 @pytest.fixture(scope="session")
 def embedding() -> Generator[EmbeddingModel]:
-    """Session-level embedding instance, each pytest-xdist worker is independent."""
+    """会话级 embedding 实例，每个 pytest-xdist worker 独立."""
     from app.models.embedding import reset_embedding_singleton
 
     reset_embedding_singleton()

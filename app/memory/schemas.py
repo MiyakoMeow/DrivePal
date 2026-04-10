@@ -1,7 +1,5 @@
 """记忆后端数据模型定义."""
 
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator

@@ -15,7 +15,7 @@ import pytest
 
 @pytest.fixture
 def isolated_app(tmp_path: Path) -> Generator[TestClient]:
-    """Each test gets an independent FastAPI app instance."""
+    """每个测试获取独立的 FastAPI app 实例."""
     import os
 
     from fastapi.testclient import TestClient

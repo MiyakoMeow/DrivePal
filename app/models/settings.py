@@ -1,7 +1,5 @@
 """统一 LLM/Embedding 配置加载器."""
 
-from __future__ import annotations
-
 import os
 
 import tomllib

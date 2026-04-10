@@ -1,7 +1,5 @@
 """文本嵌入模型封装，支持 HuggingFace 本地模型和 OpenAI 兼容远程接口."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 import openai

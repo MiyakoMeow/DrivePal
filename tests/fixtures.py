@@ -1,4 +1,4 @@
-"""Test shared fixtures and cleanup functions."""
+"""测试共享 fixtures 和清理函数."""
 
 from contextlib import suppress
 
@@ -6,7 +6,7 @@ from app.models.embedding import reset_embedding_singleton
 
 
 def reset_all_singletons() -> None:
-    """Reset all global singleton states for test isolation."""
+    """重置所有全局单例状态以隔离测试."""
     import app.models.settings
     import app.api.main
 
