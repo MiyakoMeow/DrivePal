@@ -610,7 +610,7 @@ def report(output_path: Path | None = None) -> None:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError, OSError:
-            pass
+            logger.debug("无法解析结果文件: %s", path)
         if not isinstance(data, dict):
             continue
         if data.get("failed"):

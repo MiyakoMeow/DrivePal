@@ -37,7 +37,7 @@ extend-select = [
     "PT",     # flake8-pytest-style - pytest风格检查
     "TRY",    # tryceratops - 异常处理最佳实践
     # 文档
-    "D",      # pydocstyle - 文档字符串检查 pydoclint - 文档字符串检查
+    "D",      # pydocstyle - 文档字符串检查
     # 命名
     "N",      # pep8-naming - 命名规范检查
     # 框架
@@ -48,7 +48,8 @@ extend-select = [
     "PGH",    # pygrep-hooks - 额外检查
 ]
 # 忽略的规则：
-# D211/D213/D203: docstring空行规则互相冲突
+# D203/D211: class docstring前空行规则互相冲突
+# D213: 与D212冲突（多行docstring摘要位置）
 # D400: docstring首行句号
 # E501: 行长度限制由formatter处理
 ignore = [

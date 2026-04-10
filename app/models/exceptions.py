@@ -1,7 +1,5 @@
 """模型相关异常定义."""
 
-from __future__ import annotations
-
 
 class ProviderNotFoundError(ValueError):
     """Provider 未找到错误."""
