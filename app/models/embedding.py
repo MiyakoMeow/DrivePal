@@ -60,8 +60,12 @@ class EmbeddingModel:
         provider: EmbeddingProviderConfig,
     ) -> openai.AsyncOpenAI:
         """创建嵌入模型客户端."""
+        base_url = provider.provider.base_url
+        if not base_url:
+            msg = "Embedding provider must have a base_url configured"
+            raise RuntimeError(msg)
         kwargs: dict = {"api_key": provider.provider.api_key or "not-needed"}
-        kwargs["base_url"] = provider.provider.base_url
+        kwargs["base_url"] = base_url
         return openai.AsyncOpenAI(**kwargs)
 
     async def _async_encode_with_openai(
