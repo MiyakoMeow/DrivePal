@@ -18,15 +18,6 @@
 
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
       python = pkgs.python314;
-
-      cudaLibs = with pkgs.cudaPackages_12_8; [
-        cuda_nvcc
-        cuda_cudart
-        libcublas
-        libcusparse
-        libcusolver
-        cudnn
-      ];
     in
     {
       devShells.x86_64-linux.default = pkgs.mkShell {
@@ -45,7 +36,7 @@
           unset PYTHONPATH
           export REPO_ROOT=$(git rev-parse --show-toplevel)
           export LD_LIBRARY_PATH="${
-            pkgs.lib.makeLibraryPath (cudaLibs ++ [ pkgs.stdenv.cc.cc.lib ])
+            pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ]
           }:$LD_LIBRARY_PATH"
         '';
       };

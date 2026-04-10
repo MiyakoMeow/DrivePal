@@ -1,35 +1,22 @@
-"""文本嵌入模型封装，支持 HuggingFace 本地模型和 OpenAI 兼容远程接口."""
-
-from typing import TYPE_CHECKING
+"""文本嵌入模型封装，仅支持 OpenAI 兼容远程接口."""
 
 import openai
-import torch
 
-from app.models.settings import EmbeddingProviderConfig, LLMSettings, ProviderConfig
-
-if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
+from app.models.settings import EmbeddingProviderConfig, LLMSettings
 
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
-
-
-def _auto_detect_device() -> str:
-    if torch.cuda.is_available():
-        return "cuda"
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
 
 
 def get_cached_embedding_model() -> EmbeddingModel:
     """获取缓存的embedding模型实例，避免重复加载."""
     settings = LLMSettings.load()
     provider = settings.get_embedding_provider()
-    model = provider.provider.model if provider else "BAAI/bge-small-zh-v1.5"
-    base_url = provider.provider.base_url if provider else ""
-    device = provider.device if provider else ""
-    device = device or ""
-    cache_key = f"{model}|{base_url}|{device}"
+    if provider is None:
+        msg = "No embedding provider configured"
+        raise RuntimeError(msg)
+    model = provider.provider.model
+    base_url = provider.provider.base_url or ""
+    cache_key = f"{model}|{base_url}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
         _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(provider=provider)
     return _EMBEDDING_MODEL_CACHE[cache_key]
@@ -55,15 +42,13 @@ class EmbeddingModel:
             except RuntimeError:
                 pass
         if provider is None:
-            provider = EmbeddingProviderConfig(
-                provider=ProviderConfig(model="BAAI/bge-small-zh-v1.5"),
-                device=_auto_detect_device(),
-            )
+            msg = "Embedding provider is required (no local model fallback)"
+            raise RuntimeError(msg)
         self.provider = provider
-        self._client: openai.AsyncOpenAI | SentenceTransformer | None = None
+        self._client: openai.AsyncOpenAI | None = None
 
     @property
-    def client(self) -> openai.AsyncOpenAI | SentenceTransformer:
+    def client(self) -> openai.AsyncOpenAI:
         """获取或延迟创建嵌入模型客户端."""
         if self._client is not None:
             return self._client
@@ -73,19 +58,11 @@ class EmbeddingModel:
     def _create_client(
         self,
         provider: EmbeddingProviderConfig,
-    ) -> openai.AsyncOpenAI | SentenceTransformer:
+    ) -> openai.AsyncOpenAI:
         """创建嵌入模型客户端."""
-        device = provider.device or _auto_detect_device()
-        if provider.provider.base_url:
-            kwargs: dict = {"api_key": provider.provider.api_key or "not-needed"}
-            kwargs["base_url"] = provider.provider.base_url
-            return openai.AsyncOpenAI(**kwargs)
-        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
-
-        return SentenceTransformer(
-            provider.provider.model,
-            device=device,
-        )
+        kwargs: dict = {"api_key": provider.provider.api_key or "not-needed"}
+        kwargs["base_url"] = provider.provider.base_url
+        return openai.AsyncOpenAI(**kwargs)
 
     async def _async_encode_with_openai(
         self,
@@ -97,14 +74,6 @@ class EmbeddingModel:
         resp = await client.embeddings.create(model=model, input=text)
         return resp.data[0].embedding
 
-    def _encode_with_local(
-        self,
-        model: SentenceTransformer,
-        text: str,
-    ) -> list[float]:
-        """使用本地模型编码文本."""
-        return model.encode(text, normalize_embeddings=True).tolist()
-
     async def _async_batch_encode_with_openai(
         self,
         client: openai.AsyncOpenAI,
@@ -115,36 +84,21 @@ class EmbeddingModel:
         resp = await client.embeddings.create(model=model, input=texts)
         return [d.embedding for d in sorted(resp.data, key=lambda x: x.index)]
 
-    def _batch_encode_with_local(
-        self,
-        model: SentenceTransformer,
-        texts: list[str],
-    ) -> list[list[float]]:
-        """使用本地模型批量编码文本."""
-        embeddings = model.encode(texts, normalize_embeddings=True)
-        return [emb.tolist() for emb in embeddings]
-
     async def encode(self, text: str) -> list[float]:
         """编码文本为向量."""
-        cl = self.client
-        if isinstance(cl, openai.AsyncOpenAI):
-            return await self._async_encode_with_openai(
-                cl,
-                self.provider.provider.model,
-                text,
-            )
-        return self._encode_with_local(cl, text)
+        return await self._async_encode_with_openai(
+            self.client,
+            self.provider.provider.model,
+            text,
+        )
 
     async def batch_encode(self, texts: list[str]) -> list[list[float]]:
         """批量编码文本为向量."""
-        cl = self.client
-        if isinstance(cl, openai.AsyncOpenAI):
-            return await self._async_batch_encode_with_openai(
-                cl,
-                self.provider.provider.model,
-                texts,
-            )
-        return self._batch_encode_with_local(cl, texts)
+        return await self._async_batch_encode_with_openai(
+            self.client,
+            self.provider.provider.model,
+            texts,
+        )
 
 
 def reset_embedding_singleton() -> None:

@@ -77,19 +77,6 @@ class TestLLMProviderConfig:
 class TestEmbeddingProviderConfig:
     """EmbeddingProviderConfig 测试."""
 
-    def test_from_dict_local(self) -> None:
-        """验证本地 HuggingFace 提供者解析."""
-        cfg = EmbeddingProviderConfig.from_dict(
-            {
-                "model": "BAAI/bge-small-zh-v1.5",
-                "device": "cuda",
-            },
-        )
-        assert cfg.provider.model == "BAAI/bge-small-zh-v1.5"
-        assert cfg.device == "cuda"
-        assert cfg.provider.base_url is None
-        assert cfg.provider.api_key is None
-
     def test_from_dict_remote(self) -> None:
         """验证远程 OpenAI 兼容提供者解析."""
         cfg = EmbeddingProviderConfig.from_dict(
@@ -125,16 +112,15 @@ class TestLLMSettingsLoad:
                             "base_url": "https://api.openai.com/v1",
                             "api_key": "sk-a",
                         },
-                        "huggingface": {},
                     },
-                    "embedding": {"model": "huggingface/bge-test"},
+                    "embedding": {"model": "openai/text-embedding-3-small"},
                 },
             ),
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         settings = LLMSettings.load()
         assert "default" in settings.model_groups
-        assert settings.embedding_model == "huggingface/bge-test"
+        assert settings.embedding_model == "openai/text-embedding-3-small"
 
     def test_load_no_config_raises(
         self,
@@ -145,31 +131,6 @@ class TestLLMSettingsLoad:
         monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
-
-    def test_get_embedding_provider_local(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """验证 get_embedding_provider 解析本地 embedding 模型."""
-        config = {
-            "model_groups": {"default": {"models": ["local/qwen"]}},
-            "model_providers": {
-                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
-                "huggingface": {},
-            },
-            "embedding": {"model": "huggingface/BAAI/bge-small-zh-v1.5"},
-        }
-        config_file = tmp_path / "llm.toml"
-        config_file.write_text(tomli_w.dumps(config))
-        monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        _load_config.cache_clear()
-        settings = LLMSettings.load()
-        provider = settings.get_embedding_provider()
-        assert provider is not None
-        assert provider.provider.model == "BAAI/bge-small-zh-v1.5"
-        assert provider.provider.base_url is None
-        _load_config.cache_clear()
 
     def test_get_embedding_provider_remote(
         self,
@@ -198,30 +159,6 @@ class TestLLMSettingsLoad:
         assert provider is not None
         assert provider.provider.model == "text-embedding-3-small"
         assert provider.provider.base_url == "https://api.openai.com/v1"
-        _load_config.cache_clear()
-
-    def test_get_embedding_provider_with_device_override(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """验证 get_embedding_provider 解析 device 参数."""
-        config = {
-            "model_groups": {"default": {"models": ["local/qwen"]}},
-            "model_providers": {
-                "local": {"base_url": "http://localhost:8000", "api_key": "none"},
-                "huggingface": {},
-            },
-            "embedding": {"model": "huggingface/BAAI/bge-small-zh-v1.5?device=cuda"},
-        }
-        config_file = tmp_path / "llm.toml"
-        config_file.write_text(tomli_w.dumps(config))
-        monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        _load_config.cache_clear()
-        settings = LLMSettings.load()
-        provider = settings.get_embedding_provider()
-        assert provider is not None
-        assert provider.device == "cuda"
         _load_config.cache_clear()
 
     def test_get_embedding_provider_none_when_not_configured(
@@ -406,21 +343,6 @@ class TestChatModelFallback:
 class TestEmbeddingModelFallback:
     """EmbeddingModel 单提供者测试."""
 
-    def test_local_provider_creates_sentence_transformer(self) -> None:
-        """验证本地提供者使用 SentenceTransformer."""
-        provider = EmbeddingProviderConfig(
-            provider=ProviderConfig(model="fake-model"),
-            device="cpu",
-        )
-        emb = EmbeddingModel(provider=provider)
-        mock_st = MagicMock()
-        with patch(
-            "sentence_transformers.SentenceTransformer",
-            return_value=mock_st,
-        ) as mock_cls:
-            _ = emb.client
-        mock_cls.assert_called_once_with("fake-model", device="cpu")
-
     def test_remote_provider_creates_async_openai(self) -> None:
         """验证远程提供者使用 openai.AsyncOpenAI."""
         provider = EmbeddingProviderConfig(
@@ -437,16 +359,21 @@ class TestEmbeddingModelFallback:
         mock_cls.assert_called_once()
 
     async def test_encode_uses_client(self) -> None:
-        """验证 encode 委托给缓存的客户端."""
+        """验证 encode 委托给 openai 客户端."""
         provider = EmbeddingProviderConfig(
-            provider=ProviderConfig(model="fake-model"),
-            device="cpu",
+            provider=ProviderConfig(
+                model="text-embedding-3-small",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+            ),
         )
         emb = EmbeddingModel(provider=provider)
+        mock_resp = MagicMock()
+        mock_resp.data = [MagicMock()]
+        mock_resp.data[0].embedding = [0.1, 0.2, 0.3]
         mock_client = MagicMock()
-        mock_client.encode.return_value = MagicMock(
-            tolist=MagicMock(return_value=[0.1, 0.2, 0.3]),
-        )
+        mock_client.embeddings = MagicMock()
+        mock_client.embeddings.create = AsyncMock(return_value=mock_resp)
         emb._client = mock_client
         result = await emb.encode("test")
         assert result == [0.1, 0.2, 0.3]

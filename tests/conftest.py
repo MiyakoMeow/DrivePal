@@ -11,7 +11,7 @@ from app.models.embedding import (
     get_cached_embedding_model,
     reset_embedding_singleton,
 )
-from app.models.settings import LLMProviderConfig, LLMSettings
+from app.models.settings import EmbeddingProviderConfig, LLMProviderConfig, LLMSettings
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -108,9 +108,44 @@ def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProvider
     return llm_provider
 
 
+def _check_embedding_reachable(provider: EmbeddingProviderConfig) -> bool:
+    """检查 embedding provider 是否可达."""
+    if not provider.provider.base_url:
+        return False
+    try:
+        base = provider.provider.base_url.rstrip("/")
+        resp = requests.get(
+            f"{base}/models",
+            headers={"Authorization": f"Bearer {provider.provider.api_key}"}
+            if provider.provider.api_key
+            else {},
+            timeout=5,
+        )
+    except requests.RequestException:
+        return False
+    return resp.status_code == HTTP_OK
+
+
+def get_available_embedding() -> EmbeddingModel | None:
+    """获取可达的 embedding 模型，或 None."""
+    try:
+        settings = LLMSettings.load()
+    except RuntimeError:
+        return None
+    provider = settings.get_embedding_provider()
+    if provider is None or not _check_embedding_reachable(provider):
+        return None
+    return get_cached_embedding_model()
+
+
 @pytest.fixture(scope="session")
 def embedding() -> Generator[EmbeddingModel]:
-    """会话级 embedding 实例，每个 pytest-xdist worker 独立."""
+    """会话级 embedding 实例，不可用时跳过."""
     reset_embedding_singleton()
-    yield get_cached_embedding_model()
+    model = get_available_embedding()
+    if model is None:
+        pytest.skip("No embedding provider available")
+        yield  # unreachable, for type checker
+    else:
+        yield model
     reset_embedding_singleton()

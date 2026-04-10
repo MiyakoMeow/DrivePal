@@ -86,13 +86,12 @@ class EmbeddingProviderConfig:
     """单个 Embedding 服务提供商配置."""
 
     provider: ProviderConfig
-    device: str | None = None
 
     @classmethod
     def from_dict(cls, d: dict) -> EmbeddingProviderConfig:
         """从字典创建配置实例."""
-        provider, extra = _build_provider_config_from_dict(d, {"device": None})
-        return cls(provider=provider, **extra)
+        provider, _extra = _build_provider_config_from_dict(d, {})
+        return cls(provider=provider)
 
 
 @dataclass
@@ -208,7 +207,6 @@ class LLMSettings:
                 base_url=provider_config.get("base_url"),
                 api_key=api_key,
             ),
-            device=resolved.params.get("device"),
         )
 
 
