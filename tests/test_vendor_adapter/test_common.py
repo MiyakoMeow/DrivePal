@@ -66,13 +66,13 @@ async def test_store_client_delegates_to_store() -> None:
         requires_chat = False
         supports_interaction = False
 
-        async def write(self, event: MemoryEvent) -> str:
+        async def write(self, _event: MemoryEvent) -> str:
             return "fake_id"
 
-        async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        async def search(self, query: str, _top_k: int = 10) -> list[SearchResult]:
             return [SearchResult(event={"content": f"result for {query}"}, score=1.0)]
 
-        async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        async def get_history(self, _limit: int = 10) -> list[MemoryEvent]:
             return []
 
         async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
@@ -80,9 +80,9 @@ async def test_store_client_delegates_to_store() -> None:
 
         async def write_interaction(
             self,
-            query: str,
-            response: str,
-            event_type: str = "reminder",
+            _query: str,
+            _response: str,
+            _event_type: str = "reminder",
         ) -> str:
             return "fake_interaction_id"
 

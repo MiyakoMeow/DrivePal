@@ -1,0 +1,1 @@
+"""Vendor adapter tests."""

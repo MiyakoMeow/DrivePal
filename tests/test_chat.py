@@ -144,7 +144,7 @@ class TestProviderConcurrency:
         active_count = 0
         max_active = 0
 
-        async def mock_create(*args: object, **kwargs: object) -> MagicMock:
+        async def mock_create(*_args: object, **_kwargs: object) -> MagicMock:
             nonlocal active_count, max_active
             active_count += 1
             max_active = max(max_active, active_count)

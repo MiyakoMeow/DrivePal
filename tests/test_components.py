@@ -508,7 +508,7 @@ class TestPersonalitySummary:
     async def test_personality_concurrent_inflight_dedup(self, tmp_path: Path) -> None:
         """验证并发调用同一 date_group 时仅生成一次人格摘要."""
 
-        async def slow_generate(prompt: str) -> str:
+        async def slow_generate(_prompt: str) -> str:
             await asyncio.sleep(0.1)
             return "并发人格摘要"
 

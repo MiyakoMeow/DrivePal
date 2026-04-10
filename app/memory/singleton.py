@@ -10,7 +10,7 @@ _memory_module: MemoryModule | None = None
 
 def get_memory_module() -> MemoryModule:
     """获取或初始化记忆模块单例."""
-    global _memory_module
+    global _memory_module  # noqa: PLW0603
     if _memory_module is None:
         _memory_module = MemoryModule(
             data_dir=DATA_DIR,

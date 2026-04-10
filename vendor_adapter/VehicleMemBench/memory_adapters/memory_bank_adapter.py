@@ -3,9 +3,14 @@
 from typing import TYPE_CHECKING
 
 from app.memory.stores.memory_bank import MemoryBankStore
-
-from ..model_config import get_store_chat_model, get_store_embedding_model
-from .common import StoreClient, history_to_interaction_records
+from vendor_adapter.VehicleMemBench.memory_adapters.common import (
+    StoreClient,
+    history_to_interaction_records,
+)
+from vendor_adapter.VehicleMemBench.model_config import (
+    get_store_chat_model,
+    get_store_embedding_model,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

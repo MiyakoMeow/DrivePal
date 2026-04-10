@@ -187,7 +187,7 @@ class MemoryBankEngine:
         all_event_vectors = await self.embedding_model.batch_encode(event_texts)
         today = datetime.now(UTC).date()
         results = []
-        for event, event_vector in zip(events, all_event_vectors):
+        for event, event_vector in zip(events, all_event_vectors, strict=True):
             similarity = cosine_similarity(query_vector, event_vector)
             strength = event.get("memory_strength", 1)
             last_recall = event.get("last_recall_date", today.isoformat())
@@ -331,7 +331,7 @@ class MemoryBankEngine:
         )
         return interaction_id
 
-    async def _should_append_to_event(self, interaction: dict) -> str | None:
+    async def _should_append_to_event(self, interaction: dict) -> str | None:  # noqa: PLR0911
         events = await self._storage.read_events()
         if not events:
             return None

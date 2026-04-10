@@ -24,10 +24,10 @@ def clear_config_cache() -> None:
     get_benchmark_client.cache_clear()
 
 
+@pytest.mark.usefixtures("clear_config_cache")
 def test_get_benchmark_client_returns_openai_instance(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    clear_config_cache: None,
 ) -> None:
     """测试 get_benchmark_client 从 model_groups.benchmark 返回 OpenAI 实例."""
     config = {
@@ -50,10 +50,10 @@ def test_get_benchmark_client_returns_openai_instance(
     assert hasattr(client, "chat")
 
 
+@pytest.mark.usefixtures("clear_config_cache")
 def test_get_benchmark_client_uses_model_groups_benchmark(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    clear_config_cache: None,
 ) -> None:
     """测试 get_benchmark_client 使用 model_groups.benchmark 配置."""
     config = {
@@ -76,10 +76,10 @@ def test_get_benchmark_client_uses_model_groups_benchmark(
     assert client is not None
 
 
+@pytest.mark.usefixtures("clear_config_cache")
 def test_get_benchmark_client_raises_error_without_benchmark_group(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    clear_config_cache: None,
 ) -> None:
     """测试无 model_groups.benchmark 时 get_benchmark_client 抛出错误."""
     config = {
@@ -101,10 +101,10 @@ def test_get_benchmark_client_raises_error_without_benchmark_group(
         get_benchmark_client()
 
 
+@pytest.mark.usefixtures("clear_config_cache")
 def test_get_store_chat_model(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    clear_config_cache: None,
 ) -> None:
     """测试 get_store_chat_model 返回聊天模型."""
     config = {

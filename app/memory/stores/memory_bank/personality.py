@@ -95,7 +95,7 @@ class PersonalityManager:
                 personality_data["daily_personality"] = current_daily
                 await self._store.write(personality_data)
 
-    async def maybe_summarize(
+    async def maybe_summarize(  # noqa: C901
         self,
         date_group: str,
         events: list[dict],

@@ -27,7 +27,7 @@ class MemoryBankStore:
         data_dir: Path,
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
-        **kwargs: dict,
+        **_kwargs: dict,
     ) -> None:
         """初始化记忆库存储."""
         self._storage = EventStorage(data_dir)

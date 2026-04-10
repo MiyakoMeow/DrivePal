@@ -103,7 +103,7 @@ class SummaryManager:
                 summaries["daily_summaries"] = current_daily
                 await self._summaries_store.write(summaries)
 
-    async def maybe_summarize(
+    async def maybe_summarize(  # noqa: C901
         self,
         date_group: str,
         events: list[dict],

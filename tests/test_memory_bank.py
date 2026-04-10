@@ -181,7 +181,7 @@ class TestHierarchicalSummarization:
     ) -> None:
         """验证并发调用同一 date_group 时仅生成一次摘要."""
 
-        async def slow_generate(prompt: str) -> str:
+        async def slow_generate(_prompt: str) -> str:
             await asyncio.sleep(0.1)
             return "并发摘要"
 

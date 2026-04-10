@@ -171,23 +171,23 @@ class Mutation:
     """GraphQL Mutation 集合."""
 
     @strawberry.mutation
-    async def process_query(self, input: ProcessQueryInput) -> ProcessQueryResult:
+    async def process_query(self, query_input: ProcessQueryInput) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
         try:
             mm = get_memory_module()
             workflow = AgentWorkflow(
                 data_dir=DATA_DIR,
-                memory_mode=MemoryMode(input.memory_mode.value),
+                memory_mode=MemoryMode(query_input.memory_mode.value),
                 memory_module=mm,
             )
 
             driving_context = None
-            if input.context:
-                ctx_dict = _input_to_context_dict(input.context)
+            if query_input.context:
+                ctx_dict = _input_to_context_dict(query_input.context)
                 driving_context = DrivingContext(**ctx_dict).model_dump()
 
             result, event_id, stages = await workflow.run_with_stages(
-                input.query,
+                query_input.query,
                 driving_context,
             )
             return ProcessQueryResult(
@@ -202,43 +202,45 @@ class Mutation:
             )
         except GraphQLError:
             raise
-        except Exception:
+        except Exception as e:
             logger.exception("processQuery failed")
-            raise InternalServerError
+            raise InternalServerError from e
 
     @strawberry.mutation
-    async def submit_feedback(self, input: FeedbackInput) -> FeedbackResult:
+    async def submit_feedback(self, feedback_input: FeedbackInput) -> FeedbackResult:
         """提交用户反馈."""
-        if input.action not in ("accept", "ignore"):
-            raise GraphQLInvalidActionError(input.action)
+        if feedback_input.action not in ("accept", "ignore"):
+            raise GraphQLInvalidActionError(feedback_input.action)
         from app.api.main import get_memory_module  # noqa: PLC0415
 
         try:
             mm = get_memory_module()
             safe_action: Literal["accept", "ignore"]
-            safe_action = "accept" if input.action == "accept" else "ignore"
+            safe_action = "accept" if feedback_input.action == "accept" else "ignore"
             feedback = FeedbackData(
                 action=safe_action,
-                modified_content=input.modified_content,
+                modified_content=feedback_input.modified_content,
             )
-            await mm.update_feedback(input.event_id, feedback)
+            await mm.update_feedback(feedback_input.event_id, feedback)
             return FeedbackResult(status="success")
         except GraphQLError:
             raise
-        except Exception:
+        except Exception as e:
             logger.exception("submitFeedback failed")
-            raise InternalServerError
+            raise InternalServerError from e
 
     @strawberry.mutation
     async def save_scenario_preset(
         self,
-        input: ScenarioPresetInput,
+        preset_input: ScenarioPresetInput,
     ) -> ScenarioPresetGQL:
         """保存场景预设."""
         store = _preset_store()
-        preset = ScenarioPreset(name=input.name)
-        if input.context:
-            preset.context = DrivingContext(**_input_to_context_dict(input.context))
+        preset = ScenarioPreset(name=preset_input.name)
+        if preset_input.context:
+            preset.context = DrivingContext(
+                **_input_to_context_dict(preset_input.context)
+            )
         await store.append(preset.model_dump())
         return _to_gql_preset(preset.model_dump())
 

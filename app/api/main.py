@@ -31,7 +31,7 @@ if not WEBUI_DIR.exists():
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_storage(DATA_DIR)
     logger.info("Data directory initialized: %s", DATA_DIR)
     if not Path.exists(WEBUI_DIR):

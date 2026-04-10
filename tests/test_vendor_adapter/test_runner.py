@@ -6,7 +6,8 @@ import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
+if TYPE_CHECKING:
+    import pytest
 
 from vendor_adapter.VehicleMemBench import BenchMemoryMode
 from vendor_adapter.VehicleMemBench.runner import (
@@ -81,7 +82,7 @@ def test_prepare_gold_creates_dir_and_skips(
     monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
-        lambda: MagicMock(),
+        MagicMock,
     )
 
     asyncio.run(prepare(file_range="1", memory_types="gold"))
@@ -103,7 +104,7 @@ def test_prepare_none_creates_dir_and_skips(
     monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
-        lambda: MagicMock(),
+        MagicMock,
     )
 
     asyncio.run(prepare(file_range="1", memory_types="none"))
@@ -158,7 +159,7 @@ def test_run_skips_existing_query_files(
     )
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
-        lambda: MagicMock(),
+        MagicMock,
     )
 
     asyncio.run(run(file_range="99", memory_types="gold"))
@@ -174,7 +175,7 @@ def test_report_reads_hierarchical_queries(
     monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner.get_benchmark_config",
-        lambda: type("Cfg", (), {"model": "test-model"})(),
+        type("Cfg", (), {"model": "test-model"}),
     )
 
     mb_dir = tmp_path / "memory_bank" / "file_1"

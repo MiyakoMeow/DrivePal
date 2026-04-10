@@ -137,8 +137,8 @@ def _parse_memory_types(memory_types: str) -> list[BenchMemoryMode]:
 def parse_file_range(range_str: str) -> list[int]:
     """将形如 '1-5' 或 '1,3,5' 的文件范围字符串解析为整数列表."""
     result = []
-    for part in range_str.split(","):
-        part = part.strip()
+    for raw_part in range_str.split(","):
+        part = raw_part.strip()
         if "-" in part:
             a, b = part.split("-", 1)
             a, b = int(a), int(b)
@@ -196,7 +196,7 @@ def query_result_path(
     return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"
 
 
-async def prepare(
+async def prepare(  # noqa: C901, PLR0915
     file_range: str = "1-50",
     memory_types: str = "none,gold,kv,memory_bank",
 ) -> None:
@@ -282,7 +282,7 @@ async def prepare(
 async def _prepare_single(
     agent_client: AgentClient,
     history_text: str,
-    file_num: int,
+    _file_num: int,
     memory_type: BenchMemoryMode,
 ) -> dict | None:
     if memory_type == BenchMemoryMode.KV:
@@ -297,7 +297,7 @@ async def _prepare_single(
     return None
 
 
-async def run(
+async def run(  # noqa: C901
     file_range: str = "1-50",
     memory_types: str = "none,gold,kv,memory_bank",
     reflect_num: int = 10,
@@ -384,7 +384,7 @@ async def run(
         logger.info("[run] done with %d file-level failures", failed)
 
 
-async def _run_single(
+async def _run_single(  # noqa: PLR0913
     agent_client: AgentClient,
     events: list[dict],
     prep_data: dict,
@@ -578,7 +578,7 @@ def _make_sync_memory_search(
     return _search
 
 
-async def _run_custom_adapter_with_client(
+async def _run_custom_adapter_with_client(  # noqa: PLR0913
     agent_client: AgentClient,
     task: dict,
     task_id: int,
@@ -608,7 +608,7 @@ async def _run_custom_adapter_with_client(
     )
 
 
-def report(output_path: Path | None = None) -> None:
+def report(output_path: Path | None = None) -> None:  # noqa: C901, PLR0912
     """从结果生成并打印基准测试报告."""
     output_dir = _ensure_output_dir()
     all_results: dict[BenchMemoryMode, list[dict]] = {}
@@ -646,12 +646,10 @@ def report(output_path: Path | None = None) -> None:
 
     if BenchMemoryMode.GOLD in report_data:
         gold_esm = report_data[BenchMemoryMode.GOLD].get("exact_match_rate", 0)
-        for mtype in report_data:
+        for mtype, metric in report_data.items():
             if mtype != BenchMemoryMode.GOLD:
-                auto_esm = report_data[mtype].get("exact_match_rate", 0)
-                report_data[mtype]["memory_score"] = (
-                    auto_esm / gold_esm if gold_esm > 0 else 0.0
-                )
+                auto_esm = metric.get("exact_match_rate", 0)
+                metric["memory_score"] = auto_esm / gold_esm if gold_esm > 0 else 0.0
 
     out = output_path if output_path is not None else output_dir / "report.json"
     out.parent.mkdir(parents=True, exist_ok=True)

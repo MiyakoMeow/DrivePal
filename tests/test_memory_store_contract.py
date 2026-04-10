@@ -30,7 +30,7 @@ class TestMemoryStoreContract:
         self,
         request: pytest.FixtureRequest,
         tmp_path: Path,
-        llm_provider: LLMProviderConfig | None,
+        _llm_provider: LLMProviderConfig | None,
     ) -> MemoryStore:
         """提供参数化的 MemoryStore 实例."""
         mm = MemoryModule(tmp_path)

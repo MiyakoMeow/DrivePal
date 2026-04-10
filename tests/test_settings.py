@@ -351,7 +351,7 @@ class TestChatModelFallback:
         chat = ChatModel(providers=providers)
         call_count = 0
 
-        def mock_create(provider: object) -> MagicMock:
+        def mock_create(_provider: object) -> MagicMock:
             nonlocal call_count
             call_count += 1
             if call_count == 1:

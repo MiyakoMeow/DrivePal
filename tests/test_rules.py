@@ -16,7 +16,7 @@ def test_rule_dataclass() -> None:
     """验证 Rule 数据类."""
     r = Rule(
         name="test",
-        condition=lambda ctx: True,
+        condition=lambda _: True,
         constraint={"allowed_channels": ["audio"]},
         priority=10,
     )
@@ -84,13 +84,13 @@ def test_max_frequency_minutes_takes_min() -> None:
     rules = [
         Rule(
             name="r1",
-            condition=lambda c: True,
+            condition=lambda _: True,
             constraint={"max_frequency_minutes": 30},
             priority=10,
         ),
         Rule(
             name="r2",
-            condition=lambda c: True,
+            condition=lambda _: True,
             constraint={"max_frequency_minutes": 10},
             priority=20,
         ),
@@ -107,13 +107,13 @@ def test_missing_field_not_constraining() -> None:
     rules = [
         Rule(
             name="a",
-            condition=lambda c: True,
+            condition=lambda _: True,
             constraint={"allowed_channels": ["audio", "visual"]},
             priority=10,
         ),
         Rule(
             name="b",
-            condition=lambda c: True,
+            condition=lambda _: True,
             constraint={"postpone": True},
             priority=20,
         ),
@@ -131,13 +131,13 @@ def test_empty_intersection_fallback() -> None:
     rules = [
         Rule(
             name="a",
-            condition=lambda c: True,
+            condition=lambda _: True,
             constraint={"allowed_channels": ["audio"]},
             priority=20,
         ),
         Rule(
             name="b",
-            condition=lambda c: True,
+            condition=lambda _: True,
             constraint={"allowed_channels": ["visual"]},
             priority=10,
         ),

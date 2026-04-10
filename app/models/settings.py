@@ -302,7 +302,7 @@ _settings_cache: LLMSettings | None = None
 
 def get_chat_model(temperature: float | None = None) -> ChatModel:
     """从配置创建 ChatModel 实例（使用缓存避免重复加载）."""
-    global _settings_cache
+    global _settings_cache  # noqa: PLW0603
     from app.models.chat import ChatModel  # noqa: PLC0415
 
     if _settings_cache is None:
@@ -340,7 +340,7 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
 
 def get_judge_model() -> ChatModel:
     """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
-    global _settings_cache
+    global _settings_cache  # noqa: PLW0603
     from app.models.chat import ChatModel  # noqa: PLC0415
 
     if _settings_cache is None:

@@ -43,7 +43,7 @@ async def _get_provider_semaphore(
     concurrency: int,
 ) -> asyncio.Semaphore:
     """获取或创建 provider 级别的 semaphore."""
-    global _provider_semaphore_lock
+    global _provider_semaphore_lock  # noqa: PLW0603
     if _provider_semaphore_lock is None:
         _provider_semaphore_lock = asyncio.Lock()
 

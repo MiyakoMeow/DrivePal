@@ -112,9 +112,8 @@ class MemoryModule:
         """写入交互记录."""
         store = await self._get_store(self._resolve_mode(mode))
         if not getattr(store, "supports_interaction", False):
-            raise NotImplementedError(
-                f"Store '{store.store_name}' does not support write_interaction",
-            )
+            msg = f"Store '{store.store_name}' does not support write_interaction"
+            raise NotImplementedError(msg)
         return await store.write_interaction(query, response, event_type)
 
     async def search(
