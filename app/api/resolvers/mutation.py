@@ -211,8 +211,6 @@ class Mutation:
         """提交用户反馈."""
         if feedback_input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(feedback_input.action)
-        from app.api.main import get_memory_module  # noqa: PLC0415
-
         try:
             mm = get_memory_module()
             safe_action: Literal["accept", "ignore"]

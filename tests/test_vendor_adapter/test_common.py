@@ -69,7 +69,7 @@ async def test_store_client_delegates_to_store() -> None:
         async def write(self, _event: MemoryEvent) -> str:
             return "fake_id"
 
-        async def search(self, query: str, _top_k: int = 10) -> list[SearchResult]:
+        async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:  # noqa: ARG002
             return [SearchResult(event={"content": f"result for {query}"}, score=1.0)]
 
         async def get_history(self, _limit: int = 10) -> list[MemoryEvent]:
@@ -86,6 +86,6 @@ async def test_store_client_delegates_to_store() -> None:
         ) -> str:
             return "fake_interaction_id"
 
-    client = StoreClient(FakeStore())
+    client = StoreClient(FakeStore())  # ty: ignore[invalid-argument-type]
     results = await client.search(query="test", top_k=5)
     assert len(results) == 1

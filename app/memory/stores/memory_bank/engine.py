@@ -331,7 +331,7 @@ class MemoryBankEngine:
         )
         return interaction_id
 
-    async def _should_append_to_event(self, interaction: dict) -> str | None:  # noqa: PLR0911
+    async def _should_append_to_event(self, interaction: dict) -> str | None:
         events = await self._storage.read_events()
         if not events:
             return None
@@ -343,9 +343,9 @@ class MemoryBankEngine:
             query_vec = await self.embedding_model.encode(interaction["query"])
             event_vec = await self.embedding_model.encode(recent.get("content", ""))
             similarity = cosine_similarity(query_vec, event_vec)
-            if similarity >= AGGREGATION_SIMILARITY_THRESHOLD:
-                return recent["id"]
-            return None
+            return (
+                recent["id"] if similarity >= AGGREGATION_SIMILARITY_THRESHOLD else None
+            )
         content_lower = recent.get("content", "").lower()
         query_lower = interaction["query"].lower()
         query_chars = list(set(query_lower))

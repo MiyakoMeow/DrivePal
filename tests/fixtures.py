@@ -2,7 +2,7 @@
 
 from contextlib import suppress
 
-import app.api.main
+import app.memory.singleton
 import app.models.settings
 from app.models.embedding import reset_embedding_singleton
 
@@ -13,4 +13,4 @@ def reset_all_singletons() -> None:
     with suppress(AttributeError):
         app.models.settings._settings_cache = None
     with suppress(AttributeError):
-        app.api.main._memory_module = None
+        app.memory.singleton._memory_module = None

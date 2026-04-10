@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from app.memory.memory.memory import MemoryModule
 
+from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.stores.memory_bank.summarization import (

@@ -21,7 +21,7 @@ def isolated_app(tmp_path: Path) -> Generator[TestClient]:
     data_dir = tmp_path / "data"
     os.environ["DATA_DIR"] = str(data_dir)
 
-    with patch("app.api.main.DATA_DIR", Path(data_dir)):
+    with patch("app.config.DATA_DIR", Path(data_dir)):
         reset_all_singletons()
         yield TestClient(app)
         reset_all_singletons()
@@ -68,7 +68,7 @@ def test_save_scenario_preset(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($name: String!, $ctx: DrivingContextInput!) {
-            saveScenarioPreset(input: { name: $name, context: $ctx }) {
+            saveScenarioPreset(presetInput: { name: $name, context: $ctx }) {
                 id name
             }
         }
@@ -87,7 +87,7 @@ def test_delete_scenario_preset(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($name: String!, $ctx: DrivingContextInput!) {
-            saveScenarioPreset(input: { name: $name, context: $ctx }) { id }
+            saveScenarioPreset(presetInput: { name: $name, context: $ctx }) { id }
         }
     """,
         {"name": "to-delete", "ctx": {"scenario": "PARKED"}},
