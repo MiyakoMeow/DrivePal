@@ -106,7 +106,10 @@ def get_available_embedding() -> EmbeddingModel | None:
         settings = LLMSettings.load()
     except RuntimeError:
         return None
-    provider = settings.get_embedding_provider()
+    try:
+        provider = settings.get_embedding_provider()
+    except KeyError, RuntimeError:
+        return None
     if provider is None:
         return None
     base_url = provider.provider.base_url

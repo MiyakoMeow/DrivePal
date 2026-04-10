@@ -55,9 +55,10 @@ class EmbeddingModel:
         if not base_url:
             msg = "Embedding provider must have a base_url configured"
             raise RuntimeError(msg)
-        kwargs: dict = {"api_key": provider.provider.api_key or "not-needed"}
-        kwargs["base_url"] = base_url
-        return openai.AsyncOpenAI(**kwargs)
+        return openai.AsyncOpenAI(
+            api_key=provider.provider.api_key or "not-needed",
+            base_url=base_url,
+        )
 
     async def _async_encode_with_openai(
         self,
