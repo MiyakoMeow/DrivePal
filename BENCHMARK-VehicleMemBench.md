@@ -177,7 +177,7 @@ graph LR
 - 偏好表达隐式而非直接陈述
 
 **多用户冲突示例**：
-```
+```text
 [2025-03-10 08:00] Gary: I really love this green instrument panel. 
 It reminds me of the forest canopy I write about.
 
@@ -355,7 +355,7 @@ flowchart TB
 - 匹配对应用户的偏好
 
 **典型问题模板**：
-```
+```text
 At [时间], [用户A] got into the driver's seat with [用户B] as a passenger.
 [用户A] told [用户B]: '[需求描述]'
 ```
@@ -392,7 +392,7 @@ flowchart LR
 | 状态条件 | 载客 | 开启后座空调 |
 
 **典型问题模板**：
-```
+```text
 At [时间], [用户] was driving [地点描述].
 [用户] said: '[触发条件描述]'
 ```
@@ -430,7 +430,7 @@ flowchart TB
 - 最终值与初始值不同
 
 **典型问题模板**：
-```
+```text
 At [时间], [用户] got in the car.
 [用户] told the car: '[参照历史描述]'
 ```
@@ -465,7 +465,7 @@ flowchart TB
 | 他侄子 | Gary的侄子/Justin的侄子 | 亲属关系 |
 
 **典型问题模板**：
-```
+```text
 At [时间], [用户] was driving [指代对象].
 [用户] said: '[包含指代的请求]'
 ```
@@ -530,12 +530,12 @@ graph TB
 - 每个历史文件约 300-450KB，包含数千行对话
 
 **文件格式**：
-```
+```text
 [YYYY-MM-DD HH:MM] SpeakerName: Message content
 ```
 
 **对话样例**：
-```
+```text
 [2025-03-10 08:00] Gary Allen: ...I really love this green 
 instrument panel. It reminds me of the forest canopy I write about.
 
@@ -921,7 +921,7 @@ graph TB
 - `negative_FP` = 0（无遗漏变化）
 
 **公式**：
-```
+```text
 Exact Match = (differences == []) AND (FP == 0) AND (negative_FP == 0)
 ```
 
