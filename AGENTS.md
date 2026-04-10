@@ -5,7 +5,7 @@
 - 完全使用`uv`进行依赖管理、实际项目运行等。
 
 - 检查配置：[详见CI](.github/workflows/python.yml)
-  - 每次修改后：
+  - 每次修改后，直接运行，不要加额外参数：
     1. `uv run ruff check --fix`
     2. `uv run ruff format`
     3. `uv run ty check`
