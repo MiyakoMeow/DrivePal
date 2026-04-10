@@ -183,11 +183,21 @@ class MemoryBankEngine:
         if self.embedding_model is None:
             raise EmbeddingModelRequiredError
         query_vector = await self.embedding_model.encode(query)
-        event_texts = [self._get_searchable_text(event) for event in events]
-        all_event_vectors = await self.embedding_model.batch_encode(event_texts)
+        event_text_pairs = [
+            (event, text)
+            for event in events
+            if (text := self._get_searchable_text(event)).strip()
+        ]
+        if not event_text_pairs:
+            return []
+        all_event_vectors = await self.embedding_model.batch_encode(
+            [text for _, text in event_text_pairs]
+        )
         today = datetime.now(UTC).date()
         results = []
-        for event, event_vector in zip(events, all_event_vectors, strict=True):
+        for (event, _text), event_vector in zip(
+            event_text_pairs, all_event_vectors, strict=True
+        ):
             similarity = cosine_similarity(query_vector, event_vector)
             strength = event.get("memory_strength", 1)
             last_recall = event.get("last_recall_date", today.isoformat())

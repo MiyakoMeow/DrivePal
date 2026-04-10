@@ -1,6 +1,7 @@
 """GraphQL 端点测试."""
 
 import os
+from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -14,14 +15,23 @@ from tests.fixtures import reset_all_singletons
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+_MODULES_WITH_DATA_DIR = [
+    "app.config",
+    "app.api.main",
+    "app.api.resolvers.mutation",
+    "app.memory.singleton",
+]
+
 
 @pytest.fixture
 def isolated_app(tmp_path: Path) -> Generator[TestClient]:
     """每个测试获取独立的 FastAPI app 实例."""
     data_dir = tmp_path / "data"
     os.environ["DATA_DIR"] = str(data_dir)
-
-    with patch("app.config.DATA_DIR", Path(data_dir)):
+    target = Path(data_dir)
+    with ExitStack() as stack:
+        for mod in _MODULES_WITH_DATA_DIR:
+            stack.enter_context(patch(f"{mod}.DATA_DIR", target))
         reset_all_singletons()
         yield TestClient(app)
         reset_all_singletons()
