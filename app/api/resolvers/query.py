@@ -9,6 +9,7 @@ from app.api.graphql_schema import (
     ScenarioPresetGQL,
 )
 from app.api.resolvers.mutation import _preset_store, _to_gql_preset
+from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 
 
@@ -23,8 +24,6 @@ class Query:
         memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK,
     ) -> list[MemoryEventGQL]:
         """查询历史记忆事件."""
-        from app.api.main import get_memory_module  # noqa: PLC0415
-
         mm = get_memory_module()
         mode = MemoryMode(memory_mode.value)
         events = await mm.get_history(limit=limit, mode=mode)
