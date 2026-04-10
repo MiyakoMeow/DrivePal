@@ -67,6 +67,17 @@ exclude = [".agents/**", "vendor/**"]
 "adapters/runner.py" = ["E402"]
 "vendor_adapter/VehicleMemBench/runner.py" = ["E402"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
+"tests/**" = [
+    "S101",  # 测试中使用 assert 是标准做法
+    "SLF001",  # 测试中访问私有成员是常见做法
+    "D103",  # 测试函数不需要完整的 docstring
+    "D415",  # 测试描述不需要标点结尾
+    "RUF005",  # 测试中使用列表拼接是常见做法
+    "RUF015",  # 测试中使用列表切片是常见做法
+    "FURB171",  # 测试中成员测试是常见做法
+    "D104",  # 测试包不需要 docstring
+    "RUF043",  # 测试中 match 是常见用法
+]
 
 [format]
 exclude = ["vendor/**", ".agents/**"]
