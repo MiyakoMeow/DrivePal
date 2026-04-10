@@ -68,7 +68,7 @@ def test_save_scenario_preset(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($name: String!, $ctx: DrivingContextInput!) {
-            saveScenarioPreset(presetInput: { name: $name, context: $ctx }) {
+            saveScenarioPreset(input: { name: $name, context: $ctx }) {
                 id name
             }
         }
@@ -87,7 +87,7 @@ def test_delete_scenario_preset(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($name: String!, $ctx: DrivingContextInput!) {
-            saveScenarioPreset(presetInput: { name: $name, context: $ctx }) { id }
+            saveScenarioPreset(input: { name: $name, context: $ctx }) { id }
         }
     """,
         {"name": "to-delete", "ctx": {"scenario": "PARKED"}},
@@ -121,7 +121,7 @@ def test_feedback_invalid_action(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation {
-            submitFeedback(feedbackInput: { eventId: "x", action: "invalid" }) {
+            submitFeedback(input: { eventId: "x", action: "invalid" }) {
                 status
             }
         }
@@ -149,7 +149,7 @@ def test_process_query_without_context(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($query: String!) {
-            processQuery(queryInput: { query: $query, memoryMode: MEMORY_BANK }) {
+            processQuery(input: { query: $query, memoryMode: MEMORY_BANK }) {
                 result
                 eventId
                 stages { context task decision execution }
@@ -170,7 +170,7 @@ def test_process_query_with_context(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($input: ProcessQueryInput!) {
-            processQuery(queryInput: $input) {
+            processQuery(input: $input) {
                 result
                 eventId
                 stages { context task decision execution }

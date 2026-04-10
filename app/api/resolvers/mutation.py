@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 import strawberry
 from graphql.error import GraphQLError
@@ -171,7 +171,10 @@ class Mutation:
     """GraphQL Mutation 集合."""
 
     @strawberry.mutation
-    async def process_query(self, query_input: ProcessQueryInput) -> ProcessQueryResult:
+    async def process_query(
+        self,
+        query_input: Annotated[ProcessQueryInput, strawberry.argument(name="input")],
+    ) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
         try:
             mm = get_memory_module()
@@ -207,7 +210,10 @@ class Mutation:
             raise InternalServerError from e
 
     @strawberry.mutation
-    async def submit_feedback(self, feedback_input: FeedbackInput) -> FeedbackResult:
+    async def submit_feedback(
+        self,
+        feedback_input: Annotated[FeedbackInput, strawberry.argument(name="input")],
+    ) -> FeedbackResult:
         """提交用户反馈."""
         if feedback_input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(feedback_input.action)
@@ -230,7 +236,7 @@ class Mutation:
     @strawberry.mutation
     async def save_scenario_preset(
         self,
-        preset_input: ScenarioPresetInput,
+        preset_input: Annotated[ScenarioPresetInput, strawberry.argument(name="input")],
     ) -> ScenarioPresetGQL:
         """保存场景预设."""
         store = _preset_store()
