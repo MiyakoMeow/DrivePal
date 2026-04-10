@@ -18,6 +18,7 @@ from app.memory.types import MemoryMode
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from app.models.embedding import EmbeddingModel
     from app.models.settings import LLMProviderConfig
 
 # 搜索结果数量上限（魔法值）
@@ -251,12 +252,13 @@ class TestMemoryModuleIntegration:
     async def test_write_interaction_flow(
         self,
         tmp_path: Path,
+        embedding: EmbeddingModel,
         llm_provider: LLMProviderConfig | None,
     ) -> None:
         """验证端到端的写入交互和搜索流程."""
         if llm_provider is None:
             pytest.skip("No LLM provider available")
-        memory = MemoryModule(tmp_path)
+        memory = MemoryModule(tmp_path, embedding_model=embedding)
         await memory.write_interaction("测试查询", "测试回复")
         results = await memory.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) > 0

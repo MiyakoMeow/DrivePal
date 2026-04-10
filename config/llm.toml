@@ -34,6 +34,4 @@ api_key_env = "DEEPSEEK_API_KEY"
 concurrency = 8
 
 [embedding]
-model = "huggingface/BAAI/bge-small-zh-v1.5"
-
-[model_providers.huggingface]
+model = "local/text-embedding-bge-m3"

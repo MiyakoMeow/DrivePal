@@ -11,13 +11,14 @@ from app.memory.types import MemoryMode
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from app.models.embedding import EmbeddingModel
     from app.models.settings import LLMProviderConfig
 
 
 @pytest.fixture
-def mm(tmp_path: Path) -> MemoryModule:
+def mm(tmp_path: Path, embedding: EmbeddingModel) -> MemoryModule:
     """提供一个 MemoryModule 实例用于测试."""
-    return MemoryModule(tmp_path)
+    return MemoryModule(tmp_path, embedding_model=embedding)
 
 
 class TestMemoryModuleFacade:

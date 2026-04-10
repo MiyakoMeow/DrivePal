@@ -1,10 +1,11 @@
 """共享测试配置和 fixtures."""
 
 import os
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
+import httpx
 import pytest
-import requests
 
 from app.models.embedding import (
     EmbeddingModel,
@@ -15,9 +16,6 @@ from app.models.settings import LLMProviderConfig, LLMSettings
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-
-# PLR2004: HTTP 状态码
-HTTP_OK = 200
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -54,22 +52,15 @@ def pytest_collection_modifyitems(
             item.add_marker(skip_integration)
 
 
-def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
-    """检查 provider 是否可达（发起真实 HTTP 请求）."""
-    if not provider.provider.base_url:
-        return True
+def _check_endpoint_reachable(base_url: str, api_key: str | None) -> bool:
+    """检查远程端点是否可达."""
     try:
-        base = provider.provider.base_url.rstrip("/")
-        resp = requests.get(
-            f"{base}/models",
-            headers={"Authorization": f"Bearer {provider.provider.api_key}"}
-            if provider.provider.api_key
-            else {},
-            timeout=5,
-        )
-    except requests.RequestException:
+        base = base_url.rstrip("/")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        resp = httpx.get(f"{base}/models", headers=headers, timeout=5)
+    except httpx.HTTPError:
         return False
-    return resp.status_code == HTTP_OK
+    return resp.status_code == HTTPStatus.OK
 
 
 def get_available_provider() -> LLMProviderConfig | None:
@@ -86,10 +77,11 @@ def get_available_provider() -> LLMProviderConfig | None:
 
     fallback_provider: LLMProviderConfig | None = None
     for provider in providers:
-        if not provider.provider.base_url:
+        base_url = provider.provider.base_url
+        if not base_url:
             fallback_provider = fallback_provider or provider
             continue
-        if _check_provider_reachable(provider):
+        if _check_endpoint_reachable(base_url, provider.provider.api_key):
             return provider
     return fallback_provider
 
@@ -108,9 +100,34 @@ def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProvider
     return llm_provider
 
 
+def get_available_embedding() -> EmbeddingModel | None:
+    """获取可达的 embedding 模型，或 None."""
+    try:
+        settings = LLMSettings.load()
+    except RuntimeError:
+        return None
+    try:
+        provider = settings.get_embedding_provider()
+    except KeyError, RuntimeError:
+        return None
+    if provider is None:
+        return None
+    base_url = provider.provider.base_url
+    if not base_url or not _check_endpoint_reachable(
+        base_url, provider.provider.api_key
+    ):
+        return None
+    return get_cached_embedding_model()
+
+
 @pytest.fixture(scope="session")
 def embedding() -> Generator[EmbeddingModel]:
-    """会话级 embedding 实例，每个 pytest-xdist worker 独立."""
+    """会话级 embedding 实例，不可用时跳过."""
     reset_embedding_singleton()
-    yield get_cached_embedding_model()
-    reset_embedding_singleton()
+    try:
+        model = get_available_embedding()
+        if model is None:
+            pytest.skip("No embedding provider available")
+        yield model
+    finally:
+        reset_embedding_singleton()
