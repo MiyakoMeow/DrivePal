@@ -7,6 +7,10 @@ from app.agents.rules import SAFETY_RULES, Rule, apply_rules, format_constraints
 if TYPE_CHECKING:
     from typing import Any
 
+# 替换测试中的魔法值
+RULE_PRIORITY = 10  # 测试规则优先级
+MIN_FREQUENCY_MINUTES = 10  # 最小频率分钟数
+
 
 def test_rule_dataclass() -> None:
     """验证 Rule 数据类."""
@@ -17,7 +21,7 @@ def test_rule_dataclass() -> None:
         priority=10,
     )
     assert r.name == "test"
-    assert r.priority == 10
+    assert r.priority == RULE_PRIORITY
 
 
 def test_no_matching_rules() -> None:
@@ -95,7 +99,7 @@ def test_max_frequency_minutes_takes_min() -> None:
         {"scenario": "any", "driver": {"fatigue_level": 0, "workload": "low"}},
         rules,
     )
-    assert result["max_frequency_minutes"] == 10
+    assert result["max_frequency_minutes"] == MIN_FREQUENCY_MINUTES
 
 
 def test_missing_field_not_constraining() -> None:

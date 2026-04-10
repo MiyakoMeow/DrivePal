@@ -27,6 +27,7 @@ class EmbeddingModelRequiredError(RuntimeError):
 
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
+OVERLAP_RATIO_THRESHOLD = 0.5
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
@@ -351,7 +352,7 @@ class MemoryBankEngine:
         if not query_chars:
             return None
         overlap = sum(1 for c in query_chars if c in content_lower)
-        if overlap / len(query_chars) >= 0.5:
+        if overlap / len(query_chars) >= OVERLAP_RATIO_THRESHOLD:
             return recent["id"]
         return None
 

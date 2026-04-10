@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
     from app.models.settings import LLMProviderConfig
 
+LIMIT_HISTORY = 3
+
 
 def _get_store_params() -> list[str]:
     return ["memory_bank"]
@@ -74,7 +76,7 @@ class TestMemoryStoreContract:
         for i in range(5):
             await store.write(MemoryEvent(content=f"事件{i}"))
         history = await store.get_history(limit=3)
-        assert len(history) == 3
+        assert len(history) == LIMIT_HISTORY
 
     async def test_update_feedback_affects_history(self, store: MemoryStore) -> None:
         """验证 update_feedback 后历史记录中包含反馈的事件."""

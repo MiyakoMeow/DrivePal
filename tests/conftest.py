@@ -16,6 +16,9 @@ from app.models.settings import LLMProviderConfig, LLMSettings
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+# PLR2004: HTTP 状态码
+HTTP_OK = 200
+
 
 def pytest_configure(config: pytest.Config) -> None:
     """注册自定义标记."""
@@ -66,7 +69,7 @@ def _check_provider_reachable(provider: LLMProviderConfig) -> bool:
         )
     except requests.RequestException:
         return False
-    return resp.status_code == 200
+    return resp.status_code == HTTP_OK
 
 
 def get_available_provider() -> LLMProviderConfig | None:

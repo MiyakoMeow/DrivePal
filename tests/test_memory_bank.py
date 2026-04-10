@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from app.memory.memory.memory import MemoryModule
 
-from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.stores.memory_bank.summarization import (
@@ -19,6 +19,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from app.models.settings import LLMProviderConfig
+
+# 搜索结果数量上限（魔法值）
+TOP_K = 10
+# 搜索后记忆强化目标值
+MEMORY_STRENGTH_AFTER_SEARCH = 2
+# 记忆强度下限阈值
+MEMORY_STRENGTH_THRESHOLD = 2
 
 
 @pytest.fixture
@@ -57,7 +64,7 @@ class TestSearchWithForgetting:
         for i in range(10):
             await backend.write(MemoryEvent(content=f"事件{i}关于天气"))
         results = await backend.search("天气")
-        assert len(results) == 10
+        assert len(results) == TOP_K
 
 
 class TestRecallStrengthening:
@@ -71,7 +78,7 @@ class TestRecallStrengthening:
         await backend.write(MemoryEvent(content="重要的会议"))
         await backend.search("会议")
         events = await backend.events_store.read()
-        assert events[0]["memory_strength"] == 2
+        assert events[0]["memory_strength"] == MEMORY_STRENGTH_AFTER_SEARCH
 
     async def test_search_updates_only_matched_events(
         self,
@@ -84,7 +91,7 @@ class TestRecallStrengthening:
         events = await backend.events_store.read()
         weather = [e for e in events if "天气" in e["content"]][0]
         meeting = [e for e in events if "会议" in e["content"]][0]
-        assert weather["memory_strength"] >= 2
+        assert weather["memory_strength"] >= MEMORY_STRENGTH_THRESHOLD
         assert meeting["memory_strength"] == 1
 
 

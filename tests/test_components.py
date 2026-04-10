@@ -27,6 +27,17 @@ from app.memory.stores.memory_bank.personality import (
 )
 from app.storage.toml_store import TOMLStore
 
+# 测试常量定义
+ID_TIMESTAMP_LENGTH = 14  # 事件ID时间戳部分长度
+ID_UUID_LENGTH = 8  # 事件ID UUID部分长度
+EXPECTED_EVENT_COUNT_2 = 2  # 预期事件数量
+DEFAULT_TOP_K = 5  # 搜索默认返回数量
+WEIGHT_MIN = 0.1  # 策略权重下限
+FEEDBACK_RECORD_COUNT_2 = 2  # 反馈记录数量
+INITIAL_MEMORY_STRENGTH = 1  # 初始记忆强度
+SEARCH_BOOST_STRENGTH = 2  # 搜索增强后记忆强度
+SOFT_FORGET_THRESHOLD_VALUE = 0.15  # 软遗忘阈值
+
 
 class TestForgettingCurve:
     """遗忘曲线衰减函数测试."""
@@ -73,8 +84,8 @@ class TestEventStorage:
         eid = storage.generate_id()
         assert "_" in eid
         parts = eid.split("_")
-        assert len(parts[0]) == 14
-        assert len(parts[1]) == 8
+        assert len(parts[0]) == ID_TIMESTAMP_LENGTH
+        assert len(parts[1]) == ID_UUID_LENGTH
 
     async def test_read_events_empty(self, storage: EventStorage) -> None:
         """验证从空存储读取返回空列表."""
@@ -104,7 +115,7 @@ class TestEventStorage:
         """验证多次追加能正确累积."""
         await storage.append_event(MemoryEvent(content="A"))
         await storage.append_event(MemoryEvent(content="B"))
-        assert len(await storage.read_events()) == 2
+        assert len(await storage.read_events()) == EXPECTED_EVENT_COUNT_2
 
 
 class TestKeywordSearch:
@@ -149,7 +160,7 @@ class TestKeywordSearch:
         """验证 top_k 参数限制结果数量."""
         events = [{"content": f"天气事件{i}", "description": ""} for i in range(20)]
         results = search.search("天气", events, top_k=5)
-        assert len(results) == 5
+        assert len(results) == DEFAULT_TOP_K
 
     def test_empty_events(self, search: KeywordSearch) -> None:
         """验证关键词搜索处理空事件列表."""
@@ -217,7 +228,7 @@ class TestFeedbackManager:
                 FeedbackData(action="ignore", type="general"),
             )
         strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
-        assert strategies["reminder_weights"]["general"] >= 0.1
+        assert strategies["reminder_weights"]["general"] >= WEIGHT_MIN
 
     async def test_feedback_appended_to_history(
         self,
@@ -234,7 +245,7 @@ class TestFeedbackManager:
             FeedbackData(action="ignore", type="general"),
         )
         feedback = await TOMLStore(tmp_path, Path("feedback.toml"), list).read()
-        assert len(feedback) == 2
+        assert len(feedback) == FEEDBACK_RECORD_COUNT_2
 
 
 class TestSimpleInteractionWriter:
@@ -334,7 +345,7 @@ class TestMemoryBankEngineWrite:
         await engine.write(MemoryEvent(content="重要会议"))
         await engine.search("会议")
         events = await storage.read_events()
-        assert events[0]["memory_strength"] == 2
+        assert events[0]["memory_strength"] == SEARCH_BOOST_STRENGTH
 
 
 class TestMemoryBankEngineWriteInteraction:
@@ -379,7 +390,7 @@ class TestMemoryBankEngineWriteInteraction:
         await engine.write_interaction("明天上午开会讨论", "已更新")
         events = await storage.read_events()
         assert len(events) == 1
-        assert len(events[0]["interaction_ids"]) == 2
+        assert len(events[0]["interaction_ids"]) == FEEDBACK_RECORD_COUNT_2
 
 
 class TestPersonalitySummary:
@@ -526,7 +537,7 @@ class TestSoftForgetConstants:
 
     def test_threshold_value(self) -> None:
         """验证 SOFT_FORGET_THRESHOLD 为 0.15."""
-        assert SOFT_FORGET_THRESHOLD == 0.15
+        assert SOFT_FORGET_THRESHOLD == SOFT_FORGET_THRESHOLD_VALUE
 
     def test_strength_value(self) -> None:
         """验证 SOFT_FORGET_STRENGTH 为 0."""

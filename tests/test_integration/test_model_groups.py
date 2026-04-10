@@ -10,6 +10,8 @@ from app.models.model_string import _load_config, get_model_group_providers
 if TYPE_CHECKING:
     from pathlib import Path
 
+EXPECTED_TEMPERATURE = 0.1
+
 
 def test_model_groups_basic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """测试基本的 model_groups 配置."""
@@ -63,7 +65,7 @@ def test_model_groups_with_query_params(
     providers = get_model_group_providers("fast")
     assert len(providers) == 1
     assert providers[0]["model"] == "glm-4.7-flashx"
-    assert providers[0]["temperature"] == 0.1
+    assert providers[0]["temperature"] == EXPECTED_TEMPERATURE
 
 
 def test_model_groups_not_found(

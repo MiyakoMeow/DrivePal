@@ -12,6 +12,9 @@ from app.schemas.context import (
     TrafficCondition,
 )
 
+# PLR2004: ScenarioPreset ID 长度
+EXPECTED_SCENARIO_ID_LENGTH = 12
+
 
 def test_driver_state_defaults() -> None:
     """验证 DriverState 的默认值."""
@@ -96,7 +99,7 @@ def test_scenario_preset_auto_id_and_timestamp() -> None:
     """验证 ScenarioPreset 自动生成 id 和 created_at."""
     sp = ScenarioPreset(name="test")
     assert sp.id != ""
-    assert len(sp.id) == 12
+    assert len(sp.id) == EXPECTED_SCENARIO_ID_LENGTH
     assert sp.created_at != ""
 
 

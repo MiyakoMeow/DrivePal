@@ -10,6 +10,9 @@ from app.memory.stores.memory_bank import MemoryBankStore
 if TYPE_CHECKING:
     from pathlib import Path
 
+# 相似交互聚合后的交互 ID 数量
+AGGREGATED_INTERACTION_COUNT = 2
+
 
 @pytest.fixture
 def mock_chat_model() -> MagicMock:
@@ -56,4 +59,4 @@ class TestWriteInteraction:
         await store.write_interaction("明天下午也有会议", "已更新")
         events = await store.events_store.read()
         assert len(events) == 1
-        assert len(events[0]["interaction_ids"]) == 2
+        assert len(events[0]["interaction_ids"]) == AGGREGATED_INTERACTION_COUNT

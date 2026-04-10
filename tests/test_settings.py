@@ -20,6 +20,15 @@ from app.models.settings import (
 if TYPE_CHECKING:
     from pathlib import Path
 
+# 测试用魔法值常量
+DEFAULT_TEMPERATURE = 0.7
+TEMPERATURE_0_5 = 0.5
+TEMPERATURE_0_1 = 0.1
+DEFAULT_CONCURRENCY = 4
+CONCURRENCY_8 = 8
+CONCURRENCY_16 = 16
+CALL_COUNT_2 = 2
+
 
 class TestLLMProviderConfig:
     """LLMProviderConfig 测试."""
@@ -37,7 +46,7 @@ class TestLLMProviderConfig:
         assert cfg.provider.model == "gpt-4"
         assert cfg.provider.base_url == "https://api.openai.com/v1"
         assert cfg.provider.api_key == "sk-test"
-        assert cfg.temperature == 0.5
+        assert cfg.temperature == TEMPERATURE_0_5
 
     def test_from_dict_defaults(self) -> None:
         """验证可选字段缺失时的默认值."""
@@ -45,7 +54,7 @@ class TestLLMProviderConfig:
         assert cfg.provider.model == "test"
         assert cfg.provider.base_url is None
         assert cfg.provider.api_key is None
-        assert cfg.temperature == 0.7
+        assert cfg.temperature == DEFAULT_TEMPERATURE
 
     def test_llm_provider_config_with_concurrency(self) -> None:
         """验证 concurrency 字段被正确解析."""
@@ -57,12 +66,12 @@ class TestLLMProviderConfig:
                 "concurrency": 8,
             },
         )
-        assert cfg.concurrency == 8
+        assert cfg.concurrency == CONCURRENCY_8
 
     def test_llm_provider_config_concurrency_defaults(self) -> None:
         """验证 concurrency 默认值为 4."""
         cfg = LLMProviderConfig.from_dict({"model": "test"})
-        assert cfg.concurrency == 4
+        assert cfg.concurrency == DEFAULT_CONCURRENCY
 
 
 class TestEmbeddingProviderConfig:
@@ -292,7 +301,7 @@ class TestLLMSettingsLoad:
         _load_config.cache_clear()
         settings = LLMSettings.load()
         providers = settings.get_model_group_providers("default")
-        assert providers[0].concurrency == 16
+        assert providers[0].concurrency == CONCURRENCY_16
         _load_config.cache_clear()
 
 
@@ -361,7 +370,7 @@ class TestChatModelFallback:
         with patch.object(chat, "_create_async_client", side_effect=mock_create):
             result = await chat.generate("hello")
         assert result == "fallback response"
-        assert call_count == 2
+        assert call_count == CALL_COUNT_2
 
     async def test_generate_all_providers_fail_raises(self) -> None:
         """验证所有提供者失败时抛出 RuntimeError."""
@@ -455,7 +464,7 @@ def test_judge_provider_config_from_dict() -> None:
     assert cfg.provider.model == "deepseek-chat"
     assert cfg.provider.base_url == "https://api.deepseek.com/v1"
     assert cfg.provider.api_key == "sk-xxx"
-    assert cfg.temperature == 0.1
+    assert cfg.temperature == TEMPERATURE_0_1
 
 
 def test_judge_provider_config_defaults() -> None:
@@ -463,7 +472,7 @@ def test_judge_provider_config_defaults() -> None:
     cfg = JudgeProviderConfig.from_dict({"model": "test"})
     assert cfg.provider.base_url is None
     assert cfg.provider.api_key is None
-    assert cfg.temperature == 0.1
+    assert cfg.temperature == TEMPERATURE_0_1
 
 
 def test_llm_settings_loads_judge(

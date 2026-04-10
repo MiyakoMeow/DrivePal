@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
     from app.models.embedding import EmbeddingModel
 
+SIMILARITY_THRESHOLD = 0.5
+
 
 class TestEmbeddingForMemorySearch:
     """基于嵌入的记忆搜索测试."""
@@ -37,7 +39,7 @@ class TestEmbeddingForMemorySearch:
         await memory.write(MemoryEvent(content="明天下午三点项目评审会议"))
         results = await memory.search("天气预报查询", mode=MemoryMode.MEMORY_BANK)
         if results:
-            assert results[0].score < 0.5
+            assert results[0].score < SIMILARITY_THRESHOLD
 
 
 class TestEmbeddingForMemoryBankRetrieval:
@@ -65,4 +67,4 @@ class TestEmbeddingForMemoryBankRetrieval:
         await backend.write(MemoryEvent(content="明天下午三点项目评审会议"))
         results = await backend.search("今晚吃什么好呢")
         assert len(results) > 0
-        assert results[0].score < 0.5
+        assert results[0].score < SIMILARITY_THRESHOLD

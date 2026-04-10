@@ -21,6 +21,12 @@ from app.models.settings import LLMProviderConfig, ProviderConfig
 if TYPE_CHECKING:
     from pathlib import Path
 
+# 替换测试中的魔法值
+MAX_ACTIVE = 2  # 测试并发上限
+EXPECTED_RESULTS_COUNT = 4  # 测试预期结果数量
+PROVIDER_A_CONCURRENCY = 2  # Provider A 的并发数
+PROVIDER_B_CONCURRENCY = 3  # Provider B 的并发数
+
 
 @pytest.mark.integration
 async def test_chat_drives_llm_memory_search(
@@ -157,8 +163,8 @@ class TestProviderConcurrency:
             tasks = [chat.generate(f"prompt{i}") for i in range(4)]
             results = await asyncio.gather(*tasks)
 
-        assert max_active == 2
-        assert len(results) == 4
+        assert max_active == MAX_ACTIVE
+        assert len(results) == EXPECTED_RESULTS_COUNT
 
     async def test_different_providers_have_independent_semaphores(self) -> None:
         """验证不同 provider 的 semaphore 独立."""
@@ -186,5 +192,5 @@ class TestProviderConcurrency:
         sem_a = await _get_provider_semaphore("http://a:8000", 2)
         sem_b = await _get_provider_semaphore("http://b:8000", 3)
 
-        assert sem_a._value == 2
-        assert sem_b._value == 3
+        assert sem_a._value == PROVIDER_A_CONCURRENCY
+        assert sem_b._value == PROVIDER_B_CONCURRENCY
