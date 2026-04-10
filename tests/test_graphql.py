@@ -121,7 +121,7 @@ def test_feedback_invalid_action(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation {
-            submitFeedback(input: { eventId: "x", action: "invalid" }) {
+            submitFeedback(feedbackInput: { eventId: "x", action: "invalid" }) {
                 status
             }
         }
@@ -149,7 +149,7 @@ def test_process_query_without_context(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($query: String!) {
-            processQuery(input: { query: $query, memoryMode: MEMORY_BANK }) {
+            processQuery(queryInput: { query: $query, memoryMode: MEMORY_BANK }) {
                 result
                 eventId
                 stages { context task decision execution }
@@ -170,7 +170,7 @@ def test_process_query_with_context(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($input: ProcessQueryInput!) {
-            processQuery(input: $input) {
+            processQuery(queryInput: $input) {
                 result
                 eventId
                 stages { context task decision execution }
