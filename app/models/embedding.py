@@ -19,7 +19,8 @@ def get_cached_embedding_model() -> EmbeddingModel:
     if not base_url:
         msg = "No embedding base_url configured"
         raise RuntimeError(msg)
-    cache_key = f"{model}|{base_url}"
+    api_key = provider.provider.api_key or ""
+    cache_key = f"{model}|{base_url}|{api_key}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
         _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(provider=provider)
     return _EMBEDDING_MODEL_CACHE[cache_key]
@@ -90,6 +91,8 @@ class EmbeddingModel:
 
     async def batch_encode(self, texts: list[str]) -> list[list[float]]:
         """批量编码文本为向量."""
+        if not texts:
+            return []
         return await self._async_batch_encode_with_openai(
             self.client,
             self.provider.provider.model,
