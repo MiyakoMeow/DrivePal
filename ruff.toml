@@ -10,6 +10,7 @@ ignore = [
     "D211",  # pydocstyle - docstring前不应有空行(与D203冲突)
     "D213",  # pydocstyle - 多行docstring应在第二行开始
     "D400",  # pydocstyle - docstring首行应以句号结尾
+    "COM812",  # 与formatter冲突（formatter自动处理尾随逗号）
     "E501",  # pycodestyle - 行长度限制
     "RUF001",  # 全角字符检查（中文项目无需修改）
     "RUF002",  # docstring全角字符检查（中文项目无需修改）
