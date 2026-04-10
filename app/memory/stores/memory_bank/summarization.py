@@ -1,4 +1,3 @@
-# ruff: noqa: TC003
 """MemoryBank 摘要管理器."""
 
 import asyncio
@@ -183,7 +182,7 @@ class SummaryManager:
         prompt = f"请简洁总结以下每日摘要（两到三句话）：\n{combined}"
         try:
             overall = await chat_model.generate(prompt)
-        except Exception:
+        except OSError, ValueError, RuntimeError:
             return
         async with self._lock:
             summaries = await self._summaries_store.read()

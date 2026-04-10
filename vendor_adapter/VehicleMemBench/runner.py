@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import sys
 from dataclasses import dataclass
@@ -16,6 +17,14 @@ if TYPE_CHECKING:
 import aiofiles
 
 from . import BenchMemoryMode
+
+logger = logging.getLogger(__name__)
+
+
+class VehicleMemBenchError(Exception):
+    """VehicleMemBench 模块的基准错误."""
+
+
 from .memory_adapters import ADAPTERS
 from .memory_adapters.common import StoreClient, format_search_results
 from .model_config import get_benchmark_config
@@ -119,10 +128,8 @@ def _parse_memory_types(memory_types: str) -> list[BenchMemoryMode]:
     types = [t.strip() for t in memory_types.split(",") if t.strip()]
     invalid = [t for t in types if t not in SUPPORTED_MEMORY_TYPES]
     if invalid:
-        raise ValueError(
-            f"Unsupported memory_types: {invalid}. "
-            f"Supported: {sorted(SUPPORTED_MEMORY_TYPES)}"
-        )
+        msg = f"Unsupported memory_types: {invalid}. Supported: {sorted(SUPPORTED_MEMORY_TYPES)}"
+        raise ValueError(msg)
     return [BenchMemoryMode(t) for t in types]
 
 
@@ -200,6 +207,9 @@ async def prepare(
     agent_client: AgentClient | None = None
     if any(mtype not in _PREP_FREE_TYPES and mtype not in ADAPTERS for mtype in types):
         agent_client = _get_agent_client()
+        if agent_client is None:
+            msg = "agent_client not initialized but required by memory types"
+            raise VehicleMemBenchError(msg)
 
     history_cache: dict[int, str] = {}
     if need_history:
@@ -208,7 +218,7 @@ async def prepare(
             try:
                 return fnum, await _load_history(fnum)
             except FileNotFoundError:
-                print(f"[warn] history file {fnum} not found, using empty")
+                logger.warning("[warn] history file %d not found, using empty", fnum)
                 return fnum, ""
 
         history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
@@ -218,18 +228,18 @@ async def prepare(
         fdir = file_output_dir(mtype, fnum)
         if mtype in _PREP_FREE_TYPES:
             if fdir.exists():
-                print(f"[skip] {mtype} file {fnum} already prepared")
+                logger.info("[skip] %s file %d already prepared", mtype, fnum)
                 return
             fdir.mkdir(parents=True, exist_ok=True)
-            print(f"[prepare] {mtype} file {fnum}...")
+            logger.info("[prepare] %s file %d...", mtype, fnum)
             return
 
         pp = prep_path(mtype, fnum)
         if pp.exists():
-            print(f"[skip] {mtype} file {fnum} already prepared")
+            logger.info("[skip] %s file %d already prepared", mtype, fnum)
             return
 
-        print(f"[prepare] {mtype} file {fnum}...")
+        logger.info("[prepare] %s file %d...", mtype, fnum)
         try:
             history_text = history_cache.get(fnum, "")
             if mtype in ADAPTERS:
@@ -242,9 +252,6 @@ async def prepare(
                 result = {"type": mtype, "data_dir": str(store_dir)}
             else:
                 async with semaphore:
-                    if agent_client is None:
-                        msg = f"agent_client not initialized for {mtype}"
-                        raise RuntimeError(msg)
                     result = await _prepare_single(
                         agent_client, history_text, fnum, mtype
                     )
@@ -252,8 +259,8 @@ async def prepare(
                 fdir.mkdir(parents=True, exist_ok=True)
                 async with aiofiles.open(pp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
-        except Exception as e:
-            print(f"[error] {mtype} file {fnum}: {e}")
+        except Exception:
+            logger.exception("[error] %s file %d", mtype, fnum)
             raise
 
     prep_results = await asyncio.gather(
@@ -262,7 +269,7 @@ async def prepare(
     )
     failed = sum(1 for r in prep_results if isinstance(r, BaseException))
     if failed:
-        print(f"[prepare] done with {failed} failures")
+        logger.info("[prepare] done with %d failures", failed)
 
 
 async def _prepare_single(
@@ -277,7 +284,7 @@ async def _prepare_single(
             build_memory_key_value, agent_client, daily
         )
         return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
-    print(f"[warn] unknown memory_type: {memory_type}")
+    logger.warning("[warn] unknown memory_type: %s", memory_type)
     return None
 
 
@@ -297,7 +304,7 @@ async def run(
         try:
             return fnum, await _load_qa(fnum)
         except FileNotFoundError:
-            print(f"[warn] qa file {fnum} not found")
+            logger.warning("[warn] qa file %d not found", fnum)
             return fnum, None
 
     qa_pairs = await asyncio.gather(*(_load_qa_safe(f) for f in file_nums))
@@ -315,7 +322,9 @@ async def run(
         except FileNotFoundError:
             return mtype, fnum, None
         except json.JSONDecodeError:
-            print(f"[warn] corrupt prep file for {mtype} file {fnum}, skipping")
+            logger.warning(
+                "[warn] corrupt prep file for %s file %d, skipping", mtype, fnum
+            )
             return mtype, fnum, None
 
     prep_raw = await asyncio.gather(
@@ -328,12 +337,12 @@ async def run(
     async def _task(fnum: int, mtype: BenchMemoryMode) -> None:
         prep_data = prep_cache.get((mtype, fnum))
         if prep_data is None:
-            print(f"[skip] {mtype} file {fnum} not prepared")
+            logger.info("[skip] %s file %d not prepared", mtype, fnum)
             return
 
         qa_data = qa_cache.get(fnum)
         if qa_data is None:
-            print(f"[skip] {mtype} file {fnum} qa data not found")
+            logger.info("[skip] %s file %d qa data not found", mtype, fnum)
             return
 
         events = qa_data.get("related_to_vehicle_preference", [])
@@ -343,7 +352,7 @@ async def run(
         fdir = file_output_dir(mtype, fnum)
         fdir.mkdir(parents=True, exist_ok=True)
 
-        print(f"[run] {mtype} file {fnum}: {len(events)} queries...")
+        logger.info("[run] %s file %d: %d queries...", mtype, fnum, len(events))
         await _run_single(
             agent_client,
             events,
@@ -360,7 +369,7 @@ async def run(
     )
     failed = sum(1 for r in run_results if isinstance(r, BaseException))
     if failed:
-        print(f"[run] done with {failed} file-level failures")
+        logger.info("[run] done with %d file-level failures", failed)
 
 
 async def _run_single(
@@ -420,7 +429,7 @@ async def _run_single(
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
         except Exception as e:
-            print(f"  [error] query {idx}: {e}")
+            logger.exception("  [error] query %d", idx)
             fail_record = {
                 "failed": True,
                 "error": str(e),
@@ -431,9 +440,9 @@ async def _run_single(
             try:
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
-            except OSError as write_err:
-                print(
-                    f"  [error] failed to write error record for query {idx}: {write_err}"
+            except OSError:
+                logger.exception(
+                    "  [error] failed to write error record for query %d", idx
                 )
 
     gather_results = await asyncio.gather(
@@ -442,7 +451,7 @@ async def _run_single(
     )
     silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
     if silent_failures:
-        print(f"  [warn] {len(silent_failures)} queries failed silently")
+        logger.warning("  [warn] %d queries failed silently", len(silent_failures))
 
 
 async def _build_search_client(
@@ -508,7 +517,8 @@ async def _evaluate_query(
             ctx.search_client,
         )
 
-    raise RuntimeError(f"query {idx}: no search client for {ctx.memory_type}")
+    msg = f"query {idx}: no search client for {ctx.memory_type}"
+    raise VehicleMemBenchError(msg)
 
 
 def _make_sync_memory_search(
@@ -528,12 +538,10 @@ def _make_sync_memory_search(
                 search_client.search(query=query, top_k=top_k), loop
             )
             results = future.result(timeout=_SEARCH_TIMEOUT)
-            text, count = format_search_results(results)
-            return {"success": True, "results": text, "count": count}
         except TimeoutError:
             if future is not None:
                 future.cancel()
-            print(f"  [warn] memory_search timeout: {query!r}")
+            logger.warning("  [warn] memory_search timeout: %r", query)
             return {
                 "success": False,
                 "error": "search timed out",
@@ -542,12 +550,15 @@ def _make_sync_memory_search(
             }
         except RuntimeError as e:
             if "event loop" in str(e).lower():
-                print(f"  [warn] memory_search: event loop error: {e}")
+                logger.warning("  [warn] memory_search: event loop error: %s", e)
                 return {"success": False, "error": str(e), "results": "", "count": 0}
             raise
-        except Exception as e:
-            print(f"  [warn] memory_search failed: {e}")
+        except OSError as e:
+            logger.warning("  [warn] memory_search failed: %s", e)
             return {"success": False, "error": str(e), "results": "", "count": 0}
+        else:
+            text, count = format_search_results(results)
+            return {"success": True, "results": text, "count": count}
 
     return _search
 
@@ -593,12 +604,12 @@ def report(output_path: Path | None = None) -> None:
             mtype = BenchMemoryMode(path.parent.parent.name)
         except ValueError:
             continue
+        data: dict | None = None
         try:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
-        except (json.JSONDecodeError, OSError) as exc:
-            print(f"[warn] skipping {path}: {exc}")
-            continue
+        except json.JSONDecodeError, OSError:
+            pass
         if not isinstance(data, dict):
             continue
         if data.get("failed"):
@@ -631,14 +642,17 @@ def report(output_path: Path | None = None) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
-    print(f"Report written to {out}")
+    logger.info("Report written to %s", out)
 
     for mtype, metric in report_data.items():
         esm = metric.get("exact_match_rate", 0)
         failed = metric.get("total_failed", 0)
-        print(
-            f"  {mtype}: ESM={esm:.2%}, F-F1={metric.get('state_f1_positive', 0):.4f}, "
-            f"V-F1={metric.get('state_f1_change', 0):.4f}, "
-            f"Calls={metric.get('avg_pred_calls', 0):.1f}"
-            + (f", Failed={failed}" if failed else "")
+        logger.info(
+            "  %s: ESM=%s, F-F1=%s, V-F1=%s, Calls=%s%s",
+            mtype,
+            f"{esm:.2%}",
+            f"{metric.get('state_f1_positive', 0):.4f}",
+            f"{metric.get('state_f1_change', 0):.4f}",
+            f"{metric.get('avg_pred_calls', 0):.1f}",
+            f", Failed={failed}" if failed else "",
         )

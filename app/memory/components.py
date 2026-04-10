@@ -13,6 +13,16 @@ from app.storage.toml_store import TOMLStore
 SUMMARY_WEIGHT = 0.8
 
 
+class ActionRequiredError(ValueError):
+    """action 字段为必需的异常."""
+
+    MSG = "action is required"
+
+    def __init__(self) -> None:
+        """初始化异常，使用类常量消息."""
+        super().__init__(self.MSG)
+
+
 def forgetting_curve(days_elapsed: int, strength: int) -> float:
     """遗忘曲线衰减函数."""
     if days_elapsed <= 0:
@@ -130,7 +140,7 @@ class FeedbackManager:
         feedback.event_id = event_id
         feedback.timestamp = datetime.now(UTC).isoformat()
         if feedback.action is None:
-            raise ValueError("action is required")
+            raise ActionRequiredError()
         lock = await self._get_lock()
         async with lock:
             await self._write_feedback(feedback)

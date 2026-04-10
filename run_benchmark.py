@@ -1,7 +1,11 @@
 """VehicleMemBench 评估基准的命令行入口."""
 
+import logging
+import sys
 from argparse import ArgumentParser
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _add_common_args(parser: ArgumentParser, default_types: str) -> None:
@@ -66,17 +70,17 @@ async def main() -> None:
         failed = False
         try:
             await _do_prepare(args.file_range, args.memory_types)
-        except Exception as e:
-            print(f"[prepare] failed: {e}")
+        except OSError, ValueError, RuntimeError:
+            logger.exception("[prepare] failed")
             failed = True
         try:
             await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except Exception as e:
-            print(f"[run] failed: {e}")
+        except OSError, ValueError, RuntimeError:
+            logger.exception("[run] failed")
             failed = True
         if failed and not args.allow_partial:
-            print(
-                "[all] aborted due to failures, skipping report (use --allow-partial to force)"
+            sys.stdout.write(
+                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n"
             )
             return
         _do_report(args.output)

@@ -59,4 +59,3 @@ def init_storage(data_dir: Path | None = None) -> None:
 
 if __name__ == "__main__":
     init_storage()
-    print("存储初始化完成")

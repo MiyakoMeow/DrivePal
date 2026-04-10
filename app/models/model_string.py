@@ -11,6 +11,32 @@ from typing import Any
 from app.models.settings import ResolvedModel
 
 
+class ProviderNotFoundError(ValueError):
+    """Provider 未找到错误."""
+
+    def __init__(self, provider_name: str) -> None:
+        """初始化错误."""
+        super().__init__(f"Provider '{provider_name}' not found in model_providers")
+
+
+class ModelGroupNotFoundError(KeyError):
+    """模型组未找到错误."""
+
+    def __init__(self, name: str) -> None:
+        """初始化错误."""
+        super().__init__(f"Model group '{name}' not found")
+
+
+class InvalidModelStringError(ValueError):
+    """无效的模型字符串格式错误."""
+
+    def __init__(self, model_str: str) -> None:
+        """初始化错误."""
+        super().__init__(
+            f"Invalid model string format: {model_str}. Expected 'provider/model'"
+        )
+
+
 def _get_config_path() -> Path:
     """获取配置文件路径，支持环境变量覆盖."""
     env_path = os.environ.get("CONFIG_PATH", "config/llm.toml")
@@ -58,7 +84,7 @@ def _resolve_provider(provider_name: str) -> dict:
     config = _load_config()
     providers = config.get("model_providers", {})
     if provider_name not in providers:
-        raise ValueError(f"Provider '{provider_name}' not found in model_providers")
+        raise ProviderNotFoundError(provider_name)
     return providers[provider_name]
 
 
@@ -78,7 +104,7 @@ def get_model_group_providers(name: str) -> list[dict]:
     config = _load_config()
     model_groups = config.get("model_groups", {})
     if name not in model_groups:
-        raise KeyError(f"Model group '{name}' not found")
+        raise ModelGroupNotFoundError(name)
 
     model_refs = model_groups[name].get("models", [])
     if not model_refs:
@@ -130,9 +156,7 @@ def resolve_model_string(model_str: str) -> ResolvedModel:
         model_str = model_part
 
     if "/" not in model_str:
-        raise ValueError(
-            f"Invalid model string format: {model_str}. Expected 'provider/model'"
-        )
+        raise InvalidModelStringError(model_str)
 
     provider_name, model_name = model_str.split("/", 1)
     return ResolvedModel(

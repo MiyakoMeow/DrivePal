@@ -69,7 +69,7 @@ async def test_run_with_stages_returns_stages_object(
     memory = MemoryModule(tmp_path, chat_model=chat_model)
     workflow = AgentWorkflow(memory_module=memory)
 
-    result, event_id, stages = await workflow.run_with_stages(
+    result, _event_id, stages = await workflow.run_with_stages(
         "明天上午9点有个会议",
         driving_context={
             "scenario": "parked",
@@ -97,7 +97,7 @@ async def test_run_with_stages_highway_scenario(
     memory = MemoryModule(tmp_path, chat_model=chat_model)
     workflow = AgentWorkflow(memory_module=memory)
 
-    result, event_id, stages = await workflow.run_with_stages(
+    result, _event_id, _stages = await workflow.run_with_stages(
         "提醒我回电话",
         driving_context={
             "scenario": "highway",

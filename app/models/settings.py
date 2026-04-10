@@ -12,6 +12,54 @@ if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
 
 
+class NoLLMConfigurationError(RuntimeError):
+    """没有找到任何 LLM 配置时抛出."""
+
+    def __init__(self) -> None:
+        """初始化错误."""
+        super().__init__("No LLM configuration found")
+
+
+class ModelGroupNotFoundError(KeyError):
+    """模型组不存在时抛出."""
+
+    def __init__(self, name: str) -> None:
+        """初始化 ModelGroupNotFoundError.
+
+        Args:
+            name: 不存在的模型组名称
+
+        """
+        self.name = name
+        super().__init__(f"Model group '{name}' not found")
+
+
+class ProviderNotFoundError(ValueError):
+    """提供商不存在时抛出."""
+
+    def __init__(self, provider_name: str) -> None:
+        """初始化 ProviderNotFoundError.
+
+        Args:
+            provider_name: 不存在的提供商名称
+
+        """
+        self.provider_name = provider_name
+        super().__init__(f"Provider '{provider_name}' not found")
+
+
+class MissingModelFieldError(ValueError):
+    """缺少必需字段 'model' 时抛出."""
+
+
+class NoDefaultModelGroupError(RuntimeError):
+    """没有默认模型组时抛出."""
+
+
+class NoJudgeModelConfiguredError(RuntimeError):
+    """没有配置 judge 模型时抛出."""
+
+
 @dataclass
 class ResolvedModel:
     """解析后的模型引用."""
@@ -102,9 +150,7 @@ class LLMSettings:
         model_providers = dict(config_data.get("model_providers", {}))
 
         if not model_groups:
-            raise RuntimeError(
-                "No LLM configuration found. Add [model_groups.default] to config/llm.toml"
-            )
+            raise NoLLMConfigurationError
 
         embedding_section = config_data.get("embedding")
         embedding_model = (
@@ -144,7 +190,7 @@ class LLMSettings:
 
         """
         if name not in self.model_groups:
-            raise KeyError(f"Model group '{name}' not found")
+            raise ModelGroupNotFoundError(name)
 
         model_refs = self.model_groups[name].get("models", [])
         if not model_refs:
@@ -163,9 +209,7 @@ class LLMSettings:
 
         resolved = resolve_model_string(self.embedding_model)
         if resolved.provider_name not in self.model_providers:
-            raise ValueError(
-                f"Provider '{resolved.provider_name}' not found in model_providers"
-            )
+            raise ProviderNotFoundError(resolved.provider_name)
         provider_config = self.model_providers[resolved.provider_name]
         api_key_env = provider_config.get("api_key_env")
         if api_key_env:
@@ -201,7 +245,7 @@ def _build_provider_config_from_dict(
     """
     model = d.get("model")
     if model is None:
-        raise ValueError("Missing required field 'model' in provider config")
+        raise MissingModelFieldError
     provider = ProviderConfig(
         model=model,
         base_url=d.get("base_url"),
@@ -248,9 +292,7 @@ def _build_provider_config_from_ref(
 
     resolved = resolve_model_string(ref)
     if resolved.provider_name not in model_providers:
-        raise ValueError(
-            f"Provider '{resolved.provider_name}' not found in model_providers"
-        )
+        raise ProviderNotFoundError(resolved.provider_name)
     provider_config = model_providers[resolved.provider_name]
     api_key_env = provider_config.get("api_key_env")
     if api_key_env:
@@ -280,7 +322,7 @@ def get_chat_model(temperature: float | None = None) -> ChatModel:
     if _settings_cache is None:
         _settings_cache = LLMSettings.load()
     if "default" not in _settings_cache.model_groups:
-        raise RuntimeError("No default model group configured")
+        raise NoDefaultModelGroupError
     providers = _settings_cache.get_model_group_providers("default")
     return ChatModel(providers=providers, temperature=temperature)
 
@@ -318,9 +360,7 @@ def get_judge_model() -> ChatModel:
     if _settings_cache is None:
         _settings_cache = LLMSettings.load()
     if _settings_cache.judge_provider is None:
-        raise RuntimeError(
-            "No judge model configured. Set JUDGE_MODEL or add 'judge' to config/llm.toml"
-        )
+        raise NoJudgeModelConfiguredError
     provider = LLMProviderConfig(
         provider=ProviderConfig(
             model=_settings_cache.judge_provider.provider.model,

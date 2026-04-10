@@ -23,12 +23,31 @@ from app.api.graphql_schema import (
     WorkflowStagesGQL,
 )
 from app.memory.schemas import FeedbackData
+
+
 from app.memory.types import MemoryMode
 from app.schemas.context import (
     DrivingContext,
     ScenarioPreset,
 )
 from app.storage.toml_store import TOMLStore
+
+
+class InternalServerError(GraphQLError):
+    """内部服务器错误."""
+
+    def __init__(self) -> None:
+        """初始化内部服务器错误."""
+        super().__init__("Internal server error")
+
+
+class InvalidActionError(GraphQLError):
+    """无效的操作类型."""
+
+    def __init__(self, action: str) -> None:
+        """初始化无效操作错误."""
+        super().__init__(f"Invalid action: {action!r}")
+
 
 logger = logging.getLogger(__name__)
 
@@ -184,17 +203,15 @@ class Mutation:
                     execution=cast("Any", stages.execution),
                 ),
             )
-        except Exception as e:
-            logger.exception("processQuery failed: %s", e)
-            raise GraphQLError("Internal server error")
+        except Exception:
+            logger.exception("processQuery failed")
+            raise InternalServerError
 
     @strawberry.mutation
     async def submit_feedback(self, input: FeedbackInput) -> FeedbackResult:
         """提交用户反馈."""
         if input.action not in ("accept", "ignore"):
-            raise GraphQLError(
-                f"Invalid action: {input.action!r}. Must be 'accept' or 'ignore'"
-            )
+            raise InvalidActionError(input.action)
         from app.api.main import get_memory_module
 
         try:
@@ -207,9 +224,9 @@ class Mutation:
             )
             await mm.update_feedback(input.event_id, feedback)
             return FeedbackResult(status="success")
-        except Exception as e:
-            logger.exception("submitFeedback failed: %s", e)
-            raise GraphQLError("Internal server error")
+        except Exception:
+            logger.exception("submitFeedback failed")
+            raise InternalServerError
 
     @strawberry.mutation
     async def save_scenario_preset(

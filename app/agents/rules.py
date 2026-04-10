@@ -65,7 +65,7 @@ def apply_rules(
         for r in channels_rules[1:]:
             channels &= set(r.constraint["allowed_channels"])
         if not channels:
-            channels = set(["visual", "audio", "detailed"])
+            channels = {"visual", "audio", "detailed"}
         merged_channels = sorted(channels)
     else:
         merged_channels = sorted(["visual", "audio", "detailed"])

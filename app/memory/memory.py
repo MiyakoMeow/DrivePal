@@ -6,6 +6,17 @@ from typing import Any, TYPE_CHECKING
 
 from app.memory.types import MemoryMode
 
+
+class UnknownModeError(ValueError):
+    """未知记忆模式异常."""
+
+    MSG = "Unknown mode: {mode}"
+
+    def __init__(self, mode: MemoryMode) -> None:
+        """初始化异常，使用类常量消息格式化 mode."""
+        super().__init__(self.MSG.format(mode=mode))
+
+
 if TYPE_CHECKING:
     from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
     from app.memory.interfaces import MemoryStore
@@ -72,9 +83,7 @@ class MemoryModule:
 
     def _create_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in _STORES_REGISTRY:
-            raise ValueError(
-                f"Unknown mode: {mode}. Available: {list(_STORES_REGISTRY.keys())}"
-            )
+            raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
         kwargs: dict[str, Any] = {"data_dir": self._data_dir}
         if getattr(store_cls, "requires_embedding", False):

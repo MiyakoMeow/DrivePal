@@ -18,6 +18,14 @@ from app.storage.toml_store import TOMLStore
 logger = logging.getLogger(__name__)
 
 
+class ChatModelUnavailableError(RuntimeError):
+    """ChatModel 不可用时抛出的异常."""
+
+    def __init__(self) -> None:
+        """初始化 ChatModel 不可用错误."""
+        super().__init__("ChatModel not available")
+
+
 class AgentWorkflow:
     """多Agent协作工作流."""
 
@@ -49,7 +57,7 @@ class AgentWorkflow:
 
     async def _call_llm_json(self, user_prompt: str) -> dict:
         if not self.memory_module.chat_model:
-            raise RuntimeError("ChatModel not available")
+            raise ChatModelUnavailableError
         result = await self.memory_module.chat_model.generate(user_prompt)
         cleaned = re.sub(r"^```(?:json)?\s*", "", result.strip())
         cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -73,7 +81,7 @@ class AgentWorkflow:
                 if user_input
                 else []
             )
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.warning("Memory search failed: %s", e)
             related_events = []
 
@@ -87,7 +95,7 @@ class AgentWorkflow:
                         mode=self._memory_mode
                     )
                 ]
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.warning("Memory get_history failed: %s", e)
             relevant_memories = (
                 [e.to_public() for e in related_events] if related_events else []
@@ -218,7 +226,9 @@ class AgentWorkflow:
         )
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
-            event_id = f"unknown_{hashlib.md5(str(decision).encode()).hexdigest()[:8]}"
+            event_id = (
+                f"unknown_{hashlib.sha256(str(decision).encode()).hexdigest()[:8]}"
+            )
 
         result = f"提醒已发送: {content}"
         if stages is not None:

@@ -17,6 +17,15 @@ if TYPE_CHECKING:
     from app.models.embedding import EmbeddingModel
     from app.models.chat import ChatModel
 
+
+class EmbeddingModelRequiredError(RuntimeError):
+    """向量搜索需要 embedding_model."""
+
+    def __init__(self) -> None:
+        """初始化错误."""
+        super().__init__("embedding_model is required for vector search")
+
+
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
@@ -54,6 +63,11 @@ class MemoryBankEngine:
     def personality_store(self) -> TOMLStore:
         """人格存储."""
         return self._personality_mgr.personality_store
+
+    @property
+    def interactions_store(self) -> TOMLStore:
+        """交互存储."""
+        return self._interactions_store
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件并触发摘要."""
@@ -157,7 +171,8 @@ class MemoryBankEngine:
     async def _search_by_embedding(
         self, query: str, events: list[dict], top_k: int
     ) -> list[SearchResult]:
-        assert self.embedding_model is not None
+        if self.embedding_model is None:
+            raise EmbeddingModelRequiredError()
         query_vector = await self.embedding_model.encode(query)
         event_texts = [self._get_searchable_text(event) for event in events]
         all_event_vectors = await self.embedding_model.batch_encode(event_texts)
@@ -285,8 +300,7 @@ class MemoryBankEngine:
                         ev["updated_at"] = datetime.now(UTC).isoformat()
                         break
                 await self._storage.write_events(all_events)
-            else:
-                assert event is not None
+            elif event is not None:
                 await self._storage.append_raw(event)
 
         if append_event_id:
@@ -340,7 +354,7 @@ class MemoryBankEngine:
         prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
         try:
             summary_text = await self.chat_model.generate(prompt)
-        except Exception:
+        except OSError, ValueError, RuntimeError:
             return
         async with self._lock:
             all_events = await self._storage.read_events()
