@@ -37,7 +37,7 @@ extend-select = [
     "PT",     # flake8-pytest-style - pytest风格检查
     "TRY",    # tryceratops - 异常处理最佳实践
     # 文档
-    "D",      # pydoclint - 文档字符串检查
+    "D",      # pydocstyle - 文档字符串检查 pydoclint - 文档字符串检查
     # 命名
     "N",      # pep8-naming - 命名规范检查
     # 框架
@@ -52,10 +52,10 @@ extend-select = [
 # D400: docstring首行句号
 # E501: 行长度限制由formatter处理
 ignore = [
-    "D203",  # pydoclint - docstring前应有1个空行(与D211冲突)
-    "D211",  # pydoclint - docstring前不应有空行(与D203冲突)
-    "D213",  # pydoclint - 多行docstring应在第二行开始
-    "D400",  # pydoclint - docstring首行应以句号结尾
+    "D203",  # pydocstyle - docstring前应有1个空行(与D211冲突)
+    "D211",  # pydocstyle - docstring前不应有空行(与D203冲突)
+    "D213",  # pydocstyle - 多行docstring应在第二行开始
+    "D400",  # pydocstyle - docstring首行应以句号结尾
     "E501",  # pycodestyle - 行长度限制
     "RUF001",  # 全角字符检查（中文项目无需修改）
     "RUF002",  # docstring全角字符检查（中文项目无需修改）
@@ -76,7 +76,7 @@ exclude = [".agents/**", "vendor/**"]
     "RUF015",  # 测试中使用列表切片是常见做法
     "FURB171",  # 测试中成员测试是常见做法
     "D104",  # 测试包不需要 docstring
-    "RUF043",  # 测试中 match 是常见用法
+    "RUF043",  # pytest.raises match参数中正则模式常见
 ]
 
 [format]
