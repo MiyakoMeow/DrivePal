@@ -5,4 +5,7 @@ from app.api.main import app
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=40721)
+    host = os.getenv("UVICORN_HOST", "127.0.0.1")
+    port = int(os.getenv("UVICORN_PORT", 34567))
+    uvicorn.run(app, host=host, port=port)
+
