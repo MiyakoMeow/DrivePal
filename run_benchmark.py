@@ -50,6 +50,12 @@ async def _do_all(
     except OSError, ValueError, RuntimeError:
         logger.exception("[prepare] failed due to system error")
         failed = True
+    if failed and not allow_partial:
+        sys.stdout.write(
+            "[all] aborted due to prepare failures, skipping run/report "
+            "(use --allow-partial to force)\n",
+        )
+        return
     try:
         await _do_run(file_range, memory_types, reflect_num)
     except VehicleMemBenchError:

@@ -67,6 +67,9 @@ def get_benchmark_config() -> BenchmarkConfig:
     if not isinstance(model, str) or not model.strip():
         msg = "Benchmark provider 'model' must be a non-empty string"
         raise BenchmarkConfigError(msg)
+    base_url = base_url.strip()
+    api_key = api_key.strip()
+    model = model.strip()
     if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
         msg = "Benchmark provider 'temperature' must be a number"
         raise BenchmarkConfigError(msg)

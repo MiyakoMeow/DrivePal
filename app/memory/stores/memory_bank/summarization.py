@@ -151,8 +151,13 @@ class SummaryManager:
                 existing = daily_summaries[date_group]
                 if isinstance(existing, dict):
                     return None
+            content = "\n".join(
+                e.get("content", "") for e in events if e.get("content")
+            )
+            if not content.strip():
+                return None
             self._inflight_daily_summaries.add(date_group)
-            return "\n".join(e.get("content", "") for e in events if e.get("content"))
+            return content
 
     async def _generate_and_store_summary(
         self,

@@ -434,10 +434,11 @@ async def _load_prep_cache(
     )
     exc_list = [r for r in prep_raw if isinstance(r, Exception)]
     if exc_list:
-        logger.warning("[run] prep load failures: %s", exc_list[:5])
+        msg = f"Failed to preload prep cache: {exc_list[:3]}"
+        raise VehicleMemBenchError(msg)
     prep_tuples = cast(
         "list[tuple[BenchMemoryMode, int, dict | None]]",
-        [r for r in prep_raw if not isinstance(r, Exception)],
+        prep_raw,
     )
     return {(mt, fn): data for mt, fn, data in prep_tuples}
 
@@ -489,13 +490,11 @@ async def _run_evaluations(
     )
     silent_failures = [r for r in gather_results if isinstance(r, Exception)]
     if silent_failures:
-        logger.warning(
-            "  [warn] %d queries failed silently in file %d (%s): %s",
-            len(silent_failures),
-            ctx.file_num,
-            ctx.memory_type,
-            [str(r) for r in silent_failures[:3]],
+        msg = (
+            f"{len(silent_failures)} queries failed in file {ctx.file_num}"
+            f" ({ctx.memory_type}): {silent_failures[:3]}"
         )
+        raise VehicleMemBenchError(msg)
 
 
 async def _eval_and_save(

@@ -86,8 +86,12 @@ class MemoryBankStore:
         for e in events[-limit:]:
             try:
                 result.append(MemoryEvent(**e))
-            except ValidationError:
-                logger.warning("[warn] skipping malformed event: %s", e)
+            except ValidationError as exc:
+                logger.warning(
+                    "[warn] skipping malformed event fields=%s error_locs=%s",
+                    sorted(e.keys()) if isinstance(e, dict) else [],
+                    [err.get("loc") for err in exc.errors()],
+                )
         return result
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
