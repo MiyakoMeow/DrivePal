@@ -457,6 +457,7 @@ async def _run_single(  # noqa: PLR0913
                     "  [error] failed to write error record for query %d",
                     idx,
                 )
+                raise e from None
 
     gather_results = await asyncio.gather(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
