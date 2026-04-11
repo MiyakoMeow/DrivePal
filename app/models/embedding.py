@@ -1,5 +1,7 @@
 """文本嵌入模型封装，仅支持 OpenAI 兼容远程接口."""
 
+import asyncio
+import contextlib
 import hashlib
 
 import openai
@@ -30,9 +32,22 @@ def get_cached_embedding_model() -> EmbeddingModel:
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
+async def _aclose_all_cached() -> None:
+    """关闭所有缓存客户端."""
+    for model in _EMBEDDING_MODEL_CACHE.values():
+        await model.aclose()
+
+
 def clear_embedding_model_cache() -> None:
-    """清除embedding模型缓存."""
-    _EMBEDDING_MODEL_CACHE.clear()
+    """关闭所有缓存的客户端并清除缓存."""
+    if _EMBEDDING_MODEL_CACHE:
+        try:
+            loop = asyncio.get_running_loop()
+            _close_task = loop.create_task(_aclose_all_cached())  # noqa: RUF006
+        except RuntimeError:
+            with contextlib.suppress(RuntimeError):
+                asyncio.run(_aclose_all_cached())
+        _EMBEDDING_MODEL_CACHE.clear()
 
 
 class EmbeddingModel:
@@ -50,6 +65,13 @@ class EmbeddingModel:
             return self._client
         self._client = self._create_client(self.provider)
         return self._client
+
+    async def aclose(self) -> None:
+        """关闭底层 HTTP 客户端，释放连接池资源."""
+        if self._client is not None:
+            with contextlib.suppress(RuntimeError):
+                await self._client.close()
+            self._client = None
 
     def _create_client(
         self,
@@ -106,5 +128,5 @@ class EmbeddingModel:
 
 
 def reset_embedding_singleton() -> None:
-    """清除缓存并重置为初始状态（供测试使用）."""
-    _EMBEDDING_MODEL_CACHE.clear()
+    """关闭所有客户端、清除缓存并重置为初始状态（供测试使用）."""
+    clear_embedding_model_cache()

@@ -28,6 +28,14 @@ PROVIDER_A_CONCURRENCY = 2  # Provider A 的并发数
 PROVIDER_B_CONCURRENCY = 3  # Provider B 的并发数
 
 
+def _mock_async_client() -> MagicMock:
+    """创建支持 async with 的 mock 客户端."""
+    client = MagicMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    return client
+
+
 @pytest.mark.integration
 async def test_chat_drives_llm_memory_search(
     tmp_path: Path,
@@ -156,9 +164,7 @@ class TestProviderConcurrency:
             return mock_response
 
         with patch.object(chat, "_create_client") as mock_create_client:
-            mock_client = MagicMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client = _mock_async_client()
             mock_client.chat.completions.create = mock_create
             mock_create_client.return_value = mock_client
 

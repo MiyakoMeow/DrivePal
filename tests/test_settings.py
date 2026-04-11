@@ -30,6 +30,14 @@ CONCURRENCY_16 = 16
 CALL_COUNT_2 = 2
 
 
+def _mock_async_client() -> MagicMock:
+    """创建支持 async with 的 mock 客户端."""
+    client = MagicMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    return client
+
+
 class TestLLMProviderConfig:
     """LLMProviderConfig 测试."""
 
@@ -261,9 +269,7 @@ class TestChatModelFallback:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "response"
         with patch.object(chat, "_create_client") as mock_create:
-            mock_client = MagicMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client = _mock_async_client()
             mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
             mock_create.return_value = mock_client
             result = await chat.generate("hello")
@@ -294,9 +300,7 @@ class TestChatModelFallback:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                client = MagicMock()
-                client.__aenter__ = AsyncMock(return_value=client)
-                client.__aexit__ = AsyncMock(return_value=False)
+                client = _mock_async_client()
                 client.chat.completions.create = AsyncMock(
                     side_effect=RuntimeError("API error"),
                 )
@@ -304,9 +308,7 @@ class TestChatModelFallback:
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
             mock_response.choices[0].message.content = "fallback response"
-            client = MagicMock()
-            client.__aenter__ = AsyncMock(return_value=client)
-            client.__aexit__ = AsyncMock(return_value=False)
+            client = _mock_async_client()
             client.chat.completions.create = AsyncMock(return_value=mock_response)
             return client
 
@@ -334,9 +336,7 @@ class TestChatModelFallback:
             ),
         ]
         chat = ChatModel(providers=providers)
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client = _mock_async_client()
         mock_client.chat.completions.create = AsyncMock(
             side_effect=RuntimeError("fail"),
         )
