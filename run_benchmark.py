@@ -71,12 +71,12 @@ async def main() -> None:
         failed = False
         try:
             await _do_prepare(args.file_range, args.memory_types)
-        except OSError, ValueError, RuntimeError, VehicleMemBenchError:
+        except (OSError, ValueError, RuntimeError, VehicleMemBenchError):
             logger.exception("[prepare] failed")
             failed = True
         try:
             await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except OSError, ValueError, RuntimeError, VehicleMemBenchError:
+        except (OSError, ValueError, RuntimeError, VehicleMemBenchError):
             logger.exception("[run] failed")
             failed = True
         if failed and not args.allow_partial:
