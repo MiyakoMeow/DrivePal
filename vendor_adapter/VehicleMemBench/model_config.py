@@ -58,14 +58,17 @@ def get_benchmark_config() -> BenchmarkConfig:
     model = provider["model"]
     temperature = provider["temperature"]
 
-    if base_url is None or api_key is None:
-        msg = "Benchmark provider 'base_url' and 'api_key' cannot be None"
+    if not isinstance(base_url, str) or not base_url.strip():
+        msg = "Benchmark provider 'base_url' must be a non-empty string"
         raise BenchmarkConfigError(msg)
-    if not model:
-        msg = "Benchmark provider 'model' cannot be empty"
+    if not isinstance(api_key, str) or not api_key.strip():
+        msg = "Benchmark provider 'api_key' must be a non-empty string"
         raise BenchmarkConfigError(msg)
-    if temperature is None:
-        msg = "Benchmark provider 'temperature' cannot be None"
+    if not isinstance(model, str) or not model.strip():
+        msg = "Benchmark provider 'model' must be a non-empty string"
+        raise BenchmarkConfigError(msg)
+    if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
+        msg = "Benchmark provider 'temperature' must be a number"
         raise BenchmarkConfigError(msg)
 
     max_tokens = provider.get("max_tokens", 8192)

@@ -37,8 +37,8 @@ class MemoryBankAdapter:
         """使用数据目录初始化."""
         self.data_dir = data_dir
 
-    def _validate_data_dir(self) -> None:
-        """验证数据目录有效."""
+    def _ensure_data_dir(self) -> None:
+        """确保数据目录存在且有效."""
         if not self.data_dir.exists():
             try:
                 self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -49,9 +49,18 @@ class MemoryBankAdapter:
             msg = f"data_dir is not a directory: {self.data_dir}"
             raise MemoryBankAdapterError(msg)
 
+    def _require_data_dir(self) -> None:
+        """要求数据目录已存在且为目录."""
+        if not self.data_dir.exists():
+            msg = f"data_dir does not exist: {self.data_dir}"
+            raise MemoryBankAdapterError(msg)
+        if not self.data_dir.is_dir():
+            msg = f"data_dir is not a directory: {self.data_dir}"
+            raise MemoryBankAdapterError(msg)
+
     async def add(self, history_text: str) -> MemoryBankStore:
         """将历史文本添加到记忆库存储."""
-        self._validate_data_dir()
+        self._ensure_data_dir()
         try:
             chat_model = get_store_chat_model()
             embedding_model = get_store_embedding_model()
@@ -80,7 +89,7 @@ class MemoryBankAdapter:
 
     def load(self) -> MemoryBankStore:
         """从已有数据目录加载记忆库存储（无需重放写入）."""
-        self._validate_data_dir()
+        self._require_data_dir()
         try:
             return MemoryBankStore(
                 data_dir=self.data_dir,

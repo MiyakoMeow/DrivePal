@@ -40,7 +40,7 @@ async def _do_all(
     allow_partial: bool = False,
     output: Path | None = None,
 ) -> None:
-    """Execute prepare, run, and report in sequence."""
+    """依次执行 prepare、run 和 report."""
     failed = False
     try:
         await _do_prepare(file_range, memory_types)
@@ -67,7 +67,7 @@ async def _do_all(
 
 
 def _setup_parser() -> ArgumentParser:
-    """Set up the argument parser with all subcommands."""
+    """设置包含所有子命令的参数解析器."""
     parser = ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
     _default_memory_types = "none,gold,kv,memory_bank"
@@ -96,7 +96,7 @@ def _setup_parser() -> ArgumentParser:
 
 
 async def main() -> None:
-    """Entry point for benchmark CLI."""
+    """基准测试命令行入口."""
     parser = _setup_parser()
     args = parser.parse_args()
 

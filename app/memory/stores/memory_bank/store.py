@@ -75,7 +75,10 @@ class MemoryBankStore:
         return await self._engine.search(query, top_k)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
-        """获取历史事件."""
+        """获取最近的 N 条有效历史事件.
+
+        注意：如果存储中存在格式错误的事件，实际返回数量可能少于 limit。
+        """
         events = await self._storage.read_events()
         if limit <= 0:
             return []

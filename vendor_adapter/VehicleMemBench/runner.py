@@ -201,6 +201,8 @@ async def _load_qa(file_num: int) -> dict:
     try:
         async with aiofiles.open(path, encoding="utf-8") as f:
             return json.loads(await f.read())
+    except FileNotFoundError:
+        raise
     except (json.JSONDecodeError, OSError) as e:
         msg = f"Failed to load qa file {file_num}: {e}"
         raise VehicleMemBenchError(msg) from e
@@ -211,6 +213,8 @@ async def _load_history(file_num: int) -> str:
     try:
         async with aiofiles.open(path, encoding="utf-8") as f:
             return await f.read()
+    except FileNotFoundError:
+        raise
     except OSError as e:
         msg = f"Failed to load history file {file_num}: {e}"
         raise VehicleMemBenchError(msg) from e
@@ -278,12 +282,11 @@ async def _load_history_cache(
         *(_load_or_empty(f) for f in file_nums),
         return_exceptions=True,
     )
-    return dict(
-        cast(
-            "list[tuple[int, str]]",
-            [r for r in history_pairs if not isinstance(r, Exception)],
-        )
-    )
+    exc_list = [r for r in history_pairs if isinstance(r, Exception)]
+    if exc_list:
+        msg = f"Failed to preload history cache: {exc_list[:3]}"
+        raise VehicleMemBenchError(msg)
+    return dict(cast("list[tuple[int, str]]", history_pairs))
 
 
 async def _prepare_task(
@@ -356,6 +359,8 @@ async def prepare(
     exc_list = [r for r in prep_results if isinstance(r, Exception)]
     if exc_list:
         logger.warning("[prepare] failures: %s", exc_list[:5])
+        msg = f"prepare failed for {len(exc_list)} task(s); first error: {exc_list[0]}"
+        raise VehicleMemBenchError(msg)
 
 
 async def _prepare_single(
@@ -390,12 +395,11 @@ async def _load_qa_cache(file_nums: list[int]) -> dict[int, dict | None]:
         *(_load_qa_safe(f) for f in file_nums),
         return_exceptions=True,
     )
-    return dict(
-        cast(
-            "list[tuple[int, dict | None]]",
-            [r for r in qa_pairs if not isinstance(r, Exception)],
-        )
-    )
+    exc_list = [r for r in qa_pairs if isinstance(r, Exception)]
+    if exc_list:
+        msg = f"Failed to preload QA cache: {exc_list[:3]}"
+        raise VehicleMemBenchError(msg)
+    return dict(cast("list[tuple[int, dict | None]]", qa_pairs))
 
 
 async def _load_prep_cache(
@@ -597,6 +601,8 @@ async def run(
     exc_list = [r for r in run_results if isinstance(r, Exception)]
     if exc_list:
         logger.warning("[run] file-level failures: %s", exc_list[:5])
+        msg = f"run failed for {len(exc_list)} task(s); first error: {exc_list[0]}"
+        raise VehicleMemBenchError(msg)
 
 
 async def _build_search_client(
@@ -824,8 +830,8 @@ def _update_failed_counts(
 ) -> None:
     """更新报告数据中的失败计数."""
     for mtype, fc in failed_counts.items():
-        if mtype in report_data:
-            report_data[mtype]["total_failed"] = fc
+        report_data.setdefault(mtype, {})
+        report_data[mtype]["total_failed"] = fc
 
 
 def _compute_memory_scores(report_data: dict[BenchMemoryMode, dict]) -> None:
