@@ -62,6 +62,7 @@ class EmbeddingModel:
         return openai.AsyncOpenAI(
             api_key=provider.provider.api_key or "not-needed",
             base_url=base_url,
+            timeout=43200,
         )
 
     async def _async_encode_with_openai(

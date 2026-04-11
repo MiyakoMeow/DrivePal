@@ -260,7 +260,7 @@ class TestChatModelFallback:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "response"
-        with patch.object(chat, "_create_async_client") as mock_create:
+        with patch.object(chat, "_create_client") as mock_create:
             mock_client = MagicMock()
             mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
             mock_create.return_value = mock_client
@@ -304,7 +304,7 @@ class TestChatModelFallback:
             client.chat.completions.create = AsyncMock(return_value=mock_response)
             return client
 
-        with patch.object(chat, "_create_async_client", side_effect=mock_create):
+        with patch.object(chat, "_create_client", side_effect=mock_create):
             result = await chat.generate("hello")
         assert result == "fallback response"
         assert call_count == CALL_COUNT_2
@@ -334,7 +334,7 @@ class TestChatModelFallback:
         )
 
         with (
-            patch.object(chat, "_create_async_client", return_value=mock_client),
+            patch.object(chat, "_create_client", return_value=mock_client),
             pytest.raises(RuntimeError, match="All LLM providers failed"),
         ):
             await chat.generate("hello")

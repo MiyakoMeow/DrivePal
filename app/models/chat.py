@@ -78,22 +78,14 @@ class ChatModel:
         self.providers = providers
         self.temperature = temperature
 
-    def _create_client(self, provider: LLMProviderConfig) -> openai.OpenAI:
-        """创建openai同步客户端."""
-        kwargs: dict = {
-            "api_key": provider.provider.api_key or "not-needed",
-        }
-        if provider.provider.base_url:
-            kwargs["base_url"] = provider.provider.base_url
-        return openai.OpenAI(**kwargs)
-
-    def _create_async_client(
+    def _create_client(
         self,
         provider: LLMProviderConfig,
     ) -> openai.AsyncOpenAI:
         """创建openai异步客户端."""
         kwargs: dict = {
             "api_key": provider.provider.api_key or "not-needed",
+            "timeout": 43200,
         }
         if provider.provider.base_url:
             kwargs["base_url"] = provider.provider.base_url
@@ -143,7 +135,7 @@ class ChatModel:
         errors = []
         for provider in self.providers:
             try:
-                client = self._create_async_client(provider)
+                client = self._create_client(provider)
                 coro = client.chat.completions.create(
                     model=provider.provider.model,
                     messages=messages,
@@ -170,7 +162,7 @@ class ChatModel:
             sem = await self._acquire_slot(provider)
             try:
                 async with sem:
-                    client = self._create_async_client(provider)
+                    client = self._create_client(provider)
                     stream = await client.chat.completions.create(
                         model=provider.provider.model,
                         messages=messages,
