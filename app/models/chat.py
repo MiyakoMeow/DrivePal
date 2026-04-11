@@ -3,12 +3,10 @@
 import asyncio
 from typing import TYPE_CHECKING, TypeVar
 
-import httpx
 import openai
 
+from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.settings import LLMProviderConfig, LLMSettings
-
-_CLIENT_TIMEOUT = httpx.Timeout(connect=10.0, read=43200.0, write=60.0, pool=60.0)
 
 _provider_semaphore_cache: dict[str, asyncio.Semaphore] = {}
 _provider_semaphore_lock: asyncio.Lock | None = None
