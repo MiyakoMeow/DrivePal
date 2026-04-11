@@ -83,10 +83,10 @@ class MemoryBankAdapter:
                 chat_model=get_store_chat_model(),
                 embedding_model=get_store_embedding_model(),
             )
-        except NoDefaultModelGroupError as e:
+        except (NoDefaultModelGroupError, RuntimeError) as e:
             msg = (
                 "Failed to initialize chat/embedding model for MemoryBankAdapter: "
-                "no default model group configured"
+                "no default model group configured or embedding provider missing"
             )
             raise MemoryBankAdapterError(msg) from e
 

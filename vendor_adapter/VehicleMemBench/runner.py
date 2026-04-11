@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,7 +27,7 @@ class VehicleMemBenchError(Exception):
 
 from .memory_adapters import ADAPTERS
 from .memory_adapters.common import StoreClient, format_search_results
-from .model_config import get_benchmark_config
+from .model_config import BenchmarkConfigError, get_benchmark_config
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 VENDOR_DIR = PROJECT_ROOT / "vendor" / "VehicleMemBench"
@@ -211,7 +211,7 @@ async def prepare(  # noqa: C901, PLR0915
     if any(mtype not in _PREP_FREE_TYPES and mtype not in ADAPTERS for mtype in types):
         try:
             agent_client = _get_agent_client()
-        except Exception as e:
+        except BenchmarkConfigError as e:
             msg = "agent_client not initialized but required by memory types"
             raise VehicleMemBenchError(msg) from e
 
@@ -225,8 +225,16 @@ async def prepare(  # noqa: C901, PLR0915
                 logger.warning("[warn] history file %d not found, using empty", fnum)
                 return fnum, ""
 
-        history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
-        history_cache = dict(history_pairs)
+        history_pairs = await asyncio.gather(
+            *(_load_or_empty(f) for f in file_nums),
+            return_exceptions=True,
+        )
+        history_cache = dict(
+            cast(
+                "list[tuple[int, str]]",
+                [r for r in history_pairs if not isinstance(r, Exception)],
+            )
+        )
 
     async def _task(fnum: int, mtype: BenchMemoryMode) -> None:
         fdir = file_output_dir(mtype, fnum)
@@ -274,7 +282,7 @@ async def prepare(  # noqa: C901, PLR0915
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
         return_exceptions=True,
     )
-    exc_list = [r for r in prep_results if isinstance(r, BaseException)]
+    exc_list = [r for r in prep_results if isinstance(r, Exception)]
     if exc_list:
         logger.warning("[prepare] failures: %s", exc_list[:5])
 
@@ -343,12 +351,13 @@ async def run(  # noqa: C901
         *(_load_prep(f, t) for f in file_nums for t in types),
         return_exceptions=True,
     )
-    exc_list = [r for r in prep_raw if isinstance(r, BaseException)]
+    exc_list = [r for r in prep_raw if isinstance(r, Exception)]
     if exc_list:
         logger.warning("[run] prep load failures: %s", exc_list[:5])
-    prep_tuples: list[tuple[BenchMemoryMode, int, dict | None]] = [
-        r for r in prep_raw if not isinstance(r, BaseException)
-    ]
+    prep_tuples = cast(
+        "list[tuple[BenchMemoryMode, int, dict | None]]",
+        [r for r in prep_raw if not isinstance(r, Exception)],
+    )
     prep_cache = {(mt, fn): data for mt, fn, data in prep_tuples}
 
     async def _task(fnum: int, mtype: BenchMemoryMode) -> None:
@@ -384,7 +393,7 @@ async def run(  # noqa: C901
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
         return_exceptions=True,
     )
-    exc_list = [r for r in run_results if isinstance(r, BaseException)]
+    exc_list = [r for r in run_results if isinstance(r, Exception)]
     if exc_list:
         logger.warning("[run] file-level failures: %s", exc_list[:5])
 
@@ -462,13 +471,13 @@ async def _run_single(  # noqa: PLR0913
                     "  [error] failed to write error record for query %d",
                     idx,
                 )
-                raise e from None
+                raise e from e
 
     gather_results = await asyncio.gather(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
         return_exceptions=True,
     )
-    silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
+    silent_failures = [r for r in gather_results if isinstance(r, Exception)]
     if silent_failures:
         logger.warning(
             "  [warn] %d queries failed silently in file %d (%s): %s",
@@ -641,7 +650,7 @@ def report(output_path: Path | None = None) -> None:  # noqa: C901, PLR0912
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError, OSError:
-            logger.debug("无法解析结果文件: %s", path)
+            logger.warning("无法解析结果文件: %s", path)
         if not isinstance(data, dict):
             continue
         if data.get("failed"):

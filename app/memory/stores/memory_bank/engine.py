@@ -107,8 +107,14 @@ class MemoryBankEngine:
         if self.embedding_model is None:
             event_results = await self._search_by_keyword(query, events, top_k)
         else:
-            event_results = await self._search_by_embedding(query, events, top_k)
-            if not event_results:
+            try:
+                event_results = await self._search_by_embedding(query, events, top_k)
+                if not event_results:
+                    event_results = await self._search_by_keyword(query, events, top_k)
+            except OSError, RuntimeError:
+                logger.warning(
+                    "[warn] embedding search failed, falling back to keyword"
+                )
                 event_results = await self._search_by_keyword(query, events, top_k)
         summary_results = await self._summary_mgr.search_summaries(
             query,
@@ -344,14 +350,22 @@ class MemoryBankEngine:
 
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
-        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
+        try:
+            await self._summary_mgr.maybe_summarize(
+                today, group_events, self.chat_model
+            )
+        except Exception:
+            logger.exception("[error] summarize failed for date %s", today)
         interactions = await self._interactions_store.read()
-        await self._personality_mgr.maybe_summarize(
-            today,
-            events,
-            interactions,
-            self.chat_model,
-        )
+        try:
+            await self._personality_mgr.maybe_summarize(
+                today,
+                events,
+                interactions,
+                self.chat_model,
+            )
+        except Exception:
+            logger.exception("[error] personality summarize failed for date %s", today)
         return interaction_id
 
     async def _should_append_to_event(self, interaction: dict) -> str | None:
@@ -363,12 +377,19 @@ class MemoryBankEngine:
         if recent.get("date_group") != today:
             return None
         if self.embedding_model:
-            query_vec = await self.embedding_model.encode(interaction["query"])
-            event_vec = await self.embedding_model.encode(recent.get("content", ""))
-            similarity = cosine_similarity(query_vec, event_vec)
-            return (
-                recent["id"] if similarity >= AGGREGATION_SIMILARITY_THRESHOLD else None
-            )
+            try:
+                query_vec = await self.embedding_model.encode(interaction["query"])
+                event_vec = await self.embedding_model.encode(recent.get("content", ""))
+                similarity = cosine_similarity(query_vec, event_vec)
+                return (
+                    recent["id"]
+                    if similarity >= AGGREGATION_SIMILARITY_THRESHOLD
+                    else None
+                )
+            except OSError, RuntimeError:
+                logger.warning(
+                    "[warn] embedding failed in _should_append_to_event, using keyword fallback"
+                )
         content_lower = recent.get("content", "").lower()
         query_lower = interaction["query"].lower()
         query_chars = list(set(query_lower))

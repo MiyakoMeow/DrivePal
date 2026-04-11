@@ -1,5 +1,6 @@
 """记忆适配器通用工具函数."""
 
+import logging
 import re
 from typing import TYPE_CHECKING
 
@@ -7,6 +8,8 @@ from app.memory.schemas import MemoryEvent, SearchResult
 
 if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
+
+logger = logging.getLogger(__name__)
 
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
@@ -66,4 +69,8 @@ class StoreClient:
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """在存储中搜索相关结果."""
-        return await self.store.search(query=query, top_k=top_k)
+        try:
+            return await self.store.search(query=query, top_k=top_k)
+        except Exception as e:
+            logger.warning("[warn] store.search failed: %s", e)
+            raise
