@@ -5,7 +5,12 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
-from vendor_adapter.VehicleMemBench.runner import prepare, report, run
+from vendor_adapter.VehicleMemBench.runner import (
+    VehicleMemBenchError,
+    prepare,
+    report,
+    run,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +71,12 @@ async def main() -> None:
         failed = False
         try:
             await _do_prepare(args.file_range, args.memory_types)
-        except OSError, ValueError, RuntimeError:
+        except OSError, ValueError, RuntimeError, VehicleMemBenchError:
             logger.exception("[prepare] failed")
             failed = True
         try:
             await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except OSError, ValueError, RuntimeError:
+        except OSError, ValueError, RuntimeError, VehicleMemBenchError:
             logger.exception("[run] failed")
             failed = True
         if failed and not args.allow_partial:

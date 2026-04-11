@@ -115,7 +115,7 @@ _CUSTOM_ADAPTER_INITIAL_TOOLS = [
                     "top_k": {
                         "type": "integer",
                         "description": "Number of results",
-                        "default": 5,
+                        "default": 10,
                     },
                 },
                 "required": ["query"],
