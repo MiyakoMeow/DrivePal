@@ -593,6 +593,34 @@ async def _evaluate_query(
     raise VehicleMemBenchError(msg)
 
 
+def _handle_search_error(
+    future: Future | None,
+    exc: Exception,
+    query: str,
+) -> dict:
+    """处理搜索过程中的错误并返回错误结果字典."""
+    if future is not None:
+        future.cancel()
+    error_msg: str
+    match exc:
+        case TimeoutError():
+            logger.warning("  [warn] memory_search timeout: %r", query)
+            error_msg = "search timed out"
+        case concurrent.futures.CancelledError():
+            logger.warning("  [warn] memory_search cancelled: %r", query)
+            error_msg = "search cancelled"
+        case RuntimeError() if "event loop" in str(exc).lower():
+            logger.warning("  [warn] memory_search: event loop error: %s", exc)
+            error_msg = str(exc)
+        case OSError():
+            logger.warning("  [warn] memory_search failed: %s", exc)
+            error_msg = str(exc)
+        case _:
+            logger.warning("  [warn] memory_search unexpected error: %s", exc)
+            error_msg = str(exc)
+    return {"success": False, "error": error_msg, "results": "", "count": 0}
+
+
 def _make_sync_memory_search(
     search_client: StoreClient,
 ) -> Callable[[str, int], dict]:
@@ -611,37 +639,15 @@ def _make_sync_memory_search(
                 loop,
             )
             results = future.result(timeout=_SEARCH_TIMEOUT)
-        except TimeoutError:
-            if future is not None:
-                future.cancel()
-            logger.warning("  [warn] memory_search timeout: %r", query)
-            return {
-                "success": False,
-                "error": "search timed out",
-                "results": "",
-                "count": 0,
-            }
-        except concurrent.futures.CancelledError:
-            if future is not None:
-                future.cancel()
-            logger.warning("  [warn] memory_search cancelled: %r", query)
-            return {
-                "success": False,
-                "error": "search cancelled",
-                "results": "",
-                "count": 0,
-            }
-        except RuntimeError as e:
-            if "event loop" in str(e).lower():
-                logger.warning("  [warn] memory_search: event loop error: %s", e)
-                return {"success": False, "error": str(e), "results": "", "count": 0}
-            raise
-        except OSError as e:
-            logger.warning("  [warn] memory_search failed: %s", e)
-            return {"success": False, "error": str(e), "results": "", "count": 0}
+        except (
+            TimeoutError,
+            concurrent.futures.CancelledError,
+            RuntimeError,
+            OSError,
+        ) as e:
+            return _handle_search_error(future, e, query)
         except Exception as e:  # noqa: BLE001
-            logger.warning("  [warn] memory_search unexpected error: %s", e)
-            return {"success": False, "error": str(e), "results": "", "count": 0}
+            return _handle_search_error(future, e, query)
         else:
             text, count = format_search_results(results)
             return {"success": True, "results": text, "count": count}

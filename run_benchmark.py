@@ -32,11 +32,44 @@ def _do_report(output: Path | None = None) -> None:
     report(output)
 
 
-async def main() -> None:
-    """Entry point for benchmark CLI."""
+async def _do_all(
+    file_range: str,
+    memory_types: str,
+    reflect_num: int,
+    *,
+    allow_partial: bool = False,
+    output: Path | None = None,
+) -> None:
+    """Execute prepare, run, and report in sequence."""
+    failed = False
+    try:
+        await _do_prepare(file_range, memory_types)
+    except VehicleMemBenchError:
+        logger.exception("[prepare] failed due to benchmark error")
+        failed = True
+    except OSError, ValueError, RuntimeError:
+        logger.exception("[prepare] failed due to system error")
+        failed = True
+    try:
+        await _do_run(file_range, memory_types, reflect_num)
+    except VehicleMemBenchError:
+        logger.exception("[run] failed due to benchmark error")
+        failed = True
+    except OSError, ValueError, RuntimeError:
+        logger.exception("[run] failed due to system error")
+        failed = True
+    if failed and not allow_partial:
+        sys.stdout.write(
+            "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
+        )
+        return
+    _do_report(output)
+
+
+def _setup_parser() -> ArgumentParser:
+    """Set up the argument parser with all subcommands."""
     parser = ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
-
     _default_memory_types = "none,gold,kv,memory_bank"
 
     for cmd in ["prepare", "run"]:
@@ -59,6 +92,12 @@ async def main() -> None:
     rp = subparsers.add_parser("report")
     rp.add_argument("--output", type=Path, default=None)
 
+    return parser
+
+
+async def main() -> None:
+    """Entry point for benchmark CLI."""
+    parser = _setup_parser()
     args = parser.parse_args()
 
     if args.command == "prepare":
@@ -68,29 +107,13 @@ async def main() -> None:
     elif args.command == "report":
         _do_report(args.output)
     elif args.command == "all":
-        failed = False
-        try:
-            await _do_prepare(args.file_range, args.memory_types)
-        except VehicleMemBenchError:
-            logger.exception("[prepare] failed due to benchmark error")
-            failed = True
-        except OSError, ValueError, RuntimeError:
-            logger.exception("[prepare] failed due to system error")
-            failed = True
-        try:
-            await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except VehicleMemBenchError:
-            logger.exception("[run] failed due to benchmark error")
-            failed = True
-        except OSError, ValueError, RuntimeError:
-            logger.exception("[run] failed due to system error")
-            failed = True
-        if failed and not args.allow_partial:
-            sys.stdout.write(
-                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
-            )
-            return
-        _do_report(args.output)
+        await _do_all(
+            args.file_range,
+            args.memory_types,
+            args.reflect_num,
+            allow_partial=args.allow_partial,
+            output=args.output,
+        )
     else:
         parser.print_help()
 
