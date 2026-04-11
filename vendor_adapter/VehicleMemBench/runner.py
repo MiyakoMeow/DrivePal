@@ -192,7 +192,11 @@ async def _load_history(file_num: int) -> str:
 
 
 def _ensure_output_dir() -> Path:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        msg = f"Failed to create output directory {OUTPUT_DIR}: {e}"
+        raise VehicleMemBenchError(msg) from e
     return OUTPUT_DIR
 
 
@@ -293,9 +297,10 @@ async def prepare(  # noqa: C901, PLR0915
                 fdir.mkdir(parents=True, exist_ok=True)
                 async with aiofiles.open(pp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
-        except Exception:
+        except Exception as e:
             logger.exception("[error] %s file %d", mtype, fnum)
-            raise
+            msg = f"Failed to prepare {mtype} file {fnum}"
+            raise VehicleMemBenchError(msg) from e
 
     prep_results = await asyncio.gather(
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
