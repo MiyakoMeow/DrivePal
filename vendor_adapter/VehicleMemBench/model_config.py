@@ -27,8 +27,8 @@ class BenchmarkConfigError(ValueError):
 class BenchmarkConfig:
     """基准测试配置（一次性提取所有字段）."""
 
-    base_url: str | None
-    api_key: str | None
+    base_url: str
+    api_key: str
     model: str
     temperature: float
     max_tokens: int

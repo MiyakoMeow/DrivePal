@@ -274,9 +274,9 @@ async def prepare(  # noqa: C901, PLR0915
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
         return_exceptions=True,
     )
-    exc_info = [r for r in prep_results if isinstance(r, BaseException)]
-    if exc_info:
-        logger.warning("[prepare] failures: %s", exc_info[:5])
+    exc_list = [r for r in prep_results if isinstance(r, BaseException)]
+    if exc_list:
+        logger.warning("[prepare] failures: %s", exc_list[:5])
 
 
 async def _prepare_single(
@@ -343,9 +343,9 @@ async def run(  # noqa: C901
         *(_load_prep(f, t) for f in file_nums for t in types),
         return_exceptions=True,
     )
-    exc_info = [r for r in prep_raw if isinstance(r, BaseException)]
-    if exc_info:
-        logger.warning("[run] prep load failures: %s", exc_info[:5])
+    exc_list = [r for r in prep_raw if isinstance(r, BaseException)]
+    if exc_list:
+        logger.warning("[run] prep load failures: %s", exc_list[:5])
     prep_tuples: list[tuple[BenchMemoryMode, int, dict | None]] = [
         r for r in prep_raw if not isinstance(r, BaseException)
     ]
@@ -384,9 +384,9 @@ async def run(  # noqa: C901
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
         return_exceptions=True,
     )
-    exc_info = [r for r in run_results if isinstance(r, BaseException)]
-    if exc_info:
-        logger.warning("[run] file-level failures: %s", exc_info[:5])
+    exc_list = [r for r in run_results if isinstance(r, BaseException)]
+    if exc_list:
+        logger.warning("[run] file-level failures: %s", exc_list[:5])
 
 
 async def _run_single(  # noqa: PLR0913
