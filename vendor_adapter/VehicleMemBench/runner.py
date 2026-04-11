@@ -657,7 +657,7 @@ def report(output_path: Path | None = None) -> None:  # noqa: C901, PLR0912
         try:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
-        except json.JSONDecodeError, OSError:
+        except (json.JSONDecodeError, OSError):
             logger.warning("无法解析结果文件: %s", path)
         if not isinstance(data, dict):
             continue
