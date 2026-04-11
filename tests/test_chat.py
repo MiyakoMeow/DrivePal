@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -157,6 +157,8 @@ class TestProviderConcurrency:
 
         with patch.object(chat, "_create_client") as mock_create_client:
             mock_client = MagicMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_client.chat.completions.create = mock_create
             mock_create_client.return_value = mock_client
 

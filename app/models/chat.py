@@ -138,14 +138,14 @@ class ChatModel:
         errors = []
         for provider in self.providers:
             try:
-                client = self._create_client(provider)
-                coro = client.chat.completions.create(
-                    model=provider.provider.model,
-                    messages=messages,
-                    temperature=self._get_temperature(provider),
-                )
-                response = await self._run_with_semaphore(provider, coro)
-                return response.choices[0].message.content or ""
+                async with self._create_client(provider) as client:
+                    coro = client.chat.completions.create(
+                        model=provider.provider.model,
+                        messages=messages,
+                        temperature=self._get_temperature(provider),
+                    )
+                    response = await self._run_with_semaphore(provider, coro)
+                    return response.choices[0].message.content or ""
             except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
                 continue
@@ -164,8 +164,7 @@ class ChatModel:
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
             try:
-                async with sem:
-                    client = self._create_client(provider)
+                async with sem, self._create_client(provider) as client:
                     stream = await client.chat.completions.create(
                         model=provider.provider.model,
                         messages=messages,
