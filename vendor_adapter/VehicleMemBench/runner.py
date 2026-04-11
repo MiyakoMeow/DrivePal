@@ -274,9 +274,9 @@ async def prepare(  # noqa: C901, PLR0915
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
         return_exceptions=True,
     )
-    failed = sum(1 for r in prep_results if isinstance(r, BaseException))
-    if failed:
-        logger.info("[prepare] done with %d failures", failed)
+    exc_info = [r for r in prep_results if isinstance(r, BaseException)]
+    if exc_info:
+        logger.warning("[prepare] failures: %s", exc_info[:5])
 
 
 async def _prepare_single(
@@ -341,10 +341,15 @@ async def run(  # noqa: C901
 
     prep_raw = await asyncio.gather(
         *(_load_prep(f, t) for f in file_nums for t in types),
+        return_exceptions=True,
     )
-    prep_cache: dict[tuple[BenchMemoryMode, int], dict | None] = {
-        (mt, fn): data for mt, fn, data in prep_raw
-    }
+    exc_info = [r for r in prep_raw if isinstance(r, BaseException)]
+    if exc_info:
+        logger.warning("[run] prep load failures: %s", exc_info[:5])
+    prep_tuples: list[tuple[BenchMemoryMode, int, dict | None]] = [
+        r for r in prep_raw if not isinstance(r, BaseException)
+    ]
+    prep_cache = {(mt, fn): data for mt, fn, data in prep_tuples}
 
     async def _task(fnum: int, mtype: BenchMemoryMode) -> None:
         prep_data = prep_cache.get((mtype, fnum))
@@ -379,9 +384,9 @@ async def run(  # noqa: C901
         *(_task(fnum, mtype) for fnum in file_nums for mtype in types),
         return_exceptions=True,
     )
-    failed = sum(1 for r in run_results if isinstance(r, BaseException))
-    if failed:
-        logger.info("[run] done with %d file-level failures", failed)
+    exc_info = [r for r in run_results if isinstance(r, BaseException)]
+    if exc_info:
+        logger.warning("[run] file-level failures: %s", exc_info[:5])
 
 
 async def _run_single(  # noqa: PLR0913
@@ -487,7 +492,11 @@ async def _build_search_client(
     adapter_cls = ADAPTERS[memory_type]
     data_dir = Path(data_dir_str)
     adapter = adapter_cls(data_dir=data_dir)
-    store = await asyncio.to_thread(adapter.load)
+    try:
+        store = await asyncio.to_thread(adapter.load)
+    except Exception as e:
+        msg = f"Failed to load store for {memory_type} from {data_dir}"
+        raise VehicleMemBenchError(msg) from e
     return adapter.get_search_client(store)
 
 
@@ -518,6 +527,7 @@ async def _evaluate_query(
 
     if ctx.memory_type == BenchMemoryMode.KV:
         if ctx.kv_store is None:
+            logger.warning("query %d: kv_store is None, skipping", idx)
             return None
         return await asyncio.to_thread(
             process_task_with_kv_memory,

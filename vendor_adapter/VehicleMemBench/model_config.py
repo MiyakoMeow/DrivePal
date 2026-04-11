@@ -46,11 +46,33 @@ def get_benchmark_config() -> BenchmarkConfig:
     if not providers:
         raise BenchmarkConfigError(BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED)
     provider = providers[0]
+
+    required_fields = ("base_url", "api_key", "model", "temperature")
+    for field in required_fields:
+        if field not in provider:
+            msg = f"Benchmark provider missing required field: {field}"
+            raise BenchmarkConfigError(msg)
+
+    base_url = provider["base_url"]
+    api_key = provider["api_key"]
+    model = provider["model"]
+    temperature = provider["temperature"]
+
+    if base_url is None or api_key is None:
+        msg = "Benchmark provider 'base_url' and 'api_key' cannot be None"
+        raise BenchmarkConfigError(msg)
+    if not model:
+        msg = "Benchmark provider 'model' cannot be empty"
+        raise BenchmarkConfigError(msg)
+    if temperature is None:
+        msg = "Benchmark provider 'temperature' cannot be None"
+        raise BenchmarkConfigError(msg)
+
     return BenchmarkConfig(
-        base_url=provider["base_url"],
-        api_key=provider["api_key"],
-        model=provider["model"],
-        temperature=provider["temperature"],
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
         max_tokens=8192,
     )
 
