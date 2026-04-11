@@ -1,6 +1,7 @@
 """MemoryBankEngine: 记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -31,6 +32,8 @@ OVERLAP_RATIO_THRESHOLD = 0.5
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryBankEngine:
@@ -82,7 +85,12 @@ class MemoryBankEngine:
         await self._storage.append_raw(event.model_dump())
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
-        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
+        try:
+            await self._summary_mgr.maybe_summarize(
+                today, group_events, self.chat_model
+            )
+        except Exception:
+            logger.exception("[error] summarize failed for date %s", today)
         return event.id
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
@@ -164,6 +172,7 @@ class MemoryBankEngine:
                 last_date = date.fromisoformat(last_recall)
                 days_elapsed = (today - last_date).days
             except ValueError, TypeError:
+                logger.warning("[warn] invalid last_recall_date: %r", last_recall)
                 days_elapsed = 0
             retention = forgetting_curve(days_elapsed, strength)
             if retention <= 0:
@@ -205,6 +214,7 @@ class MemoryBankEngine:
                 last_date = date.fromisoformat(last_recall)
                 days_elapsed = (today - last_date).days
             except ValueError, TypeError:
+                logger.warning("[warn] invalid last_recall_date: %r", last_recall)
                 days_elapsed = 0
             retention = forgetting_curve(days_elapsed, strength)
             score = similarity * retention
@@ -250,6 +260,9 @@ class MemoryBankEngine:
                         last_date = date.fromisoformat(last_recall)
                         days_elapsed = (today_date - last_date).days
                     except ValueError, TypeError:
+                        logger.warning(
+                            "[warn] invalid last_recall_date: %r", last_recall
+                        )
                         days_elapsed = 0
                     retention = forgetting_curve(days_elapsed, strength)
                     if retention < SOFT_FORGET_THRESHOLD:
@@ -381,6 +394,7 @@ class MemoryBankEngine:
         try:
             summary_text = await self.chat_model.generate(prompt)
         except OSError, ValueError, RuntimeError:
+            logger.warning("[warn] failed to update summary for event %s", event_id)
             return
         async with self._lock:
             all_events = await self._storage.read_events()
