@@ -71,13 +71,19 @@ async def main() -> None:
         failed = False
         try:
             await _do_prepare(args.file_range, args.memory_types)
-        except (OSError, ValueError, RuntimeError, VehicleMemBenchError):
-            logger.exception("[prepare] failed")
+        except VehicleMemBenchError:
+            logger.exception("[prepare] failed due to benchmark error")
+            failed = True
+        except OSError, ValueError, RuntimeError:
+            logger.exception("[prepare] failed due to system error")
             failed = True
         try:
             await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except (OSError, ValueError, RuntimeError, VehicleMemBenchError):
-            logger.exception("[run] failed")
+        except VehicleMemBenchError:
+            logger.exception("[run] failed due to benchmark error")
+            failed = True
+        except OSError, ValueError, RuntimeError:
+            logger.exception("[run] failed due to system error")
             failed = True
         if failed and not args.allow_partial:
             sys.stdout.write(

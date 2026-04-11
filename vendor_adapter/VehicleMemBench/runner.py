@@ -1,6 +1,7 @@
 """VehicleMemBench 评估基准的测试运行器."""
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import os
@@ -139,12 +140,22 @@ def parse_file_range(range_str: str) -> list[int]:
     result = []
     for raw_part in range_str.split(","):
         part = raw_part.strip()
+        if not part:
+            continue
         if "-" in part:
             a, b = part.split("-", 1)
-            a, b = int(a), int(b)
-            result.extend(range(min(a, b), max(a, b) + 1))
+            try:
+                a_int, b_int = int(a), int(b)
+            except ValueError:
+                msg = f"Invalid integer in range: '{part}'"
+                raise ValueError(msg) from None
+            result.extend(range(min(a_int, b_int), max(a_int, b_int) + 1))
         else:
-            result.append(int(part))
+            try:
+                result.append(int(part))
+            except ValueError:
+                msg = f"Invalid integer in file range: '{part}'"
+                raise ValueError(msg) from None
     return sorted(set(result))
 
 
@@ -162,14 +173,22 @@ def _get_agent_client() -> AgentClient:
 
 async def _load_qa(file_num: int) -> dict:
     path = BENCHMARK_DIR / "qa_data" / f"qa_{file_num}.json"
-    async with aiofiles.open(path, encoding="utf-8") as f:
-        return json.loads(await f.read())
+    try:
+        async with aiofiles.open(path, encoding="utf-8") as f:
+            return json.loads(await f.read())
+    except (json.JSONDecodeError, OSError) as e:
+        msg = f"Failed to load qa file {file_num}: {e}"
+        raise VehicleMemBenchError(msg) from e
 
 
 async def _load_history(file_num: int) -> str:
     path = BENCHMARK_DIR / "history" / f"history_{file_num}.txt"
-    async with aiofiles.open(path, encoding="utf-8") as f:
-        return await f.read()
+    try:
+        async with aiofiles.open(path, encoding="utf-8") as f:
+            return await f.read()
+    except OSError as e:
+        msg = f"Failed to load history file {file_num}: {e}"
+        raise VehicleMemBenchError(msg) from e
 
 
 def _ensure_output_dir() -> Path:
@@ -597,6 +616,16 @@ def _make_sync_memory_search(
                 "results": "",
                 "count": 0,
             }
+        except concurrent.futures.CancelledError:
+            if future is not None:
+                future.cancel()
+            logger.warning("  [warn] memory_search cancelled: %r", query)
+            return {
+                "success": False,
+                "error": "search cancelled",
+                "results": "",
+                "count": 0,
+            }
         except RuntimeError as e:
             if "event loop" in str(e).lower():
                 logger.warning("  [warn] memory_search: event loop error: %s", e)
@@ -604,6 +633,9 @@ def _make_sync_memory_search(
             raise
         except OSError as e:
             logger.warning("  [warn] memory_search failed: %s", e)
+            return {"success": False, "error": str(e), "results": "", "count": 0}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("  [warn] memory_search unexpected error: %s", e)
             return {"success": False, "error": str(e), "results": "", "count": 0}
         else:
             text, count = format_search_results(results)
@@ -657,7 +689,7 @@ def report(output_path: Path | None = None) -> None:  # noqa: C901, PLR0912
         try:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             logger.warning("无法解析结果文件: %s", path)
         if not isinstance(data, dict):
             continue
@@ -668,10 +700,18 @@ def report(output_path: Path | None = None) -> None:  # noqa: C901, PLR0912
             all_results[mtype] = []
         all_results[mtype].append(data)
 
-    cfg = get_benchmark_config()
+    try:
+        cfg = get_benchmark_config()
+    except BenchmarkConfigError:
+        logger.exception("Failed to get benchmark config")
+        raise
     report_data: dict[BenchMemoryMode, dict] = {}
     for mtype, results in all_results.items():
-        metric = _build_metric(results, model=cfg.model, memory_type=mtype)
+        try:
+            metric = _build_metric(results, model=cfg.model, memory_type=mtype)
+        except Exception:
+            logger.exception("Failed to build metric for %s", mtype)
+            continue
         report_data[mtype] = metric
 
     for mtype, fc in failed_counts.items():
