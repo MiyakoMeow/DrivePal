@@ -57,8 +57,7 @@ class PersonalityManager:
                     last_date = date.fromisoformat(last_recall)
                     days_elapsed = (today - last_date).days
                 except ValueError, TypeError:
-                    logger.warning("[warn] invalid last_recall_date: %r", last_recall)
-                    days_elapsed = 365
+                    days_elapsed = 0
                 retention = forgetting_curve(days_elapsed, strength)
                 score = retention * SUMMARY_WEIGHT * 0.8
                 results.append(

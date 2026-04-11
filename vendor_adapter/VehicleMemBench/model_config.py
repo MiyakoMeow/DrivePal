@@ -27,8 +27,8 @@ class BenchmarkConfigError(ValueError):
 class BenchmarkConfig:
     """基准测试配置（一次性提取所有字段）."""
 
-    base_url: str
-    api_key: str
+    base_url: str | None
+    api_key: str | None
     model: str
     temperature: float
     max_tokens: int
@@ -39,52 +39,19 @@ def get_benchmark_config() -> BenchmarkConfig:
     """从 model_groups.benchmark 配置中提取基准测试参数."""
     try:
         providers = get_model_group_providers("benchmark")
-    except KeyError as e:
+    except KeyError:
         raise BenchmarkConfigError(
             BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED,
-        ) from e
+        ) from None
     if not providers:
         raise BenchmarkConfigError(BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED)
     provider = providers[0]
-
-    required_fields = ("base_url", "api_key", "model", "temperature")
-    for field in required_fields:
-        if field not in provider:
-            msg = f"Benchmark provider missing required field: {field}"
-            raise BenchmarkConfigError(msg)
-
-    base_url = provider["base_url"]
-    api_key = provider["api_key"]
-    model = provider["model"]
-    temperature = provider["temperature"]
-
-    if not isinstance(base_url, str) or not base_url.strip():
-        msg = "Benchmark provider 'base_url' must be a non-empty string"
-        raise BenchmarkConfigError(msg)
-    if not isinstance(api_key, str) or not api_key.strip():
-        msg = "Benchmark provider 'api_key' must be a non-empty string"
-        raise BenchmarkConfigError(msg)
-    if not isinstance(model, str) or not model.strip():
-        msg = "Benchmark provider 'model' must be a non-empty string"
-        raise BenchmarkConfigError(msg)
-    base_url = base_url.strip()
-    api_key = api_key.strip()
-    model = model.strip()
-    if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
-        msg = "Benchmark provider 'temperature' must be a number"
-        raise BenchmarkConfigError(msg)
-
-    max_tokens = provider.get("max_tokens", 8192)
-    if not isinstance(max_tokens, int) or max_tokens <= 0:
-        msg = f"Benchmark provider 'max_tokens' must be positive int, got {max_tokens}"
-        raise BenchmarkConfigError(msg)
-
     return BenchmarkConfig(
-        base_url=base_url,
-        api_key=api_key,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
+        base_url=provider["base_url"],
+        api_key=provider["api_key"],
+        model=provider["model"],
+        temperature=provider["temperature"],
+        max_tokens=8192,
     )
 
 
