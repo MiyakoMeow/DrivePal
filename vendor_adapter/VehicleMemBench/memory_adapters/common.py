@@ -64,6 +64,6 @@ class StoreClient:
         """使用存储实例初始化."""
         self.store = store
 
-    async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
+    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """在存储中搜索相关结果."""
         return await self.store.search(query=query, top_k=top_k)

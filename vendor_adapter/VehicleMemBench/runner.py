@@ -420,7 +420,7 @@ async def _run_single(  # noqa: PLR0913
         except FileNotFoundError:
             pass
         except json.JSONDecodeError:
-            pass
+            logger.warning("  [warn] corrupt query result file: %s", qp)
 
         try:
             query = event.get("query", "")
@@ -464,7 +464,13 @@ async def _run_single(  # noqa: PLR0913
     )
     silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
     if silent_failures:
-        logger.warning("  [warn] %d queries failed silently", len(silent_failures))
+        logger.warning(
+            "  [warn] %d queries failed silently in file %d (%s): %s",
+            len(silent_failures),
+            file_num,
+            memory_type,
+            [str(r) for r in silent_failures[:3]],
+        )
 
 
 async def _build_search_client(
@@ -545,7 +551,7 @@ def _make_sync_memory_search(
     """
     loop = asyncio.get_running_loop()
 
-    def _search(query: str, top_k: int = 5) -> dict:
+    def _search(query: str, top_k: int = 10) -> dict:
         future: Future | None = None
         try:
             future = asyncio.run_coroutine_threadsafe(
