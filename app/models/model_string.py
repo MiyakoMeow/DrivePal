@@ -6,8 +6,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app.models._types import ResolvedModel
 from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
-from app.models.settings import ResolvedModel
 
 
 class InvalidModelStringError(ValueError):

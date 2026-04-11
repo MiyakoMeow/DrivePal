@@ -9,7 +9,7 @@ from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.settings import LLMProviderConfig, LLMSettings
 
 _provider_semaphore_cache: dict[str, asyncio.Semaphore] = {}
-_provider_semaphore_lock: asyncio.Lock | None = None
+_provider_semaphore_lock: asyncio.Lock = asyncio.Lock()
 
 
 class ChatError(RuntimeError):
@@ -44,10 +44,6 @@ async def _get_provider_semaphore(
     concurrency: int,
 ) -> asyncio.Semaphore:
     """获取或创建 provider 级别的 semaphore."""
-    global _provider_semaphore_lock  # noqa: PLW0603
-    if _provider_semaphore_lock is None:
-        _provider_semaphore_lock = asyncio.Lock()
-
     async with _provider_semaphore_lock:
         if provider_name not in _provider_semaphore_cache:
             _provider_semaphore_cache[provider_name] = asyncio.Semaphore(concurrency)

@@ -103,7 +103,21 @@ class SummaryManager:
                 summaries["daily_summaries"] = current_daily
                 await self._summaries_store.write(summaries)
 
-    async def maybe_summarize(  # noqa: C901
+    async def _should_generate_summary(self, date_group: str) -> bool:
+        """在锁内检查 inflight 状态和已有摘要，通过后标记 inflight."""
+        async with self._lock:
+            summaries = await self._summaries_store.read()
+            daily_summaries = summaries.get("daily_summaries", {})
+            if date_group in self._inflight_daily_summaries:
+                return False
+            if date_group in daily_summaries and isinstance(
+                daily_summaries[date_group], dict
+            ):
+                return False
+            self._inflight_daily_summaries.add(date_group)
+        return True
+
+    async def maybe_summarize(
         self,
         date_group: str,
         events: list[dict],
@@ -115,34 +129,20 @@ class SummaryManager:
         时的冗余 LLM 调用。如果稍后向同一 date_group 添加事件，现有摘要不会重新生成。
         如需强制重新生成，请从存储中删除摘要条目。
         """
-        count = len(events)
-        if count < DAILY_SUMMARY_THRESHOLD:
+        if len(events) < DAILY_SUMMARY_THRESHOLD:
             return
         if not chat_model:
             return
+        if not await self._should_generate_summary(date_group):
+            return
 
+        count = len(events)
+        # latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（摘要不可变）
         latest_source_ts = max(
             (e.get("updated_at") or e.get("created_at", "") for e in events),
             default="",
         )
-        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（摘要不可变）
-        should_generate = False
-        async with self._lock:
-            summaries = await self._summaries_store.read()
-            daily_summaries = summaries.get("daily_summaries", {})
-            if date_group in self._inflight_daily_summaries:
-                return
-            if date_group in daily_summaries:
-                existing = daily_summaries[date_group]
-                if isinstance(existing, dict):
-                    return
-            self._inflight_daily_summaries.add(date_group)
-            should_generate = True
-            content = "\n".join(
-                e.get("content", "") for e in events if e.get("content")
-            )
-        if not should_generate:
-            return
+        content = "\n".join(e.get("content", "") for e in events if e.get("content"))
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
         needs_overall_update = False
         try:

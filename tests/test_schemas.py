@@ -20,9 +20,10 @@ class TestMemoryEvent:
 
     def test_extra_fields_allowed(self) -> None:
         """验证 extra='allow' 允许未知字段."""
-        event = MemoryEvent(content="hello")
-        event.custom_field = "value"  # ty: ignore[unresolved-attribute]
-        assert event.custom_field == "value"  # ty: ignore[unresolved-attribute]
+        event = MemoryEvent.model_validate(
+            {"content": "hello", "custom_field": "value"},
+        )
+        assert event.model_extra == {"custom_field": "value"}
 
     def test_model_dump(self) -> None:
         """验证 model_dump 序列化输出."""

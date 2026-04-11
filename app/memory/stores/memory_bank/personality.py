@@ -95,7 +95,58 @@ class PersonalityManager:
                 personality_data["daily_personality"] = current_daily
                 await self._store.write(personality_data)
 
-    async def maybe_summarize(  # noqa: C901
+    async def _should_generate_personality(
+        self,
+        date_group: str,
+        events: list[dict],
+        interactions: list[dict],
+        chat_model: ChatModel | None,
+    ) -> tuple[list[dict], str, str] | None:
+        """检查是否应生成人格摘要，返回必要数据或 None.
+
+        执行前置校验（chat_model、交互数量阈值、inflight/已有检查），
+        并在锁内标记 inflight。通过后返回生成所需数据。
+
+        Returns:
+            若应生成，返回 (group_interactions, combined_text, latest_source_ts)；
+            否则返回 None。
+
+        """
+        if not chat_model:
+            return None
+
+        group_events = [e for e in events if e.get("date_group") == date_group]
+        group_interactions = [
+            i
+            for i in interactions
+            if i.get("event_id") in {e.get("id") for e in group_events}
+        ]
+        if len(group_interactions) < PERSONALITY_SUMMARY_THRESHOLD:
+            return None
+
+        latest_source_ts = max(
+            (e.get("updated_at") or e.get("created_at", "") for e in group_events),
+            default="",
+        )
+        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（人格摘要不可变）
+        async with self._personality_lock:
+            personality_data = await self._store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            if date_group in self._inflight_daily_personality:
+                return None
+            if date_group in daily_personality:
+                existing = daily_personality[date_group]
+                if isinstance(existing, dict):
+                    return None
+            self._inflight_daily_personality.add(date_group)
+
+        combined = "\n".join(
+            f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
+            for i in group_interactions
+        )
+        return group_interactions, combined, latest_source_ts
+
+    async def maybe_summarize(
         self,
         date_group: str,
         events: list[dict],
@@ -108,40 +159,15 @@ class PersonalityManager:
         如果稍后向同一 date_group 添加交互，现有摘要不会重新生成。
         如需强制重新生成，请从存储中删除人格条目。
         """
-        if not chat_model:
+        prepared = await self._should_generate_personality(
+            date_group, events, interactions, chat_model
+        )
+        if not prepared:
             return
-        group_events = [e for e in events if e.get("date_group") == date_group]
-        group_interactions = [
-            i
-            for i in interactions
-            if i.get("event_id") in {e.get("id") for e in group_events}
-        ]
-        if len(group_interactions) < PERSONALITY_SUMMARY_THRESHOLD:
+        group_interactions, combined, latest_source_ts = prepared
+        if chat_model is None:
             return
 
-        latest_source_ts = max(
-            (e.get("updated_at") or e.get("created_at", "") for e in group_events),
-            default="",
-        )
-        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（人格摘要不可变）
-        should_generate = False
-        async with self._personality_lock:
-            personality_data = await self._store.read()
-            daily_personality = personality_data.get("daily_personality", {})
-            if date_group in self._inflight_daily_personality:
-                return
-            if date_group in daily_personality:
-                existing = daily_personality[date_group]
-                if isinstance(existing, dict):
-                    return
-            self._inflight_daily_personality.add(date_group)
-            should_generate = True
-            combined = "\n".join(
-                f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
-                for i in group_interactions
-            )
-        if not should_generate:
-            return
         prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
         and devise response strategies based on your speculation. Dialogue content:
         {combined}

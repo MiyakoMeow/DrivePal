@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.memory.interfaces import MemoryStore
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from vendor_adapter.VehicleMemBench.memory_adapters.common import (
     StoreClient,
@@ -60,32 +61,35 @@ def test_format_search_results_with_events() -> None:
 async def test_store_client_delegates_to_store() -> None:
     """测试 StoreClient 将搜索委托给 store."""
 
-    class FakeStore:
+    class FakeStore(MemoryStore):
         store_name = "fake"
         requires_embedding = False
         requires_chat = False
         supports_interaction = False
 
-        async def write(self, _event: MemoryEvent) -> str:
-            return "fake_id"
+        async def write(self, event: MemoryEvent) -> str:
+            return event.id
 
-        async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:  # noqa: ARG002
+        async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+            _ = top_k
             return [SearchResult(event={"content": f"result for {query}"}, score=1.0)]
 
-        async def get_history(self, _limit: int = 10) -> list[MemoryEvent]:
+        async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+            _ = limit
             return []
 
         async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-            pass
+            _ = event_id, feedback
 
         async def write_interaction(
             self,
-            _query: str,
-            _response: str,
-            _event_type: str = "reminder",
+            query: str,
+            response: str,
+            event_type: str = "reminder",
         ) -> str:
+            _ = query, response, event_type
             return "fake_interaction_id"
 
-    client = StoreClient(FakeStore())  # ty: ignore[invalid-argument-type]
+    client = StoreClient(FakeStore())
     results = await client.search(query="test", top_k=5)
     assert len(results) == 1
