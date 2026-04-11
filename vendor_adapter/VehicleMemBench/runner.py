@@ -301,8 +301,8 @@ async def _prepare_single(
             daily,
         )
         return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
-    logger.warning("[warn] unknown memory_type: %s", memory_type)
-    return None
+    msg = f"unsupported memory_type for _prepare_single: {memory_type}"
+    raise VehicleMemBenchError(msg)
 
 
 async def run(  # noqa: C901

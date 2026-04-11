@@ -179,7 +179,7 @@ class MemoryBankEngine:
                 days_elapsed = (today - last_date).days
             except ValueError, TypeError:
                 logger.warning("[warn] invalid last_recall_date: %r", last_recall)
-                days_elapsed = 0
+                days_elapsed = 365
             retention = forgetting_curve(days_elapsed, strength)
             if retention <= 0:
                 continue
@@ -221,7 +221,7 @@ class MemoryBankEngine:
                 days_elapsed = (today - last_date).days
             except ValueError, TypeError:
                 logger.warning("[warn] invalid last_recall_date: %r", last_recall)
-                days_elapsed = 0
+                days_elapsed = 365
             retention = forgetting_curve(days_elapsed, strength)
             score = similarity * retention
             if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
@@ -269,7 +269,7 @@ class MemoryBankEngine:
                         logger.warning(
                             "[warn] invalid last_recall_date: %r", last_recall
                         )
-                        days_elapsed = 0
+                        days_elapsed = 365
                     retention = forgetting_curve(days_elapsed, strength)
                     if retention < SOFT_FORGET_THRESHOLD:
                         event["memory_strength"] = SOFT_FORGET_STRENGTH

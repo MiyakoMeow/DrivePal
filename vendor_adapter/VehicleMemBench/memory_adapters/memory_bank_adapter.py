@@ -40,7 +40,11 @@ class MemoryBankAdapter:
     def _validate_data_dir(self) -> None:
         """验证数据目录有效."""
         if not self.data_dir.exists():
-            self.data_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.data_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                msg = f"failed to create data_dir {self.data_dir}: {e}"
+                raise MemoryBankAdapterError(msg) from e
         elif not self.data_dir.is_dir():
             msg = f"data_dir is not a directory: {self.data_dir}"
             raise MemoryBankAdapterError(msg)

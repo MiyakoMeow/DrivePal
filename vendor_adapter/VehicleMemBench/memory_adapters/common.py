@@ -69,8 +69,4 @@ class StoreClient:
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """在存储中搜索相关结果."""
-        try:
-            return await self.store.search(query=query, top_k=top_k)
-        except Exception as e:
-            logger.warning("[warn] store.search failed: %s", e)
-            raise
+        return await self.store.search(query=query, top_k=top_k)
