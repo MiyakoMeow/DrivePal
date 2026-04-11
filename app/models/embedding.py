@@ -32,22 +32,23 @@ def get_cached_embedding_model() -> EmbeddingModel:
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
-async def _aclose_all_cached() -> None:
-    """关闭所有缓存客户端."""
-    for model in _EMBEDDING_MODEL_CACHE.values():
+async def _aclose_models(models: list[EmbeddingModel]) -> None:
+    """关闭指定模型的客户端."""
+    for model in models:
         await model.aclose()
 
 
 def clear_embedding_model_cache() -> None:
     """关闭所有缓存的客户端并清除缓存."""
     if _EMBEDDING_MODEL_CACHE:
+        models = list(_EMBEDDING_MODEL_CACHE.values())
+        _EMBEDDING_MODEL_CACHE.clear()
         try:
             loop = asyncio.get_running_loop()
-            _close_task = loop.create_task(_aclose_all_cached())  # noqa: RUF006
+            loop.create_task(_aclose_models(models))  # noqa: RUF006
         except RuntimeError:
             with contextlib.suppress(RuntimeError):
-                asyncio.run(_aclose_all_cached())
-        _EMBEDDING_MODEL_CACHE.clear()
+                asyncio.run(_aclose_models(models))
 
 
 class EmbeddingModel:

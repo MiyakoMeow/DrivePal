@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -17,6 +17,7 @@ from app.models.chat import (
     _provider_semaphore_cache,
 )
 from app.models.settings import LLMProviderConfig, ProviderConfig
+from tests._helpers import _mock_async_client
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,14 +27,6 @@ MAX_ACTIVE = 2  # 测试并发上限
 EXPECTED_RESULTS_COUNT = 4  # 测试预期结果数量
 PROVIDER_A_CONCURRENCY = 2  # Provider A 的并发数
 PROVIDER_B_CONCURRENCY = 3  # Provider B 的并发数
-
-
-def _mock_async_client() -> MagicMock:
-    """创建支持 async with 的 mock 客户端."""
-    client = MagicMock()
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=False)
-    return client
 
 
 @pytest.mark.integration

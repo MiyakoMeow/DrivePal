@@ -1,7 +1,7 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
 import asyncio
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 import openai
 
@@ -55,11 +55,9 @@ async def _get_provider_semaphore(
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable
+    from collections.abc import AsyncIterator
 
     from openai.types.chat import ChatCompletionMessageParam
-
-_T = TypeVar("_T")
 
 
 class ChatModel:
@@ -115,16 +113,6 @@ class ChatModel:
         provider_key = provider.provider.base_url or "default"
         return await _get_provider_semaphore(provider_key, provider.concurrency)
 
-    async def _run_with_semaphore(
-        self,
-        provider: LLMProviderConfig,
-        coro: Awaitable[_T],
-    ) -> _T:
-        """使用 provider semaphore 执行协程."""
-        sem = await self._acquire_slot(provider)
-        async with sem:
-            return await coro
-
     async def generate(
         self,
         prompt: str,
@@ -135,14 +123,14 @@ class ChatModel:
         messages = self._build_messages(prompt, system_prompt)
         errors = []
         for provider in self.providers:
+            sem = await self._acquire_slot(provider)
             try:
-                async with self._create_client(provider) as client:
-                    coro = client.chat.completions.create(
+                async with sem, self._create_client(provider) as client:
+                    response = await client.chat.completions.create(
                         model=provider.provider.model,
                         messages=messages,
                         temperature=self._get_temperature(provider),
                     )
-                    response = await self._run_with_semaphore(provider, coro)
                     return response.choices[0].message.content or ""
             except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
