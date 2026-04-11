@@ -63,7 +63,8 @@ class SummaryManager:
                     last_date = date.fromisoformat(str(last_recall))
                     days_elapsed = (today - last_date).days
                 except ValueError, TypeError:
-                    days_elapsed = 0
+                    logger.warning("[warn] invalid last_recall_date: %r", last_recall)
+                    days_elapsed = 365
                 retention = forgetting_curve(days_elapsed, strength)
                 score = retention * SUMMARY_WEIGHT
                 results.append(
@@ -103,7 +104,7 @@ class SummaryManager:
                 summaries["daily_summaries"] = current_daily
                 await self._summaries_store.write(summaries)
 
-    async def maybe_summarize(  # noqa: C901
+    async def maybe_summarize(
         self,
         date_group: str,
         events: list[dict],
@@ -125,24 +126,48 @@ class SummaryManager:
             (e.get("updated_at") or e.get("created_at", "") for e in events),
             default="",
         )
-        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（摘要不可变）
-        should_generate = False
+        claim_result = await self._claim_and_get_content(date_group, events)
+        if claim_result is None:
+            return
+
+        needs_overall = await self._generate_and_store_summary(
+            date_group, claim_result, latest_source_ts, count, chat_model
+        )
+        if needs_overall:
+            await self.update_overall_summary(chat_model)
+
+    async def _claim_and_get_content(
+        self,
+        date_group: str,
+        events: list[dict],
+    ) -> str | None:
+        """尝试声明 date_group 并返回内容. 返回 None 表示跳过生成."""
         async with self._lock:
             summaries = await self._summaries_store.read()
             daily_summaries = summaries.get("daily_summaries", {})
             if date_group in self._inflight_daily_summaries:
-                return
+                return None
             if date_group in daily_summaries:
                 existing = daily_summaries[date_group]
                 if isinstance(existing, dict):
-                    return
-            self._inflight_daily_summaries.add(date_group)
-            should_generate = True
+                    return None
             content = "\n".join(
                 e.get("content", "") for e in events if e.get("content")
             )
-        if not should_generate:
-            return
+            if not content.strip():
+                return None
+            self._inflight_daily_summaries.add(date_group)
+            return content
+
+    async def _generate_and_store_summary(
+        self,
+        date_group: str,
+        content: str,
+        latest_source_ts: str,
+        count: int,
+        chat_model: ChatModel,
+    ) -> bool:
+        """生成并存储摘要. 返回是否需要更新整体摘要."""
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
         needs_overall_update = False
         try:
@@ -164,11 +189,10 @@ class SummaryManager:
                         needs_overall_update = True
         except Exception:
             logger.exception("Failed to generate summary for date_group=%s", date_group)
-            return
+            return False
         finally:
             self._inflight_daily_summaries.discard(date_group)
-        if needs_overall_update:
-            await self.update_overall_summary(chat_model)
+        return needs_overall_update
 
     async def update_overall_summary(self, chat_model: ChatModel | None) -> None:
         """根据日常摘要更新总体摘要."""
@@ -188,7 +212,8 @@ class SummaryManager:
         prompt = f"请简洁总结以下每日摘要（两到三句话）：\n{combined}"
         try:
             overall = await chat_model.generate(prompt)
-        except OSError, ValueError, RuntimeError:
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.warning("Failed to generate overall summary: %s", e)
             return
         async with self._lock:
             summaries = await self._summaries_store.read()

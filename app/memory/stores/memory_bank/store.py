@@ -1,10 +1,15 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
+import logging
 from typing import TYPE_CHECKING
+
+from pydantic import ValidationError
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.engine import MemoryBankEngine
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -70,11 +75,24 @@ class MemoryBankStore:
         return await self._engine.search(query, top_k)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
-        """获取历史事件."""
+        """获取最近的 N 条有效历史事件.
+
+        注意：如果存储中存在格式错误的事件，实际返回数量可能少于 limit。
+        """
         events = await self._storage.read_events()
         if limit <= 0:
             return []
-        return [MemoryEvent(**e) for e in events[-limit:]]
+        result = []
+        for e in events[-limit:]:
+            try:
+                result.append(MemoryEvent(**e))
+            except ValidationError as exc:
+                logger.warning(
+                    "[warn] skipping malformed event fields=%s error_locs=%s",
+                    sorted(e.keys()) if isinstance(e, dict) else [],
+                    [err.get("loc") for err in exc.errors()],
+                )
+        return result
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈."""
