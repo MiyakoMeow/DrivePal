@@ -39,9 +39,9 @@ try:
 except ValueError:
     _QUERY_CONCURRENCY_LIMIT = 4
 try:
-    _SEARCH_TIMEOUT = int(os.environ.get("BENCHMARK_SEARCH_TIMEOUT", "60"))
+    _SEARCH_TIMEOUT = int(os.environ.get("BENCHMARK_SEARCH_TIMEOUT", str(12 * 3600)))
 except ValueError:
-    _SEARCH_TIMEOUT = 60
+    _SEARCH_TIMEOUT = 12 * 3600
 
 
 def setup_vehiclemembench_path() -> None:
