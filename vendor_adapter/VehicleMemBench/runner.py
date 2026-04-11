@@ -324,8 +324,16 @@ async def run(  # noqa: C901
             logger.warning("[warn] qa file %d not found", fnum)
             return fnum, None
 
-    qa_pairs = await asyncio.gather(*(_load_qa_safe(f) for f in file_nums))
-    qa_cache = dict(qa_pairs)
+    qa_pairs = await asyncio.gather(
+        *(_load_qa_safe(f) for f in file_nums),
+        return_exceptions=True,
+    )
+    qa_cache = dict(
+        cast(
+            "list[tuple[int, dict | None]]",
+            [r for r in qa_pairs if not isinstance(r, Exception)],
+        )
+    )
 
     async def _load_prep(
         fnum: int,
@@ -471,7 +479,7 @@ async def _run_single(  # noqa: PLR0913
                     "  [error] failed to write error record for query %d",
                     idx,
                 )
-                raise e from e
+                raise
 
     gather_results = await asyncio.gather(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),

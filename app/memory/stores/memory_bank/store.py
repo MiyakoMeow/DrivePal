@@ -1,10 +1,15 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
+import logging
 from typing import TYPE_CHECKING
+
+from pydantic import ValidationError
 
 from app.memory.components import EventStorage, FeedbackManager
 from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.engine import MemoryBankEngine
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -74,7 +79,13 @@ class MemoryBankStore:
         events = await self._storage.read_events()
         if limit <= 0:
             return []
-        return [MemoryEvent(**e) for e in events[-limit:]]
+        result = []
+        for e in events[-limit:]:
+            try:
+                result.append(MemoryEvent(**e))
+            except ValidationError:
+                logger.warning("[warn] skipping malformed event: %s", e)
+        return result
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈."""
