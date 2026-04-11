@@ -2,9 +2,12 @@
 
 import hashlib
 
+import httpx
 import openai
 
 from app.models.settings import EmbeddingProviderConfig, LLMSettings
+
+_CLIENT_TIMEOUT = httpx.Timeout(connect=10.0, read=43200.0, write=60.0, pool=60.0)
 
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
 
@@ -62,7 +65,7 @@ class EmbeddingModel:
         return openai.AsyncOpenAI(
             api_key=provider.provider.api_key or "not-needed",
             base_url=base_url,
-            timeout=43200,
+            timeout=_CLIENT_TIMEOUT,
         )
 
     async def _async_encode_with_openai(

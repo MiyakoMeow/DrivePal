@@ -3,9 +3,12 @@
 import asyncio
 from typing import TYPE_CHECKING, TypeVar
 
+import httpx
 import openai
 
 from app.models.settings import LLMProviderConfig, LLMSettings
+
+_CLIENT_TIMEOUT = httpx.Timeout(connect=10.0, read=43200.0, write=60.0, pool=60.0)
 
 _provider_semaphore_cache: dict[str, asyncio.Semaphore] = {}
 _provider_semaphore_lock: asyncio.Lock | None = None
@@ -85,7 +88,7 @@ class ChatModel:
         """创建openai异步客户端."""
         kwargs: dict = {
             "api_key": provider.provider.api_key or "not-needed",
-            "timeout": 43200,
+            "timeout": _CLIENT_TIMEOUT,
         }
         if provider.provider.base_url:
             kwargs["base_url"] = provider.provider.base_url
