@@ -17,6 +17,7 @@ from app.models.chat import (
     _provider_semaphore_cache,
 )
 from app.models.settings import LLMProviderConfig, ProviderConfig
+from tests._helpers import _mock_async_client
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -155,8 +156,8 @@ class TestProviderConcurrency:
             mock_response.choices[0].message.content = "response"
             return mock_response
 
-        with patch.object(chat, "_create_async_client") as mock_create_client:
-            mock_client = MagicMock()
+        with patch.object(chat, "_create_client") as mock_create_client:
+            mock_client = _mock_async_client()
             mock_client.chat.completions.create = mock_create
             mock_create_client.return_value = mock_client
 

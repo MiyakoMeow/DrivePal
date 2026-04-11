@@ -1,10 +1,11 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
 import asyncio
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 import openai
 
+from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.settings import LLMProviderConfig, LLMSettings
 
 _provider_semaphore_cache: dict[str, asyncio.Semaphore] = {}
@@ -54,11 +55,9 @@ async def _get_provider_semaphore(
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable
+    from collections.abc import AsyncIterator
 
     from openai.types.chat import ChatCompletionMessageParam
-
-_T = TypeVar("_T")
 
 
 class ChatModel:
@@ -78,22 +77,14 @@ class ChatModel:
         self.providers = providers
         self.temperature = temperature
 
-    def _create_client(self, provider: LLMProviderConfig) -> openai.OpenAI:
-        """创建openai同步客户端."""
-        kwargs: dict = {
-            "api_key": provider.provider.api_key or "not-needed",
-        }
-        if provider.provider.base_url:
-            kwargs["base_url"] = provider.provider.base_url
-        return openai.OpenAI(**kwargs)
-
-    def _create_async_client(
+    def _create_client(
         self,
         provider: LLMProviderConfig,
     ) -> openai.AsyncOpenAI:
         """创建openai异步客户端."""
         kwargs: dict = {
             "api_key": provider.provider.api_key or "not-needed",
+            "timeout": _CLIENT_TIMEOUT,
         }
         if provider.provider.base_url:
             kwargs["base_url"] = provider.provider.base_url
@@ -122,16 +113,6 @@ class ChatModel:
         provider_key = provider.provider.base_url or "default"
         return await _get_provider_semaphore(provider_key, provider.concurrency)
 
-    async def _run_with_semaphore(
-        self,
-        provider: LLMProviderConfig,
-        coro: Awaitable[_T],
-    ) -> _T:
-        """使用 provider semaphore 执行协程."""
-        sem = await self._acquire_slot(provider)
-        async with sem:
-            return await coro
-
     async def generate(
         self,
         prompt: str,
@@ -142,15 +123,15 @@ class ChatModel:
         messages = self._build_messages(prompt, system_prompt)
         errors = []
         for provider in self.providers:
+            sem = await self._acquire_slot(provider)
             try:
-                client = self._create_async_client(provider)
-                coro = client.chat.completions.create(
-                    model=provider.provider.model,
-                    messages=messages,
-                    temperature=self._get_temperature(provider),
-                )
-                response = await self._run_with_semaphore(provider, coro)
-                return response.choices[0].message.content or ""
+                async with sem, self._create_client(provider) as client:
+                    response = await client.chat.completions.create(
+                        model=provider.provider.model,
+                        messages=messages,
+                        temperature=self._get_temperature(provider),
+                    )
+                    return response.choices[0].message.content or ""
             except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
                 continue
@@ -169,8 +150,7 @@ class ChatModel:
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
             try:
-                async with sem:
-                    client = self._create_async_client(provider)
+                async with sem, self._create_client(provider) as client:
                     stream = await client.chat.completions.create(
                         model=provider.provider.model,
                         messages=messages,

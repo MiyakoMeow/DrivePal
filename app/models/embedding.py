@@ -1,9 +1,12 @@
 """文本嵌入模型封装，仅支持 OpenAI 兼容远程接口."""
 
+import asyncio
+import contextlib
 import hashlib
 
 import openai
 
+from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.settings import EmbeddingProviderConfig, LLMSettings
 
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
@@ -29,9 +32,23 @@ def get_cached_embedding_model() -> EmbeddingModel:
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
+async def _aclose_models(models: list[EmbeddingModel]) -> None:
+    """关闭指定模型的客户端."""
+    for model in models:
+        await model.aclose()
+
+
 def clear_embedding_model_cache() -> None:
-    """清除embedding模型缓存."""
-    _EMBEDDING_MODEL_CACHE.clear()
+    """关闭所有缓存的客户端并清除缓存."""
+    if _EMBEDDING_MODEL_CACHE:
+        models = list(_EMBEDDING_MODEL_CACHE.values())
+        _EMBEDDING_MODEL_CACHE.clear()
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_aclose_models(models))  # noqa: RUF006
+        except RuntimeError:
+            with contextlib.suppress(RuntimeError):
+                asyncio.run(_aclose_models(models))
 
 
 class EmbeddingModel:
@@ -50,6 +67,13 @@ class EmbeddingModel:
         self._client = self._create_client(self.provider)
         return self._client
 
+    async def aclose(self) -> None:
+        """关闭底层 HTTP 客户端，释放连接池资源."""
+        if self._client is not None:
+            with contextlib.suppress(RuntimeError):
+                await self._client.close()
+            self._client = None
+
     def _create_client(
         self,
         provider: EmbeddingProviderConfig,
@@ -62,6 +86,7 @@ class EmbeddingModel:
         return openai.AsyncOpenAI(
             api_key=provider.provider.api_key or "not-needed",
             base_url=base_url,
+            timeout=_CLIENT_TIMEOUT,
         )
 
     async def _async_encode_with_openai(
@@ -104,5 +129,5 @@ class EmbeddingModel:
 
 
 def reset_embedding_singleton() -> None:
-    """清除缓存并重置为初始状态（供测试使用）."""
-    _EMBEDDING_MODEL_CACHE.clear()
+    """关闭所有客户端、清除缓存并重置为初始状态（供测试使用）."""
+    clear_embedding_model_cache()
