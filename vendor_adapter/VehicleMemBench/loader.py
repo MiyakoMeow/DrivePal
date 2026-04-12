@@ -46,7 +46,7 @@ async def load_qa_safe(fnum: int) -> tuple[int, dict[str, Any] | None]:
     except FileNotFoundError:
         logger.warning("[warn] qa file %d not found", fnum)
         return fnum, None
-    except json.JSONDecodeError, OSError:
+    except json.JSONDecodeError, OSError, UnicodeDecodeError:
         logger.warning("[warn] qa file %d unreadable or corrupt", fnum)
         return fnum, None
 
@@ -63,7 +63,7 @@ async def load_history_cache(
     async def _load_or_empty(fnum: int) -> tuple[int, str]:
         try:
             return fnum, await load_history(fnum)
-        except OSError:
+        except OSError, UnicodeDecodeError:
             logger.warning(
                 "[warn] history file %d not found or unreadable, using empty", fnum
             )
@@ -86,7 +86,7 @@ async def load_prep(
             return mtype, fnum, json.loads(await f.read())
     except FileNotFoundError:
         return mtype, fnum, None
-    except OSError:
+    except OSError, UnicodeDecodeError:
         logger.warning("[warn] prep file %s/%d unreadable: %s", mtype, fnum, pp)
         return mtype, fnum, None
     except json.JSONDecodeError:

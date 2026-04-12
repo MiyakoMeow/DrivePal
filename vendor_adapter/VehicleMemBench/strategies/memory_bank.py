@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import shutil
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -188,20 +189,26 @@ class MemoryBankStrategy:
     ) -> dict[str, Any] | None:
         """构建记忆库存储."""
         store_dir = output_dir / "store"
+        temp_dir = output_dir / f".store_temp_{uuid.uuid4().hex}"
         async with semaphore:
-            store_dir.mkdir(parents=True, exist_ok=True)
+            temp_dir.mkdir(parents=True, exist_ok=True)
             try:
                 chat_model = get_store_chat_model()
                 embedding_model = get_store_embedding_model()
                 store = MemoryBankStore(
-                    data_dir=store_dir,
+                    data_dir=temp_dir,
                     chat_model=chat_model,
                     embedding_model=embedding_model,
                 )
                 for record in history_to_interaction_records(history_text):
                     await store.write(record)
+                if store_dir.exists():
+                    shutil.rmtree(store_dir)
+                shutil.move(str(temp_dir), str(store_dir))
             except Exception:
-                shutil.rmtree(store_dir, ignore_errors=True)
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                if store_dir.exists():
+                    shutil.rmtree(store_dir, ignore_errors=True)
                 raise
         return {"type": BenchMemoryMode.MEMORY_BANK, "data_dir": str(store_dir)}
 
