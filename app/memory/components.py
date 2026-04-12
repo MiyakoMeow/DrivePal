@@ -184,4 +184,4 @@ class SimpleInteractionWriter:
             description=response,
         )
         event_id = await self._storage.append_event(event)
-        return InteractionResult(event_id=event_id, interaction_id="")
+        return InteractionResult(event_id=event_id)

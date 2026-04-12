@@ -79,7 +79,10 @@ class SearchResult(BaseModel):
 
 
 class InteractionResult(BaseModel):
-    """写入交互的结果，包含事件 ID 和交互记录 ID."""
+    """写入交互的结果，包含事件 ID 和交互记录 ID.
+
+    interaction_id 在不区分交互与事件的简单实现中为空字符串。
+    """
 
     event_id: str
-    interaction_id: str
+    interaction_id: str = ""
