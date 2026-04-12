@@ -3,7 +3,12 @@
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+    from app.memory.schemas import (
+        FeedbackData,
+        InteractionResult,
+        MemoryEvent,
+        SearchResult,
+    )
 
 
 class MemoryStore(Protocol):
@@ -30,11 +35,15 @@ class MemoryStore(Protocol):
         """更新反馈."""
         ...
 
+    async def get_event_type(self, event_id: str) -> str | None:
+        """按 event_id 查找事件类型."""
+        ...
+
     async def write_interaction(
         self,
         query: str,
         response: str,
         event_type: str = "reminder",
-    ) -> str:
+    ) -> InteractionResult:
         """写入交互记录."""
         ...

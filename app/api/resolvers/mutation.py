@@ -221,8 +221,10 @@ class Mutation:
             mm = get_memory_module()
             safe_action: Literal["accept", "ignore"]
             safe_action = "accept" if feedback_input.action == "accept" else "ignore"
+            actual_type = await mm.get_event_type(feedback_input.event_id)
             feedback = FeedbackData(
                 action=safe_action,
+                type=actual_type or "default",
                 modified_content=feedback_input.modified_content,
             )
             await mm.update_feedback(feedback_input.event_id, feedback)

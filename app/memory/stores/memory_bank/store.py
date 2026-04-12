@@ -3,7 +3,12 @@
 from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
-from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.memory.schemas import (
+    FeedbackData,
+    InteractionResult,
+    MemoryEvent,
+    SearchResult,
+)
 from app.memory.stores.memory_bank.engine import MemoryBankEngine
 
 if TYPE_CHECKING:
@@ -80,11 +85,18 @@ class MemoryBankStore:
         """更新反馈."""
         await self._feedback.update_feedback(event_id, feedback)
 
+    async def get_event_type(self, event_id: str) -> str | None:
+        """按 event_id 查找事件类型."""
+        event = await self._storage.find_event_by_id(event_id)
+        if event is None:
+            return None
+        return event.get("type")
+
     async def write_interaction(
         self,
         query: str,
         response: str,
         event_type: str = "reminder",
-    ) -> str:
+    ) -> InteractionResult:
         """写入交互记录."""
         return await self._engine.write_interaction(query, response, event_type)

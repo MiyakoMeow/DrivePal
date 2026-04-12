@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.memory.schemas import InteractionResult
 from app.memory.stores.memory_bank import MemoryBankStore
 
 if TYPE_CHECKING:
@@ -42,12 +43,14 @@ class TestWriteInteraction:
         store: MemoryBankStore,
     ) -> None:
         """验证 write_interaction 创建交互记录."""
-        interaction_id = await store.write_interaction("提醒我开会", "好的")
-        assert isinstance(interaction_id, str)
+        result = await store.write_interaction("提醒我开会", "好的")
+        assert isinstance(result, InteractionResult)
+        assert len(result.event_id) > 0
+        assert len(result.interaction_id) > 0
         interactions = await store.interactions_store.read()
         stored_ids = [i["id"] for i in interactions]
-        assert interaction_id in stored_ids, (
-            f"returned id {interaction_id} not found in stored {stored_ids}"
+        assert result.interaction_id in stored_ids, (
+            f"returned id {result.interaction_id} not found in stored {stored_ids}"
         )
 
     async def test_write_interaction_aggregates_similar(

@@ -76,3 +76,10 @@ class SearchResult(BaseModel):
         if self.interactions:
             result["interactions"] = self.interactions
         return result
+
+
+class InteractionResult(BaseModel):
+    """写入交互的结果，包含事件 ID 和交互记录 ID."""
+
+    event_id: str
+    interaction_id: str

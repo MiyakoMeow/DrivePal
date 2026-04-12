@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, forgetting_curve
-from app.memory.schemas import MemoryEvent, SearchResult
+from app.memory.schemas import InteractionResult, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.personality import PersonalityManager
 from app.memory.stores.memory_bank.summarization import SummaryManager
 from app.memory.utils import cosine_similarity
@@ -276,7 +276,7 @@ class MemoryBankEngine:
         query: str,
         response: str,
         event_type: str = "reminder",
-    ) -> str:
+    ) -> InteractionResult:
         """写入交互记录并关联事件."""
         interaction_id = (
             f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -295,13 +295,15 @@ class MemoryBankEngine:
         async with self._lock:
             append_event_id = await self._should_append_to_event(interaction)
             event = None
+            resolved_event_id = ""
             if append_event_id:
                 interaction["event_id"] = append_event_id
+                resolved_event_id = append_event_id
             else:
-                event_id = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+                new_event_id = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
                 now_iso = datetime.now(UTC).isoformat()
                 event = {
-                    "id": event_id,
+                    "id": new_event_id,
                     "content": query,
                     "type": event_type,
                     "interaction_ids": [interaction_id],
@@ -311,7 +313,8 @@ class MemoryBankEngine:
                     "last_recall_date": today,
                     "date_group": today,
                 }
-                interaction["event_id"] = event_id
+                interaction["event_id"] = new_event_id
+                resolved_event_id = new_event_id
 
             await self._interactions_store.append(interaction)
 
@@ -339,7 +342,10 @@ class MemoryBankEngine:
             interactions,
             self.chat_model,
         )
-        return interaction_id
+        return InteractionResult(
+            event_id=resolved_event_id,
+            interaction_id=interaction_id,
+        )
 
     async def _should_append_to_event(self, interaction: dict) -> str | None:
         events = await self._storage.read_events()
