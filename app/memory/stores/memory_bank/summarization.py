@@ -206,8 +206,8 @@ class SummaryManager:
         prompt = f"请简洁总结以下每日摘要（两到三句话）：\n{combined}"
         try:
             overall = await chat_model.generate(prompt)
-        except OSError, ValueError, RuntimeError:
-            logger.warning("Failed to generate overall summary", exc_info=True)
+        except Exception:
+            logger.exception("Failed to generate overall summary")
             return
         async with self._lock:
             summaries = await self._summaries_store.read()

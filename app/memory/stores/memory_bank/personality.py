@@ -113,13 +113,13 @@ class PersonalityManager:
         summary_text: str,
         interaction_count: int,
         latest_source_ts: str,
-    ) -> bool:
-        """持久化人格分析，返回是否需要更新总体人格."""
+    ) -> tuple[bool, dict]:
+        """持久化人格分析，返回 (是否需要更新总体人格, 最新存储数据)."""
         async with self._personality_lock:
             personality_data = await self._store.read()
             daily_personality = personality_data.get("daily_personality", {})
             if isinstance(daily_personality.get(date_group), dict):
-                return False
+                return False, personality_data
             daily_personality[date_group] = {
                 "content": summary_text,
                 "memory_strength": 1,
@@ -129,7 +129,9 @@ class PersonalityManager:
             }
             personality_data["daily_personality"] = daily_personality
             await self._store.write(personality_data)
-            return len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD
+            return len(
+                daily_personality
+            ) >= OVERALL_PERSONALITY_THRESHOLD, personality_data
 
     async def maybe_summarize(
         self,
@@ -177,9 +179,13 @@ class PersonalityManager:
         User's personality traits, emotions, and response strategy are:
         """
         needs_overall_update = False
+        latest_personality_data: dict = {}
         try:
             summary_text = await chat_model.generate(prompt)
-            needs_overall_update = await self._persist_personality(
+            (
+                needs_overall_update,
+                latest_personality_data,
+            ) = await self._persist_personality(
                 date_group,
                 summary_text,
                 len(group_interactions),
@@ -194,9 +200,8 @@ class PersonalityManager:
         finally:
             self._inflight_daily_personality.discard(date_group)
         if needs_overall_update:
-            personality_data = await self._store.read()
             overall_text = await self.generate_overall_text(
-                personality_data,
+                latest_personality_data,
                 chat_model,
             )
             if overall_text:
