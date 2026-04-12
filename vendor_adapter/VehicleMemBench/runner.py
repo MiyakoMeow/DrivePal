@@ -641,7 +641,7 @@ async def _run_custom_adapter_with_client(
         agent_client=ctx.agent_client,
         reflect_num=ctx.reflect_num,
         system_instruction=_CUSTOM_ADAPTER_SYSTEM_INSTRUCTION,
-        request_context=f"{ctx.memory_type} file task {task_id}",
+        request_context=f"{ctx.memory_type} file {ctx.file_num} task {task_id}",
         initial_tools=_CUSTOM_ADAPTER_INITIAL_TOOLS,
         memory_funcs=memory_funcs,
     )
