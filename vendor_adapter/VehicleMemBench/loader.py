@@ -133,4 +133,4 @@ async def load_prep_cache(
     prep_raw = await asyncio.gather(
         *(_limited_load_prep(f, t) for f in file_nums for t in types),
     )
-    return {(mt, fn): data for mt, fn, data in prep_raw}
+    return {(mt, fn): data for mt, fn, data in prep_raw if data is not None}
