@@ -12,7 +12,8 @@ if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 else:
-    from app.models.settings import get_chat_model, get_embedding_model
+    from app.models.chat import get_chat_model
+    from app.models.embedding import get_cached_embedding_model as get_embedding_model
 
 
 class BenchmarkConfigError(ValueError):

@@ -12,7 +12,7 @@ from app.agents.rules import apply_rules, format_constraints
 from app.agents.state import AgentState, WorkflowStages
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
-from app.models.settings import get_chat_model
+from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)

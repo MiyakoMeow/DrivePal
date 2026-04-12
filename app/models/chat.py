@@ -1,15 +1,21 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
 import asyncio
+from functools import cache
 from typing import TYPE_CHECKING
 
 import openai
 
 from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
-from app.models.settings import LLMProviderConfig, LLMSettings
+from app.models.settings import (
+    LLMProviderConfig,
+    LLMSettings,
+    NoDefaultModelGroupError,
+    NoJudgeModelConfiguredError,
+)
+from app.models.types import ProviderConfig
 
-_provider_semaphore_cache: dict[str, asyncio.Semaphore] = {}
-_provider_semaphore_lock: asyncio.Lock | None = None
+_semaphore_cache: dict[str, asyncio.Semaphore] = {}
 
 
 class ChatError(RuntimeError):
@@ -39,19 +45,21 @@ class AllProviderFailedError(ChatError):
         super().__init__(msg)
 
 
+@cache
+def _get_lock() -> asyncio.Lock:
+    """获取或创建全局 asyncio.Lock."""
+    return asyncio.Lock()
+
+
 async def _get_provider_semaphore(
     provider_name: str,
     concurrency: int,
 ) -> asyncio.Semaphore:
     """获取或创建 provider 级别的 semaphore."""
-    global _provider_semaphore_lock  # noqa: PLW0603
-    if _provider_semaphore_lock is None:
-        _provider_semaphore_lock = asyncio.Lock()
-
-    async with _provider_semaphore_lock:
-        if provider_name not in _provider_semaphore_cache:
-            _provider_semaphore_cache[provider_name] = asyncio.Semaphore(concurrency)
-        return _provider_semaphore_cache[provider_name]
+    async with _get_lock():
+        if provider_name not in _semaphore_cache:
+            _semaphore_cache[provider_name] = asyncio.Semaphore(concurrency)
+        return _semaphore_cache[provider_name]
 
 
 if TYPE_CHECKING:
@@ -175,3 +183,34 @@ class ChatModel:
     ) -> list[str]:
         """批量生成回复."""
         return [await self.generate(p, system_prompt) for p in prompts]
+
+
+@cache
+def _get_settings_once() -> LLMSettings:
+    """获取缓存的 LLMSettings 实例（仅首次调用时加载）."""
+    return LLMSettings.load()
+
+
+def get_chat_model(temperature: float | None = None) -> ChatModel:
+    """从配置创建 ChatModel 实例（使用缓存避免重复加载）."""
+    settings = _get_settings_once()
+    if "default" not in settings.model_groups:
+        raise NoDefaultModelGroupError
+    providers = settings.get_model_group_providers("default")
+    return ChatModel(providers=providers, temperature=temperature)
+
+
+def get_judge_model() -> ChatModel:
+    """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
+    settings = _get_settings_once()
+    if settings.judge_provider is None:
+        raise NoJudgeModelConfiguredError
+    provider = LLMProviderConfig(
+        provider=ProviderConfig(
+            model=settings.judge_provider.provider.model,
+            base_url=settings.judge_provider.provider.base_url,
+            api_key=settings.judge_provider.provider.api_key,
+        ),
+        temperature=settings.judge_provider.temperature,
+    )
+    return ChatModel(providers=[provider])

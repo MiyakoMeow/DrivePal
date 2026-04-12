@@ -95,7 +95,45 @@ class PersonalityManager:
                 personality_data["daily_personality"] = current_daily
                 await self._store.write(personality_data)
 
-    async def maybe_summarize(  # noqa: C901
+    def _should_generate_personality(
+        self,
+        date_group: str,
+        daily_personality: dict,
+    ) -> bool:
+        """检查是否需要生成人格分析."""
+        if date_group in self._inflight_daily_personality:
+            return False
+        if date_group in daily_personality:
+            return not isinstance(daily_personality[date_group], dict)
+        return True
+
+    async def _persist_personality(
+        self,
+        date_group: str,
+        summary_text: str,
+        interaction_count: int,
+        latest_source_ts: str,
+    ) -> tuple[bool, dict]:
+        """持久化人格分析，返回 (是否需要更新总体人格, 最新存储数据)."""
+        async with self._personality_lock:
+            personality_data = await self._store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            if isinstance(daily_personality.get(date_group), dict):
+                return False, personality_data
+            daily_personality[date_group] = {
+                "content": summary_text,
+                "memory_strength": 1,
+                "last_recall_date": date_group,
+                "interaction_count": interaction_count,
+                "source_updated_at": latest_source_ts,
+            }
+            personality_data["daily_personality"] = daily_personality
+            await self._store.write(personality_data)
+            return len(
+                daily_personality
+            ) >= OVERALL_PERSONALITY_THRESHOLD, personality_data
+
+    async def maybe_summarize(
         self,
         date_group: str,
         events: list[dict],
@@ -123,25 +161,17 @@ class PersonalityManager:
             (e.get("updated_at") or e.get("created_at", "") for e in group_events),
             default="",
         )
-        # 注意：latest_source_ts 仅用于调试/审计目的，不参与缓存失效判断（人格摘要不可变）
-        should_generate = False
+        combined: str = ""
         async with self._personality_lock:
             personality_data = await self._store.read()
             daily_personality = personality_data.get("daily_personality", {})
-            if date_group in self._inflight_daily_personality:
+            if not self._should_generate_personality(date_group, daily_personality):
                 return
-            if date_group in daily_personality:
-                existing = daily_personality[date_group]
-                if isinstance(existing, dict):
-                    return
             self._inflight_daily_personality.add(date_group)
-            should_generate = True
             combined = "\n".join(
                 f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
                 for i in group_interactions
             )
-        if not should_generate:
-            return
         prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
         and devise response strategies based on your speculation. Dialogue content:
         {combined}
@@ -149,23 +179,18 @@ class PersonalityManager:
         User's personality traits, emotions, and response strategy are:
         """
         needs_overall_update = False
+        latest_personality_data: dict = {}
         try:
             summary_text = await chat_model.generate(prompt)
-            async with self._personality_lock:
-                personality_data = await self._store.read()
-                daily_personality = personality_data.get("daily_personality", {})
-                if not isinstance(daily_personality.get(date_group), dict):
-                    daily_personality[date_group] = {
-                        "content": summary_text,
-                        "memory_strength": 1,
-                        "last_recall_date": date_group,
-                        "interaction_count": len(group_interactions),
-                        "source_updated_at": latest_source_ts,
-                    }
-                    personality_data["daily_personality"] = daily_personality
-                    await self._store.write(personality_data)
-                    if len(daily_personality) >= OVERALL_PERSONALITY_THRESHOLD:
-                        needs_overall_update = True
+            (
+                needs_overall_update,
+                latest_personality_data,
+            ) = await self._persist_personality(
+                date_group,
+                summary_text,
+                len(group_interactions),
+                latest_source_ts,
+            )
         except Exception:
             logger.exception(
                 "Failed to generate personality summary for date_group=%s",
@@ -175,13 +200,22 @@ class PersonalityManager:
         finally:
             self._inflight_daily_personality.discard(date_group)
         if needs_overall_update:
+            snapshot_count = len(latest_personality_data.get("daily_personality", {}))
             overall_text = await self.generate_overall_text(
-                personality_data,
+                latest_personality_data,
                 chat_model,
             )
             if overall_text:
                 async with self._personality_lock:
                     personality_data = await self._store.read()
+                    current_count = len(personality_data.get("daily_personality", {}))
+                    if current_count != snapshot_count:
+                        logger.info(
+                            "daily_personality changed during overall generation (%d -> %d), discarding",
+                            snapshot_count,
+                            current_count,
+                        )
+                        return
                     personality_data["overall_personality"] = overall_text
                     await self._store.write(personality_data)
 

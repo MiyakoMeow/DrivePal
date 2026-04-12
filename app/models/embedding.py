@@ -3,13 +3,26 @@
 import asyncio
 import contextlib
 import hashlib
+import logging
 
 import openai
 
 from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.settings import EmbeddingProviderConfig, LLMSettings
 
+logger = logging.getLogger(__name__)
+
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _finalize_background_task(task: asyncio.Task[None]) -> None:
+    """回收后台任务并消费异常，避免未检索异常告警."""
+    _background_tasks.discard(task)
+    with contextlib.suppress(asyncio.CancelledError):
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("Background cleanup task failed: %s", exc)
 
 
 def get_cached_embedding_model() -> EmbeddingModel:
@@ -45,7 +58,9 @@ def clear_embedding_model_cache() -> None:
         _EMBEDDING_MODEL_CACHE.clear()
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(_aclose_models(models))  # noqa: RUF006
+            task = loop.create_task(_aclose_models(models))
+            _background_tasks.add(task)
+            task.add_done_callback(_finalize_background_task)
         except RuntimeError:
             with contextlib.suppress(RuntimeError):
                 asyncio.run(_aclose_models(models))

@@ -69,7 +69,7 @@ async def test_store_client_delegates_to_store() -> None:
         async def write(self, _event: MemoryEvent) -> str:
             return "fake_id"
 
-        async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:  # noqa: ARG002
+        async def search(self, query: str, **_kwargs: object) -> list[SearchResult]:
             return [SearchResult(event={"content": f"result for {query}"}, score=1.0)]
 
         async def get_history(self, _limit: int = 10) -> list[MemoryEvent]:

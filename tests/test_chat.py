@@ -14,9 +14,10 @@ from app.memory.types import MemoryMode
 from app.models.chat import (
     ChatModel,
     _get_provider_semaphore,
-    _provider_semaphore_cache,
+    _semaphore_cache,
 )
-from app.models.settings import LLMProviderConfig, ProviderConfig
+from app.models.settings import LLMProviderConfig
+from app.models.types import ProviderConfig
 from tests._helpers import _mock_async_client
 
 if TYPE_CHECKING:
@@ -129,7 +130,7 @@ class TestProviderConcurrency:
 
     async def test_concurrent_requests_respected(self) -> None:
         """验证并发请求受 provider semaphore 限制."""
-        _provider_semaphore_cache.clear()
+        _semaphore_cache.clear()
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(
@@ -169,7 +170,7 @@ class TestProviderConcurrency:
 
     async def test_different_providers_have_independent_semaphores(self) -> None:
         """验证不同 provider 的 semaphore 独立."""
-        _provider_semaphore_cache.clear()
+        _semaphore_cache.clear()
         providers = [
             LLMProviderConfig(
                 provider=ProviderConfig(

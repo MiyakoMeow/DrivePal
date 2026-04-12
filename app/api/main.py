@@ -18,6 +18,9 @@ from fastapi.staticfiles import StaticFiles
 from strawberry.scalars import JSON
 from strawberry.schema.config import StrawberryConfig
 
+from app.api.graphql_schema import JSONScalar
+from app.api.resolvers.mutation import Mutation as MutationImpl
+from app.api.resolvers.query import Query as QueryImpl
 from app.config import DATA_DIR
 from app.storage.init_data import init_storage
 
@@ -51,10 +54,6 @@ app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
 
 def _mount_graphql() -> None:
-    from app.api.graphql_schema import JSONScalar  # noqa: PLC0415
-    from app.api.resolvers.mutation import Mutation as MutationImpl  # noqa: PLC0415
-    from app.api.resolvers.query import Query as QueryImpl  # noqa: PLC0415
-
     schema = strawberry.Schema(
         query=QueryImpl,
         mutation=MutationImpl,

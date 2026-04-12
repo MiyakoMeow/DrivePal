@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
-from app.models.settings import ResolvedModel
+from app.models.types import ResolvedModel
 
 
 class InvalidModelStringError(ValueError):
