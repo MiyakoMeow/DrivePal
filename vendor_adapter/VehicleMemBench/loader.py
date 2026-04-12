@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from typing import Any
 
 import aiofiles
 
@@ -24,7 +25,7 @@ def _is_prep_free(mtype: BenchMemoryMode) -> bool:
     return not s.needs_history() and not s.needs_agent_for_prep()
 
 
-async def load_qa(file_num: int) -> dict:
+async def load_qa(file_num: int) -> dict[str, Any]:
     """加载 QA JSON 数据."""
     path = BENCHMARK_DIR / "qa_data" / f"qa_{file_num}.json"
     async with aiofiles.open(path, encoding="utf-8") as f:
@@ -38,7 +39,7 @@ async def load_history(file_num: int) -> str:
         return await f.read()
 
 
-async def load_qa_safe(fnum: int) -> tuple[int, dict | None]:
+async def load_qa_safe(fnum: int) -> tuple[int, dict[str, Any] | None]:
     """安全加载 QA 数据，缺失或损坏时返回 (fnum, None)."""
     try:
         return fnum, await load_qa(fnum)
@@ -75,7 +76,7 @@ async def load_history_cache(
 async def load_prep(
     fnum: int,
     mtype: BenchMemoryMode,
-) -> tuple[BenchMemoryMode, int, dict | None]:
+) -> tuple[BenchMemoryMode, int, dict[str, Any] | None]:
     """加载单个 prep 数据."""
     if _is_prep_free(mtype):
         return mtype, fnum, {"type": mtype}
@@ -100,7 +101,7 @@ async def load_prep(
 async def load_prep_cache(
     file_nums: list[int],
     types: list[BenchMemoryMode],
-) -> dict[tuple[BenchMemoryMode, int], dict | None]:
+) -> dict[tuple[BenchMemoryMode, int], dict[str, Any] | None]:
     """批量加载 prep 数据缓存."""
     prep_raw = await asyncio.gather(
         *(load_prep(f, t) for f in file_nums for t in types),

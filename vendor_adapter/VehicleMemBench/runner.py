@@ -93,7 +93,7 @@ def _resolve_agent_client(types: list[BenchMemoryMode]) -> AgentClient | None:
         try:
             return _get_agent_client()
         except Exception as e:
-            msg = "agent_client not initialized but required by memory types"
+            msg = f"agent_client not initialized but required by memory types: {e}"
             raise VehicleMemBenchError(msg) from e
     return None
 
@@ -236,8 +236,8 @@ async def _result_already_exists(qp: Path) -> bool:
     except json.JSONDecodeError:
         logger.warning("损坏的查询结果文件将被覆盖: %s", qp)
         return False
-    except OSError:
-        logger.warning("无法读取已有结果文件，将重新评估: %s", qp)
+    except OSError as e:
+        logger.warning("无法读取已有结果文件 (%s): %s", type(e).__name__, qp)
         return False
 
 
@@ -245,7 +245,7 @@ async def _run_single(
     evaluator: QueryEvaluator,
     memory_type: BenchMemoryMode,
     file_num: int,
-    events: list[dict],
+    events: list[dict[str, Any]],
     parse_answer_to_tools_fn: Callable[..., Any],
 ) -> None:
     """运行单个文件的查询评估."""
@@ -260,7 +260,7 @@ async def _run_single(
             reasoning_type = event.get("reasoning_type", "")
             ref_calls = parse_answer_to_tools_fn(event.get("new_answer", []))
             gold_memory = event.get("gold_memory", "")
-            task: dict = {
+            task: dict[str, Any] = {
                 "query": query,
                 "tools": ref_calls,
                 "reasoning_type": reasoning_type,
