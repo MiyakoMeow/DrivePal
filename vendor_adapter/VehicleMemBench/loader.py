@@ -36,23 +36,24 @@ async def load_history(file_num: int) -> str:
 
 
 async def load_qa_safe(fnum: int) -> tuple[int, dict | None]:
-    """安全加载 QA 数据，缺失时返回 (fnum, None)."""
+    """安全加载 QA 数据，缺失或损坏时返回 (fnum, None)."""
     try:
         return fnum, await load_qa(fnum)
     except FileNotFoundError:
         logger.warning("[warn] qa file %d not found", fnum)
         return fnum, None
+    except json.JSONDecodeError:
+        logger.warning("[warn] qa file %d has invalid JSON", fnum)
+        return fnum, None
 
 
 async def load_history_cache(
     file_nums: list[int],
-    needs_history_fn: object,
+    *,
+    needs_history: bool,
 ) -> dict[int, str]:
-    """批量加载历史，按 needs_history 过滤.
-
-    needs_history_fn: 可调用对象，返回 bool 表示是否需要历史.
-    """
-    if not needs_history_fn:
+    """批量加载历史，按 needs_history 过滤."""
+    if not needs_history:
         return {}
 
     async def _load_or_empty(fnum: int) -> tuple[int, str]:
@@ -68,8 +69,8 @@ async def load_history_cache(
 
 async def load_prep(
     fnum: int,
-    mtype: str,
-) -> tuple[str, int, dict | None]:
+    mtype: BenchMemoryMode,
+) -> tuple[BenchMemoryMode, int, dict | None]:
     """加载单个 prep 数据."""
     if mtype in _prep_free_types:
         return mtype, fnum, {"type": mtype}
@@ -90,8 +91,8 @@ async def load_prep(
 
 async def load_prep_cache(
     file_nums: list[int],
-    types: list[str],
-) -> dict[tuple[str, int], dict | None]:
+    types: list[BenchMemoryMode],
+) -> dict[tuple[BenchMemoryMode, int], dict | None]:
     """批量加载 prep 数据缓存."""
     prep_raw = await asyncio.gather(
         *(load_prep(f, t) for f in file_nums for t in types),

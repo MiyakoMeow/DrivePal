@@ -24,12 +24,14 @@ from .paths import (  # noqa: F401
     setup_vehiclemembench_path,
 )
 from .reporter import report  # noqa: F401
-from .strategies import STRATEGIES
+from .strategies import STRATEGIES, VehicleMemBenchError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from evaluation.agent_client import AgentClient
+
+    from vendor_adapter.VehicleMemBench.strategies import QueryEvaluator
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +81,7 @@ def _get_agent_client() -> AgentClient:
     )
 
 
-def _resolve_agent_client(types: list[BenchMemoryMode]) -> object:
+def _resolve_agent_client(types: list[BenchMemoryMode]) -> AgentClient | None:
     """按需解析 agent client."""
     strategies_list = [STRATEGIES[t] for t in types]
     if any(s.needs_agent_for_prep() for s in strategies_list):
@@ -104,7 +106,7 @@ async def prepare(
     strategies_list = [STRATEGIES[t] for t in types]
     agent_client = _resolve_agent_client(types)
     needs_history = any(s.needs_history() for s in strategies_list)
-    history_cache = await load_history_cache(file_nums, needs_history)
+    history_cache = await load_history_cache(file_nums, needs_history=needs_history)
 
     async def _prepare_one(fnum: int, mtype: BenchMemoryMode) -> None:
         strategy = STRATEGIES[mtype]
@@ -125,7 +127,11 @@ async def prepare(
 
         logger.info("[prepare] %s file %d...", mtype, fnum)
         history_text = history_cache.get(fnum, "")
-        result = await strategy.prepare(history_text, fdir, agent_client, semaphore)
+        try:
+            result = await strategy.prepare(history_text, fdir, agent_client, semaphore)
+        except Exception:
+            logger.exception("[error] prepare %s file %d", mtype, fnum)
+            raise
         if result is not None:
             fdir.mkdir(parents=True, exist_ok=True)
             async with aiofiles.open(pp, "w", encoding="utf-8") as f:
@@ -155,7 +161,7 @@ async def run(
 
     qa_pairs = await asyncio.gather(*(load_qa_safe(f) for f in file_nums))
     qa_cache = dict(qa_pairs)
-    prep_cache = await load_prep_cache(file_nums, [str(t) for t in types])
+    prep_cache = await load_prep_cache(file_nums, types)
     query_semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
 
     async def _run_one_type(fnum: int, mtype: BenchMemoryMode) -> None:
@@ -197,7 +203,7 @@ async def run(
 
 
 async def _run_single(
-    evaluator: Any,  # noqa: ANN401
+    evaluator: QueryEvaluator,
     memory_type: BenchMemoryMode,
     file_num: int,
     events: list[dict],
@@ -215,7 +221,7 @@ async def _run_single(
         except FileNotFoundError:
             pass
         except json.JSONDecodeError:
-            pass
+            logger.warning("损坏的查询结果文件将被覆盖: %s", qp)
 
         try:
             query = event.get("query", "")
@@ -258,8 +264,6 @@ async def _run_single(
     )
     silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
     if silent_failures:
+        for sf in silent_failures:
+            logger.warning("  [warn] query failed silently: %s", sf)
         logger.warning("  [warn] %d queries failed silently", len(silent_failures))
-
-
-class VehicleMemBenchError(Exception):
-    """VehicleMemBench 模块的基准错误."""

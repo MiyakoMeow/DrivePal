@@ -36,6 +36,7 @@ def collect_results(
         except json.JSONDecodeError, OSError:
             logger.warning("无法解析结果文件: %s", path)
             failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
+            continue
         if not isinstance(data, dict):
             continue
         if data.get("failed"):

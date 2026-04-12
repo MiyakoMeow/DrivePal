@@ -77,12 +77,15 @@ class KvMemoryStrategy:
     async def prepare(
         self,
         history_text: str,
-        output_dir: Path,  # noqa: ARG002
+        output_dir: Path,
         agent_client: AgentClient | None,
         semaphore: asyncio.Semaphore,
     ) -> dict | None:
         """构建 KV 存储."""
         if agent_client is None:
+            logger.warning(
+                "[kv] agent_client 为 None，跳过 prepare (output_dir=%s)", output_dir
+            )
             return None
         daily = split_history_by_day(history_text)
         async with semaphore:
@@ -103,5 +106,8 @@ class KvMemoryStrategy:
     ) -> KvEvaluator:
         """创建 KV 模式评估器."""
         store = VMBMemoryStore()
-        store.store = prep_data.get("store", {})
+        store_data = prep_data.get("store")
+        if store_data is None:
+            logger.warning("[kv] prep_data 缺少 'store' 字段，使用空存储")
+        store.store = store_data or {}
         return KvEvaluator(agent_client, store, reflect_num, query_semaphore)

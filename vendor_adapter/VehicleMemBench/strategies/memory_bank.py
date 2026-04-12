@@ -185,6 +185,9 @@ class MemoryBankStrategy:
         semaphore: asyncio.Semaphore,
     ) -> dict | None:
         """构建记忆库存储."""
+        if not history_text:
+            logger.warning("[memory_bank] 历史文本为空，跳过 prepare: %s", output_dir)
+            return None
         store_dir = output_dir / "store"
         async with semaphore:
             store_dir.mkdir(parents=True, exist_ok=True)
@@ -208,7 +211,11 @@ class MemoryBankStrategy:
         query_semaphore: asyncio.Semaphore,
     ) -> MemoryBankEvaluator:
         """创建记忆库评估器."""
-        data_dir = Path(prep_data["data_dir"])
+        data_dir_str = prep_data.get("data_dir")
+        if not data_dir_str:
+            msg = f"prep_data 缺少 'data_dir' 字段 (file_num={file_num})"
+            raise ValueError(msg)
+        data_dir = Path(data_dir_str)
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()
         store = await asyncio.to_thread(
