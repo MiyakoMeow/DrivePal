@@ -112,6 +112,9 @@ def _make_sync_memory_search(
         except OSError as e:
             logger.warning("  [warn] memory_search failed: %s", e)
             return {"success": False, "error": str(e), "results": "", "count": 0}
+        except Exception as e:
+            logger.exception("  [warn] memory_search unexpected error for %r", query)
+            return {"success": False, "error": str(e), "results": "", "count": 0}
         else:
             text, count = format_search_results(results)
             return {"success": True, "results": text, "count": count}
@@ -132,10 +135,10 @@ class MemoryBankEvaluator:
     ) -> None:
         """初始化评估器."""
         self._agent_client = agent_client
-        self._search_client = search_client
         self._reflect_num = reflect_num
         self._file_num = file_num
         self._semaphore = query_semaphore
+        self._memory_search = _make_sync_memory_search(search_client)
 
     async def evaluate(
         self,
@@ -144,9 +147,7 @@ class MemoryBankEvaluator:
         gold_memory: str,  # noqa: ARG002
     ) -> dict | None:
         """评估单个 query，使用记忆库搜索."""
-        memory_funcs = {
-            "memory_search": _make_sync_memory_search(self._search_client),
-        }
+        memory_funcs = {"memory_search": self._memory_search}
         async with self._semaphore:
             return await asyncio.to_thread(
                 _run_vehicle_task_evaluation,

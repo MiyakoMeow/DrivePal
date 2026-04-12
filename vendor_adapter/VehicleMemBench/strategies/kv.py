@@ -100,7 +100,7 @@ class KvMemoryStrategy:
         self,
         agent_client: AgentClient,
         prep_data: dict,
-        file_num: int,  # noqa: ARG002
+        file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
     ) -> KvEvaluator:
@@ -108,6 +108,7 @@ class KvMemoryStrategy:
         store = VMBMemoryStore()
         store_data = prep_data.get("store")
         if store_data is None:
-            logger.warning("[kv] prep_data 缺少 'store' 字段，使用空存储")
-        store.store = store_data or {}
+            msg = f"[kv] prep_data 缺少 'store' 字段 (file_num={file_num})"
+            raise ValueError(msg)
+        store.store = store_data
         return KvEvaluator(agent_client, store, reflect_num, query_semaphore)

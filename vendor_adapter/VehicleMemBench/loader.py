@@ -42,8 +42,8 @@ async def load_qa_safe(fnum: int) -> tuple[int, dict | None]:
     except FileNotFoundError:
         logger.warning("[warn] qa file %d not found", fnum)
         return fnum, None
-    except json.JSONDecodeError:
-        logger.warning("[warn] qa file %d has invalid JSON", fnum)
+    except json.JSONDecodeError, OSError:
+        logger.warning("[warn] qa file %d unreadable or corrupt", fnum)
         return fnum, None
 
 
@@ -59,8 +59,10 @@ async def load_history_cache(
     async def _load_or_empty(fnum: int) -> tuple[int, str]:
         try:
             return fnum, await load_history(fnum)
-        except FileNotFoundError:
-            logger.warning("[warn] history file %d not found, using empty", fnum)
+        except FileNotFoundError, OSError:
+            logger.warning(
+                "[warn] history file %d not found or unreadable, using empty", fnum
+            )
             return fnum, ""
 
     history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
@@ -78,7 +80,7 @@ async def load_prep(
     try:
         async with aiofiles.open(pp, encoding="utf-8") as f:
             return mtype, fnum, json.loads(await f.read())
-    except FileNotFoundError:
+    except FileNotFoundError, OSError:
         return mtype, fnum, None
     except json.JSONDecodeError:
         logger.warning(
