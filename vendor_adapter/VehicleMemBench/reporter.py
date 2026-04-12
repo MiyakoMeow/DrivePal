@@ -2,6 +2,7 @@
 
 import json
 import logging
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from vendor_adapter.VehicleMemBench import BenchMemoryMode
@@ -23,7 +24,7 @@ def collect_results(
 ) -> tuple[dict[BenchMemoryMode, list[dict]], dict[BenchMemoryMode, int]]:
     """从输出目录收集评估结果."""
     all_results: dict[BenchMemoryMode, list[dict]] = {}
-    failed_counts: dict[BenchMemoryMode, int] = {}
+    failed_counts: defaultdict[BenchMemoryMode, int] = defaultdict(int)
     for path in sorted(output_dir.glob("*/*/query_*.json")):
         try:
             mtype = BenchMemoryMode(path.parent.parent.name)
@@ -35,12 +36,12 @@ def collect_results(
                 data = json.load(f)
         except json.JSONDecodeError, OSError:
             logger.warning("无法解析结果文件: %s", path)
-            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
+            failed_counts[mtype] += 1
             continue
         if not isinstance(data, dict):
             continue
         if data.get("failed"):
-            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
+            failed_counts[mtype] += 1
             continue
         if mtype not in all_results:
             all_results[mtype] = []

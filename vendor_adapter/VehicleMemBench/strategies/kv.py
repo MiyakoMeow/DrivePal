@@ -110,5 +110,11 @@ class KvMemoryStrategy:
         if store_data is None:
             msg = f"[kv] prep_data 缺少 'store' 字段 (file_num={file_num})"
             raise ValueError(msg)
+        if not isinstance(store_data, dict):
+            msg = (
+                f"[kv] prep_data['store'] 类型错误，期望 dict，"
+                f"得到 {type(store_data).__name__} (file_num={file_num})"
+            )
+            raise TypeError(msg)
         store.store = store_data
         return KvEvaluator(agent_client, store, reflect_num, query_semaphore)

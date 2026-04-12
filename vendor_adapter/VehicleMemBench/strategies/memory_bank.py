@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -112,9 +113,6 @@ def _make_sync_memory_search(
         except OSError as e:
             logger.warning("  [warn] memory_search failed: %s", e)
             return {"success": False, "error": str(e), "results": "", "count": 0}
-        except Exception as e:
-            logger.exception("  [warn] memory_search unexpected error for %r", query)
-            return {"success": False, "error": str(e), "results": "", "count": 0}
         else:
             text, count = format_search_results(results)
             return {"success": True, "results": text, "count": count}
@@ -186,21 +184,22 @@ class MemoryBankStrategy:
         semaphore: asyncio.Semaphore,
     ) -> dict | None:
         """构建记忆库存储."""
-        if not history_text:
-            logger.warning("[memory_bank] 历史文本为空，跳过 prepare: %s", output_dir)
-            return None
         store_dir = output_dir / "store"
         async with semaphore:
             store_dir.mkdir(parents=True, exist_ok=True)
-            chat_model = get_store_chat_model()
-            embedding_model = get_store_embedding_model()
-            store = MemoryBankStore(
-                data_dir=store_dir,
-                chat_model=chat_model,
-                embedding_model=embedding_model,
-            )
-            for record in history_to_interaction_records(history_text):
-                await store.write(record)
+            try:
+                chat_model = get_store_chat_model()
+                embedding_model = get_store_embedding_model()
+                store = MemoryBankStore(
+                    data_dir=store_dir,
+                    chat_model=chat_model,
+                    embedding_model=embedding_model,
+                )
+                for record in history_to_interaction_records(history_text):
+                    await store.write(record)
+            except Exception:
+                shutil.rmtree(store_dir, ignore_errors=True)
+                raise
         return {"type": BenchMemoryMode.MEMORY_BANK, "data_dir": str(store_dir)}
 
     async def create_evaluator(

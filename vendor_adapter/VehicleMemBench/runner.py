@@ -28,6 +28,7 @@ from .strategies import STRATEGIES, VehicleMemBenchError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from evaluation.agent_client import AgentClient
 
@@ -57,12 +58,16 @@ def parse_file_range(range_str: str) -> list[int]:
     result = []
     for raw_part in range_str.split(","):
         part = raw_part.strip()
-        if "-" in part:
-            a, b = part.split("-", 1)
-            a, b = int(a), int(b)
-            result.extend(range(min(a, b), max(a, b) + 1))
-        else:
-            result.append(int(part))
+        try:
+            if "-" in part:
+                a, b = part.split("-", 1)
+                a, b = int(a), int(b)
+                result.extend(range(min(a, b), max(a, b) + 1))
+            else:
+                result.append(int(part))
+        except ValueError as e:
+            msg = f"Invalid file range part: {part!r} in {range_str!r}"
+            raise ValueError(msg) from e
     return sorted(set(result))
 
 
@@ -137,13 +142,20 @@ async def prepare(
             async with aiofiles.open(pp, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(result, ensure_ascii=False, indent=2))
 
+    tasks = [(fnum, mtype) for fnum in file_nums for mtype in types]
     prep_results = await asyncio.gather(
-        *(_prepare_one(fnum, mtype) for fnum in file_nums for mtype in types),
+        *(_prepare_one(fnum, mtype) for fnum, mtype in tasks),
         return_exceptions=True,
     )
-    failed = sum(1 for r in prep_results if isinstance(r, BaseException))
-    if failed:
-        logger.info("[prepare] done with %d failures", failed)
+    failures = [
+        (t, r)
+        for t, r in zip(tasks, prep_results, strict=True)
+        if isinstance(r, BaseException)
+    ]
+    for (fnum, mtype), exc in failures:
+        logger.error("[prepare] failed %s file %d: %s", mtype, fnum, exc)
+    if failures:
+        logger.info("[prepare] done with %d failures", len(failures))
 
 
 async def run(
@@ -156,7 +168,11 @@ async def run(
 
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
-    agent_client = _get_agent_client()
+    try:
+        agent_client = _get_agent_client()
+    except Exception as e:
+        msg = "agent_client not initialized but required for run"
+        raise VehicleMemBenchError(msg) from e
     ensure_output_dir()
 
     qa_pairs = await asyncio.gather(*(load_qa_safe(f) for f in file_nums))
@@ -193,13 +209,36 @@ async def run(
         )
         await _run_single(evaluator, mtype, fnum, events, parse_answer_to_tools)
 
+    run_tasks = [(fnum, mtype) for fnum in file_nums for mtype in types]
     run_results = await asyncio.gather(
-        *(_run_one_type(fnum, mtype) for fnum in file_nums for mtype in types),
+        *(_run_one_type(fnum, mtype) for fnum, mtype in run_tasks),
         return_exceptions=True,
     )
-    failed = sum(1 for r in run_results if isinstance(r, BaseException))
-    if failed:
-        logger.info("[run] done with %d file-level failures", failed)
+    failures = [
+        (t, r)
+        for t, r in zip(run_tasks, run_results, strict=True)
+        if isinstance(r, BaseException)
+    ]
+    for (fnum, mtype), exc in failures:
+        logger.error("[run] failed %s file %d: %s", mtype, fnum, exc)
+    if failures:
+        logger.info("[run] done with %d file-level failures", len(failures))
+
+
+async def _result_already_exists(qp: Path) -> bool:
+    """检查已有结果文件是否完整."""
+    try:
+        async with aiofiles.open(qp, encoding="utf-8") as f:
+            existing = json.loads(await f.read())
+        return isinstance(existing, dict) and not existing.get("failed")
+    except FileNotFoundError:
+        return False
+    except json.JSONDecodeError:
+        logger.warning("损坏的查询结果文件将被覆盖: %s", qp)
+        return False
+    except OSError:
+        logger.warning("无法读取已有结果文件，将重新评估: %s", qp)
+        return False
 
 
 async def _run_single(
@@ -213,15 +252,8 @@ async def _run_single(
 
     async def _eval_and_save(idx: int, event: dict) -> None:
         qp = query_result_path(memory_type, file_num, idx)
-        try:
-            async with aiofiles.open(qp, encoding="utf-8") as f:
-                existing = json.loads(await f.read())
-            if isinstance(existing, dict) and not existing.get("failed"):
-                return
-        except FileNotFoundError:
-            pass
-        except json.JSONDecodeError:
-            logger.warning("损坏的查询结果文件将被覆盖: %s", qp)
+        if await _result_already_exists(qp):
+            return
 
         try:
             query = event.get("query", "")

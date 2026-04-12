@@ -1,6 +1,6 @@
 """统一记忆策略 Protocol 与注册表."""
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol
 
 from vendor_adapter.VehicleMemBench import BenchMemoryMode  # noqa: TC001
 
@@ -15,21 +15,19 @@ class VehicleMemBenchError(Exception):
     """VehicleMemBench 模块的基准错误."""
 
 
-@runtime_checkable
 class QueryEvaluator(Protocol):
     """每文件评估器（含一次性初始化资源）."""
 
     async def evaluate(
         self,
-        task: dict,
+        task: dict[str, Any],
         task_id: int,
         gold_memory: str,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """评估单个 query."""
         ...
 
 
-@runtime_checkable
 class MemoryStrategy(Protocol):
     """统一记忆策略接口."""
 
@@ -52,14 +50,14 @@ class MemoryStrategy(Protocol):
         output_dir: Path,
         agent_client: AgentClient | None,
         semaphore: asyncio.Semaphore,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """准备阶段：返回 prep 数据字典（序列化为 prep.json）."""
         ...
 
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict,
+        prep_data: dict[str, Any],
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,

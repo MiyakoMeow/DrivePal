@@ -6,7 +6,7 @@ import logging
 
 import aiofiles
 
-from vendor_adapter.VehicleMemBench import BenchMemoryMode
+from vendor_adapter.VehicleMemBench import BenchMemoryMode  # noqa: TC001
 from vendor_adapter.VehicleMemBench.paths import (
     BENCHMARK_DIR,
 )
@@ -16,9 +16,12 @@ from vendor_adapter.VehicleMemBench.paths import (
 
 logger = logging.getLogger(__name__)
 
-_prep_free_types: frozenset[BenchMemoryMode] = frozenset(
-    {BenchMemoryMode.NONE, BenchMemoryMode.GOLD},
-)
+
+def _is_prep_free(mtype: BenchMemoryMode) -> bool:
+    from vendor_adapter.VehicleMemBench.strategies import STRATEGIES  # noqa: PLC0415
+
+    s = STRATEGIES[mtype]
+    return not s.needs_history() and not s.needs_agent_for_prep()
 
 
 async def load_qa(file_num: int) -> dict:
@@ -74,7 +77,7 @@ async def load_prep(
     mtype: BenchMemoryMode,
 ) -> tuple[BenchMemoryMode, int, dict | None]:
     """加载单个 prep 数据."""
-    if mtype in _prep_free_types:
+    if _is_prep_free(mtype):
         return mtype, fnum, {"type": mtype}
     pp = _prep_path(mtype, fnum)
     try:
