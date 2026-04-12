@@ -69,8 +69,7 @@ class AgentWorkflow:
         return parsed
 
     async def _context_node(self, state: AgentState) -> dict:
-        messages = state.get("messages", [])
-        user_input = "" if not messages else str(messages[-1].get("content", ""))
+        user_input = state.get("original_query", "")
         stages = state.get("stages")
 
         try:
@@ -128,13 +127,10 @@ class AgentWorkflow:
 
         return {
             "context": context,
-            "messages": state["messages"]
-            + [{"role": "user", "content": f"Context: {json.dumps(context)}"}],
         }
 
     async def _task_node(self, state: AgentState) -> dict:
-        messages = state.get("messages", [])
-        user_input = messages[-1].get("content", "") if messages else ""
+        user_input = state.get("original_query", "")
         context = state.get("context", {})
         stages = state.get("stages")
 
@@ -150,8 +146,6 @@ class AgentWorkflow:
             stages.task = task
         return {
             "task": task,
-            "messages": state["messages"]
-            + [{"role": "user", "content": f"Task: {json.dumps(task)}"}],
         }
 
     async def _strategy_node(self, state: AgentState) -> dict:
@@ -183,19 +177,14 @@ class AgentWorkflow:
             stages.decision = decision
         return {
             "decision": decision,
-            "messages": state["messages"]
-            + [{"role": "user", "content": f"Decision: {json.dumps(decision)}"}],
         }
 
     async def _execution_node(self, state: AgentState) -> dict:
         decision = state.get("decision") or {}
-        messages = state.get("messages", [])
-        user_input = str(messages[-1].get("content", "")) if messages else ""
         stages = state.get("stages")
 
         if decision.get("postpone"):
             result = "提醒已延后：当前驾驶状态不适合发送提醒"
-            event_id = None
             if stages is not None:
                 stages.execution = {
                     "content": None,
@@ -205,7 +194,6 @@ class AgentWorkflow:
             return {
                 "result": result,
                 "event_id": None,
-                "messages": state["messages"] + [{"role": "user", "content": result}],
             }
 
         remind_content = decision.get("reminder_content") or decision.get(
@@ -220,11 +208,13 @@ class AgentWorkflow:
             content = remind_content
         else:
             content = decision.get("content") or "无提醒内容"
-        event_id = await self.memory_module.write_interaction(
-            user_input,
+        original_query = state.get("original_query", "")
+        interaction_result = await self.memory_module.write_interaction(
+            original_query,
             content,
             mode=self._memory_mode,
         )
+        event_id = interaction_result.event_id
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
             event_id = (
@@ -241,7 +231,6 @@ class AgentWorkflow:
         return {
             "result": result,
             "event_id": event_id,
-            "messages": state["messages"] + [{"role": "user", "content": result}],
         }
 
     async def run_with_stages(
@@ -252,7 +241,7 @@ class AgentWorkflow:
         """运行完整工作流并返回结果、事件ID和各阶段输出."""
         stages = WorkflowStages()
         state: AgentState = {
-            "messages": [{"role": "user", "content": user_input}],
+            "original_query": user_input,
             "context": {},
             "task": None,
             "decision": None,

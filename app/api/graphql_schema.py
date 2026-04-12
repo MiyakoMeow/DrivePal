@@ -117,6 +117,7 @@ class FeedbackInput:
 
     event_id: str
     action: str
+    memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
     modified_content: str | None = None
 
 

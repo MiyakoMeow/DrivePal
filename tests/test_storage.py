@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent
 from app.storage.init_data import init_storage
@@ -59,3 +61,60 @@ async def test_feedback_history_appended(tmp_path: Path) -> None:
     await memory.update_feedback(eid2, FeedbackData(action="ignore", type="meeting"))
     feedback = await TOMLStore(tmp_path, Path("feedback.toml"), list).read()
     assert len(feedback) == FEEDBACK_HISTORY_COUNT
+
+
+async def test_write_interaction_receives_original_query(tmp_path: Path) -> None:
+    """验证 write_interaction 收到的是原始用户查询而非中间结果."""
+    init_storage(tmp_path)
+    memory = MemoryModule(tmp_path)
+    original_query = "明天下午三点有个会议"
+    _result = await memory.write_interaction(original_query, "好的，已记录")
+    events = await memory.get_history()
+    assert len(events) >= 1
+    stored = events[-1]
+    assert original_query in stored.content
+
+
+async def test_feedback_via_event_type_lookup(tmp_path: Path) -> None:
+    """验证通过 event_id 查找事件类型后更新策略权重."""
+    memory = MemoryModule(tmp_path)
+    result = await memory.write_interaction(
+        "团队周会",
+        "好的",
+        event_type="meeting",
+    )
+    event_type = await memory.get_event_type(result.event_id)
+    assert event_type == "meeting"
+    await memory.update_feedback(
+        result.event_id,
+        FeedbackData(action="accept", type=event_type or "default"),
+    )
+    strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
+    assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
+
+
+async def test_write_interaction_returns_real_event_id(tmp_path: Path) -> None:
+    """验证 write_interaction 返回的 event_id 能在事件列表中找到."""
+    memory = MemoryModule(tmp_path)
+    result = await memory.write_interaction("测试查询", "测试回复")
+    events = await memory.get_history()
+    event_ids = [e.id for e in events]
+    assert result.event_id in event_ids, (
+        f"event_id {result.event_id} not found in {event_ids}"
+    )
+
+
+async def test_get_event_type_found(tmp_path: Path) -> None:
+    """验证 get_event_type 能找到已存在事件的事件类型."""
+    init_storage(tmp_path)
+    memory = MemoryModule(tmp_path)
+    result = await memory.write_interaction("查找测试", "响应")
+    event_type = await memory.get_event_type(result.event_id)
+    assert event_type is not None
+
+
+async def test_get_event_type_returns_none_for_missing(tmp_path: Path) -> None:
+    """验证 get_event_type 对不存在的 ID 返回 None."""
+    memory = MemoryModule(tmp_path)
+    event_type = await memory.get_event_type("nonexistent_id")
+    assert event_type is None

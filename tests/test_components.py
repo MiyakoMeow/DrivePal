@@ -15,7 +15,7 @@ from app.memory.components import (
     SimpleInteractionWriter,
     forgetting_curve,
 )
-from app.memory.schemas import FeedbackData, MemoryEvent
+from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 from app.memory.stores.memory_bank.engine import (
     SOFT_FORGET_STRENGTH,
     SOFT_FORGET_THRESHOLD,
@@ -258,10 +258,11 @@ class TestSimpleInteractionWriter:
         return SimpleInteractionWriter(storage)
 
     async def test_write_returns_id(self, writer: SimpleInteractionWriter) -> None:
-        """验证 write_interaction 返回非空 ID."""
-        iid = await writer.write_interaction("查询", "响应")
-        assert isinstance(iid, str)
-        assert len(iid) > 0
+        """验证 write_interaction 返回 InteractionResult."""
+        result = await writer.write_interaction("查询", "响应")
+        assert isinstance(result, InteractionResult)
+        assert len(result.event_id) > 0
+        assert result.interaction_id == ""
 
     async def test_write_stores_content_and_description(
         self,
@@ -362,10 +363,11 @@ class TestMemoryBankEngineWriteInteraction:
         return MemoryBankEngine(tmp_path, storage)
 
     async def test_write_interaction_returns_id(self, engine: MemoryBankEngine) -> None:
-        """验证 write_interaction 返回非空交互 ID."""
-        iid = await engine.write_interaction("查询", "响应")
-        assert isinstance(iid, str)
-        assert len(iid) > 0
+        """验证 write_interaction 返回 InteractionResult."""
+        result = await engine.write_interaction("查询", "响应")
+        assert isinstance(result, InteractionResult)
+        assert len(result.event_id) > 0
+        assert len(result.interaction_id) > 0
 
     async def test_write_interaction_creates_event_and_interaction(
         self,

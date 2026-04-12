@@ -2,7 +2,7 @@
 
 ## 项目配置
 
-- 完全使用`uv`进行依赖管理、实际项目运行等。
+- 使用`uv`。
 
 - 检查配置：[详见CI](.github/workflows/python.yml)
   - 每次修改后，直接运行，不要加额外参数：
@@ -10,37 +10,27 @@
     2. `uv run ruff format`
     3. `uv run ty check`
   - 任务完成后：
-  - 注意：
     1. 额外运行CI中的 `test` 检查，详细验证无功能破坏。
+  - 注意：
     1. 本项目的类型检查器，使用 `ty` 。[官方文档](https://docs.astral.sh/ty/)
 
-- 代码规范：
-  - **代码注释必须使用中文**（包括 docstring、行内注释）
-  - **提交信息必须使用英文；必须遵循 Convention Commits 规范**：[参考](https://www.conventionalcommits.org/)
+## 代码规范
 
-## Nix 开发环境
+### 代码注释
 
-项目提供了 `flake.nix`，包含 Python 3.14、uv 和 CUDA 12.8 依赖。
+- 必须使用中文。
 
-```bash
-# 直接运行命令（避免进入 shell）
-nix develop -c uv run main.py
-```
+### 提交信息
 
-## 注意事项
+- 必须使用英文。
+- 必须遵循 Conventional Commits 规范。
 
-### Python 3.14+ 语法差异
+### PEP参考
 
-本项目运行在 Python 3.14+，以下语法与低版本行为不同，需特别注意：
+- PEP 585
+- PEP 604
+- PEP 649
+- PEP 654
+- PEP 695
+- PEP 758
 
-- **`except X, Y:` 元组捕获**（[PEP 758](https://peps.python.org/pep-0758/)）：等效于 `except (X, Y):`，同时捕获多种异常。ruff formatter 会主动将括号形式还原为逗号形式，这是预期行为，不要修改。
-- **`except* E:` 异常组**（[PEP 654](https://peps.python.org/pep-0654/)）：用于捕获 `ExceptionGroup` / `BaseExceptionGroup`，语法为 `except* ValueError as eg:`。
-- **`type` 类型别名语句**（[PEP 695](https://peps.python.org/pep-0695/)）：Python 3.12+ 支持 `type Alias = int`，3.12+ 支持泛型 `type Gen[T] = list[T]`。本项目可直接使用。
-- **延迟求值注解**（[PEP 649](https://peps.python.org/pep-0649/) / [PEP 749](https://peps.python.org/pep-0749/)）：Python 3.14 起注解采用延迟求值语义（访问时才求值为真实 Python 对象，而非字符串），通常无需手动添加 `from __future__ import annotations`。
-
-## Skill流程特定配置
-
-### brainstorming
-
-- 编写 `设计文档（spec）` 和 `计划文档（plan）` 完成后，运行完整的 review loop 流程。
-- 优先选择 `SubAgent-Driven Development` 。每一步完成后，同样运行 review loop 流程。

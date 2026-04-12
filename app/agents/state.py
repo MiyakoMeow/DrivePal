@@ -7,7 +7,7 @@ from typing import TypedDict
 class AgentState(TypedDict):
     """工作流流水线中的共享状态."""
 
-    messages: list[dict]
+    original_query: str
     context: dict
     task: dict | None
     decision: dict | None

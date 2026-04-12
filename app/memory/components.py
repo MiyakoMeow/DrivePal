@@ -7,7 +7,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.memory.schemas import (
+    FeedbackData,
+    InteractionResult,
+    MemoryEvent,
+    SearchResult,
+)
 from app.storage.toml_store import TOMLStore
 
 SUMMARY_WEIGHT = 0.8
@@ -68,6 +73,11 @@ class EventStorage:
     async def append_raw(self, event: dict) -> None:
         """追加原始事件字典."""
         await self._store.append(event)
+
+    async def find_event_by_id(self, event_id: str) -> dict | None:
+        """按 ID 查找事件."""
+        events = await self.read_events()
+        return next((e for e in events if e.get("id") == event_id), None)
 
 
 class KeywordSearch:
@@ -166,11 +176,12 @@ class SimpleInteractionWriter:
         query: str,
         response: str,
         event_type: str = "reminder",
-    ) -> str:
+    ) -> InteractionResult:
         """写入交互记录."""
         event = MemoryEvent(
             content=query,
             type=event_type,
             description=response,
         )
-        return await self._storage.append_event(event)
+        event_id = await self._storage.append_event(event)
+        return InteractionResult(event_id=event_id)

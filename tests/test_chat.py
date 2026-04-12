@@ -60,7 +60,7 @@ async def test_chat_feeds_workflow_context(
     workflow = AgentWorkflow(memory_module=memory)
 
     state: AgentState = {
-        "messages": [{"role": "user", "content": "查一下会议"}],
+        "original_query": "查一下会议",
         "context": {},
         "task": None,
         "decision": None,

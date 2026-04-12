@@ -24,7 +24,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from app.memory.interfaces import MemoryStore
-    from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+    from app.memory.schemas import (
+        FeedbackData,
+        InteractionResult,
+        MemoryEvent,
+        SearchResult,
+    )
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
@@ -104,7 +109,7 @@ class MemoryModule:
         event_type: str = "reminder",
         *,
         mode: MemoryMode | None = None,
-    ) -> str:
+    ) -> InteractionResult:
         """写入交互记录."""
         store = await self._get_store(self._resolve_mode(mode))
         if not getattr(store, "supports_interaction", False):
@@ -132,6 +137,16 @@ class MemoryModule:
         """获取历史记忆事件."""
         store = await self._get_store(self._resolve_mode(mode))
         return await store.get_history(limit)
+
+    async def get_event_type(
+        self,
+        event_id: str,
+        *,
+        mode: MemoryMode | None = None,
+    ) -> str | None:
+        """按 event_id 查找事件类型."""
+        store = await self._get_store(self._resolve_mode(mode))
+        return await store.get_event_type(event_id)
 
     async def update_feedback(
         self,

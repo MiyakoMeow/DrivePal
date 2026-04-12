@@ -10,6 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.main import app
+from app.memory.singleton import get_memory_module
+from app.storage.toml_store import TOMLStore
 from tests.fixtures import reset_all_singletons
 
 if TYPE_CHECKING:
@@ -138,6 +140,41 @@ def test_feedback_invalid_action(isolated_app: TestClient) -> None:
     """,
     )
     assert "errors" in result
+
+
+async def test_feedback_success_updates_strategy_weight(
+    isolated_app: TestClient,
+) -> None:
+    """验证 submitFeedback 成功路径按事件类型更新策略权重."""
+    mm = get_memory_module()
+    interaction_result = await mm.write_interaction(
+        "项目周会",
+        "好的",
+        event_type="meeting",
+    )
+    event_id = interaction_result.event_id
+
+    result = _graphql_query(
+        isolated_app,
+        """
+        mutation($eventId: String!, $action: String!) {
+            submitFeedback(input: { eventId: $eventId, action: $action }) {
+                status
+            }
+        }
+    """,
+        {"eventId": event_id, "action": "accept"},
+    )
+    assert "errors" not in result
+    assert result["data"]["submitFeedback"]["status"] == "success"
+
+    strategies = await TOMLStore(
+        Path(os.environ["DATA_DIR"]),
+        Path("strategies.toml"),
+        dict,
+    ).read()
+    assert "meeting" in strategies.get("reminder_weights", {})
+    assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
 
 def test_history_query(isolated_app: TestClient) -> None:

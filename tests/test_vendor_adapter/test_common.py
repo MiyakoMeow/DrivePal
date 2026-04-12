@@ -2,7 +2,12 @@
 
 import pytest
 
-from app.memory.schemas import FeedbackData, MemoryEvent, SearchResult
+from app.memory.schemas import (
+    FeedbackData,
+    InteractionResult,
+    MemoryEvent,
+    SearchResult,
+)
 from vendor_adapter.VehicleMemBench.memory_adapters.common import (
     StoreClient,
     format_search_results,
@@ -83,8 +88,10 @@ async def test_store_client_delegates_to_store() -> None:
             _query: str,
             _response: str,
             _event_type: str = "reminder",
-        ) -> str:
-            return "fake_interaction_id"
+        ) -> InteractionResult:
+            return InteractionResult(
+                event_id="fake_event_id", interaction_id="fake_interaction_id"
+            )
 
     client = StoreClient(FakeStore())  # ty: ignore[invalid-argument-type]
     results = await client.search(query="test", top_k=5)

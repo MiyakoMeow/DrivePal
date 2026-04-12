@@ -50,6 +50,14 @@ class GraphQLInvalidActionError(GraphQLError):
         super().__init__(f"Invalid action: {action!r}")
 
 
+class GraphQLEventNotFoundError(GraphQLError):
+    """事件不存在."""
+
+    def __init__(self, event_id: str) -> None:
+        """初始化事件不存在错误."""
+        super().__init__(f"Event not found: {event_id!r}")
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -221,17 +229,32 @@ class Mutation:
             mm = get_memory_module()
             safe_action: Literal["accept", "ignore"]
             safe_action = "accept" if feedback_input.action == "accept" else "ignore"
+            mode = MemoryMode(feedback_input.memory_mode.value)
+            actual_type = await mm.get_event_type(
+                feedback_input.event_id,
+                mode=mode,
+            )
+        except Exception as e:
+            logger.exception("submitFeedback failed")
+            raise InternalServerError from e
+
+        if actual_type is None:
+            raise GraphQLEventNotFoundError(feedback_input.event_id)
+
+        try:
             feedback = FeedbackData(
                 action=safe_action,
+                type=actual_type,
                 modified_content=feedback_input.modified_content,
             )
-            await mm.update_feedback(feedback_input.event_id, feedback)
-            return FeedbackResult(status="success")
+            await mm.update_feedback(feedback_input.event_id, feedback, mode=mode)
         except GraphQLError:
             raise
         except Exception as e:
             logger.exception("submitFeedback failed")
             raise InternalServerError from e
+
+        return FeedbackResult(status="success")
 
     @strawberry.mutation
     async def save_scenario_preset(

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from app.memory.memory import MemoryModule
-from app.memory.schemas import MemoryEvent, SearchResult
+from app.memory.schemas import InteractionResult, MemoryEvent, SearchResult
 from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
@@ -77,11 +77,12 @@ class TestMemoryModuleFacade:
         mm: MemoryModule,
         llm_provider: LLMProviderConfig | None,
     ) -> None:
-        """验证 write_interaction 在 memory_bank 模式下返回字符串 ID."""
+        """验证 write_interaction 在 memory_bank 模式下返回 InteractionResult."""
         if llm_provider is None:
             pytest.skip("No LLM provider available")
-        interaction_id = await mm.write_interaction("提醒我开会", "好的")
-        assert isinstance(interaction_id, str)
+        result = await mm.write_interaction("提醒我开会", "好的")
+        assert isinstance(result, InteractionResult)
+        assert result.event_id != ""
 
     async def test_search_returns_search_result_objects(
         self,
