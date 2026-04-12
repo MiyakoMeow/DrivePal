@@ -10,6 +10,7 @@ from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.settings import EmbeddingProviderConfig, LLMSettings
 
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
+_background_tasks: set[asyncio.Task] = set()
 
 
 def get_cached_embedding_model() -> EmbeddingModel:
@@ -45,7 +46,9 @@ def clear_embedding_model_cache() -> None:
         _EMBEDDING_MODEL_CACHE.clear()
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(_aclose_models(models))  # noqa: RUF006
+            task = loop.create_task(_aclose_models(models))
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
         except RuntimeError:
             with contextlib.suppress(RuntimeError):
                 asyncio.run(_aclose_models(models))
