@@ -84,7 +84,7 @@ class KvMemoryStrategy:
     ) -> dict[str, Any] | None:
         """构建 KV 存储."""
         if agent_client is None:
-            msg = f"[kv] agent_client is None, cannot prepare (output_dir={output_dir})"
+            msg = f"[kv] agent_client 为 None，无法 prepare (output_dir={output_dir})"
             raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
         async with semaphore:

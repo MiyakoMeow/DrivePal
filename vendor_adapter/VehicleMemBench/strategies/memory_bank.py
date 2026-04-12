@@ -225,7 +225,7 @@ class MemoryBankStrategy:
     ) -> MemoryBankEvaluator:
         """创建记忆库评估器."""
         if prep_data is None:
-            msg = f"prep_data is None (file_num={file_num})"
+            msg = f"prep_data 为 None (file_num={file_num})"
             raise ValueError(msg)
         data_dir_str = prep_data.get("data_dir")
         if not data_dir_str:

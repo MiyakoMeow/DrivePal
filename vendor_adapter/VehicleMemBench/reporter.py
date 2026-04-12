@@ -92,8 +92,12 @@ def report(output_path: Path | None = None) -> None:
     serializable_data = {str(k): v for k, v in report_data.items()}
     out = output_path if output_path is not None else output_dir / "report.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", encoding="utf-8") as f:
-        json.dump(serializable_data, f, ensure_ascii=False, indent=2)
+    try:
+        with out.open("w", encoding="utf-8") as f:
+            json.dump(serializable_data, f, ensure_ascii=False, indent=2)
+    except OSError, TypeError:
+        logger.exception("写入报告文件失败: %s", out)
+        raise
     logger.info("Report written to %s", out)
 
     for mtype, metric in report_data.items():

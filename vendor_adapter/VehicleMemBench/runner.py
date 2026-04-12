@@ -293,6 +293,9 @@ async def _run_single(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
         return_exceptions=True,
     )
+    for r in gather_results:
+        if isinstance(r, BaseException) and not isinstance(r, Exception):
+            raise r
     silent_failures = [r for r in gather_results if isinstance(r, Exception)]
     if silent_failures:
         for sf in silent_failures:
