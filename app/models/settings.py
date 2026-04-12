@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
+from app.models.types import ProviderConfig
 
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
@@ -43,24 +44,6 @@ class NoJudgeModelConfiguredError(RuntimeError):
     def __init__(self) -> None:
         """初始化错误."""
         super().__init__("No judge model configured")
-
-
-@dataclass
-class ResolvedModel:
-    """解析后的模型引用."""
-
-    provider_name: str
-    model_name: str
-    params: dict[str, Any]
-
-
-@dataclass
-class ProviderConfig:
-    """LLM 提供商基础配置."""
-
-    model: str
-    base_url: str | None = None
-    api_key: str | None = None
 
 
 @dataclass
