@@ -54,7 +54,7 @@ async def load_qa_safe(fnum: int) -> tuple[int, dict[str, Any] | None]:
     except FileNotFoundError:
         logger.warning("[warn] qa file %d not found", fnum)
         return fnum, None
-    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+    except json.JSONDecodeError, OSError, UnicodeDecodeError:
         logger.warning("[warn] qa file %d unreadable or corrupt", fnum)
         return fnum, None
 
@@ -71,7 +71,7 @@ async def load_history_cache(
     async def _load_or_empty(fnum: int) -> tuple[int, str]:
         try:
             return fnum, await load_history(fnum)
-        except (OSError, UnicodeDecodeError):
+        except OSError, UnicodeDecodeError:
             logger.warning(
                 "[warn] history file %d not found or unreadable, using empty", fnum
             )
@@ -103,7 +103,7 @@ async def load_prep(
             return mtype, fnum, parsed
     except FileNotFoundError:
         return mtype, fnum, None
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         logger.warning("[warn] prep file %s/%d unreadable: %s", mtype, fnum, pp)
         return mtype, fnum, None
     except json.JSONDecodeError:
@@ -123,7 +123,10 @@ async def load_prep_cache(
     # Limit concurrency to avoid EMFILE/OSError from too many open files
     semaphore = asyncio.Semaphore(100)
 
-    async def _limited_load_prep(f: int, t: BenchMemoryMode):
+    async def _limited_load_prep(
+        f: int,
+        t: BenchMemoryMode,
+    ) -> tuple[BenchMemoryMode, int, dict[str, Any] | None]:
         async with semaphore:
             return await load_prep(f, t)
 
