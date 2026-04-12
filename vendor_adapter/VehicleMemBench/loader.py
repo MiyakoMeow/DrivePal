@@ -25,7 +25,7 @@ def _is_prep_free(mtype: BenchMemoryMode) -> bool:
     return not s.needs_history() and not s.needs_agent_for_prep()
 
 
-async def load_qa(file_num: int) -> dict[str, Any]:
+async def load_qa(file_num: int) -> dict[str, Any] | None:
     """加载 QA JSON 数据."""
     path = BENCHMARK_DIR / "qa_data" / f"qa_{file_num}.json"
     async with aiofiles.open(path, encoding="utf-8") as f:
@@ -36,7 +36,7 @@ async def load_qa(file_num: int) -> dict[str, Any]:
                 file_num,
                 type(parsed).__name__,
             )
-            return {}
+            return None
         return parsed
 
 
@@ -77,7 +77,15 @@ async def load_history_cache(
             )
             return fnum, ""
 
-    history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
+    semaphore = asyncio.Semaphore(100)
+
+    async def _limited_load_or_empty(fnum: int) -> tuple[int, str]:
+        async with semaphore:
+            return await _load_or_empty(fnum)
+
+    history_pairs = await asyncio.gather(
+        *(_limited_load_or_empty(f) for f in file_nums)
+    )
     return dict(history_pairs)
 
 
@@ -118,7 +126,7 @@ async def load_prep(
 async def load_prep_cache(
     file_nums: list[int],
     types: list[BenchMemoryMode],
-) -> dict[tuple[BenchMemoryMode, int], dict[str, Any] | None]:
+) -> dict[tuple[BenchMemoryMode, int], dict[str, Any]]:
     """批量加载 prep 数据缓存."""
     # 限制并发数量，避免打开过多文件导致 EMFILE/OSError
     semaphore = asyncio.Semaphore(100)
