@@ -208,6 +208,29 @@ STRATEGIES: dict[BenchMemoryMode, MemoryStrategy] = {
 - `compute_memory_scores(report_data: dict[BenchMemoryMode, dict]) -> None` — 就地计算相对 GOLD 的 memory_score
 - `report(output_path: Path | None = None) -> None` — 生成报告 + 打印
 
+### 中间函数/类映射（补充）
+
+| 当前 runner.py 中的函数/类 | 目标位置 | 说明 |
+|--------------------------|---------|------|
+| `_build_kv_store()` | `strategies/kv.py` | KvMemoryStrategy.create_evaluator() 内部 |
+| `_build_search_client()` | `strategies/memory_bank.py` | MemoryBankStrategy.create_evaluator() 内部 |
+| `_run_custom_adapter_with_client()` | `strategies/memory_bank.py` | evaluator.evaluate() 内部 |
+| `_prepare_single()` | `strategies/kv.py` | KvMemoryStrategy.prepare()（其他策略无需此函数） |
+| `_run_one_type()` | `runner.py` | 逻辑内联到 run() 的 gather 循环 |
+| `_resolve_agent_client()` | `runner.py` | 保留，改用 STRATEGIES 判断 |
+| `EvalContext` | `runner.py` | 保留但精简，仅用于 run() 内部 |
+| `SUPPORTED_MEMORY_TYPES` | 删除 | 由 `STRATEGIES.keys()` 替代 |
+| `_PREP_FREE_TYPES` | 删除 | 由 `strategy.needs_history()` / `strategy.needs_agent_for_prep()` 替代 |
+| `_CUSTOM_ADAPTER_*` 常量 | `strategies/memory_bank.py` | 仅 MemoryBankStrategy 使用 |
+| `_make_sync_memory_search()` | `strategies/memory_bank.py` | 仅 MemoryBankStrategy 使用 |
+
+### 导出兼容性
+
+runner.py 通过重导出保持公共 API 不变：
+```python
+from .reporter import report  # 重导出，保持 run_benchmark.py 无需修改
+```
+
 ## 数据流
 
 ### Prepare
@@ -271,7 +294,8 @@ reporter.report(output_path?)
 | `vendor_adapter.VehicleMemBench.runner._load_qa` | `vendor_adapter.VehicleMemBench.loader.load_qa` |
 | `vendor_adapter.VehicleMemBench.runner._evaluate_query` | 对应 strategy 的 `evaluate` 方法 |
 | `vendor_adapter.VehicleMemBench.runner._get_agent_client` | `vendor_adapter.VehicleMemBench.runner._get_agent_client`（不变） |
-| `vendor_adapter.VehicleMemBench.runner.get_benchmark_config` | `vendor_adapter.VehicleMemBench.model_config.get_benchmark_config`（不变） |
+| `vendor_adapter.VehicleMemBench.runner.get_benchmark_config` | `vendor_adapter.VehicleMemBench.model_config.get_benchmark_config`（不变，runner/test_runner 中引用） |
+| `vendor_adapter.VehicleMemBench.reporter.get_benchmark_config` | 新增：`reporter.py` 内部调用，若需 monkeypatch 则 patch 此路径 |
 
 ### 新增测试
 
