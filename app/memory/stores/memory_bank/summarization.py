@@ -207,6 +207,7 @@ class SummaryManager:
         try:
             overall = await chat_model.generate(prompt)
         except OSError, ValueError, RuntimeError:
+            logger.warning("Failed to generate overall summary", exc_info=True)
             return
         async with self._lock:
             summaries = await self._summaries_store.read()

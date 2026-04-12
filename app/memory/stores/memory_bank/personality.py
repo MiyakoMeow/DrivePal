@@ -194,6 +194,7 @@ class PersonalityManager:
         finally:
             self._inflight_daily_personality.discard(date_group)
         if needs_overall_update:
+            personality_data = await self._store.read()
             overall_text = await self.generate_overall_text(
                 personality_data,
                 chat_model,

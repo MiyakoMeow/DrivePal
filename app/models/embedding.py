@@ -10,7 +10,7 @@ from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.settings import EmbeddingProviderConfig, LLMSettings
 
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
-_background_tasks: set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task[None]] = set()
 
 
 def get_cached_embedding_model() -> EmbeddingModel:
