@@ -3,15 +3,12 @@
 import os
 import tomllib
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
 from app.models.types import ProviderConfig
-
-if TYPE_CHECKING:
-    from app.models.chat import ChatModel
-    from app.models.embedding import EmbeddingModel
 
 
 class NoLLMConfigurationError(RuntimeError):
@@ -278,27 +275,10 @@ def _build_provider_config_from_ref(
     )
 
 
-_settings_cache: LLMSettings | None = None
-
-
-def get_chat_model(temperature: float | None = None) -> ChatModel:
-    """从配置创建 ChatModel 实例（使用缓存避免重复加载）."""
-    global _settings_cache  # noqa: PLW0603
-    from app.models.chat import ChatModel  # noqa: PLC0415
-
-    if _settings_cache is None:
-        _settings_cache = LLMSettings.load()
-    if "default" not in _settings_cache.model_groups:
-        raise NoDefaultModelGroupError
-    providers = _settings_cache.get_model_group_providers("default")
-    return ChatModel(providers=providers, temperature=temperature)
-
-
-def get_embedding_model() -> EmbeddingModel:
-    """从配置创建 EmbeddingModel 实例（使用缓存避免重复加载）."""
-    from app.models.embedding import get_cached_embedding_model  # noqa: PLC0415
-
-    return get_cached_embedding_model()
+@lru_cache(maxsize=1)
+def get_settings() -> LLMSettings:
+    """获取缓存的 LLM 配置实例."""
+    return LLMSettings.load()
 
 
 def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
@@ -317,23 +297,3 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
     if judge_dict:
         return JudgeProviderConfig.from_dict(judge_dict)
     return None
-
-
-def get_judge_model() -> ChatModel:
-    """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
-    global _settings_cache  # noqa: PLW0603
-    from app.models.chat import ChatModel  # noqa: PLC0415
-
-    if _settings_cache is None:
-        _settings_cache = LLMSettings.load()
-    if _settings_cache.judge_provider is None:
-        raise NoJudgeModelConfiguredError
-    provider = LLMProviderConfig(
-        provider=ProviderConfig(
-            model=_settings_cache.judge_provider.provider.model,
-            base_url=_settings_cache.judge_provider.provider.base_url,
-            api_key=_settings_cache.judge_provider.provider.api_key,
-        ),
-        temperature=_settings_cache.judge_provider.temperature,
-    )
-    return ChatModel(providers=[provider])
