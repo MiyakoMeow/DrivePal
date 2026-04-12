@@ -8,18 +8,19 @@ from app.memory.schemas import MemoryEvent, SearchResult
 if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
 
+_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
+
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
     """将历史文本转换为交互记录."""
     if not history_text.strip():
         return []
-    pattern = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
     records = []
     for i, raw_line in enumerate(history_text.strip().splitlines()):
         line = raw_line.strip()
         if not line:
             continue
-        m = pattern.match(line)
+        m = _TIMESTAMP_PATTERN.match(line)
         if m:
             date_group = m.group(1)
             content = m.group(2)
@@ -45,13 +46,9 @@ def format_search_results(results: list[SearchResult]) -> tuple[str, int]:
         return ("", 0)
     texts = []
     for r in results:
-        event = r.event if hasattr(r, "event") else r
-        if isinstance(event, dict):
-            content = event.get("content", "")
-        elif hasattr(event, "content"):
-            content = event.content
-        else:
-            content = str(event)
+        content = (
+            r.event.get("content", "") if isinstance(r.event, dict) else str(r.event)
+        )
         if content:
             texts.append(content)
     return ("\n".join(texts), len(texts))

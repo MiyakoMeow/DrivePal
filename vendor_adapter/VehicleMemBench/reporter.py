@@ -68,12 +68,13 @@ def build_report_metrics(
 def compute_memory_scores(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> None:
     """计算相对于 GOLD 的 memory_score."""
     gold_esm = report_data.get(BenchMemoryMode.GOLD, {}).get("exact_match_rate", 0)
-    if gold_esm <= 0:
+    if not isinstance(gold_esm, int | float) or gold_esm <= 0:
         return
     for mtype, metric in report_data.items():
         if mtype != BenchMemoryMode.GOLD:
             auto_esm = metric.get("exact_match_rate", 0)
-            metric["memory_score"] = auto_esm / gold_esm
+            if isinstance(auto_esm, int | float):
+                metric["memory_score"] = auto_esm / gold_esm
 
 
 def report(output_path: Path | None = None) -> None:

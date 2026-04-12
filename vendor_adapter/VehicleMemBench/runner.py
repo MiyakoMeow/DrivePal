@@ -132,11 +132,7 @@ async def prepare(
 
         logger.info("[prepare] %s file %d...", mtype, fnum)
         history_text = history_cache.get(fnum, "")
-        try:
-            result = await strategy.prepare(history_text, fdir, agent_client, semaphore)
-        except Exception:
-            logger.exception("[error] prepare %s file %d", mtype, fnum)
-            raise
+        result = await strategy.prepare(history_text, fdir, agent_client, semaphore)
         if result is not None:
             fdir.mkdir(parents=True, exist_ok=True)
             async with aiofiles.open(pp, "w", encoding="utf-8") as f:
