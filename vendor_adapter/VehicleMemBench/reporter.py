@@ -88,10 +88,11 @@ def report(output_path: Path | None = None) -> None:
 
     compute_memory_scores(report_data)
 
+    serializable_data = {str(k): v for k, v in report_data.items()}
     out = output_path if output_path is not None else output_dir / "report.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
-        json.dump(report_data, f, ensure_ascii=False, indent=2)
+        json.dump(serializable_data, f, ensure_ascii=False, indent=2)
     logger.info("Report written to %s", out)
 
     for mtype, metric in report_data.items():
@@ -99,7 +100,7 @@ def report(output_path: Path | None = None) -> None:
         failed = metric.get("total_failed", 0)
         logger.info(
             "  %s: ESM=%s, F-F1=%s, V-F1=%s, Calls=%s%s",
-            mtype,
+            mtype.value,
             f"{esm:.2%}",
             f"{metric.get('state_f1_positive', 0):.4f}",
             f"{metric.get('state_f1_change', 0):.4f}",
