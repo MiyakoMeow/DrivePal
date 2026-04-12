@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.types import MemoryMode
+from app.models.chat import get_chat_model
+from app.models.embedding import get_cached_embedding_model
 
 
 class UnknownModeError(ValueError):
@@ -61,8 +63,6 @@ class MemoryModule:
     def chat_model(self) -> ChatModel:
         """获取聊天模型，延迟初始化."""
         if self._chat_model is None:
-            from app.models.chat import get_chat_model  # noqa: PLC0415
-
             self._chat_model = get_chat_model()
         return self._chat_model
 
@@ -84,16 +84,10 @@ class MemoryModule:
         kwargs: dict[str, Any] = {"data_dir": self._data_dir}
         if getattr(store_cls, "requires_embedding", False):
             if self._embedding_model is None:
-                from app.models.embedding import (  # noqa: PLC0415
-                    get_cached_embedding_model,
-                )
-
                 self._embedding_model = get_cached_embedding_model()
             kwargs["embedding_model"] = self._embedding_model
         if getattr(store_cls, "requires_chat", False):
             if self._chat_model is None:
-                from app.models.chat import get_chat_model  # noqa: PLC0415
-
                 self._chat_model = get_chat_model()
             kwargs["chat_model"] = self._chat_model
         return store_cls(**kwargs)
