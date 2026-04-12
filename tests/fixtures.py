@@ -11,6 +11,6 @@ def reset_all_singletons() -> None:
     """重置所有全局单例状态以隔离测试."""
     reset_embedding_singleton()
     with suppress(AttributeError):
-        app.models.settings._settings_cache = None
+        app.models.settings.get_settings.cache_clear()
     with suppress(AttributeError):
-        app.memory.singleton._memory_module = None
+        app.memory.singleton._memory_module_state[0] = None

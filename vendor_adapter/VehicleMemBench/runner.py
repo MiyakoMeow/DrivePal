@@ -627,8 +627,11 @@ async def _run_custom_adapter_with_client(
     _run_vehicle_task_evaluation 是同步函数，通过 asyncio.to_thread 在线程池中执行。
     其调用的 memory_search 回调通过 run_coroutine_threadsafe 调度到主事件循环。
     """
+    if ctx.search_client is None:
+        msg = "search_client is required for custom adapter evaluation"
+        raise VehicleMemBenchError(msg)
     memory_funcs = {
-        "memory_search": _make_sync_memory_search(ctx.search_client),  # type: ignore[arg-type]
+        "memory_search": _make_sync_memory_search(ctx.search_client),
     }
 
     return await asyncio.to_thread(
