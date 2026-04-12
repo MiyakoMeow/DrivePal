@@ -194,6 +194,7 @@ class SummaryManager:
             return
         summaries = await self._summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
+        snapshot_count = len(daily_summaries)
         all_summaries: list[str] = []
         for date_group, summary_data in daily_summaries.items():
             if isinstance(summary_data, dict):
@@ -211,5 +212,13 @@ class SummaryManager:
             return
         async with self._lock:
             summaries = await self._summaries_store.read()
+            current_count = len(summaries.get("daily_summaries", {}))
+            if current_count != snapshot_count:
+                logger.info(
+                    "daily_summaries changed during overall generation (%d -> %d), discarding",
+                    snapshot_count,
+                    current_count,
+                )
+                return
             summaries["overall_summary"] = overall
             await self._summaries_store.write(summaries)

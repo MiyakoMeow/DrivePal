@@ -200,6 +200,7 @@ class PersonalityManager:
         finally:
             self._inflight_daily_personality.discard(date_group)
         if needs_overall_update:
+            snapshot_count = len(latest_personality_data.get("daily_personality", {}))
             overall_text = await self.generate_overall_text(
                 latest_personality_data,
                 chat_model,
@@ -207,6 +208,14 @@ class PersonalityManager:
             if overall_text:
                 async with self._personality_lock:
                     personality_data = await self._store.read()
+                    current_count = len(personality_data.get("daily_personality", {}))
+                    if current_count != snapshot_count:
+                        logger.info(
+                            "daily_personality changed during overall generation (%d -> %d), discarding",
+                            snapshot_count,
+                            current_count,
+                        )
+                        return
                     personality_data["overall_personality"] = overall_text
                     await self._store.write(personality_data)
 
