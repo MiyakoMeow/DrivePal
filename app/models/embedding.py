@@ -13,6 +13,13 @@ _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
+def _finalize_background_task(task: asyncio.Task[None]) -> None:
+    """回收后台任务并消费异常，避免未检索异常告警."""
+    _background_tasks.discard(task)
+    with contextlib.suppress(asyncio.CancelledError):
+        _ = task.exception()
+
+
 def get_cached_embedding_model() -> EmbeddingModel:
     """获取缓存的embedding模型实例，避免重复加载."""
     settings = LLMSettings.load()
@@ -48,7 +55,7 @@ def clear_embedding_model_cache() -> None:
             loop = asyncio.get_running_loop()
             task = loop.create_task(_aclose_models(models))
             _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
+            task.add_done_callback(_finalize_background_task)
         except RuntimeError:
             with contextlib.suppress(RuntimeError):
                 asyncio.run(_aclose_models(models))

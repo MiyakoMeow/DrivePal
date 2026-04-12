@@ -663,7 +663,8 @@ def _collect_results(
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError, OSError:
-            logger.debug("无法解析结果文件: %s", path)
+            logger.warning("无法解析结果文件: %s", path)
+            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
         if not isinstance(data, dict):
             continue
         if data.get("failed"):
@@ -705,8 +706,8 @@ def report(output_path: Path | None = None) -> None:
     report_data = _build_report_metrics(all_results)
 
     for mtype, fc in failed_counts.items():
-        if mtype in report_data:
-            report_data[mtype]["total_failed"] = fc
+        metric = report_data.setdefault(mtype, {"total_failed": 0})
+        metric["total_failed"] = fc
 
     _compute_memory_scores(report_data)
 
