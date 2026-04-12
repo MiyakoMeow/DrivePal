@@ -143,6 +143,9 @@ async def prepare(
         *(_prepare_one(fnum, mtype) for fnum, mtype in tasks),
         return_exceptions=True,
     )
+    for _t, r in zip(tasks, prep_results, strict=True):
+        if isinstance(r, BaseException) and not isinstance(r, Exception):
+            raise r
     failures = [
         (t, r)
         for t, r in zip(tasks, prep_results, strict=True)
@@ -210,6 +213,9 @@ async def run(
         *(_run_one_type(fnum, mtype) for fnum, mtype in run_tasks),
         return_exceptions=True,
     )
+    for _t, r in zip(run_tasks, run_results, strict=True):
+        if isinstance(r, BaseException) and not isinstance(r, Exception):
+            raise r
     failures = [
         (t, r)
         for t, r in zip(run_tasks, run_results, strict=True)

@@ -3,16 +3,15 @@
 from typing import TYPE_CHECKING, Any, Protocol
 
 from vendor_adapter.VehicleMemBench import BenchMemoryMode  # noqa: TC001
+from vendor_adapter.VehicleMemBench.strategies.exceptions import (
+    VehicleMemBenchError as VehicleMemBenchError,
+)
 
 if TYPE_CHECKING:
     import asyncio
     from pathlib import Path
 
     from evaluation.agent_client import AgentClient
-
-
-class VehicleMemBenchError(Exception):
-    """VehicleMemBench 模块的基准错误."""
 
 
 class QueryEvaluator(Protocol):

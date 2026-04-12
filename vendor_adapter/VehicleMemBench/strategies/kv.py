@@ -8,7 +8,7 @@ from vendor_adapter.VehicleMemBench import BenchMemoryMode
 from vendor_adapter.VehicleMemBench.paths import (
     setup_vehiclemembench_path as _,  # noqa: F401
 )
-from vendor_adapter.VehicleMemBench.strategies import VehicleMemBenchError
+from vendor_adapter.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
 
 from evaluation.model_evaluation import (  # isort: skip
     MemoryStore as VMBMemoryStore,
