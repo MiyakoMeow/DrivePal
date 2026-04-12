@@ -76,7 +76,7 @@ class NoneStrategy:
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict[str, Any],  # noqa: ARG002
+        prep_data: dict[str, Any] | None,  # noqa: ARG002
         file_num: int,  # noqa: ARG002
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,

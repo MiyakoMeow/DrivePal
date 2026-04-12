@@ -181,10 +181,10 @@ async def run(
     query_semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
 
     async def _run_one_type(fnum: int, mtype: BenchMemoryMode) -> None:
-        prep_data = prep_cache.get((mtype, fnum))
-        if prep_data is None:
+        if (mtype, fnum) not in prep_cache:
             logger.info("[skip] %s file %d not prepared", mtype, fnum)
             return
+        prep_data = prep_cache[(mtype, fnum)]
 
         qa_data = qa_cache.get(fnum)
         if qa_data is None:

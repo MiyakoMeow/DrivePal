@@ -208,12 +208,15 @@ class MemoryBankStrategy:
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict[str, Any],
+        prep_data: dict[str, Any] | None,
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
     ) -> MemoryBankEvaluator:
         """创建记忆库评估器."""
+        if prep_data is None:
+            msg = f"prep_data is None (file_num={file_num})"
+            raise ValueError(msg)
         data_dir_str = prep_data.get("data_dir")
         if not data_dir_str:
             msg = f"prep_data 缺少 'data_dir' 字段 (file_num={file_num})"

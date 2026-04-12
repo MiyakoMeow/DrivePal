@@ -57,7 +57,7 @@ class MemoryStrategy(Protocol):
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict[str, Any],
+        prep_data: dict[str, Any] | None,
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
@@ -73,7 +73,9 @@ from vendor_adapter.VehicleMemBench.strategies.memory_bank import (  # noqa: E40
 )
 from vendor_adapter.VehicleMemBench.strategies.none import NoneStrategy  # noqa: E402
 
-STRATEGIES: dict[BenchMemoryMode, MemoryStrategy] = {
+_StrategyTypes = NoneStrategy | GoldStrategy | KvMemoryStrategy | MemoryBankStrategy
+
+STRATEGIES: dict[BenchMemoryMode, _StrategyTypes] = {
     s.mode: s
     for s in [NoneStrategy(), GoldStrategy(), KvMemoryStrategy(), MemoryBankStrategy()]
 }

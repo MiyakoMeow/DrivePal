@@ -99,13 +99,16 @@ class KvMemoryStrategy:
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict[str, Any],
+        prep_data: dict[str, Any] | None,
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
     ) -> KvEvaluator:
         """创建 KV 模式评估器."""
         store = VMBMemoryStore()
+        if prep_data is None:
+            msg = f"[kv] prep_data is None (file_num={file_num})"
+            raise ValueError(msg)
         store_data = prep_data.get("store")
         if store_data is None:
             msg = f"[kv] prep_data 缺少 'store' 字段 (file_num={file_num})"
