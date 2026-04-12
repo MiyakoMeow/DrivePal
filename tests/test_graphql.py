@@ -174,6 +174,7 @@ async def test_feedback_success_updates_strategy_weight(
         dict,
     ).read()
     assert "meeting" in strategies.get("reminder_weights", {})
+    assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
 
 def test_history_query(isolated_app: TestClient) -> None:

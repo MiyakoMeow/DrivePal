@@ -104,8 +104,8 @@ async def test_write_interaction_returns_real_event_id(tmp_path: Path) -> None:
     )
 
 
-async def test_find_event_by_id_found(tmp_path: Path) -> None:
-    """验证 find_event_by_id 能找到已存在的事件."""
+async def test_get_event_type_found(tmp_path: Path) -> None:
+    """验证 get_event_type 能找到已存在事件的事件类型."""
     init_storage(tmp_path)
     memory = MemoryModule(tmp_path)
     result = await memory.write_interaction("查找测试", "响应")

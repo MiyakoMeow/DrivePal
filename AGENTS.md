@@ -23,11 +23,14 @@
 ### 提交信息
 
 - 必须使用英文。
-- 必须遵循 Convention Commits 规范。
+- 必须遵循 Conventional Commits 规范。
 
 ### PEP参考
 
-- PEP 758
+- PEP 585
+- PEP 604
+- PEP 649
 - PEP 654
 - PEP 695
-- PEP 649
+- PEP 758
+

@@ -82,6 +82,7 @@ class TestMemoryModuleFacade:
             pytest.skip("No LLM provider available")
         result = await mm.write_interaction("提醒我开会", "好的")
         assert isinstance(result, InteractionResult)
+        assert result.event_id != ""
 
     async def test_search_returns_search_result_objects(
         self,
