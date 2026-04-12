@@ -3,7 +3,6 @@
 import os
 import tomllib
 from dataclasses import dataclass, field
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -270,12 +269,6 @@ def _build_provider_config_from_ref(
         temperature=resolved.params.get("temperature", 0.7),
         concurrency=concurrency,
     )
-
-
-@lru_cache(maxsize=1)
-def get_settings() -> LLMSettings:
-    """获取缓存的 LLM 配置实例."""
-    return LLMSettings.load()
 
 
 def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:

@@ -14,8 +14,8 @@ from app.models.settings import (
     JudgeProviderConfig,
     LLMProviderConfig,
     LLMSettings,
-    ProviderConfig,
 )
+from app.models.types import ProviderConfig
 from tests._helpers import _mock_async_client
 
 if TYPE_CHECKING:
