@@ -15,8 +15,7 @@ from app.models.settings import (
 )
 from app.models.types import ProviderConfig
 
-_provider_semaphore_cache: dict[str, asyncio.Semaphore] = {}
-_provider_semaphore_lock: asyncio.Lock | None = None
+_semaphore_cache: dict[str, asyncio.Semaphore] = {}
 
 
 class ChatError(RuntimeError):
@@ -46,19 +45,21 @@ class AllProviderFailedError(ChatError):
         super().__init__(msg)
 
 
+@cache
+def _get_lock() -> asyncio.Lock:
+    """获取或创建全局 asyncio.Lock."""
+    return asyncio.Lock()
+
+
 async def _get_provider_semaphore(
     provider_name: str,
     concurrency: int,
 ) -> asyncio.Semaphore:
     """获取或创建 provider 级别的 semaphore."""
-    global _provider_semaphore_lock  # noqa: PLW0603
-    if _provider_semaphore_lock is None:
-        _provider_semaphore_lock = asyncio.Lock()
-
-    async with _provider_semaphore_lock:
-        if provider_name not in _provider_semaphore_cache:
-            _provider_semaphore_cache[provider_name] = asyncio.Semaphore(concurrency)
-        return _provider_semaphore_cache[provider_name]
+    async with _get_lock():
+        if provider_name not in _semaphore_cache:
+            _semaphore_cache[provider_name] = asyncio.Semaphore(concurrency)
+        return _semaphore_cache[provider_name]
 
 
 if TYPE_CHECKING:
