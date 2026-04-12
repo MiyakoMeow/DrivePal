@@ -107,7 +107,8 @@ def _make_sync_memory_search(
                 "count": 0,
             }
         except RuntimeError as e:
-            if "loop" in str(e).lower() or "closed" in str(e).lower():
+            msg = str(e).lower()
+            if "event loop" in msg or "closed" in msg:
                 logger.warning("  [warn] memory_search: event loop error: %s", e)
                 return {"success": False, "error": str(e), "results": "", "count": 0}
             raise

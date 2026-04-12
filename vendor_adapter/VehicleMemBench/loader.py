@@ -89,10 +89,10 @@ async def load_history_cache(
     )
     result: dict[int, str] = {}
     for pair in history_pairs:
-        if isinstance(pair, BaseException):
-            logger.warning("[warn] 加载历史文件失败: %s", pair)
-        else:
+        if isinstance(pair, tuple):
             result[pair[0]] = pair[1]
+        else:
+            logger.warning("[warn] 加载历史文件失败: %s", pair)
     return result
 
 
@@ -152,10 +152,10 @@ async def load_prep_cache(
     )
     data: dict[tuple[BenchMemoryMode, int], dict[str, Any]] = {}
     for item in prep_raw:
-        if isinstance(item, BaseException):
-            logger.warning("[warn] 加载 prep 数据失败: %s", item)
-        else:
+        if isinstance(item, tuple):
             mt, fn, d = item
             if d is not None:
                 data[(mt, fn)] = d
+        else:
+            logger.warning("[warn] 加载 prep 数据失败: %s", item)
     return data

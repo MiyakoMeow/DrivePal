@@ -8,6 +8,7 @@ from vendor_adapter.VehicleMemBench import BenchMemoryMode
 from vendor_adapter.VehicleMemBench.paths import (
     setup_vehiclemembench_path as _,  # noqa: F401
 )
+from vendor_adapter.VehicleMemBench.strategies import VehicleMemBenchError
 
 from evaluation.model_evaluation import (  # isort: skip
     MemoryStore as VMBMemoryStore,
@@ -83,10 +84,8 @@ class KvMemoryStrategy:
     ) -> dict[str, Any] | None:
         """构建 KV 存储."""
         if agent_client is None:
-            logger.warning(
-                "[kv] agent_client 为 None，跳过 prepare (output_dir=%s)", output_dir
-            )
-            return None
+            msg = f"[kv] agent_client is None, cannot prepare (output_dir={output_dir})"
+            raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
         async with semaphore:
             store, _, _ = await asyncio.to_thread(

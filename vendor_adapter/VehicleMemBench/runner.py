@@ -146,7 +146,7 @@ async def prepare(
     failures = [
         (t, r)
         for t, r in zip(tasks, prep_results, strict=True)
-        if isinstance(r, BaseException)
+        if isinstance(r, Exception)
     ]
     for (fnum, mtype), exc in failures:
         logger.error("[prepare] failed %s file %d: %s", mtype, fnum, exc)
@@ -213,7 +213,7 @@ async def run(
     failures = [
         (t, r)
         for t, r in zip(run_tasks, run_results, strict=True)
-        if isinstance(r, BaseException)
+        if isinstance(r, Exception)
     ]
     for (fnum, mtype), exc in failures:
         logger.error("[run] failed %s file %d: %s", mtype, fnum, exc)
@@ -234,6 +234,9 @@ async def _result_already_exists(qp: Path) -> bool:
         return False
     except OSError as e:
         logger.warning("无法读取已有结果文件 (%s): %s", type(e).__name__, qp)
+        return False
+    except UnicodeDecodeError:
+        logger.warning("编码错误的结果文件将被覆盖: %s", qp)
         return False
 
 
@@ -290,7 +293,7 @@ async def _run_single(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
         return_exceptions=True,
     )
-    silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
+    silent_failures = [r for r in gather_results if isinstance(r, Exception)]
     if silent_failures:
         for sf in silent_failures:
             logger.warning("  [warn] query failed silently: %s", sf)
