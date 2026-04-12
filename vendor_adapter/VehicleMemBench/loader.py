@@ -120,7 +120,7 @@ async def load_prep_cache(
     types: list[BenchMemoryMode],
 ) -> dict[tuple[BenchMemoryMode, int], dict[str, Any] | None]:
     """批量加载 prep 数据缓存."""
-    # Limit concurrency to avoid EMFILE/OSError from too many open files
+    # 限制并发数量，避免打开过多文件导致 EMFILE/OSError
     semaphore = asyncio.Semaphore(100)
 
     async def _limited_load_prep(
