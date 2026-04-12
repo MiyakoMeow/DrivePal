@@ -73,9 +73,7 @@ from vendor_adapter.VehicleMemBench.strategies.memory_bank import (  # noqa: E40
 )
 from vendor_adapter.VehicleMemBench.strategies.none import NoneStrategy  # noqa: E402
 
-_StrategyTypes = NoneStrategy | GoldStrategy | KvMemoryStrategy | MemoryBankStrategy
-
-STRATEGIES: dict[BenchMemoryMode, _StrategyTypes] = {
+STRATEGIES: dict[BenchMemoryMode, MemoryStrategy] = {
     s.mode: s
     for s in [NoneStrategy(), GoldStrategy(), KvMemoryStrategy(), MemoryBankStrategy()]
 }

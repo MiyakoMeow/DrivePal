@@ -30,7 +30,7 @@ def collect_results(
             mtype = BenchMemoryMode(path.parent.parent.name)
         except ValueError:
             continue
-        data: dict | None = None
+        data: dict[str, Any] | None = None
         try:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)

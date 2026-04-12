@@ -95,7 +95,7 @@ async def load_prep(
 ) -> tuple[BenchMemoryMode, int, dict[str, Any] | None]:
     """加载单个 prep 数据."""
     if _is_prep_free(mtype):
-        return mtype, fnum, None
+        return mtype, fnum, {"type": mtype}
     pp = _prep_path(mtype, fnum)
     try:
         async with aiofiles.open(pp, encoding="utf-8") as f:
