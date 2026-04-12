@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from vendor_adapter.VehicleMemBench import BenchMemoryMode
 from vendor_adapter.VehicleMemBench.paths import (
@@ -42,10 +42,10 @@ class KvEvaluator:
 
     async def evaluate(
         self,
-        task: dict,
+        task: dict[str, Any],
         task_id: int,
         gold_memory: str,  # noqa: ARG002
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """评估单个 query，使用 KV 存储."""
         async with self._semaphore:
             return await asyncio.to_thread(
@@ -80,7 +80,7 @@ class KvMemoryStrategy:
         output_dir: Path,
         agent_client: AgentClient | None,
         semaphore: asyncio.Semaphore,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """构建 KV 存储."""
         if agent_client is None:
             logger.warning(
@@ -99,7 +99,7 @@ class KvMemoryStrategy:
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict,
+        prep_data: dict[str, Any],
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,

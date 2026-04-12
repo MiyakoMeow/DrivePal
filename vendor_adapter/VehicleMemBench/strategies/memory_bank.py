@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.memory.stores.memory_bank import MemoryBankStore
 from vendor_adapter.VehicleMemBench import BenchMemoryMode
@@ -79,7 +79,7 @@ _CUSTOM_ADAPTER_INITIAL_TOOLS = [
 
 def _make_sync_memory_search(
     search_client: StoreClient,
-) -> Callable[[str, int], dict]:
+) -> Callable[[str, int], dict[str, Any]]:
     """为同步 vendor 代码创建同步的 memory_search 包装器.
 
     使用 run_coroutine_threadsafe 将异步搜索调度到主事件循环.
@@ -87,7 +87,7 @@ def _make_sync_memory_search(
     """
     loop = asyncio.get_running_loop()
 
-    def _search(query: str, top_k: int = 5) -> dict:
+    def _search(query: str, top_k: int = 5) -> dict[str, Any]:
         future: Future | None = None
         try:
             future = asyncio.run_coroutine_threadsafe(
@@ -112,6 +112,9 @@ def _make_sync_memory_search(
             raise
         except OSError as e:
             logger.warning("  [warn] memory_search failed: %s", e)
+            return {"success": False, "error": str(e), "results": "", "count": 0}
+        except Exception as e:
+            logger.exception("  [warn] memory_search unexpected error for %r", query)
             return {"success": False, "error": str(e), "results": "", "count": 0}
         else:
             text, count = format_search_results(results)
@@ -140,10 +143,10 @@ class MemoryBankEvaluator:
 
     async def evaluate(
         self,
-        task: dict,
+        task: dict[str, Any],
         task_id: int,
         gold_memory: str,  # noqa: ARG002
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """评估单个 query，使用记忆库搜索."""
         memory_funcs = {"memory_search": self._memory_search}
         async with self._semaphore:
@@ -182,7 +185,7 @@ class MemoryBankStrategy:
         output_dir: Path,
         agent_client: AgentClient | None,  # noqa: ARG002
         semaphore: asyncio.Semaphore,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """构建记忆库存储."""
         store_dir = output_dir / "store"
         async with semaphore:
@@ -205,7 +208,7 @@ class MemoryBankStrategy:
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict,
+        prep_data: dict[str, Any],
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
@@ -216,6 +219,9 @@ class MemoryBankStrategy:
             msg = f"prep_data 缺少 'data_dir' 字段 (file_num={file_num})"
             raise ValueError(msg)
         data_dir = Path(data_dir_str)
+        if not data_dir.exists():  # noqa: ASYNC240
+            msg = f"记忆库数据目录不存在: {data_dir} (file_num={file_num})"
+            raise FileNotFoundError(msg)
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()
         store = await asyncio.to_thread(

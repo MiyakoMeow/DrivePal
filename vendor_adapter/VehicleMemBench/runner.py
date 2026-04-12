@@ -155,7 +155,7 @@ async def prepare(
     for (fnum, mtype), exc in failures:
         logger.error("[prepare] failed %s file %d: %s", mtype, fnum, exc)
     if failures:
-        logger.info("[prepare] done with %d failures", len(failures))
+        logger.error("[prepare] done with %d failures", len(failures))
 
 
 async def run(
@@ -222,7 +222,7 @@ async def run(
     for (fnum, mtype), exc in failures:
         logger.error("[run] failed %s file %d: %s", mtype, fnum, exc)
     if failures:
-        logger.info("[run] done with %d file-level failures", len(failures))
+        logger.error("[run] done with %d file-level failures", len(failures))
 
 
 async def _result_already_exists(qp: Path) -> bool:

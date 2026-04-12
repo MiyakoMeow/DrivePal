@@ -1,7 +1,7 @@
 """无记忆策略."""
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from vendor_adapter.VehicleMemBench import BenchMemoryMode
 from vendor_adapter.VehicleMemBench.paths import (
@@ -32,10 +32,10 @@ class NoneEvaluator:
 
     async def evaluate(
         self,
-        task: dict,
+        task: dict[str, Any],
         task_id: int,
         gold_memory: str,  # noqa: ARG002
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """评估单个 query，不使用历史."""
         async with self._semaphore:
             return await asyncio.to_thread(
@@ -69,14 +69,14 @@ class NoneStrategy:
         output_dir: Path,  # noqa: ARG002
         agent_client: AgentClient | None,  # noqa: ARG002
         semaphore: asyncio.Semaphore,  # noqa: ARG002
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """无记忆策略无需准备."""
         return None
 
     async def create_evaluator(
         self,
         agent_client: AgentClient,
-        prep_data: dict,  # noqa: ARG002
+        prep_data: dict[str, Any],  # noqa: ARG002
         file_num: int,  # noqa: ARG002
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,

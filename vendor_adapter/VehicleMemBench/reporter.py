@@ -3,7 +3,7 @@
 import json
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from vendor_adapter.VehicleMemBench import BenchMemoryMode
 from vendor_adapter.VehicleMemBench.model_config import get_benchmark_config
@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 
 def collect_results(
     output_dir: Path,
-) -> tuple[dict[BenchMemoryMode, list[dict]], dict[BenchMemoryMode, int]]:
+) -> tuple[dict[BenchMemoryMode, list[dict[str, Any]]], dict[BenchMemoryMode, int]]:
     """从输出目录收集评估结果."""
-    all_results: dict[BenchMemoryMode, list[dict]] = {}
+    all_results: dict[BenchMemoryMode, list[dict[str, Any]]] = {}
     failed_counts: defaultdict[BenchMemoryMode, int] = defaultdict(int)
     for path in sorted(output_dir.glob("*/*/query_*.json")):
         try:
@@ -50,18 +50,22 @@ def collect_results(
 
 
 def build_report_metrics(
-    all_results: dict[BenchMemoryMode, list[dict]],
-) -> dict[BenchMemoryMode, dict]:
+    all_results: dict[BenchMemoryMode, list[dict[str, Any]]],
+) -> dict[BenchMemoryMode, dict[str, Any]]:
     """构建评估报告指标."""
     cfg = get_benchmark_config()
-    report_data: dict[BenchMemoryMode, dict] = {}
+    report_data: dict[BenchMemoryMode, dict[str, Any]] = {}
     for mtype, results in all_results.items():
-        metric = _build_metric(results, model=cfg.model, memory_type=mtype)
+        try:
+            metric = _build_metric(results, model=cfg.model, memory_type=mtype)
+        except Exception:
+            logger.exception("构建指标失败: %s", mtype)
+            continue
         report_data[mtype] = metric
     return report_data
 
 
-def compute_memory_scores(report_data: dict[BenchMemoryMode, dict]) -> None:
+def compute_memory_scores(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> None:
     """计算相对于 GOLD 的 memory_score."""
     gold_esm = report_data.get(BenchMemoryMode.GOLD, {}).get("exact_match_rate", 0)
     if gold_esm <= 0:

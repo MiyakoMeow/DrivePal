@@ -62,7 +62,7 @@ async def load_history_cache(
     async def _load_or_empty(fnum: int) -> tuple[int, str]:
         try:
             return fnum, await load_history(fnum)
-        except FileNotFoundError, OSError:
+        except OSError:
             logger.warning(
                 "[warn] history file %d not found or unreadable, using empty", fnum
             )
@@ -83,7 +83,10 @@ async def load_prep(
     try:
         async with aiofiles.open(pp, encoding="utf-8") as f:
             return mtype, fnum, json.loads(await f.read())
-    except FileNotFoundError, OSError:
+    except FileNotFoundError:
+        return mtype, fnum, None
+    except OSError:
+        logger.warning("[warn] prep file %s/%d unreadable: %s", mtype, fnum, pp)
         return mtype, fnum, None
     except json.JSONDecodeError:
         logger.warning(
