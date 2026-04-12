@@ -84,9 +84,16 @@ async def load_history_cache(
             return await _load_or_empty(fnum)
 
     history_pairs = await asyncio.gather(
-        *(_limited_load_or_empty(f) for f in file_nums)
+        *(_limited_load_or_empty(f) for f in file_nums),
+        return_exceptions=True,
     )
-    return dict(history_pairs)
+    result: dict[int, str] = {}
+    for pair in history_pairs:
+        if isinstance(pair, BaseException):
+            logger.warning("[warn] 加载历史文件失败: %s", pair)
+        else:
+            result[pair[0]] = pair[1]
+    return result
 
 
 async def load_prep(
@@ -110,6 +117,7 @@ async def load_prep(
                 return mtype, fnum, None
             return mtype, fnum, parsed
     except FileNotFoundError:
+        logger.debug("[skip] prep file %s/%d not found", mtype, fnum)
         return mtype, fnum, None
     except OSError, UnicodeDecodeError:
         logger.warning("[warn] prep file %s/%d unreadable: %s", mtype, fnum, pp)
@@ -140,5 +148,14 @@ async def load_prep_cache(
 
     prep_raw = await asyncio.gather(
         *(_limited_load_prep(f, t) for f in file_nums for t in types),
+        return_exceptions=True,
     )
-    return {(mt, fn): data for mt, fn, data in prep_raw if data is not None}
+    data: dict[tuple[BenchMemoryMode, int], dict[str, Any]] = {}
+    for item in prep_raw:
+        if isinstance(item, BaseException):
+            logger.warning("[warn] 加载 prep 数据失败: %s", item)
+        else:
+            mt, fn, d = item
+            if d is not None:
+                data[(mt, fn)] = d
+    return data

@@ -203,12 +203,14 @@ class MemoryBankStrategy:
                 for record in history_to_interaction_records(history_text):
                     await store.write(record)
                 if store_dir.exists():
-                    shutil.rmtree(store_dir)
-                shutil.move(str(temp_dir), str(store_dir))
+                    await asyncio.to_thread(shutil.rmtree, store_dir)
+                await asyncio.to_thread(shutil.move, str(temp_dir), str(store_dir))
             except Exception:
-                shutil.rmtree(temp_dir, ignore_errors=True)
+                await asyncio.to_thread(shutil.rmtree, temp_dir, ignore_errors=True)
                 if store_dir.exists():
-                    shutil.rmtree(store_dir, ignore_errors=True)
+                    await asyncio.to_thread(
+                        shutil.rmtree, store_dir, ignore_errors=True
+                    )
                 raise
         return {"type": BenchMemoryMode.MEMORY_BANK, "data_dir": str(store_dir)}
 

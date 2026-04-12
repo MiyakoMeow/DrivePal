@@ -246,7 +246,7 @@ async def _run_single(
 ) -> None:
     """运行单个文件的查询评估."""
 
-    async def _eval_and_save(idx: int, event: dict) -> None:
+    async def _eval_and_save(idx: int, event: dict[str, Any]) -> None:
         qp = query_result_path(memory_type, file_num, idx)
         if await _result_already_exists(qp):
             return

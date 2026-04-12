@@ -34,7 +34,7 @@ def collect_results(
         try:
             with path.open(encoding="utf-8") as f:
                 data = json.load(f)
-        except json.JSONDecodeError, OSError:
+        except json.JSONDecodeError, OSError, UnicodeDecodeError:
             logger.warning("无法解析结果文件: %s", path)
             failed_counts[mtype] += 1
             continue
