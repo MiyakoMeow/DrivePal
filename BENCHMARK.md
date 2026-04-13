@@ -1,4 +1,4 @@
-# 对比实验
+# 基准测试
 
 基于 [VehicleMemBench](vendor/VehicleMemBench/README.md) 的车载记忆基准评估框架。
 
@@ -49,6 +49,8 @@ uv run python run_benchmark.py report --output path/to/report.json
 | `memory_bank` | `MemoryBankStrategy` | 本项目 MemoryBank 后端（嵌入+摘要） |
 
 每个策略实现 `MemoryStrategy` Protocol，统一 prepare → create_evaluator 流程。
+
+> **注意**：VehicleMemBench 上游框架还支持 `summary` 类型，本项目适配器未实现。详见 [BENCHMARK-VehicleMemBench.md](BENCHMARK-VehicleMemBench.md)。
 
 ### 报告生成
 
