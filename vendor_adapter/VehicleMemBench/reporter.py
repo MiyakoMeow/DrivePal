@@ -442,7 +442,7 @@ def generate_markdown_report(
     parts.append(_md_summary(report_data))
 
     content = "\n".join(parts)
-    filename = f"report-{now.strftime('%Y%m%d-%H%M%S')}.md"
+    filename = f"report-{now.strftime('%Y%m%d-%H%M%S-%f')}.md"
     out_path = output_dir / filename
     try:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -479,8 +479,8 @@ def report(output_path: Path | None = None) -> None:
 
     try:
         generate_markdown_report(out.parent, report_data, all_results)
-    except Exception:
-        logger.exception("生成 Markdown 报告失败，已跳过")
+    except OSError:
+        logger.exception("生成 Markdown 报告失败")
 
     for mtype, metric in report_data.items():
         esm = _num(metric.get("exact_match_rate"))
