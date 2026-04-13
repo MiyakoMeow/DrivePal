@@ -296,7 +296,9 @@ async def _run_single(
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
         except Exception as e:
-            logger.exception("  [error] query %d", idx)
+            logger.exception(
+                "  [error] query %d (mtype=%s, file=%d)", idx, memory_type, file_num
+            )
             fail_record = {
                 "failed": True,
                 "error": str(e),
@@ -309,8 +311,10 @@ async def _run_single(
                     await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
             except OSError:
                 logger.exception(
-                    "  [error] failed to write error record for query %d",
+                    "  [error] failed to write error record for query %d (mtype=%s, file=%d)",
                     idx,
+                    memory_type,
+                    file_num,
                 )
 
     gather_results = await asyncio.gather(

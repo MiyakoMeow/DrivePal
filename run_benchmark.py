@@ -1,6 +1,7 @@
 """VehicleMemBench 评估基准的命令行入口."""
 
 import logging
+import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -72,6 +73,7 @@ async def main() -> None:
         )
     else:
         parser.print_help()
+        sys.exit(1)
 
 
 async def _do_all(
@@ -86,13 +88,19 @@ async def _do_all(
     try:
         await prepare(file_range, memory_types)
     except OSError, ValueError, RuntimeError, VehicleMemBenchError:
-        logger.exception("[prepare] failed")
+        logger.exception(
+            "[prepare] failed (file_range=%s, memory_types=%s)",
+            file_range,
+            memory_types,
+        )
         if not allow_partial:
             raise
     try:
         await run(file_range, memory_types, reflect_num)
     except OSError, ValueError, RuntimeError, VehicleMemBenchError:
-        logger.exception("[run] failed")
+        logger.exception(
+            "[run] failed (file_range=%s, memory_types=%s)", file_range, memory_types
+        )
         if not allow_partial:
             raise
     report(output)
