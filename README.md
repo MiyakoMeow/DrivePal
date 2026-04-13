@@ -342,7 +342,7 @@ uv sync
 编辑 `config/llm.toml` 中的 `model_providers` 和 `model_groups`。也可通过环境变量覆盖：
 
 ```bash
-# 示例：设置 MiniMax API Key（用于 benchmark 模型组）
+# 示例：设置 MiniMax API Key（用于 balanced 模型组）
 export MINIMAX_API_KEY="your-api-key"
 ```
 
