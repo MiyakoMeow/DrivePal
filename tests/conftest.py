@@ -64,9 +64,12 @@ def pytest_collection_modifyitems(
 
 @pytest.fixture(scope="session")
 def llm_provider(request: pytest.FixtureRequest) -> LLMProviderConfig:
-    """返回 LLM provider，仅在 --test-llm 时启用."""
-    if not request.config.getoption("--test-llm", default=False):
-        pytest.skip("需要 --test-llm 标志")
+    """返回 LLM provider，由 --test-llm 标记控制是否启用.
+
+    跳过逻辑由 pytest_collection_modifyitems 中的 marker 处理，
+    此处仅验证配置可用性。
+    """
+    _ = request
     try:
         settings = LLMSettings.load()
     except RuntimeError:
@@ -84,13 +87,17 @@ def llm_provider(request: pytest.FixtureRequest) -> LLMProviderConfig:
 def embedding(
     request: pytest.FixtureRequest,
 ) -> Generator[EmbeddingModel]:
-    """会话级 embedding 实例，仅在 --test-embedding 时启用."""
-    if not request.config.getoption("--test-embedding", default=False):
-        pytest.skip("需要 --test-embedding 标志")
+    """会话级 embedding 实例，由 --test-embedding 标记控制是否启用.
+
+    跳过逻辑由 pytest_collection_modifyitems 中的 marker 处理，
+    此处仅验证配置可用性。
+    """
+    _ = request
     try:
         settings = LLMSettings.load()
     except RuntimeError:
         pytest.skip("无法加载 embedding 配置")
+    # 验证 embedding provider 配置存在（模型由全局单例创建）
     try:
         provider = settings.get_embedding_provider()
     except KeyError, RuntimeError:

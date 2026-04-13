@@ -23,7 +23,11 @@ def mm(tmp_path: Path, embedding: EmbeddingModel) -> MemoryModule:
 @pytest.mark.llm
 @pytest.mark.usefixtures("llm_provider")
 class TestMemoryModuleFacade:
-    """MemoryModule Facade 接口测试."""
+    """MemoryModule Facade 接口测试.
+
+    使用 usefixtures("llm_provider") 确保 LLM 配置可用，
+    因为 MemoryBankStore.requires_chat=True 会惰性初始化 ChatModel。
+    """
 
     async def test_default_mode_is_memory_bank(
         self,
