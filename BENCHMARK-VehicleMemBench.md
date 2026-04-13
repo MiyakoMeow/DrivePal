@@ -74,6 +74,7 @@ graph TB
         GOLD[gold<br>真实记忆]
         SUMMARY[summary<br>递归摘要]
         KV[key_value<br>键值存储]
+        MB[memory_bank<br>遗忘曲线记忆]
     end
     
     subgraph 外部记忆系统
@@ -81,7 +82,7 @@ graph TB
         MOS[MemOS]
         LM[LightMem]
         SM[Supermemory]
-        MB[Memobase]
+        MOB[Memobase]
     end
     
     subgraph 评估指标
@@ -98,11 +99,12 @@ graph TB
     ME --> GOLD
     ME --> SUMMARY
     ME --> KV
+    ME --> MB
     MSE --> M0
     MSE --> MOS
     MSE --> LM
     MSE --> SM
-    MSE --> MB
+    MSE --> MOB
     ME --> EMR
     ME --> FL
     ME --> VL
@@ -117,12 +119,13 @@ graph TB
 
 模型评估测试基础模型在不同记忆构建方式下的表现。评估者首先加载历史对话，然后根据选择的记忆类型构建上下文，最后模型基于该上下文回答问题。
 
-| 实验组 | 内存类型 | 描述 | 理论意义 |
+| 实验组 | 记忆类型 | 描述 | 理论意义 |
 |--------|----------|------|----------|
 | `none` | Raw History | 无历史信息，让模型直接预测 | 基线性能 |
 | `gold` | Gold Memory | 直接提供真实最新用户偏好 | 理论性能上界 |
 | `summary` | Recursive Summarization | 将历史压缩为层次化摘要 | 摘要推理能力 |
 | `key_value` | Key-Value Store | 将偏好组织为结构化键值对 | 精确检索能力 |
+| `memory_bank` | MemoryBank | 基于遗忘曲线的分层记忆（本项目实现） | 遗忘曲线检索能力 |
 
 #### B. 记忆系统评估（Memory-System Evaluation）
 
@@ -1077,7 +1080,7 @@ graph TB
 
 | 变量 | 选项 | 说明 |
 |------|------|------|
-| 内存类型 | `none`, `gold`, `summary`, `key_value` | 不同的记忆构建方式 |
+| 记忆类型 | `none`, `gold`, `summary`, `key_value`, `memory_bank` | 不同的记忆构建方式 |
 | 是否启用思考 | `true`, `false` | 是否启用模型思考能力 |
 | 基础模型 | 可配置 | 如 Qwen、GPT-4 等 |
 
@@ -1119,17 +1122,18 @@ graph TB
 
 ### 6.4 实验设计矩阵
 
-| 实验编号 | 内存类型 | 记忆系统 | 思考能力 | 预期目标 |
+| 实验编号 | 记忆类型 | 记忆系统 | 思考能力 | 预期目标 |
 |----------|----------|----------|----------|----------|
 | 1 | none | - | false | 基线性能 |
 | 2 | gold | - | false | 理论上限 |
 | 3 | summary | - | true | 摘要能力 |
 | 4 | key_value | - | true | 检索能力 |
-| 5 | - | mem0 | true | Mem0 系统性能 |
-| 6 | - | memos | true | MemOS 系统性能 |
-| 7 | - | lightmem | true | LightMem 系统性能 |
-| 8 | - | supermemory | true | Supermemory 系统性能 |
-| 9 | - | memobase | true | Memobase 系统性能 |
+| 5 | memory_bank | - | true | 遗忘曲线记忆 |
+| 6 | - | mem0 | true | Mem0 系统性能 |
+| 7 | - | memos | true | MemOS 系统性能 |
+| 8 | - | lightmem | true | LightMem 系统性能 |
+| 9 | - | supermemory | true | Supermemory 系统性能 |
+| 10 | - | memobase | true | Memobase 系统性能 |
 
 ---
 
@@ -1249,11 +1253,11 @@ flowchart TB
 
 适用场景：正式评估、论文实验
 
-### 7.2 核心参数说明
+### 7.3 核心参数说明
 
 | 参数 | 说明 | 典型值 | 适用命令 |
 |------|------|--------|----------|
-| `--memory_type` | 记忆构建类型 | `none`, `gold`, `summary`, `key_value` | model |
+| `--memory_type` | 记忆构建类型 | `none`, `gold`, `summary`, `key_value`, `memory_bank` | model |
 | `--memory_system` | 记忆系统名称 | `mem0`, `memos`, `lightmem` 等 | memorysystem |
 | `--enable_thinking` | 是否启用思考模式 | `true`, `false` | both |
 | `--file_range` | 评估文件范围 | `1-50`, `1,3,5` | both |
@@ -1339,10 +1343,10 @@ graph TB
         subgraph 记忆系统适配器
             MS[evaluation/memorysystems/]
             M0[mem0.py]
-            MOS[memos.py]
+            MOSM[memos.py]
             LM[lightmem.py]
             SM[supermemory.py]
-            MB[memobase.py]
+            MOB[memobase.py]
         end
         
         subgraph 脚本与配置
@@ -1444,21 +1448,27 @@ graph TB
         LOG --> L2["gold结果"]
         LOG --> L3["summary结果"]
         LOG --> L4["key_value结果"]
+        LOG --> L5["memory_bank结果"]
     end
     
     subgraph memory_system_log目录
         ML --> M1["mem0结果"]
         ML --> M2["memos结果"]
         ML --> M3["lightmem结果"]
+        ML --> M4["supermemory结果"]
+        ML --> M5["memobase结果"]
     end
     
     L1 --> R[report.json]
     L2 --> R
     L3 --> R
     L4 --> R
+    L5 --> R
     M1 --> R
     M2 --> R
     M3 --> R
+    M4 --> R
+    M5 --> R
 ```
 
 ---
@@ -1530,6 +1540,7 @@ graph LR
 | 基线 | gold | 真实记忆 |
 | 基线 | summary | 递归摘要 |
 | 基线 | key_value | 键值存储 |
+| 基线 | memory_bank | 遗忘曲线记忆（本项目） |
 | 外部 | Mem0 | 商业产品 |
 | 外部 | MemOS | 多模态 |
 | 外部 | LightMem | 轻量方案 |

@@ -1,6 +1,6 @@
 # 知行车秘 - 车载AI智能体原型系统
 
-基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略的对比评估（基于 VehicleMemBench 基准测试框架）。
+基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略的基准评估（基于 VehicleMemBench 基准测试框架）。
 
 ---
 
@@ -12,7 +12,7 @@
   - [多Agent工作流](#1-多agent工作流)
   - [上下文注入与规则引擎](#2-上下文注入与规则引擎)
   - [记忆检索系统](#3-记忆检索系统)
-  - [对比实验](#4-对比实验)
+  - [基准测试](#4-基准测试)
   - [GraphQL API](#5-graphql-api)
   - [模拟测试工作台](#6-模拟测试工作台)
 - [快速开始](#快速开始)
@@ -51,14 +51,18 @@ thesis-cockpit-memo/
 │   │       ├── query.py          #   Query resolvers
 │   │       └── mutation.py       #   Mutation resolvers
 │   ├── models/                   # AI模型封装
-│   │   ├── chat.py               # LLM调用封装（多provider自动fallback）
-│   │   ├── embedding.py          # 嵌入模型封装
+│   │   ├── chat.py               # LLM调用封装（多provider自动fallback，纯异步）
+│   │   ├── embedding.py          # 嵌入模型封装（纯远程OpenAI兼容接口）
+│   │   ├── settings.py           # 模型组/Provider配置加载
 │   │   ├── model_string.py       # 模型字符串解析工具
-│   │   └── settings.py           # 模型组/Provider配置加载
+│   │   ├── _http.py              # HTTP客户端共享超时配置（12h read timeout）
+│   │   ├── types.py              # 纯数据类型（ProviderConfig等）
+│   │   └── exceptions.py         # 模型异常定义
 │   ├── memory/                   # 记忆模块
 │   │   ├── memory.py             # MemoryModule Facade（工厂注册表）
 │   │   ├── interfaces.py         # MemoryStore Protocol定义
 │   │   ├── components.py         # 可组合组件（EventStorage等）
+│   │   ├── singleton.py          # 记忆模块单例（线程安全延迟初始化）
 │   │   ├── types.py              # MemoryMode枚举（memory_bank）
 │   │   ├── schemas.py            # 记忆数据模型定义
 │   │   ├── utils.py              # 记忆模块共享工具函数
@@ -70,15 +74,25 @@ thesis-cockpit-memo/
 │   │           └── summarization.py # 分层摘要管理器
 │   ├── schemas/                  # 通用数据模型
 │   │   └── context.py            # 驾驶上下文数据模型（DrivingContext等）
+│   ├── config.py                 # 应用配置（DATA_DIR等）
 │   ├── storage/                  # 存储模块
 │   │   ├── toml_store.py         # TOML文件存储引擎
 │   │   └── init_data.py          # 数据目录初始化
 ├── vendor_adapter/               # VehicleMemBench适配器层
 │   └── VehicleMemBench/
-│       ├── __init__.py           # 适配器注册表
+│       ├── __init__.py           # BenchMemoryMode 枚举
 │       ├── model_config.py       # 模型字符串解析（provider/model?params）
-│       ├── runner.py             # VehicleMemBench运行器
-│       └── memory_adapters/      # 记忆存储策略适配器
+│       ├── runner.py             # VehicleMemBench运行器（编排层）
+│       ├── loader.py             # QA/历史/prep数据异步加载
+│       ├── paths.py              # 路径常量与sys.path初始化
+│       ├── reporter.py           # 结果收集与Markdown报告生成
+│       └── strategies/           # 记忆策略实现（策略模式）
+│           ├── none.py           #   无记忆策略
+│           ├── gold.py           #   黄金记忆策略
+│           ├── kv.py             #   键值存储策略
+│           ├── memory_bank.py    #   MemoryBank策略
+│           ├── common.py         #   策略共享工具
+│           └── exceptions.py     #   策略异常定义
 ├── config/                       # 配置文件
 │   └── llm.toml                  # 模型组+Provider配置
 ├── data/                         # 数据目录（运行时生成）
@@ -207,9 +221,9 @@ flowchart TD
 
 ---
 
-### 4. 对比实验
+### 4. 基准测试
 
-详见 [EXPERIMENT.md](./EXPERIMENT.md)。
+详见 [BENCHMARK.md](./BENCHMARK.md)。
 
 ---
 
@@ -328,7 +342,7 @@ uv sync
 编辑 `config/llm.toml` 中的 `model_providers` 和 `model_groups`。也可通过环境变量覆盖：
 
 ```bash
-# 示例：设置 MiniMax API Key（用于 benchmark 模型组）
+# 示例：设置 MiniMax API Key（用于 balanced 模型组）
 export MINIMAX_API_KEY="your-api-key"
 ```
 
