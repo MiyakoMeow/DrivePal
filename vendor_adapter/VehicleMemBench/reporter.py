@@ -314,8 +314,11 @@ def _md_query_analysis(  # noqa: C901
                 lines.extend(_format_query_entry(q, ["  - 完全匹配: ✅"]))
 
         non_match = [q for q in queries if not q.get("exact_match")]
+        fp_candidates = [
+            q for q in non_match if _num((q.get("state_score") or {}).get("FP")) > 0
+        ]
         fp_sorted = sorted(
-            non_match,
+            fp_candidates,
             key=lambda q: (
                 -_num((q.get("state_score") or {}).get("FP")),
                 *_query_sort_key(q),
@@ -331,8 +334,11 @@ def _md_query_analysis(  # noqa: C901
                 extra.extend(f"  - 差异: {d}" for d in diffs)
                 lines.extend(_format_query_entry(q, extra))
 
+        fn_candidates = [
+            q for q in non_match if _num((q.get("tool_score") or {}).get("fn")) > 0
+        ]
         fn_sorted = sorted(
-            non_match,
+            fn_candidates,
             key=lambda q: (
                 -_num((q.get("tool_score") or {}).get("fn")),
                 *_query_sort_key(q),
@@ -472,7 +478,7 @@ def report(output_path: Path | None = None) -> None:
     logger.info("报告已写入: %s", out)
 
     try:
-        generate_markdown_report(output_dir, report_data, all_results)
+        generate_markdown_report(out.parent, report_data, all_results)
     except Exception:
         logger.exception("生成 Markdown 报告失败，已跳过")
 

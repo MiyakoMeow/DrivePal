@@ -222,16 +222,20 @@ class TestFormatCalls:
     """_format_calls 测试."""
 
     def test_empty_calls(self) -> None:
+        """测试空调用列表返回无标记."""
         assert _format_calls([]) == "（无）"
 
     def test_single_call(self) -> None:
+        """测试单个调用仅返回函数名."""
         assert _format_calls([{"name": "foo"}]) == "foo"
 
     def test_multiple_calls(self) -> None:
+        """测试多个调用以逗号分隔输出."""
         result = _format_calls([{"name": "foo"}, {"name": "bar"}, {"name": "baz"}])
         assert result == "foo, bar, baz"
 
     def test_missing_name(self) -> None:
+        """测试缺少 name 字段时返回问号."""
         assert _format_calls([{"args": {}}]) == "?"
 
 
@@ -239,7 +243,7 @@ class TestMdOverview:
     """_md_overview 测试."""
 
     def test_contains_header_and_table(self) -> None:
-        """测试包含标题和表格结构."""
+        """测试总览包含标题和各类记忆类型行."""
         md = _md_overview(_make_report_data())
         assert "## 1. 总览" in md
         assert "| gold" in md
@@ -248,13 +252,13 @@ class TestMdOverview:
         assert "10.00%" in md
 
     def test_shows_delta_for_non_gold(self) -> None:
-        """测试显示相对gold的Delta百分比."""
+        """测试非 gold 类型显示相对 gold 的百分比差值."""
         md = _md_overview(_make_report_data())
         assert "Δ%" in md
         assert "-76.19%" in md
 
     def test_gold_no_delta_column(self) -> None:
-        """测试gold类型没有Delta列."""
+        """测试 gold 行的 Delta 列显示为横杠."""
         md = _md_overview(_make_report_data())
         lines = md.split("\n")
         gold_lines = [
@@ -293,6 +297,7 @@ class TestMdMemoryTypeDetail:
     """_md_memory_type_detail 测试."""
 
     def test_gold_section(self) -> None:
+        """测试 gold 类型详细段落包含关键指标."""
         data = _make_report_data()
         md = _md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
@@ -303,6 +308,7 @@ class TestMdMemoryTypeDetail:
         assert "条件约束" in md
 
     def test_non_gold_shows_gold_comparison(self) -> None:
+        """测试非 gold 类型段落显示与 gold 的对比."""
         data = _make_report_data()
         gold_metric = data[BenchMemoryMode.GOLD]
         md = _md_memory_type_detail(
@@ -311,6 +317,7 @@ class TestMdMemoryTypeDetail:
         assert "与 Gold 对比" in md
 
     def test_gold_no_comparison(self) -> None:
+        """测试 gold 类型段落不包含与自身的对比."""
         data = _make_report_data()
         md = _md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
@@ -318,6 +325,7 @@ class TestMdMemoryTypeDetail:
         assert "与 Gold 对比" not in md
 
     def test_shows_reasoning_type_table(self) -> None:
+        """测试按推理类型细分表格包含预期标签和数据."""
         data = _make_report_data()
         md = _md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
@@ -327,6 +335,7 @@ class TestMdMemoryTypeDetail:
         assert "35.70%" in md
 
     def test_shows_academic_explanation(self) -> None:
+        """测试详细分析包含指标学术说明."""
         data = _make_report_data()
         md = _md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
@@ -339,16 +348,19 @@ class TestMdReasoningCrossComparison:
     """_md_reasoning_cross_comparison 测试."""
 
     def test_contains_section_header(self) -> None:
+        """测试交叉对比包含正确的节标题."""
         md = _md_reasoning_cross_comparison(_make_report_data())
         assert "## 3. 按推理类型交叉对比" in md
 
     def test_contains_table_with_types(self) -> None:
+        """测试交叉对比表格包含各推理类型和记忆类型."""
         md = _md_reasoning_cross_comparison(_make_report_data())
         assert "| 偏好冲突 |" in md
         assert "gold" in md
         assert "none" in md
 
     def test_bolds_max_esm(self) -> None:
+        """测试最高 ESM 值以加粗显示."""
         md = _md_reasoning_cross_comparison(_make_report_data())
         lines = md.split("\n")
         pref_lines = [
@@ -365,6 +377,7 @@ class TestMdReasoningCrossComparison:
         assert "**15.00%**" not in cond_lines[0]
 
     def test_empty_data(self) -> None:
+        """测试空数据时显示无数据提示."""
         md = _md_reasoning_cross_comparison({})
         assert "无数据" in md
 
@@ -373,28 +386,34 @@ class TestMdQueryAnalysis:
     """_md_query_analysis 测试."""
 
     def test_contains_section_header(self) -> None:
+        """测试查询分析包含正确的节标题."""
         md = _md_query_analysis(_make_all_results())
         assert "## 4. 单条查询分析" in md
 
     def test_shows_success_case(self) -> None:
+        """测试成功匹配案例在输出中展示."""
         md = _md_query_analysis(_make_all_results())
         assert "完全匹配" in md
         assert "Gary got into the driver" in md
 
     def test_shows_overmodification_case(self) -> None:
+        """测试过度修改案例在输出中展示."""
         md = _md_query_analysis(_make_all_results())
         assert "过度修改" in md
         assert "Patricia was driving" in md
 
     def test_shows_omission_case(self) -> None:
+        """测试遗漏调用案例在输出中展示."""
         md = _md_query_analysis(_make_all_results())
         assert "遗漏" in md
 
     def test_empty_results(self) -> None:
+        """测试空查询数据时显示无数据提示."""
         md = _md_query_analysis({})
         assert "无查询数据" in md
 
     def test_skips_empty_query_list(self) -> None:
+        """测试空查询列表的记忆类型不出现在输出中."""
         results = {BenchMemoryMode.GOLD: []}
         md = _md_query_analysis(results)
         assert "### gold" not in md
@@ -442,10 +461,12 @@ class TestMdSummary:
     """_md_summary 测试."""
 
     def test_contains_section_header(self) -> None:
+        """测试总结包含正确的节标题."""
         md = _md_summary(_make_report_data())
         assert "## 5. 总结" in md
 
     def test_contains_ranking(self) -> None:
+        """测试总结包含按 ESM 排名的记忆类型."""
         md = _md_summary(_make_report_data())
         assert "1." in md
         assert "gold" in md
@@ -455,6 +476,7 @@ class TestMdSummary:
         assert gold_pos < none_pos, "gold should appear before none in ranking"
 
     def test_gold_highest_rank(self) -> None:
+        """测试 gold 类型排名最高."""
         md = _md_summary(_make_report_data())
         assert "42.00%" in md
         assert "10.00%" in md
@@ -465,6 +487,7 @@ class TestMdSummary:
         )
 
     def test_empty_data(self) -> None:
+        """测试空数据时总结显示无数据提示."""
         md = _md_summary({})
         assert "无数据" in md
 
@@ -473,11 +496,13 @@ class TestGenerateMarkdownReport:
     """generate_markdown_report 测试."""
 
     def test_creates_md_file(self, tmp_path: Path) -> None:
+        """测试生成 Markdown 报告文件."""
         generate_markdown_report(tmp_path, _make_report_data(), _make_all_results())
         files = list(tmp_path.glob("report-*.md"))
         assert len(files) == 1
 
     def test_md_contains_all_sections(self, tmp_path: Path) -> None:
+        """测试报告文件包含所有预期章节."""
         generate_markdown_report(tmp_path, _make_report_data(), _make_all_results())
         md_file = next(tmp_path.glob("report-*.md"))
         content = md_file.read_text(encoding="utf-8")
@@ -489,11 +514,13 @@ class TestGenerateMarkdownReport:
         assert "## 5. 总结" in content
 
     def test_md_filename_format(self, tmp_path: Path) -> None:
+        """测试报告文件名遵循时间戳格式."""
         generate_markdown_report(tmp_path, _make_report_data(), _make_all_results())
         md_file = next(tmp_path.glob("report-*.md"))
         assert re.match(r"report-\d{8}-\d{6}\.md", md_file.name)
 
     def test_md_contains_metadata(self, tmp_path: Path) -> None:
+        """测试报告文件包含生成时间和模型名称."""
         generate_markdown_report(tmp_path, _make_report_data(), _make_all_results())
         md_file = next(tmp_path.glob("report-*.md"))
         content = md_file.read_text(encoding="utf-8")
