@@ -125,7 +125,7 @@ graph TB
 | `gold` | Gold Memory | 直接提供真实最新用户偏好 | 理论性能上界 |
 | `summary` | Recursive Summarization | 将历史压缩为层次化摘要 | 摘要推理能力 |
 | `key_value` | Key-Value Store | 将偏好组织为结构化键值对 | 精确检索能力 |
-| `memory_bank` | MemoryBank | 基于遗忘曲线的分层记忆（本项目实现） | 遗忘曲线+嵌入检索 |
+| `memory_bank` | MemoryBank | 基于遗忘曲线的分层记忆（本项目实现） | 遗忘曲线检索能力 |
 
 #### B. 记忆系统评估（Memory-System Evaluation）
 

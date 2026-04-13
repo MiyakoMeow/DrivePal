@@ -22,9 +22,9 @@ uv run python run_benchmark.py all --file-range 1-2
 uv run python run_benchmark.py prepare --file-range 1-2
 uv run python run_benchmark.py run --file-range 1-2
 
-# 生成Markdown报告
+# 生成报告
 uv run python run_benchmark.py report
-uv run python run_benchmark.py report --output path/to/report.md
+uv run python run_benchmark.py report --output path/to/report.json
 ```
 
 ### CLI 参数
@@ -35,7 +35,7 @@ uv run python run_benchmark.py report --output path/to/report.md
 | `--memory-types` | `none,gold,kv,memory_bank` | prepare, run, all | 记忆类型（逗号分隔） |
 | `--reflect-num` | `10` | run, all | 反射推理次数 |
 | `--allow-partial` | `false` | all | 即使部分步骤失败也生成报告 |
-| `--output` | `None` | all, report | 自定义报告输出路径（Markdown格式） |
+| `--output` | `None` | all, report | 自定义JSON报告输出路径（Markdown报告自动生成至同目录） |
 
 ### 架构：策略模式
 
