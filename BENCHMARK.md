@@ -62,7 +62,7 @@ uv run python run_benchmark.py report --output path/to/report.json
 ### 注意事项
 
 - **API限流**：大批量文件（如1-50）可能触发API限流，建议分批处理
-- **memory_bank耗时**：memory_bank prepare阶段对大历史文件较慢，需要多次LLM调用进行摘要和嵌入
+- **memory_bank耗时**：memory_bank prepare阶段对大历史文件较慢，需要对每条历史进行嵌入向量计算
 - **gold/none类型**：prepare阶段仅创建目录，无 prep.json 文件
 - **并发控制**：通过 `BENCHMARK_QUERY_CONCURRENCY` 环境变量控制查询并发数（默认4）
 
