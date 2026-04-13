@@ -55,3 +55,8 @@
   - 无 `as` 时可省略括号：`except ValueError, TypeError:` 等价于 `except (ValueError, TypeError):`
   - 有 `as` 时仍需括号：`except (ValueError, TypeError) as e:` 不允许省略
   - 同样适用于 `except*`：`except* ValueError, TypeError:` 合法
+
+## 注意事项
+
+- 禁止修改 `vendor` 目录下的 `VehicleMemBench` 子模块中的文件。
+
