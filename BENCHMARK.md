@@ -9,7 +9,7 @@
 ### 前置条件
 
 1. **配置模型**：确保 `config/llm.toml` 中 `model_groups.benchmark` 已配置有效模型
-2. **设置API密钥**：导出所需环境变量（如 `MINIMAX_API_KEY`）
+2. **设置 API 密钥**：如使用远程模型，导出所需环境变量（如 `DEEPSEEK_API_KEY`）；本地模型无需配置
 3. **初始化子模块**：`git submodule update --init --recursive`
 
 ### 命令示例
@@ -61,10 +61,10 @@ uv run python run_benchmark.py report --output path/to/report.json
 
 ### 注意事项
 
-- **API限流**：大批量文件（如1-50）可能触发API限流，建议分批处理
-- **memory_bank耗时**：memory_bank prepare阶段对大历史文件较慢，需要对每条历史进行嵌入向量计算
-- **gold/none类型**：prepare阶段仅创建目录，无 prep.json 文件
-- **并发控制**：通过 `BENCHMARK_QUERY_CONCURRENCY` 环境变量控制查询并发数（默认4）
+- **API 限流**：大批量文件（如 1-50）可能触发 API 限流，建议分批处理
+- **memory_bank 耗时**：`memory_bank` prepare 阶段对大历史文件较慢，需要对每条历史进行嵌入向量计算
+- **gold/none 类型**：`gold`/`none` 的 prepare 阶段仅创建目录，无 prep.json 文件
+- **并发控制**：通过 `BENCHMARK_QUERY_CONCURRENCY` 环境变量控制查询并发数（默认 4）
 
 ## 故障排除
 
