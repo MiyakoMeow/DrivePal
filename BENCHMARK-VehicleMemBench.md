@@ -1080,7 +1080,7 @@ graph TB
 
 | 变量 | 选项 | 说明 |
 |------|------|------|
-| 内存类型 | `none`, `gold`, `summary`, `key_value` | 不同的记忆构建方式 |
+| 内存类型 | `none`, `gold`, `summary`, `key_value`, `memory_bank` | 不同的记忆构建方式 |
 | 是否启用思考 | `true`, `false` | 是否启用模型思考能力 |
 | 基础模型 | 可配置 | 如 Qwen、GPT-4 等 |
 
@@ -1257,7 +1257,7 @@ flowchart TB
 
 | 参数 | 说明 | 典型值 | 适用命令 |
 |------|------|--------|----------|
-| `--memory_type` | 记忆构建类型 | `none`, `gold`, `summary`, `key_value` | model |
+| `--memory_type` | 记忆构建类型 | `none`, `gold`, `summary`, `key_value`, `memory_bank` | model |
 | `--memory_system` | 记忆系统名称 | `mem0`, `memos`, `lightmem` 等 | memorysystem |
 | `--enable_thinking` | 是否启用思考模式 | `true`, `false` | both |
 | `--file_range` | 评估文件范围 | `1-50`, `1,3,5` | both |

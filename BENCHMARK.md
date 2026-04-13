@@ -54,7 +54,7 @@ uv run python run_benchmark.py report --output path/to/report.json
 
 ### 报告生成
 
-`report` 命令收集 `data/benchmark/` 下的评估结果，生成 Markdown 格式报告，包含：
+`report` 命令收集 `data/benchmark/` 下的评估结果，先生成 JSON 报告（可通过 `--output` 自定义路径），再基于其生成 Markdown 报告至同目录，包含：
 - 各记忆类型的 Exact Match Rate、Field-Level / Value-Level 指标
 - 按推理类型分组的细分统计
 - 效率指标（平均工具调用数、平均输出 token 数）
