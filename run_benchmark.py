@@ -63,25 +63,47 @@ async def main() -> None:
     elif args.command == "report":
         _do_report(args.output)
     elif args.command == "all":
-        failed = False
-        try:
-            await _do_prepare(args.file_range, args.memory_types)
-        except OSError, ValueError, RuntimeError:
-            logger.exception("[prepare] failed")
-            failed = True
-        try:
-            await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except OSError, ValueError, RuntimeError:
-            logger.exception("[run] failed")
-            failed = True
-        if failed and not args.allow_partial:
-            sys.stdout.write(
-                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
-            )
-            return
-        _do_report(args.output)
+        await _do_all(
+            args.file_range,
+            args.memory_types,
+            args.reflect_num,
+            allow_partial=args.allow_partial,
+            output=args.output,
+        )
     else:
         parser.print_help()
+
+
+async def _do_all(
+    file_range: str,
+    memory_types: str,
+    reflect_num: int,
+    *,
+    allow_partial: bool,
+    output: Path | None,
+) -> None:
+    """执行 all 命令：依次运行 prepare、run、report."""
+    failed = False
+    try:
+        await prepare(file_range, memory_types)
+    except OSError, ValueError, RuntimeError:
+        logger.exception("[prepare] failed")
+        if not allow_partial:
+            raise
+        failed = True
+    try:
+        await run(file_range, memory_types, reflect_num)
+    except OSError, ValueError, RuntimeError:
+        logger.exception("[run] failed")
+        if not allow_partial:
+            raise
+        failed = True
+    if failed and not allow_partial:
+        sys.stdout.write(
+            "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
+        )
+        return
+    report(output)
 
 
 if __name__ == "__main__":

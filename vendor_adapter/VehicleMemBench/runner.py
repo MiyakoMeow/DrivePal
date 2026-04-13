@@ -251,7 +251,7 @@ async def _run_single(
     memory_type: BenchMemoryMode,
     file_num: int,
     events: list[dict[str, Any]],
-    parse_answer_to_tools_fn: Callable[..., Any],
+    parse_answer_to_tools_fn: Callable[[list], list],
 ) -> None:
     """运行单个文件的查询评估."""
 

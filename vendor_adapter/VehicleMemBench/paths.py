@@ -1,6 +1,7 @@
 """路径常量与 sys.path 初始化."""
 
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,8 +14,9 @@ BENCHMARK_DIR = VENDOR_DIR / "benchmark"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"
 
 
+@lru_cache(maxsize=1)
 def setup_vehiclemembench_path() -> None:
-    """将 VehicleMemBench 路径添加到 sys.path."""
+    """将 VehicleMemBench 路径添加到 sys.path（幂等操作）."""
     for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
         d_str = str(d)
         if not any(Path(p).resolve() == Path(d_str).resolve() for p in sys.path):
