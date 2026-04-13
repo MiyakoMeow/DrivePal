@@ -63,13 +63,12 @@ def pytest_collection_modifyitems(
 
 
 @pytest.fixture(scope="session")
-def llm_provider(request: pytest.FixtureRequest) -> LLMProviderConfig:
+def llm_provider() -> LLMProviderConfig:
     """返回 LLM provider，由 --test-llm 标记控制是否启用.
 
     跳过逻辑由 pytest_collection_modifyitems 中的 marker 处理，
     此处仅验证配置可用性。
     """
-    _ = request
     try:
         settings = LLMSettings.load()
     except RuntimeError:
@@ -84,15 +83,12 @@ def llm_provider(request: pytest.FixtureRequest) -> LLMProviderConfig:
 
 
 @pytest.fixture(scope="session")
-def embedding(
-    request: pytest.FixtureRequest,
-) -> Generator[EmbeddingModel]:
+def embedding() -> Generator[EmbeddingModel]:
     """会话级 embedding 实例，由 --test-embedding 标记控制是否启用.
 
     跳过逻辑由 pytest_collection_modifyitems 中的 marker 处理，
     此处仅验证配置可用性。
     """
-    _ = request
     try:
         settings = LLMSettings.load()
     except RuntimeError:
