@@ -69,7 +69,16 @@ def build_report_metrics(
         try:
             metric = _build_metric(results, model=cfg.model, memory_type=mtype)
         except Exception:
-            logger.exception("构建指标失败: %s", mtype)
+            logger.exception(
+                "构建指标失败，已跳过该类型: mtype=%s, result_count=%d",
+                mtype,
+                len(results),
+            )
+            report_data[mtype] = {
+                "build_error": True,
+                "completed_tasks": 0,
+                "total_failed": 0,
+            }
             continue
         report_data[mtype] = metric
     return report_data

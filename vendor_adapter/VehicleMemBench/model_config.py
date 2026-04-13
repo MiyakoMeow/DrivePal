@@ -40,10 +40,10 @@ def get_benchmark_config() -> BenchmarkConfig:
     """从 model_groups.benchmark 配置中提取基准测试参数."""
     try:
         providers = get_model_group_providers("benchmark")
-    except KeyError:
+    except KeyError as e:
         raise BenchmarkConfigError(
             BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED,
-        ) from None
+        ) from e
     if not providers:
         raise BenchmarkConfigError(BenchmarkConfigError.BENCHMARK_MODEL_REQUIRED)
     provider = providers[0]
@@ -52,7 +52,7 @@ def get_benchmark_config() -> BenchmarkConfig:
         api_key=provider["api_key"],
         model=provider["model"],
         temperature=provider["temperature"],
-        max_tokens=8192,
+        max_tokens=int(provider["max_tokens"]) if provider.get("max_tokens") else 8192,
     )
 
 

@@ -40,6 +40,10 @@ try:
     _QUERY_CONCURRENCY_LIMIT = int(os.environ.get("BENCHMARK_QUERY_CONCURRENCY", "4"))
 except ValueError:
     _QUERY_CONCURRENCY_LIMIT = 4
+    logger.warning(
+        "BENCHMARK_QUERY_CONCURRENCY 环境变量值无效，使用默认值 %d",
+        _QUERY_CONCURRENCY_LIMIT,
+    )
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 
@@ -152,7 +156,14 @@ async def prepare(
         if isinstance(r, Exception)
     ]
     for (fnum, mtype), exc in failures:
-        logger.error("[prepare] failed %s file %d: %s", mtype, fnum, exc)
+        logger.error(
+            "[prepare] failed %s file %d: %s (total_tasks=%d, failed=%d)",
+            mtype,
+            fnum,
+            exc,
+            len(tasks),
+            len(failures),
+        )
     if failures:
         logger.error("[prepare] done with %d failures", len(failures))
 
@@ -222,7 +233,14 @@ async def run(
         if isinstance(r, Exception)
     ]
     for (fnum, mtype), exc in failures:
-        logger.error("[run] failed %s file %d: %s", mtype, fnum, exc)
+        logger.error(
+            "[run] failed %s file %d: %s (total_tasks=%d, failed=%d)",
+            mtype,
+            fnum,
+            exc,
+            len(run_tasks),
+            len(failures),
+        )
     if failures:
         logger.error("[run] done with %d file-level failures", len(failures))
 
@@ -302,8 +320,3 @@ async def _run_single(
     for r in gather_results:
         if isinstance(r, BaseException) and not isinstance(r, Exception):
             raise r
-    silent_failures = [r for r in gather_results if isinstance(r, Exception)]
-    if silent_failures:
-        for sf in silent_failures:
-            logger.warning("  [warn] query failed silently: %s", sf)
-        logger.warning("  [warn] %d queries failed silently", len(silent_failures))
