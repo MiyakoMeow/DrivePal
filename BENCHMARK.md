@@ -35,7 +35,7 @@ uv run python run_benchmark.py report --output path/to/report.json
 | `--memory-types` | `none,gold,kv,memory_bank` | prepare, run, all | 记忆类型（逗号分隔） |
 | `--reflect-num` | `10` | run, all | 反射推理次数 |
 | `--allow-partial` | `false` | all | 即使部分步骤失败也生成报告 |
-| `--output` | `None` | all, report | 自定义JSON报告输出路径（Markdown报告自动生成至同目录） |
+| `--output` | `None` | all, report | 自定义 JSON 报告输出路径（Markdown 报告自动生成至同目录） |
 
 ### 架构：策略模式
 
@@ -45,12 +45,12 @@ uv run python run_benchmark.py report --output path/to/report.json
 |------|------|------|
 | `none` | `NoneStrategy` | 无记忆基线，直接调用 agent |
 | `gold` | `GoldStrategy` | 黄金记忆，注入 ground truth |
-| `kv` | `KvMemoryStrategy` | 键值存储，LLM构建结构化记忆 |
+| `kv` | `KvMemoryStrategy` | 键值存储，LLM 构建结构化记忆 |
 | `memory_bank` | `MemoryBankStrategy` | 本项目 MemoryBank 后端（嵌入+摘要） |
 
 每个策略实现 `MemoryStrategy` Protocol，统一 prepare → create_evaluator 流程。
 
-> **注意**：VehicleMemBench 上游框架还支持 `summary` 类型，本项目适配器未实现。详见 [BENCHMARK-VehicleMemBench.md](BENCHMARK-VehicleMemBench.md)。
+> **注意**：VehicleMemBench 上游框架还支持 `summary` 类型，本项目适配器未实现。本项目 `kv` 策略对应上游框架的 `key_value` 类型。详见 [BENCHMARK-VehicleMemBench.md](BENCHMARK-VehicleMemBench.md)。
 
 ### 报告生成
 
