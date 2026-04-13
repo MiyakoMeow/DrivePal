@@ -51,7 +51,7 @@ def get_benchmark_config() -> BenchmarkConfig:
         base_url=provider["base_url"],
         api_key=provider["api_key"],
         model=provider["model"],
-        temperature=provider["temperature"],
+        temperature=float(provider["temperature"]),
         max_tokens=int(provider["max_tokens"]) if provider.get("max_tokens") else 8192,
     )
 

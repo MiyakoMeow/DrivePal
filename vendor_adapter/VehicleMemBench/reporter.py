@@ -488,7 +488,7 @@ def report(output_path: Path | None = None) -> None:
 
     for mtype, fc in failed_counts.items():
         metric = report_data.setdefault(mtype, {"total_failed": 0})
-        metric["total_failed"] = fc
+        metric["total_failed"] = metric.get("total_failed", 0) + fc
 
     compute_memory_scores(report_data)
 

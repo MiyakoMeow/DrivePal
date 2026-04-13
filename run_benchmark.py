@@ -6,7 +6,6 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 from vendor_adapter.VehicleMemBench.runner import prepare, report, run
-from vendor_adapter.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +86,7 @@ async def _do_all(
     """执行 all 命令：依次运行 prepare、run、report."""
     try:
         await prepare(file_range, memory_types)
-    except OSError, ValueError, RuntimeError, VehicleMemBenchError:
+    except Exception:
         logger.exception(
             "[prepare] failed (file_range=%s, memory_types=%s)",
             file_range,
@@ -97,7 +96,7 @@ async def _do_all(
             raise
     try:
         await run(file_range, memory_types, reflect_num)
-    except OSError, ValueError, RuntimeError, VehicleMemBenchError:
+    except Exception:
         logger.exception(
             "[run] failed (file_range=%s, memory_types=%s)", file_range, memory_types
         )
