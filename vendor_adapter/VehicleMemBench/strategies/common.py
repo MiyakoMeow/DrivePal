@@ -1,25 +1,26 @@
 """记忆适配器通用工具函数."""
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.memory.schemas import MemoryEvent, SearchResult
 
 if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
 
+_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
+
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
     """将历史文本转换为交互记录."""
     if not history_text.strip():
         return []
-    pattern = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
     records = []
     for i, raw_line in enumerate(history_text.strip().splitlines()):
         line = raw_line.strip()
         if not line:
             continue
-        m = pattern.match(line)
+        m = _TIMESTAMP_PATTERN.match(line)
         if m:
             date_group = m.group(1)
             content = m.group(2)
@@ -45,13 +46,14 @@ def format_search_results(results: list[SearchResult]) -> tuple[str, int]:
         return ("", 0)
     texts = []
     for r in results:
-        event = r.event if hasattr(r, "event") else r
-        if isinstance(event, dict):
-            content = event.get("content", "")
-        elif hasattr(event, "content"):
-            content = event.content
+        raw: Any = ""
+        if isinstance(r.event, dict):
+            raw = r.event.get("content", "")
+        elif hasattr(r.event, "content"):
+            raw = getattr(r.event, "content", "")
         else:
-            content = str(event)
+            raw = r.event
+        content = str(raw) if raw is not None else ""
         if content:
             texts.append(content)
     return ("\n".join(texts), len(texts))
@@ -62,8 +64,8 @@ class StoreClient:
 
     def __init__(self, store: MemoryStore) -> None:
         """使用存储实例初始化."""
-        self.store = store
+        self._store = store
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """在存储中搜索相关结果."""
-        return await self.store.search(query=query, top_k=top_k)
+        return await self._store.search(query=query, top_k=top_k)

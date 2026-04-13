@@ -79,7 +79,7 @@ def test_prepare_gold_creates_dir_and_skips(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """验证 gold 类型 prepare 创建目录并支持重复调用."""
-    monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("vendor_adapter.VehicleMemBench.paths.OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
         MagicMock,
@@ -101,7 +101,7 @@ def test_prepare_none_creates_dir_and_skips(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """验证 none 类型 prepare 创建目录并支持重复调用."""
-    monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("vendor_adapter.VehicleMemBench.paths.OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
         MagicMock,
@@ -120,7 +120,7 @@ def test_run_skips_existing_query_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """验证 run 跳过已存在的查询文件."""
-    monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("vendor_adapter.VehicleMemBench.paths.OUTPUT_DIR", tmp_path)
 
     mtype = BenchMemoryMode.GOLD
     fnum = 99
@@ -149,13 +149,22 @@ def test_run_skips_existing_query_files(
         )
 
     monkeypatch.setattr(
-        "vendor_adapter.VehicleMemBench.runner._load_qa",
+        "vendor_adapter.VehicleMemBench.loader.load_qa",
         AsyncMock(return_value={"related_to_vehicle_preference": events}),
     )
-    mock_evaluate = AsyncMock(return_value={"query": "mocked", "exact_match": True})
-    monkeypatch.setattr(
-        "vendor_adapter.VehicleMemBench.runner._evaluate_query",
-        mock_evaluate,
+    mock_evaluator = MagicMock()
+    mock_evaluator.evaluate = AsyncMock(
+        return_value={"query": "mocked", "exact_match": True}
+    )
+    mock_strategy = MagicMock()
+    mock_strategy.create_evaluator = AsyncMock(return_value=mock_evaluator)
+    monkeypatch.setitem(
+        __import__(
+            "vendor_adapter.VehicleMemBench.strategies",
+            fromlist=["STRATEGIES"],
+        ).STRATEGIES,
+        mtype,
+        mock_strategy,
     )
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
@@ -164,7 +173,7 @@ def test_run_skips_existing_query_files(
 
     asyncio.run(run(file_range="99", memory_types="gold"))
 
-    mock_evaluate.assert_not_called()
+    mock_evaluator.evaluate.assert_not_called()
 
 
 def test_report_reads_hierarchical_queries(
@@ -172,9 +181,9 @@ def test_report_reads_hierarchical_queries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """验证 report 读取分层查询结果."""
-    monkeypatch.setattr("vendor_adapter.VehicleMemBench.runner.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("vendor_adapter.VehicleMemBench.paths.OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(
-        "vendor_adapter.VehicleMemBench.runner.get_benchmark_config",
+        "vendor_adapter.VehicleMemBench.reporter.get_benchmark_config",
         type("Cfg", (), {"model": "test-model"}),
     )
 

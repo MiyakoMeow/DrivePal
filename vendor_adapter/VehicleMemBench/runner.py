@@ -1,129 +1,47 @@
-"""VehicleMemBench 评估基准的测试运行器."""
+"""VehicleMemBench 评估基准的测试运行器（编排层）."""
 
 import asyncio
 import json
 import logging
 import os
-import sys
-from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-    from concurrent.futures import Future
+from typing import TYPE_CHECKING, Any
 
 import aiofiles
 
 from . import BenchMemoryMode
+from .loader import load_history_cache, load_prep_cache, load_qa_safe
+from .model_config import get_benchmark_config
+from .paths import (  # noqa: F401
+    BENCHMARK_DIR,
+    OUTPUT_DIR,
+    PROJECT_ROOT,
+    VENDOR_DIR,
+    ensure_output_dir,
+    file_output_dir,
+    prep_path,
+    query_result_path,
+    setup_vehiclemembench_path,
+)
+from .reporter import report  # noqa: F401
+from .strategies import STRATEGIES, VehicleMemBenchError
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from evaluation.agent_client import AgentClient
+
+    from vendor_adapter.VehicleMemBench.strategies import QueryEvaluator
 
 logger = logging.getLogger(__name__)
-
-
-class VehicleMemBenchError(Exception):
-    """VehicleMemBench 模块的基准错误."""
-
-
-from .memory_adapters import ADAPTERS
-from .memory_adapters.common import StoreClient, format_search_results
-from .model_config import get_benchmark_config
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-VENDOR_DIR = PROJECT_ROOT / "vendor" / "VehicleMemBench"
-BENCHMARK_DIR = VENDOR_DIR / "benchmark"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"
 
 try:
     _QUERY_CONCURRENCY_LIMIT = int(os.environ.get("BENCHMARK_QUERY_CONCURRENCY", "4"))
 except ValueError:
     _QUERY_CONCURRENCY_LIMIT = 4
-try:
-    _SEARCH_TIMEOUT = int(os.environ.get("BENCHMARK_SEARCH_TIMEOUT", str(12 * 3600)))
-except ValueError:
-    _SEARCH_TIMEOUT = 12 * 3600
-
-
-def setup_vehiclemembench_path() -> None:
-    """将 VehicleMemBench 路径添加到 sys.path."""
-    for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
-        d_str = str(d)
-        if not any(Path(p).resolve() == Path(d_str).resolve() for p in sys.path):
-            sys.path.insert(0, d_str)
-
-
-setup_vehiclemembench_path()
-
-from evaluation.agent_client import AgentClient
-from evaluation.model_evaluation import (
-    MemoryStore as VMBMemoryStore,
-)
-from evaluation.model_evaluation import (
-    _build_metric,
-    _run_vehicle_task_evaluation,
-    build_memory_key_value,
-    get_list_module_tools_schema,
-    parse_answer_to_tools,
-    process_task_direct,
-    process_task_with_kv_memory,
-    split_history_by_day,
-)
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
-_PREP_FREE_TYPES: frozenset[BenchMemoryMode] = frozenset(
-    {BenchMemoryMode.NONE, BenchMemoryMode.GOLD},
-)
-
-
-@dataclass
-class EvalContext:
-    """单次 query 评估所需的共享上下文."""
-
-    agent_client: AgentClient
-    prep_data: dict
-    file_num: int
-    memory_type: BenchMemoryMode
-    reflect_num: int
-    search_client: StoreClient | None
-    query_semaphore: asyncio.Semaphore
-    kv_store: VMBMemoryStore | None = None
-
-
-_CUSTOM_ADAPTER_SYSTEM_INSTRUCTION = (
-    "You are an intelligent in-car AI assistant responsible for fulfilling user requests by calling the vehicle system API.\n"
-    "You have access to a memory store containing user vehicle preferences.\n"
-    "- Use memory_search(query, top_k) to look up relevant user preferences\n"
-    "- Use list_module_tools(module_name='xxx') to discover available functions\n"
-    "- Call the specific functions you need\n"
-    "When the available information does not support setting a device to a specific value, "
-    "perform only the minimal required action."
-)
-
-_CUSTOM_ADAPTER_INITIAL_TOOLS = [
-    {"type": "function", "function": get_list_module_tools_schema()},
-    {
-        "type": "function",
-        "function": {
-            "name": "memory_search",
-            "description": "Search user vehicle preferences by keyword",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query",
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of results",
-                        "default": 5,
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-]
 
 
 def _parse_memory_types(memory_types: str) -> list[BenchMemoryMode]:
@@ -140,17 +58,24 @@ def parse_file_range(range_str: str) -> list[int]:
     result = []
     for raw_part in range_str.split(","):
         part = raw_part.strip()
-        if "-" in part:
-            a, b = part.split("-", 1)
-            a, b = int(a), int(b)
-            result.extend(range(min(a, b), max(a, b) + 1))
-        else:
-            result.append(int(part))
+        try:
+            if "-" in part:
+                a, b = part.split("-", 1)
+                a, b = int(a), int(b)
+                result.extend(range(min(a, b), max(a, b) + 1))
+            else:
+                result.append(int(part))
+        except ValueError as e:
+            msg = f"Invalid file range part: {part!r} in {range_str!r}"
+            raise ValueError(msg) from e
     return sorted(set(result))
 
 
 @lru_cache(maxsize=1)
 def _get_agent_client() -> AgentClient:
+    """获取或创建 agent client（带缓存）."""
+    from evaluation.agent_client import AgentClient  # noqa: PLC0415
+
     cfg = get_benchmark_config()
     return AgentClient(
         api_base=cfg.base_url,
@@ -161,121 +86,16 @@ def _get_agent_client() -> AgentClient:
     )
 
 
-async def _load_qa(file_num: int) -> dict:
-    path = BENCHMARK_DIR / "qa_data" / f"qa_{file_num}.json"
-    async with aiofiles.open(path, encoding="utf-8") as f:
-        return json.loads(await f.read())
-
-
-async def _load_history(file_num: int) -> str:
-    path = BENCHMARK_DIR / "history" / f"history_{file_num}.txt"
-    async with aiofiles.open(path, encoding="utf-8") as f:
-        return await f.read()
-
-
-def _ensure_output_dir() -> Path:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    return OUTPUT_DIR
-
-
-def file_output_dir(memory_type: BenchMemoryMode, file_num: int) -> Path:
-    """返回指定记忆类型和文件编号的输出目录路径."""
-    return OUTPUT_DIR / memory_type / f"file_{file_num}"
-
-
-def prep_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
-    """返回指定记忆类型和文件编号的 prep 数据路径."""
-    return file_output_dir(memory_type, file_num) / "prep.json"
-
-
-def query_result_path(
-    memory_type: BenchMemoryMode,
-    file_num: int,
-    event_index: int,
-) -> Path:
-    """返回指定记忆类型、文件编号和事件索引的查询结果路径."""
-    return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"
-
-
 def _resolve_agent_client(types: list[BenchMemoryMode]) -> AgentClient | None:
     """按需解析 agent client."""
-    if any(mtype not in _PREP_FREE_TYPES and mtype not in ADAPTERS for mtype in types):
+    strategies_list = [STRATEGIES[t] for t in types]
+    if any(s.needs_agent_for_prep() for s in strategies_list):
         try:
             return _get_agent_client()
         except Exception as e:
-            msg = "agent_client not initialized but required by memory types"
+            msg = f"agent_client not initialized but required by memory types: {e}"
             raise VehicleMemBenchError(msg) from e
     return None
-
-
-async def _load_history_cache(
-    file_nums: list[int],
-    types: list[BenchMemoryMode],
-) -> dict[int, str]:
-    """加载历史文件缓存."""
-    need_history = any(mtype not in _PREP_FREE_TYPES for mtype in types)
-    if not need_history:
-        return {}
-
-    async def _load_or_empty(fnum: int) -> tuple[int, str]:
-        try:
-            return fnum, await _load_history(fnum)
-        except FileNotFoundError:
-            logger.warning("[warn] history file %d not found, using empty", fnum)
-            return fnum, ""
-
-    history_pairs = await asyncio.gather(*(_load_or_empty(f) for f in file_nums))
-    return dict(history_pairs)
-
-
-async def _prepare_one_type(
-    fnum: int,
-    mtype: BenchMemoryMode,
-    history_cache: dict[int, str],
-    semaphore: asyncio.Semaphore,
-    agent_client: AgentClient | None,
-) -> None:
-    """为单个文件+记忆类型准备数据."""
-    fdir = file_output_dir(mtype, fnum)
-    if mtype in _PREP_FREE_TYPES:
-        if fdir.exists():
-            logger.info("[skip] %s file %d already prepared", mtype, fnum)
-            return
-        fdir.mkdir(parents=True, exist_ok=True)
-        logger.info("[prepare] %s file %d...", mtype, fnum)
-        return
-
-    pp = prep_path(mtype, fnum)
-    if pp.exists():
-        logger.info("[skip] %s file %d already prepared", mtype, fnum)
-        return
-
-    logger.info("[prepare] %s file %d...", mtype, fnum)
-    try:
-        history_text = history_cache.get(fnum, "")
-        if mtype in ADAPTERS:
-            store_dir = fdir / "store"
-            async with semaphore:
-                store_dir.mkdir(parents=True, exist_ok=True)
-                adapter_cls = ADAPTERS[mtype]
-                adapter = adapter_cls(data_dir=store_dir)
-                await adapter.add(history_text)
-            result = {"type": mtype, "data_dir": str(store_dir)}
-        else:
-            async with semaphore:
-                result = await _prepare_single(
-                    agent_client,
-                    history_text,
-                    fnum,
-                    mtype,
-                )
-        if result is not None:
-            fdir.mkdir(parents=True, exist_ok=True)
-            async with aiofiles.open(pp, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(result, ensure_ascii=False, indent=2))
-    except Exception:
-        logger.exception("[error] %s file %d", mtype, fnum)
-        raise
 
 
 async def prepare(
@@ -285,134 +105,56 @@ async def prepare(
     """为指定文件范围和记忆类型准备基准测试数据."""
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
-    _ensure_output_dir()
+    ensure_output_dir()
     semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
 
+    strategies_list = [STRATEGIES[t] for t in types]
     agent_client = _resolve_agent_client(types)
-    history_cache = await _load_history_cache(file_nums, types)
+    needs_history = any(s.needs_history() for s in strategies_list)
+    history_cache = await load_history_cache(file_nums, needs_history=needs_history)
 
+    async def _prepare_one(fnum: int, mtype: BenchMemoryMode) -> None:
+        strategy = STRATEGIES[mtype]
+        fdir = file_output_dir(mtype, fnum)
+        pp = prep_path(mtype, fnum)
+
+        if not strategy.needs_history() and not strategy.needs_agent_for_prep():
+            if fdir.exists():
+                logger.info("[skip] %s file %d already prepared", mtype, fnum)
+                return
+            fdir.mkdir(parents=True, exist_ok=True)
+            logger.info("[prepare] %s file %d...", mtype, fnum)
+            return
+
+        if pp.exists():
+            logger.info("[skip] %s file %d already prepared", mtype, fnum)
+            return
+
+        logger.info("[prepare] %s file %d...", mtype, fnum)
+        history_text = history_cache.get(fnum, "")
+        result = await strategy.prepare(history_text, fdir, agent_client, semaphore)
+        if result is not None:
+            fdir.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(pp, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(result, ensure_ascii=False, indent=2))
+
+    tasks = [(fnum, mtype) for fnum in file_nums for mtype in types]
     prep_results = await asyncio.gather(
-        *(
-            _prepare_one_type(fnum, mtype, history_cache, semaphore, agent_client)
-            for fnum in file_nums
-            for mtype in types
-        ),
+        *(_prepare_one(fnum, mtype) for fnum, mtype in tasks),
         return_exceptions=True,
     )
-    failed = sum(1 for r in prep_results if isinstance(r, BaseException))
-    if failed:
-        logger.info("[prepare] done with %d failures", failed)
-
-
-async def _prepare_single(
-    agent_client: AgentClient,
-    history_text: str,
-    _file_num: int,
-    memory_type: BenchMemoryMode,
-) -> dict | None:
-    if memory_type == BenchMemoryMode.KV:
-        daily = split_history_by_day(history_text)
-        store, _, _ = await asyncio.to_thread(
-            build_memory_key_value,
-            agent_client,
-            daily,
-        )
-        return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
-    logger.warning("[warn] unknown memory_type: %s", memory_type)
-    return None
-
-
-async def _load_qa_safe(fnum: int) -> tuple[int, dict | None]:
-    """安全加载 QA 数据."""
-    try:
-        return fnum, await _load_qa(fnum)
-    except FileNotFoundError:
-        logger.warning("[warn] qa file %d not found", fnum)
-        return fnum, None
-
-
-async def _load_prep(
-    fnum: int,
-    mtype: BenchMemoryMode,
-) -> tuple[BenchMemoryMode, int, dict | None]:
-    """加载单个 prep 数据."""
-    if mtype in _PREP_FREE_TYPES:
-        return mtype, fnum, {"type": mtype}
-    pp = prep_path(mtype, fnum)
-    try:
-        async with aiofiles.open(pp, encoding="utf-8") as f:
-            return mtype, fnum, json.loads(await f.read())
-    except FileNotFoundError:
-        return mtype, fnum, None
-    except json.JSONDecodeError:
-        logger.warning(
-            "[warn] corrupt prep file for %s file %d, skipping",
-            mtype,
-            fnum,
-        )
-        return mtype, fnum, None
-
-
-async def _load_prep_cache(
-    file_nums: list[int],
-    types: list[BenchMemoryMode],
-) -> dict[tuple[BenchMemoryMode, int], dict | None]:
-    """加载所有 prep 数据缓存."""
-    prep_raw = await asyncio.gather(
-        *(_load_prep(f, t) for f in file_nums for t in types),
-    )
-    return {(mt, fn): data for mt, fn, data in prep_raw}
-
-
-def _build_kv_store(
-    prep_data: dict, memory_type: BenchMemoryMode
-) -> VMBMemoryStore | None:
-    """构建 KV 存储实例."""
-    if memory_type != BenchMemoryMode.KV:
-        return None
-    store = VMBMemoryStore()
-    store.store = prep_data.get("store", {})
-    return store
-
-
-async def _run_one_type(
-    fnum: int,
-    mtype: BenchMemoryMode,
-    qa_cache: dict[int, dict | None],
-    prep_cache: dict[tuple[BenchMemoryMode, int], dict | None],
-    ctx: EvalContext,
-) -> None:
-    """为单个文件+记忆类型运行评估."""
-    prep_data = prep_cache.get((mtype, fnum))
-    if prep_data is None:
-        logger.info("[skip] %s file %d not prepared", mtype, fnum)
-        return
-
-    qa_data = qa_cache.get(fnum)
-    if qa_data is None:
-        logger.info("[skip] %s file %d qa data not found", mtype, fnum)
-        return
-
-    events = qa_data.get("related_to_vehicle_preference", [])
-    if not events:
-        return
-
-    fdir = file_output_dir(mtype, fnum)
-    fdir.mkdir(parents=True, exist_ok=True)
-
-    logger.info("[run] %s file %d: %d queries...", mtype, fnum, len(events))
-
-    local_ctx = EvalContext(
-        agent_client=ctx.agent_client,
-        prep_data=prep_data,
-        file_num=fnum,
-        memory_type=mtype,
-        reflect_num=ctx.reflect_num,
-        search_client=await _build_search_client(prep_data, mtype),
-        query_semaphore=ctx.query_semaphore,
-        kv_store=_build_kv_store(prep_data, mtype),
-    )
-    await _run_single(local_ctx, events)
+    for _t, r in zip(tasks, prep_results, strict=True):
+        if isinstance(r, BaseException) and not isinstance(r, Exception):
+            raise r
+    failures = [
+        (t, r)
+        for t, r in zip(tasks, prep_results, strict=True)
+        if isinstance(r, Exception)
+    ]
+    for (fnum, mtype), exc in failures:
+        logger.error("[prepare] failed %s file %d: %s", mtype, fnum, exc)
+    if failures:
+        logger.error("[prepare] done with %d failures", len(failures))
 
 
 async def run(
@@ -421,69 +163,118 @@ async def run(
     reflect_num: int = 10,
 ) -> None:
     """为指定文件范围和记忆类型运行基准评估."""
+    from evaluation.model_evaluation import parse_answer_to_tools  # noqa: PLC0415
+
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
-    agent_client = _get_agent_client()
-    _ensure_output_dir()
+    try:
+        agent_client = _get_agent_client()
+    except Exception as e:
+        msg = "agent_client not initialized but required for run"
+        raise VehicleMemBenchError(msg) from e
+    ensure_output_dir()
 
-    qa_pairs = await asyncio.gather(*(_load_qa_safe(f) for f in file_nums))
+    qa_pairs = await asyncio.gather(*(load_qa_safe(f) for f in file_nums))
     qa_cache = dict(qa_pairs)
-    prep_cache = await _load_prep_cache(file_nums, types)
+    prep_cache = await load_prep_cache(file_nums, types)
+    query_semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
 
-    ctx = EvalContext(
-        agent_client=agent_client,
-        prep_data={},
-        file_num=0,
-        memory_type=BenchMemoryMode.NONE,
-        reflect_num=reflect_num,
-        search_client=None,
-        query_semaphore=asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT),
-    )
+    async def _run_one_type(fnum: int, mtype: BenchMemoryMode) -> None:
+        if (mtype, fnum) not in prep_cache:
+            logger.info("[skip] %s file %d not prepared", mtype, fnum)
+            return
+        prep_data = prep_cache[(mtype, fnum)]
 
+        qa_data = qa_cache.get(fnum)
+        if qa_data is None:
+            logger.info("[skip] %s file %d qa data not found", mtype, fnum)
+            return
+
+        events = qa_data.get("related_to_vehicle_preference", [])
+        if not events:
+            return
+
+        fdir = file_output_dir(mtype, fnum)
+        fdir.mkdir(parents=True, exist_ok=True)
+        logger.info("[run] %s file %d: %d queries...", mtype, fnum, len(events))
+
+        strategy = STRATEGIES[mtype]
+        evaluator = await strategy.create_evaluator(
+            agent_client,
+            prep_data,
+            fnum,
+            reflect_num,
+            query_semaphore,
+        )
+        await _run_single(evaluator, mtype, fnum, events, parse_answer_to_tools)
+
+    run_tasks = [(fnum, mtype) for fnum in file_nums for mtype in types]
     run_results = await asyncio.gather(
-        *(
-            _run_one_type(fnum, mtype, qa_cache, prep_cache, ctx)
-            for fnum in file_nums
-            for mtype in types
-        ),
+        *(_run_one_type(fnum, mtype) for fnum, mtype in run_tasks),
         return_exceptions=True,
     )
-    failed = sum(1 for r in run_results if isinstance(r, BaseException))
-    if failed:
-        logger.info("[run] done with %d file-level failures", failed)
+    for _t, r in zip(run_tasks, run_results, strict=True):
+        if isinstance(r, BaseException) and not isinstance(r, Exception):
+            raise r
+    failures = [
+        (t, r)
+        for t, r in zip(run_tasks, run_results, strict=True)
+        if isinstance(r, Exception)
+    ]
+    for (fnum, mtype), exc in failures:
+        logger.error("[run] failed %s file %d: %s", mtype, fnum, exc)
+    if failures:
+        logger.error("[run] done with %d file-level failures", len(failures))
 
 
-async def _run_single(ctx: EvalContext, events: list[dict]) -> None:
+async def _result_already_exists(qp: Path) -> bool:
+    """检查已有结果文件是否完整."""
+    try:
+        async with aiofiles.open(qp, encoding="utf-8") as f:
+            existing = json.loads(await f.read())
+        return isinstance(existing, dict) and not existing.get("failed")
+    except FileNotFoundError:
+        return False
+    except json.JSONDecodeError:
+        logger.warning("损坏的查询结果文件将被覆盖: %s", qp)
+        return False
+    except OSError as e:
+        logger.warning("无法读取已有结果文件 (%s): %s", type(e).__name__, qp)
+        return False
+    except UnicodeDecodeError:
+        logger.warning("编码错误的结果文件将被覆盖: %s", qp)
+        return False
+
+
+async def _run_single(
+    evaluator: QueryEvaluator,
+    memory_type: BenchMemoryMode,
+    file_num: int,
+    events: list[dict[str, Any]],
+    parse_answer_to_tools_fn: Callable[..., Any],
+) -> None:
     """运行单个文件的查询评估."""
 
-    async def _eval_and_save(idx: int, event: dict) -> None:
-        qp = query_result_path(ctx.memory_type, ctx.file_num, idx)
-        try:
-            async with aiofiles.open(qp, encoding="utf-8") as f:
-                existing = json.loads(await f.read())
-            if isinstance(existing, dict) and not existing.get("failed"):
-                return
-        except FileNotFoundError:
-            pass
-        except json.JSONDecodeError:
-            pass
+    async def _eval_and_save(idx: int, event: dict[str, Any]) -> None:
+        qp = query_result_path(memory_type, file_num, idx)
+        if await _result_already_exists(qp):
+            return
 
         try:
             query = event.get("query", "")
             reasoning_type = event.get("reasoning_type", "")
-            ref_calls = parse_answer_to_tools(event.get("new_answer", []))
+            ref_calls = parse_answer_to_tools_fn(event.get("new_answer", []))
             gold_memory = event.get("gold_memory", "")
-            task: dict = {
+            task: dict[str, Any] = {
                 "query": query,
                 "tools": ref_calls,
                 "reasoning_type": reasoning_type,
             }
-            async with ctx.query_semaphore:
-                result = await _evaluate_query(ctx, task, idx, gold_memory)
+            result = await evaluator.evaluate(task, idx, gold_memory)
             if result is not None:
-                result["source_file"] = ctx.file_num
+                result["source_file"] = file_num
                 result["event_index"] = idx
-                result["memory_type"] = ctx.memory_type
+                result["memory_type"] = memory_type
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
         except Exception as e:
@@ -491,9 +282,9 @@ async def _run_single(ctx: EvalContext, events: list[dict]) -> None:
             fail_record = {
                 "failed": True,
                 "error": str(e),
-                "source_file": ctx.file_num,
+                "source_file": file_num,
                 "event_index": idx,
-                "memory_type": ctx.memory_type,
+                "memory_type": memory_type,
             }
             try:
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
@@ -508,224 +299,11 @@ async def _run_single(ctx: EvalContext, events: list[dict]) -> None:
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
         return_exceptions=True,
     )
-    silent_failures = [r for r in gather_results if isinstance(r, BaseException)]
+    for r in gather_results:
+        if isinstance(r, BaseException) and not isinstance(r, Exception):
+            raise r
+    silent_failures = [r for r in gather_results if isinstance(r, Exception)]
     if silent_failures:
+        for sf in silent_failures:
+            logger.warning("  [warn] query failed silently: %s", sf)
         logger.warning("  [warn] %d queries failed silently", len(silent_failures))
-
-
-async def _build_search_client(
-    prep_data: dict,
-    memory_type: BenchMemoryMode,
-) -> StoreClient | None:
-    """为自定义适配器预构建搜索客户端（按 file+type 复用）."""
-    if memory_type not in ADAPTERS:
-        return None
-    data_dir_str = prep_data.get("data_dir")
-    if not data_dir_str:
-        return None
-    adapter_cls = ADAPTERS[memory_type]
-    data_dir = Path(data_dir_str)
-    adapter = adapter_cls(data_dir=data_dir)
-    store = await asyncio.to_thread(adapter.load)
-    return adapter.get_search_client(store)
-
-
-async def _evaluate_query(
-    ctx: EvalContext,
-    task: dict,
-    idx: int,
-    gold_memory: str,
-) -> dict | None:
-    """执行单个 query 的评估，同步 vendor 调用通过 asyncio.to_thread 包装."""
-    if ctx.memory_type == BenchMemoryMode.NONE:
-        return await asyncio.to_thread(
-            process_task_direct,
-            {**task, "history_text": ""},
-            idx,
-            ctx.agent_client,
-            ctx.reflect_num,
-        )
-
-    if ctx.memory_type == BenchMemoryMode.GOLD:
-        return await asyncio.to_thread(
-            process_task_direct,
-            {**task, "history_text": gold_memory},
-            idx,
-            ctx.agent_client,
-            ctx.reflect_num,
-        )
-
-    if ctx.memory_type == BenchMemoryMode.KV:
-        if ctx.kv_store is None:
-            return None
-        return await asyncio.to_thread(
-            process_task_with_kv_memory,
-            task,
-            idx,
-            ctx.kv_store,
-            ctx.agent_client,
-            ctx.reflect_num,
-        )
-
-    if ctx.search_client is not None:
-        return await _run_custom_adapter_with_client(ctx, task, idx)
-
-    msg = f"query {idx}: no search client for {ctx.memory_type}"
-    raise VehicleMemBenchError(msg)
-
-
-def _make_sync_memory_search(
-    search_client: StoreClient,
-) -> Callable[[str, int], dict]:
-    """为同步 vendor 代码创建同步的 memory_search 包装器.
-
-    使用 run_coroutine_threadsafe 将异步搜索调度到主事件循环.
-    在主事件循环线程中调用此工厂函数以捕获事件循环引用.
-    """
-    loop = asyncio.get_running_loop()
-
-    def _search(query: str, top_k: int = 5) -> dict:
-        future: Future | None = None
-        try:
-            future = asyncio.run_coroutine_threadsafe(
-                search_client.search(query=query, top_k=top_k),
-                loop,
-            )
-            results = future.result(timeout=_SEARCH_TIMEOUT)
-        except TimeoutError:
-            if future is not None:
-                future.cancel()
-            logger.warning("  [warn] memory_search timeout: %r", query)
-            return {
-                "success": False,
-                "error": "search timed out",
-                "results": "",
-                "count": 0,
-            }
-        except RuntimeError as e:
-            if "event loop" in str(e).lower():
-                logger.warning("  [warn] memory_search: event loop error: %s", e)
-                return {"success": False, "error": str(e), "results": "", "count": 0}
-            raise
-        except OSError as e:
-            logger.warning("  [warn] memory_search failed: %s", e)
-            return {"success": False, "error": str(e), "results": "", "count": 0}
-        else:
-            text, count = format_search_results(results)
-            return {"success": True, "results": text, "count": count}
-
-    return _search
-
-
-async def _run_custom_adapter_with_client(
-    ctx: EvalContext,
-    task: dict,
-    task_id: int,
-) -> dict | None:
-    """使用预构建的搜索客户端运行自定义适配器评估.
-
-    _run_vehicle_task_evaluation 是同步函数，通过 asyncio.to_thread 在线程池中执行。
-    其调用的 memory_search 回调通过 run_coroutine_threadsafe 调度到主事件循环。
-    """
-    if ctx.search_client is None:
-        msg = "search_client is required for custom adapter evaluation"
-        raise VehicleMemBenchError(msg)
-    memory_funcs = {
-        "memory_search": _make_sync_memory_search(ctx.search_client),
-    }
-
-    return await asyncio.to_thread(
-        _run_vehicle_task_evaluation,
-        task=task,
-        task_id=task_id,
-        agent_client=ctx.agent_client,
-        reflect_num=ctx.reflect_num,
-        system_instruction=_CUSTOM_ADAPTER_SYSTEM_INSTRUCTION,
-        request_context=f"{ctx.memory_type} file {ctx.file_num} task {task_id}",
-        initial_tools=_CUSTOM_ADAPTER_INITIAL_TOOLS,
-        memory_funcs=memory_funcs,
-    )
-
-
-def _collect_results(
-    output_dir: Path,
-) -> tuple[dict[BenchMemoryMode, list[dict]], dict[BenchMemoryMode, int]]:
-    """从输出目录收集评估结果."""
-    all_results: dict[BenchMemoryMode, list[dict]] = {}
-    failed_counts: dict[BenchMemoryMode, int] = {}
-    for path in sorted(output_dir.glob("*/*/query_*.json")):
-        try:
-            mtype = BenchMemoryMode(path.parent.parent.name)
-        except ValueError:
-            continue
-        data: dict | None = None
-        try:
-            with path.open(encoding="utf-8") as f:
-                data = json.load(f)
-        except json.JSONDecodeError, OSError:
-            logger.warning("无法解析结果文件: %s", path)
-            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
-        if not isinstance(data, dict):
-            continue
-        if data.get("failed"):
-            failed_counts[mtype] = failed_counts.get(mtype, 0) + 1
-            continue
-        if mtype not in all_results:
-            all_results[mtype] = []
-        all_results[mtype].append(data)
-    return all_results, failed_counts
-
-
-def _build_report_metrics(
-    all_results: dict[BenchMemoryMode, list[dict]],
-) -> dict[BenchMemoryMode, dict]:
-    """构建评估报告指标."""
-    cfg = get_benchmark_config()
-    report_data: dict[BenchMemoryMode, dict] = {}
-    for mtype, results in all_results.items():
-        metric = _build_metric(results, model=cfg.model, memory_type=mtype)
-        report_data[mtype] = metric
-    return report_data
-
-
-def _compute_memory_scores(report_data: dict[BenchMemoryMode, dict]) -> None:
-    """计算相对于 GOLD 的 memory_score."""
-    gold_esm = report_data.get(BenchMemoryMode.GOLD, {}).get("exact_match_rate", 0)
-    if gold_esm <= 0:
-        return
-    for mtype, metric in report_data.items():
-        if mtype != BenchMemoryMode.GOLD:
-            auto_esm = metric.get("exact_match_rate", 0)
-            metric["memory_score"] = auto_esm / gold_esm
-
-
-def report(output_path: Path | None = None) -> None:
-    """从结果生成并打印基准测试报告."""
-    output_dir = _ensure_output_dir()
-    all_results, failed_counts = _collect_results(output_dir)
-    report_data = _build_report_metrics(all_results)
-
-    for mtype, fc in failed_counts.items():
-        metric = report_data.setdefault(mtype, {"total_failed": 0})
-        metric["total_failed"] = fc
-
-    _compute_memory_scores(report_data)
-
-    out = output_path if output_path is not None else output_dir / "report.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", encoding="utf-8") as f:
-        json.dump(report_data, f, ensure_ascii=False, indent=2)
-    logger.info("Report written to %s", out)
-
-    for mtype, metric in report_data.items():
-        esm = metric.get("exact_match_rate", 0)
-        failed = metric.get("total_failed", 0)
-        logger.info(
-            "  %s: ESM=%s, F-F1=%s, V-F1=%s, Calls=%s%s",
-            mtype,
-            f"{esm:.2%}",
-            f"{metric.get('state_f1_positive', 0):.4f}",
-            f"{metric.get('state_f1_change', 0):.4f}",
-            f"{metric.get('avg_pred_calls', 0):.1f}",
-            f", Failed={failed}" if failed else "",
-        )
