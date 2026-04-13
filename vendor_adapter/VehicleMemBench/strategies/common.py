@@ -1,7 +1,7 @@
 """记忆适配器通用工具函数."""
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.memory.schemas import MemoryEvent, SearchResult
 
@@ -46,9 +46,14 @@ def format_search_results(results: list[SearchResult]) -> tuple[str, int]:
         return ("", 0)
     texts = []
     for r in results:
-        content = (
-            r.event.get("content", "") if isinstance(r.event, dict) else str(r.event)
-        )
+        raw: Any = ""
+        if isinstance(r.event, dict):
+            raw = r.event.get("content", "")
+        elif hasattr(r.event, "content"):
+            raw = getattr(r.event, "content", "")
+        else:
+            raw = r.event
+        content = str(raw) if raw is not None else ""
         if content:
             texts.append(content)
     return ("\n".join(texts), len(texts))

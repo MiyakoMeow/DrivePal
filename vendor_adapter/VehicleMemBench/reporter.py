@@ -39,6 +39,12 @@ def collect_results(
             failed_counts[mtype] += 1
             continue
         if not isinstance(data, dict):
+            logger.warning(
+                "结果文件结构异常（非 dict），已跳过: %s (type=%s)",
+                path,
+                type(data).__name__,
+            )
+            failed_counts[mtype] += 1
             continue
         if data.get("failed"):
             failed_counts[mtype] += 1
