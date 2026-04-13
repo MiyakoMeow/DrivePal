@@ -9,11 +9,13 @@ if TYPE_CHECKING:
 from vendor_adapter.VehicleMemBench import BenchMemoryMode
 from vendor_adapter.VehicleMemBench.reporter import (
     _format_calls,
+    _format_reasoning_type,
     _md_memory_type_detail,
     _md_overview,
     _md_query_analysis,
     _md_reasoning_cross_comparison,
     _md_summary,
+    _num,
     generate_markdown_report,
 )
 
@@ -535,3 +537,47 @@ class TestGenerateMarkdownReport:
         assert "# VehicleMemBench 基准测试报告" in content
         assert "无数据" in content
         assert "unknown" in content
+
+
+class TestNum:
+    """_num 辅助函数测试."""
+
+    def test_int_passthrough(self) -> None:
+        """测试 int 值直接返回."""
+        assert _num(42) == 42  # noqa: PLR2004
+
+    def test_float_passthrough(self) -> None:
+        """测试 float 值直接返回."""
+        assert _num(3.14) == 3.14  # noqa: PLR2004
+
+    def test_none_returns_default(self) -> None:
+        """测试 None 返回默认值 0."""
+        assert _num(None) == 0
+
+    def test_str_returns_default(self) -> None:
+        """测试非数字类型返回默认值."""
+        assert _num("bad") == 0
+
+    def test_custom_default(self) -> None:
+        """测试自定义默认值."""
+        assert _num(None, default=-1) == -1
+
+    def test_zero_passthrough(self) -> None:
+        """测试 0 值直接返回（不被替换为 default）."""
+        assert _num(0) == 0
+
+
+class TestFormatReasoningType:
+    """_format_reasoning_type 测试."""
+
+    def test_known_type(self) -> None:
+        """测试已知类型返回中文标签."""
+        assert _format_reasoning_type("preference_conflict") == "偏好冲突"
+
+    def test_unknown_type_fallback(self) -> None:
+        """测试未知类型返回原字符串."""
+        assert _format_reasoning_type("unknown_type") == "unknown_type"
+
+    def test_none_returns_empty(self) -> None:
+        """测试 None 返回空字符串."""
+        assert _format_reasoning_type(None) == ""

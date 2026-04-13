@@ -365,7 +365,7 @@ def _md_summary(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
         lines.append("无数据。\n")
         return "\n".join(lines)
 
-    total_tasks = sum(m.get("completed_tasks", 0) for m in report_data.values())
+    total_tasks = sum(int(_num(m.get("completed_tasks"))) for m in report_data.values())
     n_types = len(report_data)
 
     sorted_types = sorted(
@@ -444,13 +444,9 @@ def generate_markdown_report(
     content = "\n".join(parts)
     filename = f"report-{now.strftime('%Y%m%d-%H%M%S-%f')}.md"
     out_path = output_dir / filename
-    try:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", encoding="utf-8") as f:
-            f.write(content)
-    except OSError:
-        logger.exception("写入 Markdown 报告失败: %s", out_path)
-        raise
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as f:
+        f.write(content)
     logger.info("Markdown 报告已写入: %s", out_path)
 
 
@@ -479,7 +475,7 @@ def report(output_path: Path | None = None) -> None:
 
     try:
         generate_markdown_report(out.parent, report_data, all_results)
-    except OSError:
+    except OSError, TypeError:
         logger.exception("生成 Markdown 报告失败")
 
     for mtype, metric in report_data.items():
