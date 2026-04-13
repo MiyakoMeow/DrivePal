@@ -74,6 +74,7 @@ graph TB
         GOLD[gold<br>真实记忆]
         SUMMARY[summary<br>递归摘要]
         KV[key_value<br>键值存储]
+        MB[memory_bank<br>遗忘曲线记忆]
     end
     
     subgraph 外部记忆系统
@@ -98,6 +99,7 @@ graph TB
     ME --> GOLD
     ME --> SUMMARY
     ME --> KV
+    ME --> MB
     MSE --> M0
     MSE --> MOS
     MSE --> LM
@@ -123,6 +125,7 @@ graph TB
 | `gold` | Gold Memory | 直接提供真实最新用户偏好 | 理论性能上界 |
 | `summary` | Recursive Summarization | 将历史压缩为层次化摘要 | 摘要推理能力 |
 | `key_value` | Key-Value Store | 将偏好组织为结构化键值对 | 精确检索能力 |
+| `memory_bank` | MemoryBank | 基于遗忘曲线的分层记忆（本项目实现） | 遗忘曲线+嵌入检索 |
 
 #### B. 记忆系统评估（Memory-System Evaluation）
 
@@ -1125,11 +1128,12 @@ graph TB
 | 2 | gold | - | false | 理论上限 |
 | 3 | summary | - | true | 摘要能力 |
 | 4 | key_value | - | true | 检索能力 |
-| 5 | - | mem0 | true | Mem0 系统性能 |
-| 6 | - | memos | true | MemOS 系统性能 |
-| 7 | - | lightmem | true | LightMem 系统性能 |
-| 8 | - | supermemory | true | Supermemory 系统性能 |
-| 9 | - | memobase | true | Memobase 系统性能 |
+| 5 | memory_bank | - | true | 遗忘曲线记忆 |
+| 6 | - | mem0 | true | Mem0 系统性能 |
+| 7 | - | memos | true | MemOS 系统性能 |
+| 8 | - | lightmem | true | LightMem 系统性能 |
+| 9 | - | supermemory | true | Supermemory 系统性能 |
+| 10 | - | memobase | true | Memobase 系统性能 |
 
 ---
 
@@ -1530,6 +1534,7 @@ graph LR
 | 基线 | gold | 真实记忆 |
 | 基线 | summary | 递归摘要 |
 | 基线 | key_value | 键值存储 |
+| 基线 | memory_bank | 遗忘曲线记忆（本项目） |
 | 外部 | Mem0 | 商业产品 |
 | 外部 | MemOS | 多模态 |
 | 外部 | LightMem | 轻量方案 |

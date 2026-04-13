@@ -31,8 +31,25 @@ model = "local/text-embedding-bge-m3"
 ```
 
 **Provider 并发控制：**
-- `concurrency`：每个 provider 的最大并发请求数（默认 1），使用 semaphore 实现
+- `concurrency`：每个 provider 的最大并发请求数（默认 4），使用 semaphore 实现
 - 当同一 provider 被多个 model_groups 引用时，共享同一个 semaphore
+
+**Judge 模型配置：**
+
+可选配置独立的 judge 评估模型（用于 benchmark 评估），支持配置文件或环境变量：
+
+```toml
+[judge]
+model = "local/qwen3.5-2b"
+temperature = 0.1
+```
+
+环境变量覆盖：`JUDGE_MODEL`、`JUDGE_BASE_URL`、`JUDGE_API_KEY`、`JUDGE_TEMPERATURE`
+
+**HTTP 客户端超时：**
+- `app/models/_http.py` 统一配置所有 LLM/Embedding HTTP 客户端超时
+- read timeout 设为 12 小时，避免长时推理任务中途断开
+- connect timeout 10 秒，快速发现连接问题
 
 **环境变量覆盖：**
 
@@ -44,6 +61,9 @@ model = "local/text-embedding-bge-m3"
 | `MINIMAX_API_KEY` | MiniMax provider API Key（用于 `benchmark` 模型组） |
 | `DEEPSEEK_API_KEY` | DeepSeek provider API Key（用于 `smart` 模型组） |
 | `ZHIPU_API_KEY` | 智谱 provider API Key（用于 `fast` 模型组） |
+| `JUDGE_MODEL` | Judge 评估模型（如 `local/qwen3.5-2b`） |
+| `BENCHMARK_QUERY_CONCURRENCY` | Benchmark 评估查询并发数（默认 `4`） |
+| `BENCHMARK_SEARCH_TIMEOUT` | Benchmark memory_bank 搜索超时秒数（默认 `43200`） |
 
 ---
 
@@ -156,12 +176,14 @@ INTEGRATION_TESTS=1 uv run pytest tests/ -v
 | `tests/test_vendor_adapter/test_common.py` | 适配器通用工具函数 |
 | `tests/test_vendor_adapter/test_model_config.py` | 模型字符串解析 |
 | `tests/test_vendor_adapter/test_runner.py` | VehicleMemBench 运行器 |
+| `tests/test_vendor_adapter/test_reporter_md.py` | 结果收集与Markdown报告生成 |
+| `tests/test_vendor_adapter/test_strategies.py` | 记忆策略注册表与接口 |
 | `tests/stores/test_memory_bank_store.py` | MemoryBank 后端 |
 | `tests/test_context_schemas.py` | 驾驶上下文数据模型 |
 | `tests/test_graphql.py` | GraphQL 端点测试 |
 | `tests/test_rules.py` | 规则引擎测试 |
 | `tests/test_chat.py` | Chat 驱动 LLM 多provider fallback、Workflow 上下文注入 |
-| `tests/test_embedding.py` | Embedding 语义检索与聚合 |
+| `tests/test_embedding.py` | Embedding 远程接口语义检索与聚合 |
 | `tests/test_memory_bank.py` | 遗忘曲线、层级摘要、交互聚合 |
 | `tests/test_storage.py` | TOMLStore 跨实例持久化、反馈策略更新 |
 | `tests/test_settings.py` | 模型配置加载与 model_groups 解析 |
@@ -181,8 +203,8 @@ INTEGRATION_TESTS=1 uv run pytest tests/ -v
 | **API 层** | Strawberry GraphQL (code-first) |
 | **AI工作流** | 自定义四阶段 Agent 流水线 + 轻量规则引擎 |
 | **LLM支持** | Qwen3.5-2B (vLLM, 默认), MiniMax-M2.7, DeepSeek-chat, GLM-4.7-flashx |
-| **LLM推理** | vLLM (本地部署), OpenAI兼容接口（多provider自动fallback） |
-| **嵌入模型** | BGE-M3 (本地 vLLM 部署, OpenAI 兼容接口) |
+| **LLM推理** | vLLM (本地部署), OpenAI兼容接口（多provider自动fallback，纯异步客户端） |
+| **嵌入模型** | BGE-M3 (远程 vLLM 部署, OpenAI 兼容接口，纯远程无本地依赖) |
 | **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线+分层摘要+个性分析) |
 | **数据存储** | TOML文件 (tomllib + tomli-w) |
 | **数据集** | HuggingFace Datasets |

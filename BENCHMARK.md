@@ -22,8 +22,9 @@ uv run python run_benchmark.py all --file-range 1-2
 uv run python run_benchmark.py prepare --file-range 1-2
 uv run python run_benchmark.py run --file-range 1-2
 
-# 生成报告
+# 生成Markdown报告
 uv run python run_benchmark.py report
+uv run python run_benchmark.py report --output path/to/report.md
 ```
 
 ### CLI 参数
@@ -31,16 +32,37 @@ uv run python run_benchmark.py report
 | 参数 | 默认值 | 适用命令 | 说明 |
 |------|--------|----------|------|
 | `--file-range` | `1-50` | prepare, run, all | 评估文件范围（如 `1-10` 或 `1,3,5`） |
-| `--memory-types` | `gold,summary,kv,memory_bank` | prepare, run, all | 记忆类型 |
+| `--memory-types` | `none,gold,kv,memory_bank` | prepare, run, all | 记忆类型（逗号分隔） |
 | `--reflect-num` | `10` | run, all | 反射推理次数 |
 | `--allow-partial` | `false` | all | 即使部分步骤失败也生成报告 |
-| `--output` | `None` | all, report | 自定义报告输出路径 |
+| `--output` | `None` | all, report | 自定义报告输出路径（Markdown格式） |
+
+### 架构：策略模式
+
+`vendor_adapter/VehicleMemBench/strategies/` 采用策略模式组织各记忆类型的评估逻辑：
+
+| 策略 | 类名 | 说明 |
+|------|------|------|
+| `none` | `NoneStrategy` | 无记忆基线，直接调用 agent |
+| `gold` | `GoldStrategy` | 黄金记忆，注入 ground truth |
+| `kv` | `KvMemoryStrategy` | 键值存储，LLM构建结构化记忆 |
+| `memory_bank` | `MemoryBankStrategy` | 本项目 MemoryBank 后端（嵌入+摘要） |
+
+每个策略实现 `MemoryStrategy` Protocol，统一 prepare → create_evaluator 流程。
+
+### 报告生成
+
+`report` 命令收集 `data/benchmark/` 下的评估结果，生成 Markdown 格式报告，包含：
+- 各记忆类型的 Exact Match Rate、Field-Level / Value-Level 指标
+- 按推理类型分组的细分统计
+- 效率指标（平均工具调用数、平均输出 token 数）
 
 ### 注意事项
 
 - **API限流**：大批量文件（如1-50）可能触发API限流，建议分批处理
-- **memory_bank耗时**：memory_bank prepare阶段对大历史文件较慢，属正常现象
-- **gold类型**：gold类型prepare阶段仅创建目录，无prep.json文件
+- **memory_bank耗时**：memory_bank prepare阶段对大历史文件较慢，需要多次LLM调用进行摘要和嵌入
+- **gold/none类型**：prepare阶段仅创建目录，无 prep.json 文件
+- **并发控制**：通过 `BENCHMARK_QUERY_CONCURRENCY` 环境变量控制查询并发数（默认4）
 
 ## 故障排除
 
