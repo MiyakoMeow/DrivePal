@@ -14,7 +14,7 @@
 models = ["local/qwen3.5-2b"]
 
 [model_groups.benchmark]
-models = ["minimax-cn/MiniMax-M2.7?temperature=0.0"]
+models = ["minimax-cn/MiniMax-M2.5?temperature=0.0"]
 
 [model_providers.local]
 base_url = "http://127.0.0.1:50721/v1"
