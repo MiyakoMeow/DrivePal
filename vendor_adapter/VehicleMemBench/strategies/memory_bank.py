@@ -268,9 +268,9 @@ class MemoryBankStrategy:
         embedding_model = get_store_embedding_model()
         store = await asyncio.to_thread(
             MemoryBankStore,
-            data_dir,
-            embedding_model,
-            chat_model,
+            data_dir=data_dir,
+            chat_model=chat_model,
+            embedding_model=embedding_model,
         )
         search_client = StoreClient(store)
         return MemoryBankEvaluator(

@@ -321,6 +321,8 @@ async def _run_single(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
         return_exceptions=True,
     )
-    for r in gather_results:
+    for i, r in enumerate(gather_results):
         if isinstance(r, BaseException) and not isinstance(r, Exception):
             raise r
+        if isinstance(r, Exception):
+            logger.error("[unexpected] query %d unhandled exception: %s", i, r)

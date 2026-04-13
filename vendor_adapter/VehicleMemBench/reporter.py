@@ -104,6 +104,8 @@ def _md_overview(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
         return "\n".join(lines)
 
     has_gold = BenchMemoryMode.GOLD in report_data
+    if not has_gold:
+        lines.append("注意：未包含 GOLD 类型数据，Memory Score 和 Δ% 列不可用。\n")
     gold_esm = _num(report_data.get(BenchMemoryMode.GOLD, {}).get("exact_match_rate"))
 
     header = "| 记忆类型 | ESM | F1 Positive | F1 Change | Memory Score | Δ% (vs Gold) | Avg Calls | Avg Tokens | 失败数 |"
@@ -112,6 +114,11 @@ def _md_overview(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
     lines.append(sep)
 
     for mtype, metric in report_data.items():
+        if metric.get("build_error"):
+            lines.append(
+                f"| {mtype.value} | 指标构建失败 | - | - | - | - | - | - | - |"
+            )
+            continue
         esm = _num(metric.get("exact_match_rate"))
         f1_pos = _num(metric.get("state_f1_positive"))
         f1_chg = _num(metric.get("state_f1_change"))
@@ -153,6 +160,12 @@ def _md_memory_type_detail(
     """生成单个记忆类型的详细分析（由外层包裹 ## 2. 节标题）."""
     lines: list[str] = []
     lines.append(f"### {mtype.value}\n")
+
+    if metric.get("build_error"):
+        lines.append(
+            "**指标构建失败**：该记忆类型的评估结果无法正常聚合，请检查原始数据。\n"
+        )
+        return "\n".join(lines)
 
     esm = _num(metric.get("exact_match_rate"))
     f1_pos = _num(metric.get("state_f1_positive"))
@@ -374,12 +387,17 @@ def _md_summary(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
         lines.append("无数据。\n")
         return "\n".join(lines)
 
-    total_tasks = sum(int(_num(m.get("completed_tasks"))) for m in report_data.values())
+    total_tasks = sum(
+        int(_num(m.get("completed_tasks"))) + int(_num(m.get("total_failed")))
+        for m in report_data.values()
+    )
     n_types = len(report_data)
 
     sorted_types = sorted(
         report_data.items(),
-        key=lambda x: _num(x[1].get("exact_match_rate")),
+        key=lambda x: (
+            -1 if x[1].get("build_error") else _num(x[1].get("exact_match_rate"))
+        ),
         reverse=True,
     )
 
@@ -389,8 +407,11 @@ def _md_summary(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
         f"按完全匹配率（ESM）排名：\n"
     )
     for rank, (mtype, metric) in enumerate(sorted_types, 1):
-        esm = _num(metric.get("exact_match_rate"))
-        lines.append(f"{rank}. {mtype.value}（ESM={esm:.2%}）")
+        if metric.get("build_error"):
+            lines.append(f"{rank}. {mtype.value}（指标构建失败）")
+        else:
+            esm = _num(metric.get("exact_match_rate"))
+            lines.append(f"{rank}. {mtype.value}（ESM={esm:.2%}）")
     lines.append("")
 
     gold_metric = report_data.get(BenchMemoryMode.GOLD)
