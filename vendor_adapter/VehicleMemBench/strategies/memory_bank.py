@@ -221,7 +221,10 @@ class MemoryBankStrategy:
                         )
                     raise
                 if backup_dir is not None and backup_dir.exists():
-                    await asyncio.to_thread(shutil.rmtree, backup_dir)
+                    try:
+                        await asyncio.to_thread(shutil.rmtree, backup_dir)
+                    except OSError as e:
+                        logger.warning("清理备份目录失败: %s: %s", backup_dir, e)
             except Exception:
                 await asyncio.to_thread(shutil.rmtree, temp_dir, ignore_errors=True)
                 raise
