@@ -82,7 +82,7 @@ graph TB
         MOS[MemOS]
         LM[LightMem]
         SM[Supermemory]
-        MB[Memobase]
+        MOB[Memobase]
     end
     
     subgraph 评估指标
@@ -104,7 +104,7 @@ graph TB
     MSE --> MOS
     MSE --> LM
     MSE --> SM
-    MSE --> MB
+    MSE --> MOB
     ME --> EMR
     ME --> FL
     ME --> VL

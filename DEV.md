@@ -58,7 +58,7 @@ temperature = 0.1
 | `CONFIG_PATH` | 自定义配置文件路径（默认 `config/llm.toml`） |
 | `DATA_DIR` | 数据目录路径（默认 `data`），服务启动时自动初始化 |
 | `WEBUI_DIR` | WebUI 静态文件目录路径（默认项目根目录下 `webui/`） |
-| `MINIMAX_API_KEY` | MiniMax provider API Key（用于 `benchmark` 模型组） |
+| `MINIMAX_API_KEY` | MiniMax provider API Key（用于 `balanced` 模型组） |
 | `DEEPSEEK_API_KEY` | DeepSeek provider API Key（用于 `smart` 模型组） |
 | `ZHIPU_API_KEY` | 智谱 provider API Key（用于 `fast` 模型组） |
 | `JUDGE_MODEL` | Judge 评估模型（如 `local/qwen3.5-2b`） |
