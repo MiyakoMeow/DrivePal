@@ -314,7 +314,7 @@ class TestMdOverview:
         header_line = next(line for line in lines if line.startswith("| 记忆类型"))
         headers = [h.strip() for h in header_line.split("|") if h.strip()]
         delta_idx = headers.index("Δ% (vs Gold)")
-        assert parts[delta_idx].strip() == "-"
+        assert parts[delta_idx + 1].strip() == "-"
 
 
 class TestMdMemoryTypeDetail:
@@ -381,6 +381,31 @@ class TestMdMemoryTypeDetail:
         }
         md = _md_memory_type_detail(BenchMemoryMode.GOLD, metric, None)
         assert "按推理类型细分" not in md
+
+    def test_gold_esm_zero_no_comparison(self) -> None:
+        """测试 gold ESM 为 0 时不输出与 Gold 对比段落."""
+        gold_metric_zero: dict[str, Any] = {
+            "exact_match_rate": 0.0,
+            "state_f1_positive": 0.0,
+            "state_f1_change": 0.0,
+            "state_f1_negative": 0.0,
+            "change_accuracy": 0.0,
+            "avg_pred_calls": 0.0,
+            "avg_output_token": 0.0,
+            "total_failed": 0,
+        }
+        none_metric: dict[str, Any] = {
+            "exact_match_rate": 0.5,
+            "state_f1_positive": 0.6,
+            "state_f1_change": 0.5,
+            "state_f1_negative": 0.99,
+            "change_accuracy": 0.5,
+            "avg_pred_calls": 3.0,
+            "avg_output_token": 100.0,
+            "total_failed": 0,
+        }
+        md = _md_memory_type_detail(BenchMemoryMode.NONE, none_metric, gold_metric_zero)
+        assert "与 Gold 对比" not in md
 
 
 class TestMdReasoningCrossComparison:
@@ -537,6 +562,14 @@ class TestMdSummary:
         md = _md_summary(gold_only)
         assert "理论上限" not in md
         assert "gold" in md
+
+    def test_non_gold_no_memory_score_shows_zero(self) -> None:
+        """测试非 GOLD 无 memory_score 时显示 0.00%."""
+        data = _make_report_data()
+        del data[BenchMemoryMode.NONE]["memory_score"]
+        md = _md_summary(data)
+        assert "0.00%" in md
+        assert "理论上限" in md
 
 
 class TestGenerateMarkdownReport:
