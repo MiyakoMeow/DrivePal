@@ -133,7 +133,7 @@ _REASONING_TYPE_LABELS: dict[str, str] = {
 
 def _num(v: object, default: float = 0) -> int | float:
     """确保值为数字，None 或非数字类型返回默认值."""
-    return v if isinstance(v, int | float) else default
+    return v if isinstance(v, int | float) and not isinstance(v, bool) else default
 
 
 def _md_memory_type_detail(
@@ -219,7 +219,7 @@ def _md_reasoning_cross_comparison(
 
     all_reasoning_types: set[str] = set()
     for metric in report_data.values():
-        all_reasoning_types.update(metric.get("by_reasoning_type", {}).keys())
+        all_reasoning_types.update((metric.get("by_reasoning_type") or {}).keys())
     sorted_rt = sorted(all_reasoning_types)
 
     mtypes = sorted(report_data.keys())
@@ -475,7 +475,7 @@ def report(output_path: Path | None = None) -> None:
 
     try:
         generate_markdown_report(out.parent, report_data, all_results)
-    except OSError, TypeError:
+    except Exception:
         logger.exception("生成 Markdown 报告失败")
 
     for mtype, metric in report_data.items():

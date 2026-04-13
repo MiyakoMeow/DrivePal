@@ -294,6 +294,28 @@ class TestMdOverview:
         assert "## 1. 总览" in md
         assert "无数据" in md
 
+    def test_no_gold_all_delta_dash(self) -> None:
+        """测试无 GOLD 类型时所有行 Delta 列为横杠."""
+        none_data: dict[BenchMemoryMode, dict[str, Any]] = {
+            BenchMemoryMode.NONE: {
+                "exact_match_rate": 0.5,
+                "state_f1_positive": 0.6,
+                "state_f1_change": 0.5,
+                "avg_pred_calls": 3.0,
+                "avg_output_token": 100.0,
+                "total_failed": 0,
+            },
+        }
+        md = _md_overview(none_data)
+        lines = md.split("\n")
+        data_lines = [line for line in lines if line.startswith("| none |")]
+        assert len(data_lines) == 1
+        parts = data_lines[0].split("|")
+        header_line = next(line for line in lines if line.startswith("| 记忆类型"))
+        headers = [h.strip() for h in header_line.split("|") if h.strip()]
+        delta_idx = headers.index("Δ% (vs Gold)")
+        assert parts[delta_idx].strip() == "-"
+
 
 class TestMdMemoryTypeDetail:
     """_md_memory_type_detail 测试."""
@@ -344,6 +366,21 @@ class TestMdMemoryTypeDetail:
         )
         assert "Exact Match Rate" in md
         assert "F1 Positive" in md
+
+    def test_no_reasoning_type_no_table(self) -> None:
+        """测试无推理类型时不输出细分表格."""
+        metric: dict[str, Any] = {
+            "exact_match_rate": 0.5,
+            "state_f1_positive": 0.6,
+            "state_f1_change": 0.5,
+            "state_f1_negative": 0.99,
+            "change_accuracy": 0.5,
+            "avg_pred_calls": 3.0,
+            "avg_output_token": 100.0,
+            "total_failed": 0,
+        }
+        md = _md_memory_type_detail(BenchMemoryMode.GOLD, metric, None)
+        assert "按推理类型细分" not in md
 
 
 class TestMdReasoningCrossComparison:
@@ -493,6 +530,14 @@ class TestMdSummary:
         md = _md_summary({})
         assert "无数据" in md
 
+    def test_gold_only_no_theoretical_limit(self) -> None:
+        """测试仅 GOLD 类型时不输出理论上限段落."""
+        data = _make_report_data()
+        gold_only = {BenchMemoryMode.GOLD: data[BenchMemoryMode.GOLD]}
+        md = _md_summary(gold_only)
+        assert "理论上限" not in md
+        assert "gold" in md
+
 
 class TestGenerateMarkdownReport:
     """generate_markdown_report 测试."""
@@ -565,6 +610,11 @@ class TestNum:
     def test_zero_passthrough(self) -> None:
         """测试 0 值直接返回（不被替换为 default）."""
         assert _num(0) == 0
+
+    def test_bool_returns_default(self) -> None:
+        """测试 bool 类型返回默认值（bool 是 int 子类但不应作为数值）."""
+        assert _num(True) == 0  # noqa: FBT003
+        assert _num(False) == 0  # noqa: FBT003
 
 
 class TestFormatReasoningType:
