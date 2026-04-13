@@ -1,11 +1,11 @@
 """VehicleMemBench 评估基准的命令行入口."""
 
 import logging
-import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
 from vendor_adapter.VehicleMemBench.runner import prepare, report, run
+from vendor_adapter.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
 
 logger = logging.getLogger(__name__)
 
@@ -83,26 +83,18 @@ async def _do_all(
     output: Path | None,
 ) -> None:
     """执行 all 命令：依次运行 prepare、run、report."""
-    failed = False
     try:
         await prepare(file_range, memory_types)
-    except OSError, ValueError, RuntimeError:
+    except OSError, ValueError, RuntimeError, VehicleMemBenchError:
         logger.exception("[prepare] failed")
         if not allow_partial:
             raise
-        failed = True
     try:
         await run(file_range, memory_types, reflect_num)
-    except OSError, ValueError, RuntimeError:
+    except OSError, ValueError, RuntimeError, VehicleMemBenchError:
         logger.exception("[run] failed")
         if not allow_partial:
             raise
-        failed = True
-    if failed and not allow_partial:
-        sys.stdout.write(
-            "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
-        )
-        return
     report(output)
 
 
