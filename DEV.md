@@ -202,9 +202,9 @@ INTEGRATION_TESTS=1 uv run pytest tests/ -v
 | **Web框架** | FastAPI + Uvicorn |
 | **API 层** | Strawberry GraphQL (code-first) |
 | **AI工作流** | 自定义四阶段 Agent 流水线 + 轻量规则引擎 |
-| **LLM支持** | Qwen3.5-2B (vLLM, 默认), MiniMax-M2.7, DeepSeek-chat, GLM-4.7-flashx |
+| **LLM支持** | Qwen3.5-2B (vLLM, 默认), MiniMax-M2.5, DeepSeek-chat, GLM-4.7-flashx |
 | **LLM推理** | vLLM (本地部署), OpenAI兼容接口（多provider自动fallback，纯异步客户端） |
-| **嵌入模型** | BGE-M3 (远程 vLLM 部署, OpenAI 兼容接口，纯远程无本地依赖) |
+| **嵌入模型** | BGE-M3 (vLLM 部署, OpenAI 兼容接口，纯远程无本地计算依赖) |
 | **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线+分层摘要+个性分析) |
 | **数据存储** | TOML文件 (tomllib + tomli-w) |
 | **数据集** | HuggingFace Datasets |
