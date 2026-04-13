@@ -30,14 +30,12 @@ PROVIDER_A_CONCURRENCY = 2  # Provider A 的并发数
 PROVIDER_B_CONCURRENCY = 3  # Provider B 的并发数
 
 
-@pytest.mark.integration
+@pytest.mark.llm
 async def test_chat_drives_llm_memory_search(
     tmp_path: Path,
-    llm_provider: LLMProviderConfig | None,
+    llm_provider: LLMProviderConfig,
 ) -> None:
     """验证聊天驱动的 LLM 记忆搜索能检索到相关事件."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
     chat_model = ChatModel(providers=[llm_provider])
     memory = MemoryModule(tmp_path, chat_model=chat_model)
     await memory.write(MemoryEvent(content="明天下午三点项目会议", type="meeting"))
@@ -46,15 +44,12 @@ async def test_chat_drives_llm_memory_search(
     assert "会议" in results[0].event["content"]
 
 
-@pytest.mark.integration
+@pytest.mark.llm
 async def test_chat_feeds_workflow_context(
     tmp_path: Path,
-    llm_provider: LLMProviderConfig | None,
+    llm_provider: LLMProviderConfig,
 ) -> None:
     """验证记忆上下文被注入到代理工作流状态中."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
-
     memory = MemoryModule(tmp_path, chat_model=ChatModel(providers=[llm_provider]))
     await memory.write(MemoryEvent(content="下午三点开会", type="meeting"))
     workflow = AgentWorkflow(memory_module=memory)
@@ -73,15 +68,12 @@ async def test_chat_feeds_workflow_context(
     assert "related_events" in result["context"]
 
 
-@pytest.mark.integration
+@pytest.mark.llm
 async def test_run_with_stages_returns_stages_object(
     tmp_path: Path,
-    llm_provider: LLMProviderConfig | None,
+    llm_provider: LLMProviderConfig,
 ) -> None:
     """验证 run_with_stages 返回包含各阶段输出的 WorkflowStages 对象."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
-
     chat_model = ChatModel(providers=[llm_provider])
     memory = MemoryModule(tmp_path, chat_model=chat_model)
     workflow = AgentWorkflow(memory_module=memory)
@@ -101,15 +93,12 @@ async def test_run_with_stages_returns_stages_object(
     assert stages.execution is not None
 
 
-@pytest.mark.integration
+@pytest.mark.llm
 async def test_run_with_stages_highway_scenario(
     tmp_path: Path,
-    llm_provider: LLMProviderConfig | None,
+    llm_provider: LLMProviderConfig,
 ) -> None:
     """验证高速公路场景下规则引擎约束生效."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
-
     chat_model = ChatModel(providers=[llm_provider])
     memory = MemoryModule(tmp_path, chat_model=chat_model)
     workflow = AgentWorkflow(memory_module=memory)

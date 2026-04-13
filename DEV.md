@@ -161,13 +161,29 @@ store.update(key, val) # 更新键值（仅dict类型）
 uv run pytest tests/ -v
 ```
 
-### 运行集成测试（需要 LLM provider）
+### 运行需要外部服务的测试
+
+测试通过 marker 控制跳过逻辑，默认跳过所有需要外部服务的测试：
 
 ```bash
+# 运行需要 LLM provider 的测试
+uv run pytest tests/ -v --test-llm
+
+# 运行需要 embedding provider 的测试
+uv run pytest tests/ -v --test-embedding
+
+# 运行集成测试（GraphQL 端到端，需要完整服务）
 uv run pytest tests/ -v --run-integration
-# 或
-INTEGRATION_TESTS=1 uv run pytest tests/ -v
+
+# 组合使用
+uv run pytest tests/ -v --test-llm --test-embedding
 ```
+
+| 标志 | marker | 说明 |
+|------|--------|------|
+| `--test-llm` | `@pytest.mark.llm` | 需要真实 LLM provider 的测试 |
+| `--test-embedding` | `@pytest.mark.embedding` | 需要真实 embedding provider 的测试 |
+| `--run-integration` | `@pytest.mark.integration` | 需要完整服务的集成测试 |
 
 ### 测试覆盖模块
 

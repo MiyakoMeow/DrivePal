@@ -1,10 +1,7 @@
 """共享测试配置和 fixtures."""
 
-import os
-from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-import httpx
 import pytest
 
 from app.models.embedding import (
@@ -21,6 +18,8 @@ if TYPE_CHECKING:
 def pytest_configure(config: pytest.Config) -> None:
     """注册自定义标记."""
     config.addinivalue_line("markers", "integration: 集成测试，需要真实的 LLM provider")
+    config.addinivalue_line("markers", "llm: 需要 LLM provider 的测试")
+    config.addinivalue_line("markers", "embedding: 需要 embedding provider 的测试")
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -31,103 +30,79 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="运行集成测试（需要真实 LLM provider）",
     )
+    parser.addoption(
+        "--test-llm",
+        action="store_true",
+        default=False,
+        help="运行需要 LLM provider 的测试",
+    )
+    parser.addoption(
+        "--test-embedding",
+        action="store_true",
+        default=False,
+        help="运行需要 embedding provider 的测试",
+    )
 
 
 def pytest_collection_modifyitems(
     config: pytest.Config,
     items: list[pytest.Item],
 ) -> None:
-    """默认跳过 integration 测试，除非显式启用."""
-    run_integration = (
-        config.getoption("--run-integration", default=False)
-        or os.environ.get("INTEGRATION_TESTS") == "1"
-    )
-    if run_integration:
-        return
-    skip_integration = pytest.mark.skip(
-        reason="需要 --run-integration 标志或 INTEGRATION_TESTS=1 环境变量",
-    )
+    """根据命令行选项跳过相应测试."""
+    run_integration = config.getoption("--run-integration", default=False)
+    test_llm = config.getoption("--test-llm", default=False)
+    test_embedding = config.getoption("--test-embedding", default=False)
+
     for item in items:
-        if "integration" in item.keywords:
-            item.add_marker(skip_integration)
+        if "integration" in item.keywords and not run_integration:
+            item.add_marker(pytest.mark.skip(reason="需要 --run-integration 标志"))
+        if "llm" in item.keywords and not test_llm:
+            item.add_marker(pytest.mark.skip(reason="需要 --test-llm 标志"))
+        if "embedding" in item.keywords and not test_embedding:
+            item.add_marker(pytest.mark.skip(reason="需要 --test-embedding 标志"))
 
 
-def _check_endpoint_reachable(base_url: str, api_key: str | None) -> bool:
-    """检查远程端点是否可达."""
-    try:
-        base = base_url.rstrip("/")
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-        resp = httpx.get(f"{base}/models", headers=headers, timeout=5)
-    except httpx.HTTPError:
-        return False
-    return resp.status_code == HTTPStatus.OK
+@pytest.fixture(scope="session")
+def llm_provider() -> LLMProviderConfig:
+    """返回 LLM provider，由 --test-llm 标记控制是否启用.
 
-
-def get_available_provider() -> LLMProviderConfig | None:
-    """获取第一个可达的 LLM provider，或 None."""
+    跳过逻辑由 pytest_collection_modifyitems 中的 marker 处理，
+    此处仅验证配置可用性。
+    """
     try:
         settings = LLMSettings.load()
     except RuntimeError:
-        return None
-
+        pytest.skip("无法加载 LLM 配置")
     try:
         providers = settings.get_model_group_providers("default")
     except KeyError, ValueError, RuntimeError:
-        return None
-
-    fallback_provider: LLMProviderConfig | None = None
-    for provider in providers:
-        base_url = provider.provider.base_url
-        if not base_url:
-            fallback_provider = fallback_provider or provider
-            continue
-        if _check_endpoint_reachable(base_url, provider.provider.api_key):
-            return provider
-    return fallback_provider
-
-
-@pytest.fixture
-def llm_provider() -> LLMProviderConfig | None:
-    """返回可达的 LLM provider（若有），否则 None."""
-    return get_available_provider()
-
-
-@pytest.fixture
-def required_llm_provider(llm_provider: LLMProviderConfig | None) -> LLMProviderConfig:
-    """返回可用 provider；不可用时直接 skip."""
-    if llm_provider is None:
-        pytest.skip("No LLM provider available")
-    return llm_provider
-
-
-def get_available_embedding() -> EmbeddingModel | None:
-    """获取可达的 embedding 模型，或 None."""
-    try:
-        settings = LLMSettings.load()
-    except RuntimeError:
-        return None
-    try:
-        provider = settings.get_embedding_provider()
-    except KeyError, RuntimeError:
-        return None
-    if provider is None:
-        return None
-    base_url = provider.provider.base_url
-    if not base_url or not _check_endpoint_reachable(
-        base_url, provider.provider.api_key
-    ):
-        return None
-    return get_cached_embedding_model()
+        pytest.skip("无法获取 LLM providers")
+    if not providers:
+        pytest.skip("没有配置 LLM providers")
+    return providers[0]
 
 
 @pytest.fixture(scope="session")
 def embedding() -> Generator[EmbeddingModel]:
-    """会话级 embedding 实例，不可用时跳过."""
+    """会话级 embedding 实例，由 --test-embedding 标记控制是否启用.
+
+    跳过逻辑由 pytest_collection_modifyitems 中的 marker 处理，
+    此处仅验证配置可用性。
+    """
+    try:
+        settings = LLMSettings.load()
+    except RuntimeError:
+        pytest.skip("无法加载 embedding 配置")
+    # 验证 embedding provider 配置存在（模型由全局单例创建）
+    try:
+        provider = settings.get_embedding_provider()
+    except KeyError, RuntimeError:
+        pytest.skip("无法获取 embedding provider")
+    if provider is None:
+        pytest.skip("没有配置 embedding provider")
     reset_embedding_singleton()
     try:
-        model = get_available_embedding()
-        if model is None:
-            pytest.skip("No embedding provider available")
+        model = get_cached_embedding_model()
         yield model
     finally:
         reset_embedding_singleton()

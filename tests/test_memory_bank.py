@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from app.models.embedding import EmbeddingModel
-    from app.models.settings import LLMProviderConfig
 
 # 搜索结果数量上限（魔法值）
 TOP_K = 10
@@ -246,18 +245,22 @@ class TestUpdateEventSummary:
         assert events[0]["content"] == "提醒我明天上午开会"
 
 
+@pytest.mark.llm
+@pytest.mark.embedding
+@pytest.mark.usefixtures("llm_provider")
 class TestMemoryModuleIntegration:
-    """MemoryModule 与记忆库的完整集成测试."""
+    """MemoryModule 与记忆库的完整集成测试.
+
+    使用 usefixtures("llm_provider") 确保 LLM 配置可用，
+    因为 MemoryBankStore.requires_chat=True 会惰性初始化 ChatModel。
+    """
 
     async def test_write_interaction_flow(
         self,
         tmp_path: Path,
         embedding: EmbeddingModel,
-        llm_provider: LLMProviderConfig | None,
     ) -> None:
         """验证端到端的写入交互和搜索流程."""
-        if llm_provider is None:
-            pytest.skip("No LLM provider available")
         memory = MemoryModule(tmp_path, embedding_model=embedding)
         await memory.write_interaction("测试查询", "测试回复")
         results = await memory.search("测试", mode=MemoryMode.MEMORY_BANK)
