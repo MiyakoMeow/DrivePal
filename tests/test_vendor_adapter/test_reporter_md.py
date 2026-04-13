@@ -517,7 +517,7 @@ class TestGenerateMarkdownReport:
         """测试报告文件名遵循时间戳格式."""
         generate_markdown_report(tmp_path, _make_report_data(), _make_all_results())
         md_file = next(tmp_path.glob("report-*.md"))
-        assert re.match(r"report-\d{8}-\d{6}\.md", md_file.name)
+        assert re.match(r"report-\d{8}-\d{6}-\d{6}\.md", md_file.name)
 
     def test_md_contains_metadata(self, tmp_path: Path) -> None:
         """测试报告文件包含生成时间和模型名称."""
