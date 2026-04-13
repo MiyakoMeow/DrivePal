@@ -293,17 +293,17 @@ def _md_query_analysis(  # noqa: C901
         lines.append("无查询数据。\n")
         return "\n".join(lines)
 
+    def _query_sort_key(q: dict[str, Any]) -> tuple[str, int, int]:
+        return (
+            q.get("memory_type", ""),
+            q.get("source_file", 0),
+            q.get("task_id", 0),
+        )
+
     for mtype, queries in all_results.items():
         if not queries:
             continue
         lines.append(f"### {mtype.value} 查询分析\n")
-
-        def _query_sort_key(q: dict[str, Any]) -> tuple[str, int, int]:
-            return (
-                q.get("memory_type", ""),
-                q.get("source_file", 0),
-                q.get("task_id", 0),
-            )
 
         successes = [q for q in queries if q.get("exact_match")]
         successes.sort(key=_query_sort_key)
@@ -316,15 +316,16 @@ def _md_query_analysis(  # noqa: C901
         fp_sorted = sorted(
             non_match,
             key=lambda q: (
-                -_num(q.get("state_score", {}).get("FP")),
+                -_num((q.get("state_score") or {}).get("FP")),
                 *_query_sort_key(q),
             ),
         )
         if fp_sorted:
             lines.append("**过度修改案例（FP 最高，前3条）：**\n")
             for q in fp_sorted[:3]:
-                fp = _num(q.get("state_score", {}).get("FP"))
-                diffs = q.get("state_score", {}).get("differences") or []
+                state_score = q.get("state_score") or {}
+                fp = _num(state_score.get("FP"))
+                diffs = state_score.get("differences") or []
                 extra: list[str] = [f"  - FP={fp}"]
                 extra.extend(f"  - 差异: {d}" for d in diffs)
                 lines.extend(_format_query_entry(q, extra))
@@ -332,15 +333,17 @@ def _md_query_analysis(  # noqa: C901
         fn_sorted = sorted(
             non_match,
             key=lambda q: (
-                -_num(q.get("tool_score", {}).get("fn")),
+                -_num((q.get("tool_score") or {}).get("fn")),
                 *_query_sort_key(q),
             ),
         )
         if fn_sorted:
             lines.append("**遗漏调用案例（tool_score.fn 最高，前3条）：**\n")
             for q in fn_sorted[:3]:
-                fn = _num(q.get("tool_score", {}).get("fn"))
-                diffs = q.get("state_score", {}).get("differences") or []
+                tool_score = q.get("tool_score") or {}
+                fn = _num(tool_score.get("fn"))
+                state_score = q.get("state_score") or {}
+                diffs = state_score.get("differences") or []
                 extra = [f"  - FN={fn}"]
                 extra.extend(f"  - 差异: {d}" for d in diffs)
                 lines.extend(_format_query_entry(q, extra))
@@ -360,7 +363,7 @@ def _md_summary(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
 
     sorted_types = sorted(
         report_data.items(),
-        key=lambda x: x[1].get("exact_match_rate", 0),
+        key=lambda x: _num(x[1].get("exact_match_rate")),
         reverse=True,
     )
 
@@ -370,7 +373,7 @@ def _md_summary(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
         f"按完全匹配率（ESM）排名：\n"
     )
     for rank, (mtype, metric) in enumerate(sorted_types, 1):
-        esm = metric.get("exact_match_rate", 0)
+        esm = _num(metric.get("exact_match_rate"))
         lines.append(f"{rank}. {mtype.value}（ESM={esm:.2%}）")
     lines.append("")
 
@@ -441,7 +444,7 @@ def generate_markdown_report(
     except OSError:
         logger.exception("写入 Markdown 报告失败: %s", out_path)
         raise
-    logger.info("Markdown report written to %s", out_path)
+    logger.info("Markdown 报告已写入: %s", out_path)
 
 
 def report(output_path: Path | None = None) -> None:
@@ -465,11 +468,11 @@ def report(output_path: Path | None = None) -> None:
     except OSError, TypeError:
         logger.exception("写入报告文件失败: %s", out)
         raise
-    logger.info("Report written to %s", out)
+    logger.info("报告已写入: %s", out)
 
     try:
         generate_markdown_report(output_dir, report_data, all_results)
-    except OSError:
+    except Exception:
         logger.exception("生成 Markdown 报告失败，已跳过")
 
     for mtype, metric in report_data.items():
