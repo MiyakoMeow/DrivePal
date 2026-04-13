@@ -21,6 +21,7 @@ def mm(tmp_path: Path, embedding: EmbeddingModel) -> MemoryModule:
 
 
 @pytest.mark.llm
+@pytest.mark.embedding
 @pytest.mark.usefixtures("llm_provider")
 class TestMemoryModuleFacade:
     """MemoryModule Facade 接口测试.

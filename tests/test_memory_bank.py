@@ -246,6 +246,7 @@ class TestUpdateEventSummary:
 
 
 @pytest.mark.llm
+@pytest.mark.embedding
 @pytest.mark.usefixtures("llm_provider")
 class TestMemoryModuleIntegration:
     """MemoryModule 与记忆库的完整集成测试.
