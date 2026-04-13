@@ -204,9 +204,7 @@ class MemoryBankStrategy:
                 for record in history_to_interaction_records(history_text):
                     await store.write(record)
                 if store_dir.exists():
-                    backup_dir = store_dir.with_suffix(".bak")
-                    if backup_dir.exists():
-                        await asyncio.to_thread(shutil.rmtree, backup_dir)
+                    backup_dir = store_dir.with_suffix(f".bak_{temp_dir.name}")
                     await asyncio.to_thread(
                         shutil.move, str(store_dir), str(backup_dir)
                     )
@@ -246,7 +244,8 @@ class MemoryBankStrategy:
             msg = f"prep_data 缺少 'data_dir' 字段 (file_num={file_num})"
             raise ValueError(msg)
         data_dir = Path(data_dir_str)
-        if not data_dir.exists():  # noqa: ASYNC240
+        exists = await asyncio.to_thread(data_dir.exists)
+        if not exists:
             msg = f"记忆库数据目录不存在: {data_dir} (file_num={file_num})"
             raise FileNotFoundError(msg)
         chat_model = get_store_chat_model()

@@ -11,7 +11,10 @@ from vendor_adapter.VehicleMemBench.paths import (
     ensure_output_dir,
 )
 
+# 明确依赖 vendor 模块的私有函数以复用指标构建逻辑，
+# 该函数无公开 API，vendor 模块为本项目内部使用不受 PEP8 约束。
 from evaluation.model_evaluation import _build_metric  # isort: skip
+
 
 if TYPE_CHECKING:
     from pathlib import Path
