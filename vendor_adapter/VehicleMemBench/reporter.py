@@ -184,7 +184,8 @@ def _md_memory_type_detail(
             "| 推理类型 | 样本数 | ESM | F1 Positive | F1 Change | Avg Calls |"
         )
         lines.append("|---|---|---|---|---|---|")
-        for rt, rt_metric in by_rt.items():
+        for rt, raw_rt_metric in by_rt.items():
+            rt_metric = raw_rt_metric or {}
             label = _format_reasoning_type(rt)
             rt_count = _num(rt_metric.get("count"))
             rt_esm = _num(rt_metric.get("exact_match_rate"))
@@ -232,7 +233,7 @@ def _md_reasoning_cross_comparison(
         label = _format_reasoning_type(rt)
         values: list[tuple[float, BenchMemoryMode]] = []
         for mt in mtypes:
-            rt_data = report_data[mt].get("by_reasoning_type", {}).get(rt, {})
+            rt_data = (report_data[mt].get("by_reasoning_type") or {}).get(rt) or {}
             esm = _num(rt_data.get("exact_match_rate"))
             values.append((esm, mt))
         max_esm = max(v for v, _ in values) if values else 0
@@ -295,9 +296,9 @@ def _md_query_analysis(  # noqa: C901
 
     def _query_sort_key(q: dict[str, Any]) -> tuple[str, int, int]:
         return (
-            q.get("memory_type", ""),
-            q.get("source_file", 0),
-            q.get("task_id", 0),
+            str(q.get("memory_type", "")),
+            int(_num(q.get("source_file", 0))),
+            int(_num(q.get("task_id", 0))),
         )
 
     for mtype, queries in all_results.items():
@@ -437,8 +438,8 @@ def generate_markdown_report(
     content = "\n".join(parts)
     filename = f"report-{now.strftime('%Y%m%d-%H%M%S')}.md"
     out_path = output_dir / filename
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     try:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         with out_path.open("w", encoding="utf-8") as f:
             f.write(content)
     except OSError:
@@ -476,14 +477,14 @@ def report(output_path: Path | None = None) -> None:
         logger.exception("生成 Markdown 报告失败，已跳过")
 
     for mtype, metric in report_data.items():
-        esm = metric.get("exact_match_rate", 0)
-        failed = metric.get("total_failed", 0)
+        esm = _num(metric.get("exact_match_rate"))
+        failed = _num(metric.get("total_failed"))
         logger.info(
             "  %s: ESM=%s, F-F1=%s, V-F1=%s, Calls=%s%s",
             mtype.value,
             f"{esm:.2%}",
-            f"{metric.get('state_f1_positive', 0):.4f}",
-            f"{metric.get('state_f1_change', 0):.4f}",
-            f"{metric.get('avg_pred_calls', 0):.1f}",
+            f"{_num(metric.get('state_f1_positive')):.4f}",
+            f"{_num(metric.get('state_f1_change')):.4f}",
+            f"{_num(metric.get('avg_pred_calls')):.1f}",
             f", Failed={failed}" if failed else "",
         )
