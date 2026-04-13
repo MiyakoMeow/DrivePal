@@ -63,9 +63,7 @@ def pytest_collection_modifyitems(
 
 
 @pytest.fixture(scope="session")
-def llm_provider(
-    request: pytest.FixtureRequest,
-) -> Generator[LLMProviderConfig, None, None]:
+def llm_provider(request: pytest.FixtureRequest) -> LLMProviderConfig:
     """返回 LLM provider，仅在 --test-llm 时启用."""
     if not request.config.getoption("--test-llm", default=False):
         pytest.skip("需要 --test-llm 标志")
@@ -79,26 +77,28 @@ def llm_provider(
         pytest.skip("无法获取 LLM providers")
     if not providers:
         pytest.skip("没有配置 LLM providers")
-    yield providers[0]
+    return providers[0]
 
 
 @pytest.fixture(scope="session")
-def embedding(request: pytest.FixtureRequest) -> Generator[EmbeddingModel]:
+def embedding(
+    request: pytest.FixtureRequest,
+) -> Generator[EmbeddingModel]:
     """会话级 embedding 实例，仅在 --test-embedding 时启用."""
     if not request.config.getoption("--test-embedding", default=False):
         pytest.skip("需要 --test-embedding 标志")
+    try:
+        settings = LLMSettings.load()
+    except RuntimeError:
+        pytest.skip("无法加载 embedding 配置")
+    try:
+        provider = settings.get_embedding_provider()
+    except KeyError, RuntimeError:
+        pytest.skip("无法获取 embedding provider")
+    if provider is None:
+        pytest.skip("没有配置 embedding provider")
     reset_embedding_singleton()
     try:
-        try:
-            settings = LLMSettings.load()
-        except RuntimeError:
-            pytest.skip("无法加载 embedding 配置")
-        try:
-            provider = settings.get_embedding_provider()
-        except KeyError, RuntimeError:
-            pytest.skip("无法获取 embedding provider")
-        if provider is None:
-            pytest.skip("没有配置 embedding provider")
         model = get_cached_embedding_model()
         yield model
     finally:

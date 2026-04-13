@@ -30,7 +30,6 @@ PROVIDER_A_CONCURRENCY = 2  # Provider A 的并发数
 PROVIDER_B_CONCURRENCY = 3  # Provider B 的并发数
 
 
-@pytest.mark.integration
 @pytest.mark.llm
 async def test_chat_drives_llm_memory_search(
     tmp_path: Path,
@@ -45,7 +44,6 @@ async def test_chat_drives_llm_memory_search(
     assert "会议" in results[0].event["content"]
 
 
-@pytest.mark.integration
 @pytest.mark.llm
 async def test_chat_feeds_workflow_context(
     tmp_path: Path,
@@ -70,7 +68,6 @@ async def test_chat_feeds_workflow_context(
     assert "related_events" in result["context"]
 
 
-@pytest.mark.integration
 @pytest.mark.llm
 async def test_run_with_stages_returns_stages_object(
     tmp_path: Path,
@@ -96,7 +93,6 @@ async def test_run_with_stages_returns_stages_object(
     assert stages.execution is not None
 
 
-@pytest.mark.integration
 @pytest.mark.llm
 async def test_run_with_stages_highway_scenario(
     tmp_path: Path,
