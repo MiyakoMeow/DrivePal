@@ -231,6 +231,12 @@ def test_report_reads_hierarchical_queries(
     assert "memory_bank" in data
     assert data["memory_bank"]["completed_tasks"] == 1
 
+    md_files = list(tmp_path.glob("report-*.md"))
+    assert len(md_files) == 1
+    md_content = md_files[0].read_text(encoding="utf-8")
+    assert "# VehicleMemBench 基准测试报告" in md_content
+    assert "memory_bank" in md_content
+
 
 def test_imports_available() -> None:
     """测试 vendor 导入可用."""
