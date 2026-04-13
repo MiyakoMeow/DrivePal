@@ -487,7 +487,9 @@ def report(output_path: Path | None = None) -> None:
     report_data = build_report_metrics(all_results)
 
     for mtype, fc in failed_counts.items():
-        metric = report_data.setdefault(mtype, {"total_failed": 0})
+        metric = report_data.setdefault(mtype, {})
+        if not metric.get("completed_tasks"):
+            metric["build_error"] = True
         metric["total_failed"] = metric.get("total_failed", 0) + fc
 
     compute_memory_scores(report_data)

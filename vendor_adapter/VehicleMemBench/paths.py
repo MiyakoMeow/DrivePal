@@ -32,18 +32,18 @@ def ensure_output_dir() -> Path:
     return OUTPUT_DIR
 
 
-def file_output_dir(memory_type: BenchMemoryMode | str, file_num: int) -> Path:
+def file_output_dir(memory_type: BenchMemoryMode, file_num: int) -> Path:
     """返回指定记忆类型和文件编号的输出目录路径."""
     return OUTPUT_DIR / memory_type / f"file_{file_num}"
 
 
-def prep_path(memory_type: BenchMemoryMode | str, file_num: int) -> Path:
+def prep_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
     """返回指定记忆类型和文件编号的 prep 数据路径."""
     return file_output_dir(memory_type, file_num) / "prep.json"
 
 
 def query_result_path(
-    memory_type: BenchMemoryMode | str, file_num: int, event_index: int
+    memory_type: BenchMemoryMode, file_num: int, event_index: int
 ) -> Path:
     """返回指定记忆类型、文件编号和事件索引的查询结果路径."""
     return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"

@@ -295,6 +295,22 @@ async def _run_single(
                 result["memory_type"] = memory_type
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                logger.warning(
+                    "  [warn] query %d returned None (mtype=%s, file=%d)",
+                    idx,
+                    memory_type,
+                    file_num,
+                )
+                fail_record = {
+                    "failed": True,
+                    "error": "evaluator returned None",
+                    "source_file": file_num,
+                    "event_index": idx,
+                    "memory_type": memory_type,
+                }
+                async with aiofiles.open(qp, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
         except Exception as e:
             logger.exception(
                 "  [error] query %d (mtype=%s, file=%d)", idx, memory_type, file_num
