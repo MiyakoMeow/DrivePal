@@ -1,8 +1,8 @@
 [model_groups.default]
-models = ["local/qwen3.5-2b"]
+models = ["openrouter/qwen/qwen3.5-9b"]
 
 [model_groups.benchmark]
-models = ["local/qwen3.5-2b?temperature=0.0&max_tokens=8192"]
+models = ["openrouter/qwen/qwen3.5-9b"]
 
 [model_groups.smart]
 models = ["deepseek/deepseek-chat"]
@@ -16,6 +16,11 @@ models = ["minimax-cn/MiniMax-M2.5"]
 [model_providers.local]
 base_url = "http://127.0.0.1:50721/v1"
 api_key = "none"
+concurrency = 4
+
+[model_providers.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
 concurrency = 4
 
 [model_providers.minimax-cn]
@@ -34,4 +39,4 @@ api_key_env = "DEEPSEEK_API_KEY"
 concurrency = 8
 
 [embedding]
-model = "local/text-embedding-bge-m3"
+model = "openrouter/baai/bge-m3"
