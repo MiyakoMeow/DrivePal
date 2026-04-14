@@ -1,5 +1,6 @@
 """记忆库后端和集成测试."""
 
+import inspect
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -10,6 +11,7 @@ from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.stores.memory_bank.summarization import (
     DAILY_SUMMARY_THRESHOLD,
+    SummaryManager,
 )
 from app.memory.types import MemoryMode
 
@@ -104,6 +106,16 @@ class TestHierarchicalSummarization:
             await backend.write(MemoryEvent(content=f"事件{i}"))
         summaries = await backend.summaries_store.read()
         assert len(summaries["daily_summaries"]) == 0
+
+    async def test_daily_summary_prompt_is_english(self) -> None:
+        """验证 daily summary prompt 包含英文车辆偏好提取指令."""
+        source = inspect.getsource(SummaryManager.maybe_summarize)
+        assert "vehicle-related preferences" in source
+
+    async def test_overall_summary_prompt_is_english(self) -> None:
+        """验证 overall summary prompt 包含英文偏好合并指令."""
+        source = inspect.getsource(SummaryManager.update_overall_summary)
+        assert "preference profile" in source
 
 
 @pytest.mark.llm
