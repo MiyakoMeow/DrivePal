@@ -281,6 +281,48 @@ class TestMemoryBankEngineWrite:
         await engine.write(MemoryEvent(content="测试"))
         assert await engine.search("   ") == []
 
+    async def test_write_preserves_existing_date_group(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证 write 保留传入的 date_group."""
+        await engine.write(MemoryEvent(content="历史事件", date_group="2025-03-10"))
+        events = await storage.read_events()
+        assert events[0]["date_group"] == "2025-03-10"
+
+    async def test_write_preserves_existing_last_recall_date(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证 write 保留传入的 last_recall_date."""
+        await engine.write(
+            MemoryEvent(content="历史事件", last_recall_date="2025-03-10"),
+        )
+        events = await storage.read_events()
+        assert events[0]["last_recall_date"] == "2025-03-10"
+
+    async def test_write_defaults_date_group_when_empty(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证 date_group 为空时使用当天日期."""
+        await engine.write(MemoryEvent(content="新事件"))
+        events = await storage.read_events()
+        assert events[0]["date_group"] != ""
+
+    async def test_write_defaults_last_recall_date_to_date_group(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证 last_recall_date 为空时使用 date_group."""
+        await engine.write(MemoryEvent(content="新事件", date_group="2025-06-01"))
+        events = await storage.read_events()
+        assert events[0]["last_recall_date"] == "2025-06-01"
+
 
 class TestMemoryBankEngineWriteInteraction:
     """MemoryBankEngine.write_interaction 测试."""

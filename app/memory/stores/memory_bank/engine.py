@@ -78,16 +78,18 @@ class MemoryBankEngine:
         event = event.model_copy(deep=True)
         event.id = self._storage.generate_id()
         event.created_at = datetime.now(UTC).isoformat()
-        today = datetime.now(UTC).date().isoformat()
+        if not event.date_group:
+            event.date_group = datetime.now(UTC).date().isoformat()
+        if not event.last_recall_date:
+            event.last_recall_date = event.date_group
         event.memory_strength = 1
-        event.last_recall_date = today
-        event.date_group = today
         await self._storage.append_raw(event.model_dump())
+        date_group = event.date_group
         events = await self._storage.read_events()
-        group_events = [e for e in events if e.get("date_group") == today]
+        group_events = [e for e in events if e.get("date_group") == date_group]
         interactions = await self._interactions_store.read()
         await self._summary_mgr.maybe_summarize(
-            today, group_events, self.chat_model, interactions
+            date_group, group_events, self.chat_model, interactions
         )
         return event.id
 
