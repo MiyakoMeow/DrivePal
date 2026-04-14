@@ -23,7 +23,7 @@ from .paths import (  # noqa: F401
     query_result_path,
     setup_vehiclemembench_path,
 )
-from .reporter import report  # noqa: F401
+from .reporter_impl import report  # noqa: F401
 from .strategies import STRATEGIES, VehicleMemBenchError
 
 if TYPE_CHECKING:

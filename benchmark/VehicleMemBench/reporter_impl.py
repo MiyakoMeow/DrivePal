@@ -6,12 +6,12 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from benchmark.VehicleMemBench import BenchMemoryMode
-from benchmark.VehicleMemBench.markdown_formatters import (
-    generate_markdown_report,
-)
 from benchmark.VehicleMemBench.model_config import get_benchmark_config
 from benchmark.VehicleMemBench.paths import (
     ensure_output_dir,
+)
+from benchmark.VehicleMemBench.reporter.markdown_formatters import (
+    generate_markdown_report,
 )
 
 # 明确依赖 vendor 模块的私有函数以复用指标构建逻辑，

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from benchmark.VehicleMemBench import BenchMemoryMode
-from benchmark.VehicleMemBench.markdown_formatters import (
+from benchmark.VehicleMemBench.reporter.markdown_formatters import (
     _format_calls,
     _format_reasoning_type,
     _num,
