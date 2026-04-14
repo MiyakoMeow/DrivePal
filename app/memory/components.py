@@ -28,13 +28,20 @@ class ActionRequiredError(ValueError):
         super().__init__(self.MSG)
 
 
-def forgetting_curve(days_elapsed: int, strength: int) -> float:
+DEFAULT_DECAY_BASE = 5
+
+
+def forgetting_curve(
+    days_elapsed: int,
+    strength: int,
+    decay_base: int = DEFAULT_DECAY_BASE,
+) -> float:
     """遗忘曲线衰减函数."""
     if days_elapsed <= 0:
         return 1.0
     if strength <= 0:
         return 0.0
-    return math.exp(-days_elapsed / (5 * strength))
+    return math.exp(-days_elapsed / (decay_base * strength))
 
 
 class EventStorage:

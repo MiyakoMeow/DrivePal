@@ -1,5 +1,7 @@
 """app.memory.components 可组合组件测试."""
 
+import inspect
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,12 +12,14 @@ from app.memory.components import (
     FeedbackManager,
     KeywordSearch,
     SimpleInteractionWriter,
+    forgetting_curve,
 )
 from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 from app.memory.stores.memory_bank.engine import (
     SOFT_FORGET_STRENGTH,
     MemoryBankEngine,
 )
+from app.memory.stores.memory_bank.personality import PersonalityManager
 from app.storage.toml_store import TOMLStore
 
 # 测试常量定义
@@ -368,6 +372,22 @@ class TestPersonalitySummary:
         results = await engine._personality_mgr.search("音乐", top_k=1)
         assert len(results) == 0
 
+    async def test_personality_prompt_is_preference_profile(
+        self,
+        engine: MemoryBankEngine,
+    ) -> None:
+        """验证人格分析 prompt 使用偏好画像模板."""
+        source = inspect.getsource(PersonalityManager.maybe_summarize)
+        assert "vehicle preference profile" in source
+
+    async def test_overall_personality_prompt_is_preference_summary(
+        self,
+        engine: MemoryBankEngine,
+    ) -> None:
+        """验证总体人格 prompt 使用偏好汇总模板."""
+        source = inspect.getsource(PersonalityManager.generate_overall_text)
+        assert "preference summary" in source
+
 
 class TestSoftForgetMechanism:
     """软遗忘机制测试."""
@@ -458,3 +478,31 @@ class TestSoftForgetMechanism:
         assert matched.get("forgotten") is not True
         assert unmatched.get("forgotten") is True
         assert matched["memory_strength"] > unmatched["memory_strength"]
+
+
+class TestForgettingCurve:
+    """遗忘曲线函数测试."""
+
+    def test_default_decay_base(self) -> None:
+        """验证默认衰减基数为 5."""
+        result = forgetting_curve(5, 1)
+        assert result == pytest.approx(math.exp(-1.0))
+
+    def test_custom_decay_base(self) -> None:
+        """验证自定义衰减基数."""
+        result = forgetting_curve(10, 1, decay_base=10)
+        assert result == pytest.approx(math.exp(-1.0))
+
+    def test_zero_days_returns_one(self) -> None:
+        """验证 0 天经过返回 1.0."""
+        assert forgetting_curve(0, 1) == 1.0
+
+    def test_zero_strength_returns_zero(self) -> None:
+        """验证 0 强度返回 0.0."""
+        assert forgetting_curve(10, 0) == 0.0
+
+    def test_larger_decay_base_slower_decay(self) -> None:
+        """验证更大的衰减基数衰减更慢."""
+        fast = forgetting_curve(10, 1, decay_base=5)
+        slow = forgetting_curve(10, 1, decay_base=20)
+        assert slow > fast
