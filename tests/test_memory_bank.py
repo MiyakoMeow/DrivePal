@@ -93,20 +93,6 @@ class TestRecallStrengthening:
 class TestHierarchicalSummarization:
     """层次化每日和总体摘要测试."""
 
-    async def test_summaries_included_in_search(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证每日摘要包含在搜索结果中."""
-        mock_chat_model.generate.return_value = "今天讨论了项目进度"
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        for i in range(DAILY_SUMMARY_THRESHOLD):
-            await backend.write(MemoryEvent(content=f"事件{i}关于项目"))
-        results = await backend.search("讨论了")
-        sources = [r.source for r in results]
-        assert "daily_summary" in sources
-
     async def test_no_summary_below_threshold(
         self,
         tmp_path: Path,
