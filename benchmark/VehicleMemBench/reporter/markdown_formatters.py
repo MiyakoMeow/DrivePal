@@ -54,6 +54,7 @@ def md_experiment_groups() -> str:
         "| none | Raw History | 无历史信息，让模型直接预测 | 基线性能 |",
         "| gold | Gold Memory | 直接提供真实最新用户偏好 | 理论性能上界 |",
         "| key_value | Key-Value Store | 将偏好组织为结构化键值对 | 精确检索能力 |",
+        "| summary | Recursive Summary | LLM 逐日构建递归摘要 | 摘要压缩能力 |",
         "| memory_bank | MemoryBank | 基于遗忘曲线的分层记忆 | 遗忘曲线检索能力 |\n",
     ]
     return "\n".join(lines)

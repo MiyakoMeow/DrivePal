@@ -1,4 +1,4 @@
-"""键值记忆策略."""
+"""递归摘要记忆策略."""
 
 import asyncio
 import logging
@@ -11,9 +11,8 @@ from benchmark.VehicleMemBench.paths import (
 from benchmark.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
 
 from evaluation.model_evaluation import (  # isort: skip
-    MemoryStore as VMBMemoryStore,
-    build_memory_key_value,
-    process_task_with_kv_memory,
+    build_memory_recursive_summary,
+    process_task_with_memory,
     split_history_by_day,
 )
 
@@ -25,19 +24,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class KvEvaluator:
-    """KV 模式评估器：使用预构建的 KV 存储."""
+class SummaryEvaluator:
+    """Summary 模式评估器：使用预构建的摘要记忆."""
 
     def __init__(
         self,
         agent_client: AgentClient,
-        kv_store: VMBMemoryStore,
+        memory_text: str,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
     ) -> None:
         """初始化评估器."""
         self._agent_client = agent_client
-        self._kv_store = kv_store
+        self._memory_text = memory_text
         self._reflect_num = reflect_num
         self._semaphore = query_semaphore
 
@@ -47,25 +46,25 @@ class KvEvaluator:
         task_id: int,
         gold_memory: str,  # noqa: ARG002
     ) -> dict[str, Any] | None:
-        """评估单个 query，使用 KV 存储."""
+        """评估单个 query，使用摘要记忆."""
         async with self._semaphore:
             return await asyncio.to_thread(
-                process_task_with_kv_memory,
+                process_task_with_memory,
                 task,
                 task_id,
-                self._kv_store,
+                self._memory_text,
                 self._agent_client,
                 self._reflect_num,
             )
 
 
-class KvMemoryStrategy:
-    """键值记忆策略：提取历史中的 KV 对，用于查询评估."""
+class SummaryMemoryStrategy:
+    """递归摘要记忆策略：LLM 逐日构建递归摘要，用于查询评估."""
 
     @property
     def mode(self) -> BenchMemoryMode:
         """返回策略模式."""
-        return BenchMemoryMode.KV
+        return BenchMemoryMode.SUMMARY
 
     def needs_history(self) -> bool:
         """是否需要历史文本."""
@@ -82,18 +81,18 @@ class KvMemoryStrategy:
         agent_client: AgentClient | None,
         semaphore: asyncio.Semaphore,
     ) -> dict[str, Any] | None:
-        """构建 KV 存储."""
+        """构建递归摘要记忆."""
         if agent_client is None:
-            msg = f"[kv] agent_client 为 None，无法 prepare (output_dir={output_dir})"
+            msg = f"[summary] agent_client 为 None，无法 prepare (output_dir={output_dir})"
             raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
         async with semaphore:
-            store, _, _ = await asyncio.to_thread(
-                build_memory_key_value,
+            memory_text, _, _ = await asyncio.to_thread(
+                build_memory_recursive_summary,
                 agent_client,
                 daily,
             )
-        return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
+        return {"type": BenchMemoryMode.SUMMARY, "memory": memory_text}
 
     async def create_evaluator(
         self,
@@ -102,27 +101,34 @@ class KvMemoryStrategy:
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
-    ) -> KvEvaluator:
-        """创建 KV 模式评估器."""
-        store = VMBMemoryStore()
+    ) -> SummaryEvaluator:
+        """创建 Summary 模式评估器."""
         if prep_data is None:
             msg = f"prep_data 为 None (file_num={file_num})"
             raise VehicleMemBenchError(
-                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+                msg, file_num=file_num, memory_type=BenchMemoryMode.SUMMARY
             )
-        store_data = prep_data.get("store")
-        if store_data is None:
-            msg = f"prep_data 缺少 'store' 字段 (file_num={file_num})"
-            raise VehicleMemBenchError(
-                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
-            )
-        if not isinstance(store_data, dict):
+        prep_type = prep_data.get("type")
+        if prep_type != BenchMemoryMode.SUMMARY:
             msg = (
-                f"prep_data['store'] 类型错误，期望 dict，"
-                f"得到 {type(store_data).__name__} (file_num={file_num})"
+                f"prep_data['type'] 不匹配，期望 {BenchMemoryMode.SUMMARY}，"
+                f"得到 {prep_type} (file_num={file_num})"
             )
             raise VehicleMemBenchError(
-                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+                msg, file_num=file_num, memory_type=BenchMemoryMode.SUMMARY
             )
-        store.store = store_data
-        return KvEvaluator(agent_client, store, reflect_num, query_semaphore)
+        memory_text = prep_data.get("memory")
+        if memory_text is None:
+            msg = f"prep_data 缺少 'memory' 字段 (file_num={file_num})"
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.SUMMARY
+            )
+        if not isinstance(memory_text, str):
+            msg = (
+                f"prep_data['memory'] 类型错误，期望 str，"
+                f"得到 {type(memory_text).__name__} (file_num={file_num})"
+            )
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.SUMMARY
+            )
+        return SummaryEvaluator(agent_client, memory_text, reflect_num, query_semaphore)

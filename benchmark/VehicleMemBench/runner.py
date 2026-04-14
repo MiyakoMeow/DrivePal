@@ -115,7 +115,7 @@ def _resolve_agent_client(types: list[BenchMemoryMode]) -> AgentClient | None:
 
 async def prepare(
     file_range: str = "1-50",
-    memory_types: str = "none,gold,kv,memory_bank",
+    memory_types: str = "none,gold,key_value,summary,memory_bank",
 ) -> None:
     """为指定文件范围和记忆类型准备基准测试数据."""
     file_nums = parse_file_range(file_range)
@@ -181,7 +181,7 @@ async def prepare(
 
 async def run(
     file_range: str = "1-50",
-    memory_types: str = "none,gold,kv,memory_bank",
+    memory_types: str = "none,gold,key_value,summary,memory_bank",
     reflect_num: int = 10,
 ) -> None:
     """为指定文件范围和记忆类型运行基准评估."""
