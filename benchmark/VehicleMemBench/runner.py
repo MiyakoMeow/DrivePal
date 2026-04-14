@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from evaluation.agent_client import AgentClient
 
-    from vendor_adapter.VehicleMemBench.strategies import QueryEvaluator
+    from benchmark.VehicleMemBench.strategies import QueryEvaluator
 
 logger = logging.getLogger(__name__)
 

@@ -78,7 +78,7 @@ thesis-cockpit-memo/
 │   ├── storage/                  # 存储模块
 │   │   ├── toml_store.py         # TOML文件存储引擎
 │   │   └── init_data.py          # 数据目录初始化
-├── vendor_adapter/               # VehicleMemBench适配器层
+├── benchmark/               # VehicleMemBench适配器层
 │   └── VehicleMemBench/
 │       ├── __init__.py           # BenchMemoryMode 枚举
 │       ├── model_config.py       # 模型字符串解析（provider/model?params）

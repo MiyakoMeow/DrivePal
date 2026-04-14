@@ -2,8 +2,8 @@
 
 import pytest
 
-from vendor_adapter.VehicleMemBench import BenchMemoryMode
-from vendor_adapter.VehicleMemBench.strategies import STRATEGIES
+from benchmark.VehicleMemBench import BenchMemoryMode
+from benchmark.VehicleMemBench.strategies import STRATEGIES
 
 
 def test_strategies_registry_has_all_modes() -> None:

@@ -6,7 +6,7 @@ import pytest
 import tomli_w
 
 from app.models.model_string import _load_config, resolve_model_string
-from vendor_adapter.VehicleMemBench.model_config import (
+from benchmark.VehicleMemBench.model_config import (
     get_benchmark_client,
     get_benchmark_config,
     get_store_chat_model,

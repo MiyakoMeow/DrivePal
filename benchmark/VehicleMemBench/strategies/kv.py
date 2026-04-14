@@ -4,11 +4,11 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from vendor_adapter.VehicleMemBench import BenchMemoryMode
-from vendor_adapter.VehicleMemBench.paths import (
+from benchmark.VehicleMemBench import BenchMemoryMode
+from benchmark.VehicleMemBench.paths import (
     setup_vehiclemembench_path as _,  # noqa: F401
 )
-from vendor_adapter.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
+from benchmark.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
 
 from evaluation.model_evaluation import (  # isort: skip
     MemoryStore as VMBMemoryStore,

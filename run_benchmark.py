@@ -5,7 +5,7 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
-from vendor_adapter.VehicleMemBench.runner import prepare, report, run
+from benchmark.VehicleMemBench.runner import prepare, report, run
 
 logger = logging.getLogger(__name__)
 

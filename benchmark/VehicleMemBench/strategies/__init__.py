@@ -2,8 +2,8 @@
 
 from typing import TYPE_CHECKING, Any, Protocol
 
-from vendor_adapter.VehicleMemBench import BenchMemoryMode  # noqa: TC001
-from vendor_adapter.VehicleMemBench.strategies.exceptions import (
+from benchmark.VehicleMemBench import BenchMemoryMode  # noqa: TC001
+from benchmark.VehicleMemBench.strategies.exceptions import (
     VehicleMemBenchError as VehicleMemBenchError,
 )
 
@@ -65,12 +65,12 @@ class MemoryStrategy(Protocol):
         ...
 
 
-from vendor_adapter.VehicleMemBench.strategies.gold import GoldStrategy  # noqa: E402
-from vendor_adapter.VehicleMemBench.strategies.kv import KvMemoryStrategy  # noqa: E402
-from vendor_adapter.VehicleMemBench.strategies.memory_bank import (  # noqa: E402
+from benchmark.VehicleMemBench.strategies.gold import GoldStrategy  # noqa: E402
+from benchmark.VehicleMemBench.strategies.kv import KvMemoryStrategy  # noqa: E402
+from benchmark.VehicleMemBench.strategies.memory_bank import (  # noqa: E402
     MemoryBankStrategy,
 )
-from vendor_adapter.VehicleMemBench.strategies.none import NoneStrategy  # noqa: E402
+from benchmark.VehicleMemBench.strategies.none import NoneStrategy  # noqa: E402
 
 STRATEGIES: dict[BenchMemoryMode, MemoryStrategy] = {
     s.mode: s

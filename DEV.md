@@ -189,11 +189,11 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 | 文件 | 说明 |
 |------|------|
-| `tests/test_vendor_adapter/test_common.py` | 适配器通用工具函数 |
-| `tests/test_vendor_adapter/test_model_config.py` | 模型字符串解析 |
-| `tests/test_vendor_adapter/test_runner.py` | VehicleMemBench 运行器 |
-| `tests/test_vendor_adapter/test_reporter_md.py` | 结果收集与 Markdown 报告生成 |
-| `tests/test_vendor_adapter/test_strategies.py` | 记忆策略注册表与接口 |
+| `tests/test_benchmark/test_common.py` | 适配器通用工具函数 |
+| `tests/test_benchmark/test_model_config.py` | 模型字符串解析 |
+| `tests/test_benchmark/test_runner.py` | VehicleMemBench 运行器 |
+| `tests/test_benchmark/test_reporter_md.py` | 结果收集与 Markdown 报告生成 |
+| `tests/test_benchmark/test_strategies.py` | 记忆策略注册表与接口 |
 | `tests/stores/test_memory_bank_store.py` | MemoryBank 后端 |
 | `tests/test_context_schemas.py` | 驾驶上下文数据模型 |
 | `tests/test_graphql.py` | GraphQL 端点测试 |

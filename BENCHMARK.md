@@ -39,7 +39,7 @@ uv run python run_benchmark.py report --output path/to/report.json
 
 ### 架构：策略模式
 
-`vendor_adapter/VehicleMemBench/strategies/` 采用策略模式组织各记忆类型的评估逻辑：
+`benchmark/VehicleMemBench/strategies/` 采用策略模式组织各记忆类型的评估逻辑：
 
 | 策略 | 类名 | 说明 |
 |------|------|------|
