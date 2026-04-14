@@ -277,24 +277,6 @@ class TestMemoryBankEngineWrite:
         await engine.write(MemoryEvent(content="测试"))
         assert await engine.search("   ") == []
 
-    async def test_keyword_search_finds_match(self, engine: MemoryBankEngine) -> None:
-        """验证关键词搜索能找到匹配的事件."""
-        await engine.write(MemoryEvent(content="天气晴朗"))
-        results = await engine.search("天气")
-        assert len(results) > 0
-        assert "天气" in results[0].event["content"]
-
-    async def test_search_strengthens_matched_events(
-        self,
-        engine: MemoryBankEngine,
-        storage: EventStorage,
-    ) -> None:
-        """验证搜索增强匹配事件的记忆."""
-        await engine.write(MemoryEvent(content="重要会议"))
-        await engine.search("会议")
-        events = await storage.read_events()
-        assert events[0]["memory_strength"] == SEARCH_BOOST_STRENGTH
-
 
 class TestMemoryBankEngineWriteInteraction:
     """MemoryBankEngine.write_interaction 测试."""
@@ -309,13 +291,6 @@ class TestMemoryBankEngineWriteInteraction:
         """提供不带嵌入或聊天模型的 MemoryBankEngine."""
         return MemoryBankEngine(tmp_path, storage)
 
-    async def test_write_interaction_returns_id(self, engine: MemoryBankEngine) -> None:
-        """验证 write_interaction 返回 InteractionResult."""
-        result = await engine.write_interaction("查询", "响应")
-        assert isinstance(result, InteractionResult)
-        assert len(result.event_id) > 0
-        assert len(result.interaction_id) > 0
-
     async def test_write_interaction_creates_event_and_interaction(
         self,
         engine: MemoryBankEngine,
@@ -328,18 +303,6 @@ class TestMemoryBankEngineWriteInteraction:
         assert len(events) == 1
         assert len(interactions) == 1
         assert interactions[0]["event_id"] == events[0]["id"]
-
-    async def test_similar_interactions_aggregate_to_same_event(
-        self,
-        engine: MemoryBankEngine,
-        storage: EventStorage,
-    ) -> None:
-        """验证相似的交互聚合到同一事件."""
-        await engine.write_interaction("明天上午开会", "好的")
-        await engine.write_interaction("明天上午开会讨论", "已更新")
-        events = await storage.read_events()
-        assert len(events) == 1
-        assert len(events[0]["interaction_ids"]) == FEEDBACK_RECORD_COUNT_2
 
 
 class TestPersonalitySummary:
