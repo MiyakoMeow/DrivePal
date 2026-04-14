@@ -46,8 +46,13 @@ def format_search_results(results: list[SearchResult]) -> tuple[str, int]:
         return ("", 0)
     texts = []
     for idx, r in enumerate(results, 1):
-        event = r.event if isinstance(r.event, dict) else {}
-        content = str(event.get("content", "")) if event else ""
+        if isinstance(r.event, dict):
+            event = r.event
+        elif hasattr(r.event, "content"):
+            event = {"content": getattr(r.event, "content", "")}
+        else:
+            event = {"content": str(r.event) if r.event is not None else ""}
+        content = str(event.get("content", ""))
         if not content:
             continue
         date_group = event.get("date_group", "unknown")

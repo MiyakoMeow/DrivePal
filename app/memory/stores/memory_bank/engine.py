@@ -145,6 +145,7 @@ class MemoryBankEngine:
         if personality_keys:
             await self._personality_mgr.strengthen(personality_keys)
 
+        await self.forget_expired()
         return await self._expand_event_interactions(top_results)
 
     def _get_searchable_text(self, event: dict) -> str:
