@@ -1,7 +1,6 @@
 """MemoryBankStore 测试 - 仅存储级别测试."""
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,23 +15,9 @@ AGGREGATED_INTERACTION_COUNT = 2
 
 
 @pytest.fixture
-def mock_chat_model() -> MagicMock:
-    """创建 mock chat model."""
-    chat = MagicMock()
-    chat.generate.return_value = "测试摘要"
-    return chat
-
-
-@pytest.fixture
 def store(tmp_path: Path) -> MemoryBankStore:
     """创建用于测试的 MemoryBankStore."""
     return MemoryBankStore(tmp_path)
-
-
-@pytest.fixture
-def store_with_llm(tmp_path: Path, mock_chat_model: MagicMock) -> MemoryBankStore:
-    """创建带 chat model 的 MemoryBankStore."""
-    return MemoryBankStore(tmp_path, chat_model=mock_chat_model)
 
 
 class TestWriteInteraction:

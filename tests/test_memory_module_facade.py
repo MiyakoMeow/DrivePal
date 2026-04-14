@@ -30,67 +30,42 @@ class TestMemoryModuleFacade:
     因为 MemoryBankStore.requires_chat=True 会惰性初始化 ChatModel。
     """
 
-    async def test_default_mode_is_memory_bank(
+    async def test_write_and_get_history(
         self,
         mm: MemoryModule,
     ) -> None:
-        """验证默认模式为 memory_bank（通过隐式调用验证）."""
-        await mm.write(MemoryEvent(content="test"))
-
-    async def test_write_uses_default_mode(
-        self,
-        mm: MemoryModule,
-    ) -> None:
-        """验证 write 使用默认模式存储."""
+        """验证 write 和 get_history 基本流程."""
         await mm.write(MemoryEvent(content="事件"))
         history = await mm.get_history()
         assert len(history) == 1
         assert isinstance(history[0], MemoryEvent)
 
-    async def test_search_routes_to_correct_store(
+    async def test_search_routes_to_memory_bank(
         self,
         mm: MemoryModule,
     ) -> None:
-        """验证 search 路由到正确的存储后端."""
+        """验证 search 路由到记忆库并返回 SearchResult."""
         await mm.write(MemoryEvent(content="测试事件"))
         results = await mm.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) == 1
         assert isinstance(results[0], SearchResult)
 
-    async def test_write_with_explicit_mode(
+    async def test_write_interaction_returns_interaction_result(
         self,
         mm: MemoryModule,
     ) -> None:
-        """验证 write 使用显式 mode 参数."""
-        await mm.write(MemoryEvent(content="test"), mode=MemoryMode.MEMORY_BANK)
-        history = await mm.get_history(mode=MemoryMode.MEMORY_BANK)
-        assert len(history) == 1
-
-    async def test_write_interaction_calls_memory_bank(
-        self,
-        mm: MemoryModule,
-    ) -> None:
-        """验证 write_interaction 在 memory_bank 模式下返回 InteractionResult."""
+        """验证 write_interaction 返回 InteractionResult."""
         result = await mm.write_interaction("提醒我开会", "好的")
         assert isinstance(result, InteractionResult)
         assert result.event_id != ""
 
-    async def test_search_returns_search_result_objects(
+    async def test_search_returns_public_objects(
         self,
         mm: MemoryModule,
     ) -> None:
-        """验证 search 返回 SearchResult 对象列表."""
+        """验证 search 返回的对象可转换为公共格式."""
         await mm.write(MemoryEvent(content="特殊关键词事件"))
         results = await mm.search("特殊关键词", mode=MemoryMode.MEMORY_BANK)
         assert all(isinstance(r, SearchResult) for r in results)
         pub = results[0].to_public()
         assert "score" not in pub
-
-    async def test_get_history_returns_memory_event_objects(
-        self,
-        mm: MemoryModule,
-    ) -> None:
-        """验证 get_history 返回 MemoryEvent 对象列表."""
-        await mm.write(MemoryEvent(content="事件"))
-        history = await mm.get_history()
-        assert all(isinstance(e, MemoryEvent) for e in history)

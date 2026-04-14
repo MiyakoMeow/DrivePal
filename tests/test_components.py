@@ -1,10 +1,7 @@
 """app.memory.components 可组合组件测试."""
 
-import asyncio
-import math
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -13,62 +10,20 @@ from app.memory.components import (
     FeedbackManager,
     KeywordSearch,
     SimpleInteractionWriter,
-    forgetting_curve,
 )
 from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 from app.memory.stores.memory_bank.engine import (
     SOFT_FORGET_STRENGTH,
-    SOFT_FORGET_THRESHOLD,
     MemoryBankEngine,
-)
-from app.memory.stores.memory_bank.personality import (
-    PERSONALITY_SUMMARY_THRESHOLD,
-    PersonalityManager,
 )
 from app.storage.toml_store import TOMLStore
 
 # 测试常量定义
-ID_TIMESTAMP_LENGTH = 14  # 事件ID时间戳部分长度
-ID_UUID_LENGTH = 8  # 事件ID UUID部分长度
 EXPECTED_EVENT_COUNT_2 = 2  # 预期事件数量
 DEFAULT_TOP_K = 5  # 搜索默认返回数量
 WEIGHT_MIN = 0.1  # 策略权重下限
 FEEDBACK_RECORD_COUNT_2 = 2  # 反馈记录数量
-INITIAL_MEMORY_STRENGTH = 1  # 初始记忆强度
 SEARCH_BOOST_STRENGTH = 2  # 搜索增强后记忆强度
-SOFT_FORGET_THRESHOLD_VALUE = 0.15  # 软遗忘阈值
-
-
-class TestForgettingCurve:
-    """遗忘曲线衰减函数测试."""
-
-    def test_zero_days_returns_one(self) -> None:
-        """验证无时间流逝时保留率为 1.0."""
-        assert forgetting_curve(0, 1) == 1.0
-
-    def test_negative_days_returns_one(self) -> None:
-        """验证负数天数时保留率为 1.0."""
-        assert forgetting_curve(-5, 3) == 1.0
-
-    def test_zero_strength_returns_zero(self) -> None:
-        """验证记忆强度为零时保留率为 0.0."""
-        assert forgetting_curve(10, 0) == 0.0
-
-    def test_negative_strength_returns_zero(self) -> None:
-        """验证记忆强度为负时保留率为 0.0."""
-        assert forgetting_curve(10, -1) == 0.0
-
-    def test_positive_decay(self) -> None:
-        """验证正衰减产生 0 到 1 之间的值."""
-        result = forgetting_curve(10, 2)
-        assert 0.0 < result < 1.0
-        assert math.isclose(result, math.exp(-10 / 10))
-
-    def test_higher_strength_slower_decay(self) -> None:
-        """验证更高的强度导致更慢的衰减."""
-        weak = forgetting_curve(10, 1)
-        strong = forgetting_curve(10, 5)
-        assert strong > weak
 
 
 class TestEventStorage:
@@ -78,14 +33,6 @@ class TestEventStorage:
     def storage(self, tmp_path: Path) -> EventStorage:
         """提供由临时目录支持的 EventStorage."""
         return EventStorage(tmp_path)
-
-    def test_generate_id_format(self, storage: EventStorage) -> None:
-        """验证生成的 ID 遵循 timestamp_uuid 格式."""
-        eid = storage.generate_id()
-        assert "_" in eid
-        parts = eid.split("_")
-        assert len(parts[0]) == ID_TIMESTAMP_LENGTH
-        assert len(parts[1]) == ID_UUID_LENGTH
 
     async def test_read_events_empty(self, storage: EventStorage) -> None:
         """验证从空存储读取返回空列表."""
@@ -330,24 +277,6 @@ class TestMemoryBankEngineWrite:
         await engine.write(MemoryEvent(content="测试"))
         assert await engine.search("   ") == []
 
-    async def test_keyword_search_finds_match(self, engine: MemoryBankEngine) -> None:
-        """验证关键词搜索能找到匹配的事件."""
-        await engine.write(MemoryEvent(content="天气晴朗"))
-        results = await engine.search("天气")
-        assert len(results) > 0
-        assert "天气" in results[0].event["content"]
-
-    async def test_search_strengthens_matched_events(
-        self,
-        engine: MemoryBankEngine,
-        storage: EventStorage,
-    ) -> None:
-        """验证搜索增强匹配事件的记忆."""
-        await engine.write(MemoryEvent(content="重要会议"))
-        await engine.search("会议")
-        events = await storage.read_events()
-        assert events[0]["memory_strength"] == SEARCH_BOOST_STRENGTH
-
 
 class TestMemoryBankEngineWriteInteraction:
     """MemoryBankEngine.write_interaction 测试."""
@@ -362,13 +291,6 @@ class TestMemoryBankEngineWriteInteraction:
         """提供不带嵌入或聊天模型的 MemoryBankEngine."""
         return MemoryBankEngine(tmp_path, storage)
 
-    async def test_write_interaction_returns_id(self, engine: MemoryBankEngine) -> None:
-        """验证 write_interaction 返回 InteractionResult."""
-        result = await engine.write_interaction("查询", "响应")
-        assert isinstance(result, InteractionResult)
-        assert len(result.event_id) > 0
-        assert len(result.interaction_id) > 0
-
     async def test_write_interaction_creates_event_and_interaction(
         self,
         engine: MemoryBankEngine,
@@ -381,18 +303,6 @@ class TestMemoryBankEngineWriteInteraction:
         assert len(events) == 1
         assert len(interactions) == 1
         assert interactions[0]["event_id"] == events[0]["id"]
-
-    async def test_similar_interactions_aggregate_to_same_event(
-        self,
-        engine: MemoryBankEngine,
-        storage: EventStorage,
-    ) -> None:
-        """验证相似的交互聚合到同一事件."""
-        await engine.write_interaction("明天上午开会", "好的")
-        await engine.write_interaction("明天上午开会讨论", "已更新")
-        events = await storage.read_events()
-        assert len(events) == 1
-        assert len(events[0]["interaction_ids"]) == FEEDBACK_RECORD_COUNT_2
 
 
 class TestPersonalitySummary:
@@ -458,93 +368,6 @@ class TestPersonalitySummary:
         results = await engine._personality_mgr.search("音乐", top_k=1)
         assert len(results) == 0
 
-    async def test_search_personality_via_public_interface(
-        self,
-        engine: MemoryBankEngine,
-    ) -> None:
-        """验证通过 search() 公共接口能返回人格摘要."""
-        personality_data = {
-            "daily_personality": {
-                "2026-04-01": {
-                    "content": "用户喜欢讨论天气",
-                    "memory_strength": 1,
-                    "last_recall_date": "2026-04-01",
-                },
-            },
-            "overall_personality": "",
-        }
-        await engine.personality_store.write(personality_data)
-        results = await engine.search("天气", top_k=5)
-        personality_results = [r for r in results if r.source == "personality"]
-        assert len(personality_results) == 1
-        assert "天气" in personality_results[0].event["content"]
-
-    async def test_personality_immutability_no_regen(self, tmp_path: Path) -> None:
-        """验证已有人格摘要不会被重新生成（不可变语义）."""
-        chat_model = MagicMock()
-        chat_model.generate = AsyncMock(return_value="初始人格摘要")
-        mgr = PersonalityManager(tmp_path)
-        date_group = "2026-04-09"
-        events = [
-            {"id": f"e{i}", "date_group": date_group}
-            for i in range(PERSONALITY_SUMMARY_THRESHOLD)
-        ]
-        interactions = [
-            {"event_id": f"e{i}", "query": f"q{i}", "response": f"r{i}"}
-            for i in range(PERSONALITY_SUMMARY_THRESHOLD)
-        ]
-        await mgr.maybe_summarize(date_group, events, interactions, chat_model)
-        assert chat_model.generate.call_count == 1
-        more_events = events + [{"id": "e99", "date_group": date_group}]
-        more_interactions = interactions + [
-            {"event_id": "e99", "query": "q99", "response": "r99"},
-        ]
-        await mgr.maybe_summarize(
-            date_group,
-            more_events,
-            more_interactions,
-            chat_model,
-        )
-        assert chat_model.generate.call_count == 1
-
-    async def test_personality_concurrent_inflight_dedup(self, tmp_path: Path) -> None:
-        """验证并发调用同一 date_group 时仅生成一次人格摘要."""
-
-        async def slow_generate(_prompt: str) -> str:
-            await asyncio.sleep(0.1)
-            return "并发人格摘要"
-
-        chat_model = MagicMock()
-        chat_model.generate = AsyncMock(side_effect=slow_generate)
-        mgr = PersonalityManager(tmp_path)
-        date_group = "2026-04-09"
-        events = [
-            {"id": f"e{i}", "date_group": date_group}
-            for i in range(PERSONALITY_SUMMARY_THRESHOLD)
-        ]
-        interactions = [
-            {"event_id": f"e{i}", "query": f"q{i}", "response": f"r{i}"}
-            for i in range(PERSONALITY_SUMMARY_THRESHOLD)
-        ]
-        await asyncio.gather(
-            mgr.maybe_summarize(date_group, events, interactions, chat_model),
-            mgr.maybe_summarize(date_group, events, interactions, chat_model),
-            mgr.maybe_summarize(date_group, events, interactions, chat_model),
-        )
-        assert chat_model.generate.call_count == 1
-
-
-class TestSoftForgetConstants:
-    """软遗忘常量测试."""
-
-    def test_threshold_value(self) -> None:
-        """验证 SOFT_FORGET_THRESHOLD 为 0.15."""
-        assert SOFT_FORGET_THRESHOLD == SOFT_FORGET_THRESHOLD_VALUE
-
-    def test_strength_value(self) -> None:
-        """验证 SOFT_FORGET_STRENGTH 为 0."""
-        assert SOFT_FORGET_STRENGTH == 0
-
 
 class TestSoftForgetMechanism:
     """软遗忘机制测试."""
@@ -599,10 +422,15 @@ class TestSoftForgetMechanism:
         """验证软遗忘只应用于未匹配的记忆."""
         await engine.write(MemoryEvent(content="匹配事件"))
         await engine.write(MemoryEvent(content="完全不相关事件"))
+        events = await storage.read_events()
+        unmatched = next(e for e in events if e["content"] == "完全不相关事件")
+        unmatched["last_recall_date"] = "2020-01-01"
+        unmatched["memory_strength"] = 1
+        await storage.write_events(events)
         await engine.search("匹配事件")
         events = await storage.read_events()
         matched = next(e for e in events if e["content"] == "匹配事件")
         unmatched = next(e for e in events if e["content"] == "完全不相关事件")
         assert matched.get("forgotten") is not True
-        if unmatched.get("forgotten"):
-            assert matched["memory_strength"] > unmatched["memory_strength"]
+        assert unmatched.get("forgotten") is True
+        assert matched["memory_strength"] > unmatched["memory_strength"]

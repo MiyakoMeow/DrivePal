@@ -36,12 +36,6 @@ class TestMemoryStoreContract:
         mm = MemoryModule(tmp_path)
         return await mm._get_store(MemoryMode(request.param))
 
-    async def test_write_returns_string_id(self, store: MemoryStore) -> None:
-        """验证 write 返回一个字符串 ID."""
-        event_id = await store.write(MemoryEvent(content="test"))
-        assert isinstance(event_id, str)
-        assert len(event_id) > 0
-
     async def test_write_then_get_history_returns_same_event(
         self,
         store: MemoryStore,

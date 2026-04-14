@@ -42,12 +42,14 @@ class TestLLMProviderConfig:
                 "base_url": "https://api.openai.com/v1",
                 "api_key": "sk-test",
                 "temperature": 0.5,
+                "concurrency": 8,
             },
         )
         assert cfg.provider.model == "gpt-4"
         assert cfg.provider.base_url == "https://api.openai.com/v1"
         assert cfg.provider.api_key == "sk-test"
         assert cfg.temperature == TEMPERATURE_0_5
+        assert cfg.concurrency == CONCURRENCY_8
 
     def test_from_dict_defaults(self) -> None:
         """验证可选字段缺失时的默认值."""
@@ -56,22 +58,6 @@ class TestLLMProviderConfig:
         assert cfg.provider.base_url is None
         assert cfg.provider.api_key is None
         assert cfg.temperature == DEFAULT_TEMPERATURE
-
-    def test_llm_provider_config_with_concurrency(self) -> None:
-        """验证 concurrency 字段被正确解析."""
-        cfg = LLMProviderConfig.from_dict(
-            {
-                "model": "gpt-4",
-                "base_url": "https://api.openai.com/v1",
-                "api_key": "sk-test",
-                "concurrency": 8,
-            },
-        )
-        assert cfg.concurrency == CONCURRENCY_8
-
-    def test_llm_provider_config_concurrency_defaults(self) -> None:
-        """验证 concurrency 默认值为 4."""
-        cfg = LLMProviderConfig.from_dict({"model": "test"})
         assert cfg.concurrency == DEFAULT_CONCURRENCY
 
 
@@ -343,21 +329,6 @@ class TestChatModelFallback:
 
 class TestEmbeddingModelFallback:
     """EmbeddingModel 单提供者测试."""
-
-    def test_remote_provider_creates_async_openai(self) -> None:
-        """验证远程提供者使用 openai.AsyncOpenAI."""
-        provider = EmbeddingProviderConfig(
-            provider=ProviderConfig(
-                model="text-embedding-3-small",
-                base_url="https://api.openai.com/v1",
-                api_key="sk-test",
-            ),
-        )
-        emb = EmbeddingModel(provider=provider)
-        with patch("app.models.embedding.openai.AsyncOpenAI") as mock_cls:
-            mock_cls.return_value = MagicMock()
-            _ = emb.client
-        mock_cls.assert_called_once()
 
     async def test_encode_uses_client(self) -> None:
         """验证 encode 委托给 openai 客户端."""

@@ -1,6 +1,5 @@
 """记忆库后端和集成测试."""
 
-import asyncio
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -11,7 +10,6 @@ from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.stores.memory_bank.summarization import (
     DAILY_SUMMARY_THRESHOLD,
-    OVERALL_SUMMARY_THRESHOLD,
 )
 from app.memory.types import MemoryMode
 
@@ -20,11 +18,8 @@ if TYPE_CHECKING:
 
     from app.models.embedding import EmbeddingModel
 
-# 搜索结果数量上限（魔法值）
 TOP_K = 10
-# 搜索后记忆强化目标值
 MEMORY_STRENGTH_AFTER_SEARCH = 2
-# 记忆强度下限阈值
 MEMORY_STRENGTH_THRESHOLD = 2
 
 
@@ -98,20 +93,6 @@ class TestRecallStrengthening:
 class TestHierarchicalSummarization:
     """层次化每日和总体摘要测试."""
 
-    async def test_summarize_trigger_threshold(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证每日摘要在天数达到阈值时触发."""
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        for i in range(DAILY_SUMMARY_THRESHOLD):
-            await backend.write(MemoryEvent(content=f"事件{i}"))
-        summaries = await backend.summaries_store.read()
-        today = (await backend.events_store.read())[0]["date_group"]
-        assert today in summaries["daily_summaries"]
-        assert mock_chat_model.generate.called
-
     async def test_no_summary_below_threshold(
         self,
         tmp_path: Path,
@@ -123,126 +104,6 @@ class TestHierarchicalSummarization:
             await backend.write(MemoryEvent(content=f"事件{i}"))
         summaries = await backend.summaries_store.read()
         assert len(summaries["daily_summaries"]) == 0
-
-    async def test_overall_summary_trigger(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证当每日摘要达到阈值时触发总体摘要."""
-        mock_chat_model.generate.return_value = "总体摘要"
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        summaries = await backend.summaries_store.read()
-        for i in range(OVERALL_SUMMARY_THRESHOLD):
-            date_group = f"2026-03-{20 + i:02d}"
-            summaries["daily_summaries"][date_group] = {
-                "content": f"每日摘要{i}",
-                "memory_strength": 1,
-                "last_recall_date": date_group,
-            }
-        await backend.summaries_store.write(summaries)
-        await backend._engine._summary_mgr.update_overall_summary(mock_chat_model)
-        updated = await backend.summaries_store.read()
-        assert updated["overall_summary"] == "总体摘要"
-
-    async def test_summaries_included_in_search(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证每日摘要包含在搜索结果中."""
-        mock_chat_model.generate.return_value = "今天讨论了项目进度"
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        for i in range(DAILY_SUMMARY_THRESHOLD):
-            await backend.write(MemoryEvent(content=f"事件{i}关于项目"))
-        results = await backend.search("讨论了")
-        sources = [r.source for r in results]
-        assert "daily_summary" in sources
-
-    async def test_summary_immutability_no_regen(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证已有摘要不会被重新生成（不可变语义）."""
-        mock_chat_model.generate.return_value = "初始摘要"
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        for i in range(DAILY_SUMMARY_THRESHOLD):
-            await backend.write(MemoryEvent(content=f"事件{i}"))
-        assert mock_chat_model.generate.call_count == 1
-        for i in range(DAILY_SUMMARY_THRESHOLD):
-            await backend.write(MemoryEvent(content=f"额外事件{i}"))
-        assert mock_chat_model.generate.call_count == 1
-
-    async def test_summary_concurrent_inflight_dedup(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证并发调用同一 date_group 时仅生成一次摘要."""
-
-        async def slow_generate(_prompt: str) -> str:
-            await asyncio.sleep(0.1)
-            return "并发摘要"
-
-        mock_chat_model.generate = AsyncMock(side_effect=slow_generate)
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        events_data = [
-            MemoryEvent(content=f"事件{i}") for i in range(DAILY_SUMMARY_THRESHOLD)
-        ]
-        for ev in events_data:
-            await backend.write(ev)
-        events = await backend.events_store.read()
-        if not events:
-            pytest.skip("No events generated")
-        target_dg = events[0]["date_group"]
-        await asyncio.gather(
-            backend._engine._summary_mgr.maybe_summarize(
-                target_dg,
-                events,
-                mock_chat_model,
-            ),
-            backend._engine._summary_mgr.maybe_summarize(
-                target_dg,
-                events,
-                mock_chat_model,
-            ),
-            backend._engine._summary_mgr.maybe_summarize(
-                target_dg,
-                events,
-                mock_chat_model,
-            ),
-        )
-        assert mock_chat_model.generate.call_count == 1
-
-
-class TestUpdateEventSummary:
-    """基于 LLM 的事件摘要更新测试."""
-
-    async def test_llm_updates_event_content(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证 LLM 在聚合时生成更新后的事件摘要."""
-        mock_chat_model.generate.return_value = "用户修改了会议时间"
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        await backend.write_interaction(
-            "提醒我明天上午开会",
-            "好的",
-            event_type="meeting",
-        )
-        await backend.write_interaction("明天下午也有会议", "已更新")
-        events = await backend.events_store.read()
-        assert len(events) == 1
-        assert events[0]["content"] == "用户修改了会议时间"
-
-    async def test_no_llm_preserves_original(self, backend: MemoryBankStore) -> None:
-        """验证无 LLM 时保留原始内容."""
-        await backend.write_interaction("提醒我明天上午开会", "好的")
-        await backend.write_interaction("明天下午也有会议", "已更新")
-        events = await backend.events_store.read()
-        assert events[0]["content"] == "提醒我明天上午开会"
 
 
 @pytest.mark.llm

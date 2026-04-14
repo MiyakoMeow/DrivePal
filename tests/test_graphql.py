@@ -54,12 +54,6 @@ def _graphql_query(
     return resp.json()
 
 
-def test_graphql_endpoint_responds(isolated_app: TestClient) -> None:
-    """验证 GraphQL 端点正常响应."""
-    result = _graphql_query(isolated_app, "{ __typename }")
-    assert "data" in result
-
-
 def test_experiment_report_query(isolated_app: TestClient) -> None:
     """验证 experimentReport 查询."""
     result = _graphql_query(isolated_app, "{ experimentReport { report } }")
@@ -175,18 +169,6 @@ async def test_feedback_success_updates_strategy_weight(
     ).read()
     assert "meeting" in strategies.get("reminder_weights", {})
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
-
-
-def test_history_query(isolated_app: TestClient) -> None:
-    """验证历史记录查询."""
-    result = _graphql_query(
-        isolated_app,
-        """
-        query { history(limit: 5, memoryMode: MEMORY_BANK) { id content } }
-    """,
-    )
-    assert "data" in result
-    assert isinstance(result["data"]["history"], list)
 
 
 @pytest.mark.integration

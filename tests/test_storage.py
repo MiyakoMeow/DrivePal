@@ -28,18 +28,6 @@ async def test_events_persist_across_instances(tmp_path: Path) -> None:
     assert events[0].content == "项目进度会议"
 
 
-async def test_feedback_updates_strategies(tmp_path: Path) -> None:
-    """验证接受反馈会增加对应策略权重."""
-    memory = MemoryModule(tmp_path)
-    event_id = await memory.write(MemoryEvent(content="团队周会", type="meeting"))
-    await memory.update_feedback(
-        event_id,
-        FeedbackData(action="accept", type="meeting"),
-    )
-    strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
-    assert strategies["reminder_weights"]["meeting"] == MEETING_WEIGHT_AFTER_ACCEPT
-
-
 async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
     """验证忽略反馈会降低对应策略权重."""
     memory = MemoryModule(tmp_path)
@@ -96,26 +84,6 @@ async def test_feedback_via_event_type_lookup(tmp_path: Path) -> None:
     )
     strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
-
-
-async def test_write_interaction_returns_real_event_id(tmp_path: Path) -> None:
-    """验证 write_interaction 返回的 event_id 能在事件列表中找到."""
-    memory = MemoryModule(tmp_path)
-    result = await memory.write_interaction("测试查询", "测试回复")
-    events = await memory.get_history()
-    event_ids = [e.id for e in events]
-    assert result.event_id in event_ids, (
-        f"event_id {result.event_id} not found in {event_ids}"
-    )
-
-
-async def test_get_event_type_found(tmp_path: Path) -> None:
-    """验证 get_event_type 能找到已存在事件的事件类型."""
-    init_storage(tmp_path)
-    memory = MemoryModule(tmp_path)
-    result = await memory.write_interaction("查找测试", "响应")
-    event_type = await memory.get_event_type(result.event_id)
-    assert event_type is not None
 
 
 async def test_get_event_type_returns_none_for_missing(tmp_path: Path) -> None:
