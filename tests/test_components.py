@@ -2,6 +2,7 @@
 
 import inspect
 import math
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -654,3 +655,53 @@ class TestSummaryPersonalityEmbeddingSearch:
             top_k=3,
         )
         assert len(results) >= 1
+
+
+class TestEventSummaryPrompt:
+    """Event summary prompt 测试."""
+
+    async def test_event_summary_prompt_is_english(self) -> None:
+        """验证 event summary prompt 使用英文偏好保留模板."""
+        source = inspect.getsource(MemoryBankEngine._update_event_summary)
+        assert "vehicle-related preferences" in source
+
+
+class TestForgetThrottle:
+    """遗忘节流测试."""
+
+    @pytest.fixture
+    def storage(self, tmp_path: Path) -> EventStorage:
+        """提供存储."""
+        return EventStorage(tmp_path)
+
+    @pytest.fixture
+    def engine(self, tmp_path: Path, storage: EventStorage) -> MemoryBankEngine:
+        """提供引擎."""
+        return MemoryBankEngine(tmp_path, storage)
+
+    async def test_forget_throttle_skips_recent_call(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证节流机制跳过短时间内重复遗忘."""
+        await engine.write(MemoryEvent(content="事件"))
+        engine._last_forget_time = time.monotonic()
+        await engine.forget_expired()
+        events = await storage.read_events()
+        assert events[0].get("forgotten") is not True
+
+    async def test_forget_force_bypasses_throttle(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证 force=True 绕过节流."""
+        await engine.write(MemoryEvent(content="旧事件"))
+        events = await storage.read_events()
+        events[0]["last_recall_date"] = "2020-01-01"
+        await storage.write_events(events)
+        engine._last_forget_time = time.monotonic()
+        await engine.forget_expired(force=True)
+        events = await storage.read_events()
+        assert events[0]["forgotten"] is True

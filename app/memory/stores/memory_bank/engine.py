@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ OVERLAP_RATIO_THRESHOLD = 0.45
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
+FORGET_INTERVAL_SECONDS = 300
 
 
 class MemoryBankEngine:
@@ -57,6 +59,7 @@ class MemoryBankEngine:
         self._lock = asyncio.Lock()
         self._personality_mgr = PersonalityManager(data_dir)
         self._summary_mgr = SummaryManager(data_dir)
+        self._last_forget_time: float = 0.0
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -408,8 +411,11 @@ class MemoryBankEngine:
             if updated:
                 await self._interactions_store.write(all_interactions)
 
-    async def forget_expired(self) -> None:
-        """遗忘过期事件（在搜索末尾自动调用，也可独立调用）."""
+    async def forget_expired(self, *, force: bool = False) -> None:
+        """遗忘过期事件（带节流，在搜索末尾自动调用）."""
+        now = time.monotonic()
+        if not force and (now - self._last_forget_time) < FORGET_INTERVAL_SECONDS:
+            return
         today_date = datetime.now(UTC).date()
         async with self._lock:
             all_events = await self._storage.read_events()
@@ -431,6 +437,7 @@ class MemoryBankEngine:
                     updated = True
             if updated:
                 await self._storage.write_events(all_events)
+        self._last_forget_time = time.monotonic()
 
     async def write_interaction(
         self,
@@ -559,7 +566,12 @@ class MemoryBankEngine:
             f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
             for i in child_interactions
         )
-        prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
+        prompt = (
+            "Summarize the following interaction, preserving all vehicle-related preferences "
+            "and specific setting values mentioned.\n"
+            "Include user names and any conditions or context for each preference.\n\n"
+            f"Interactions:\n{combined}\n\nSummary:"
+        )
         try:
             summary_text = await self.chat_model.generate(prompt)
         except OSError, ValueError, RuntimeError:
