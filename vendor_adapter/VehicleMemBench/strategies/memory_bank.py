@@ -22,6 +22,9 @@ from vendor_adapter.VehicleMemBench.strategies.common import (
     format_search_results,
     history_to_interaction_records,
 )
+from vendor_adapter.VehicleMemBench.strategies.exceptions import (
+    VehicleMemBenchError,
+)
 
 from evaluation.model_evaluation import (  # isort: skip
     _run_vehicle_task_evaluation,
@@ -40,6 +43,10 @@ try:
     _SEARCH_TIMEOUT = int(os.environ.get("BENCHMARK_SEARCH_TIMEOUT", str(12 * 3600)))
 except ValueError:
     _SEARCH_TIMEOUT = 12 * 3600
+    logger.warning(
+        "BENCHMARK_SEARCH_TIMEOUT 环境变量值无效，使用默认值 %d",
+        _SEARCH_TIMEOUT,
+    )
 
 _CUSTOM_ADAPTER_SYSTEM_INSTRUCTION = (
     "You are an intelligent in-car AI assistant responsible for fulfilling user requests by calling the vehicle system API.\n"
@@ -241,16 +248,22 @@ class MemoryBankStrategy:
         """创建记忆库评估器."""
         if prep_data is None:
             msg = f"prep_data 为 None (file_num={file_num})"
-            raise ValueError(msg)
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.MEMORY_BANK
+            )
         data_dir_str = prep_data.get("data_dir")
         if not data_dir_str:
             msg = f"prep_data 缺少 'data_dir' 字段 (file_num={file_num})"
-            raise ValueError(msg)
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.MEMORY_BANK
+            )
         data_dir = Path(data_dir_str)
         exists = await asyncio.to_thread(data_dir.exists)
         if not exists:
             msg = f"记忆库数据目录不存在: {data_dir} (file_num={file_num})"
-            raise FileNotFoundError(msg)
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.MEMORY_BANK
+            )
         chat_model = get_store_chat_model()
         embedding_model = get_store_embedding_model()
         store = await asyncio.to_thread(

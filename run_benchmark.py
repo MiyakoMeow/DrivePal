@@ -28,7 +28,7 @@ def _do_report(output: Path | None = None) -> None:
 
 
 async def main() -> None:
-    """Entry point for benchmark CLI."""
+    """基准测试命令行入口."""
     parser = ArgumentParser(description="VehicleMemBench evaluation")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -63,25 +63,46 @@ async def main() -> None:
     elif args.command == "report":
         _do_report(args.output)
     elif args.command == "all":
-        failed = False
-        try:
-            await _do_prepare(args.file_range, args.memory_types)
-        except OSError, ValueError, RuntimeError:
-            logger.exception("[prepare] failed")
-            failed = True
-        try:
-            await _do_run(args.file_range, args.memory_types, args.reflect_num)
-        except OSError, ValueError, RuntimeError:
-            logger.exception("[run] failed")
-            failed = True
-        if failed and not args.allow_partial:
-            sys.stdout.write(
-                "[all] aborted due to failures, skipping report (use --allow-partial to force)\n",
-            )
-            return
-        _do_report(args.output)
+        await _do_all(
+            args.file_range,
+            args.memory_types,
+            args.reflect_num,
+            allow_partial=args.allow_partial,
+            output=args.output,
+        )
     else:
         parser.print_help()
+        sys.exit(1)
+
+
+async def _do_all(
+    file_range: str,
+    memory_types: str,
+    reflect_num: int,
+    *,
+    allow_partial: bool,
+    output: Path | None,
+) -> None:
+    """执行 all 命令：依次运行 prepare、run、report."""
+    try:
+        await prepare(file_range, memory_types)
+    except Exception:
+        logger.exception(
+            "[prepare] failed (file_range=%s, memory_types=%s)",
+            file_range,
+            memory_types,
+        )
+        if not allow_partial:
+            raise
+    try:
+        await run(file_range, memory_types, reflect_num)
+    except Exception:
+        logger.exception(
+            "[run] failed (file_range=%s, memory_types=%s)", file_range, memory_types
+        )
+        if not allow_partial:
+            raise
+    report(output)
 
 
 if __name__ == "__main__":

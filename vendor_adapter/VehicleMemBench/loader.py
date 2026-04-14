@@ -89,6 +89,8 @@ async def load_history_cache(
     )
     result: dict[int, str] = {}
     for pair in history_pairs:
+        if isinstance(pair, BaseException) and not isinstance(pair, Exception):
+            raise pair
         if isinstance(pair, tuple):
             result[pair[0]] = pair[1]
         else:
@@ -152,6 +154,8 @@ async def load_prep_cache(
     )
     data: dict[tuple[BenchMemoryMode, int], dict[str, Any]] = {}
     for item in prep_raw:
+        if isinstance(item, BaseException) and not isinstance(item, Exception):
+            raise item
         if isinstance(item, tuple):
             mt, fn, d = item
             if d is not None:

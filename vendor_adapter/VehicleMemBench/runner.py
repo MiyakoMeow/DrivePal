@@ -40,6 +40,10 @@ try:
     _QUERY_CONCURRENCY_LIMIT = int(os.environ.get("BENCHMARK_QUERY_CONCURRENCY", "4"))
 except ValueError:
     _QUERY_CONCURRENCY_LIMIT = 4
+    logger.warning(
+        "BENCHMARK_QUERY_CONCURRENCY 环境变量值无效，使用默认值 %d",
+        _QUERY_CONCURRENCY_LIMIT,
+    )
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 
@@ -152,7 +156,14 @@ async def prepare(
         if isinstance(r, Exception)
     ]
     for (fnum, mtype), exc in failures:
-        logger.error("[prepare] failed %s file %d: %s", mtype, fnum, exc)
+        logger.error(
+            "[prepare] failed %s file %d: %s (total_tasks=%d, failed=%d)",
+            mtype,
+            fnum,
+            exc,
+            len(tasks),
+            len(failures),
+        )
     if failures:
         logger.error("[prepare] done with %d failures", len(failures))
 
@@ -222,7 +233,14 @@ async def run(
         if isinstance(r, Exception)
     ]
     for (fnum, mtype), exc in failures:
-        logger.error("[run] failed %s file %d: %s", mtype, fnum, exc)
+        logger.error(
+            "[run] failed %s file %d: %s (total_tasks=%d, failed=%d)",
+            mtype,
+            fnum,
+            exc,
+            len(run_tasks),
+            len(failures),
+        )
     if failures:
         logger.error("[run] done with %d file-level failures", len(failures))
 
@@ -251,7 +269,7 @@ async def _run_single(
     memory_type: BenchMemoryMode,
     file_num: int,
     events: list[dict[str, Any]],
-    parse_answer_to_tools_fn: Callable[..., Any],
+    parse_answer_to_tools_fn: Callable[[list], list],
 ) -> None:
     """运行单个文件的查询评估."""
 
@@ -277,8 +295,26 @@ async def _run_single(
                 result["memory_type"] = memory_type
                 async with aiofiles.open(qp, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                logger.warning(
+                    "  [warn] query %d returned None (mtype=%s, file=%d)",
+                    idx,
+                    memory_type,
+                    file_num,
+                )
+                fail_record = {
+                    "failed": True,
+                    "error": "evaluator returned None",
+                    "source_file": file_num,
+                    "event_index": idx,
+                    "memory_type": memory_type,
+                }
+                async with aiofiles.open(qp, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
         except Exception as e:
-            logger.exception("  [error] query %d", idx)
+            logger.exception(
+                "  [error] query %d (mtype=%s, file=%d)", idx, memory_type, file_num
+            )
             fail_record = {
                 "failed": True,
                 "error": str(e),
@@ -291,19 +327,18 @@ async def _run_single(
                     await f.write(json.dumps(fail_record, ensure_ascii=False, indent=2))
             except OSError:
                 logger.exception(
-                    "  [error] failed to write error record for query %d",
+                    "  [error] failed to write error record for query %d (mtype=%s, file=%d)",
                     idx,
+                    memory_type,
+                    file_num,
                 )
 
     gather_results = await asyncio.gather(
         *(_eval_and_save(i, e) for i, e in enumerate(events)),
         return_exceptions=True,
     )
-    for r in gather_results:
+    for i, r in enumerate(gather_results):
         if isinstance(r, BaseException) and not isinstance(r, Exception):
             raise r
-    silent_failures = [r for r in gather_results if isinstance(r, Exception)]
-    if silent_failures:
-        for sf in silent_failures:
-            logger.warning("  [warn] query failed silently: %s", sf)
-        logger.warning("  [warn] %d queries failed silently", len(silent_failures))
+        if isinstance(r, Exception):
+            logger.error("[unexpected] query %d unhandled exception: %s", i, r)

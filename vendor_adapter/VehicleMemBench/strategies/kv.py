@@ -106,17 +106,23 @@ class KvMemoryStrategy:
         """创建 KV 模式评估器."""
         store = VMBMemoryStore()
         if prep_data is None:
-            msg = f"[kv] prep_data is None (file_num={file_num})"
-            raise ValueError(msg)
+            msg = f"prep_data 为 None (file_num={file_num})"
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+            )
         store_data = prep_data.get("store")
         if store_data is None:
-            msg = f"[kv] prep_data 缺少 'store' 字段 (file_num={file_num})"
-            raise ValueError(msg)
+            msg = f"prep_data 缺少 'store' 字段 (file_num={file_num})"
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+            )
         if not isinstance(store_data, dict):
             msg = (
-                f"[kv] prep_data['store'] 类型错误，期望 dict，"
+                f"prep_data['store'] 类型错误，期望 dict，"
                 f"得到 {type(store_data).__name__} (file_num={file_num})"
             )
-            raise TypeError(msg)
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+            )
         store.store = store_data
         return KvEvaluator(agent_client, store, reflect_num, query_semaphore)

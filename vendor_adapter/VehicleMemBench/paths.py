@@ -1,6 +1,7 @@
 """路径常量与 sys.path 初始化."""
 
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,8 +14,9 @@ BENCHMARK_DIR = VENDOR_DIR / "benchmark"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "benchmark"
 
 
+@lru_cache(maxsize=1)
 def setup_vehiclemembench_path() -> None:
-    """将 VehicleMemBench 路径添加到 sys.path."""
+    """将 VehicleMemBench 路径添加到 sys.path（幂等操作）."""
     for d in [VENDOR_DIR, VENDOR_DIR / "evaluation"]:
         d_str = str(d)
         if not any(Path(p).resolve() == Path(d_str).resolve() for p in sys.path):
@@ -30,18 +32,18 @@ def ensure_output_dir() -> Path:
     return OUTPUT_DIR
 
 
-def file_output_dir(memory_type: BenchMemoryMode | str, file_num: int) -> Path:
+def file_output_dir(memory_type: BenchMemoryMode, file_num: int) -> Path:
     """返回指定记忆类型和文件编号的输出目录路径."""
     return OUTPUT_DIR / memory_type / f"file_{file_num}"
 
 
-def prep_path(memory_type: BenchMemoryMode | str, file_num: int) -> Path:
+def prep_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
     """返回指定记忆类型和文件编号的 prep 数据路径."""
     return file_output_dir(memory_type, file_num) / "prep.json"
 
 
 def query_result_path(
-    memory_type: BenchMemoryMode | str, file_num: int, event_index: int
+    memory_type: BenchMemoryMode, file_num: int, event_index: int
 ) -> Path:
     """返回指定记忆类型、文件编号和事件索引的查询结果路径."""
     return file_output_dir(memory_type, file_num) / f"query_{event_index}.json"
