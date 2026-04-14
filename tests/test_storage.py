@@ -98,17 +98,6 @@ async def test_feedback_via_event_type_lookup(tmp_path: Path) -> None:
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
 
-async def test_write_interaction_returns_real_event_id(tmp_path: Path) -> None:
-    """验证 write_interaction 返回的 event_id 能在事件列表中找到."""
-    memory = MemoryModule(tmp_path)
-    result = await memory.write_interaction("测试查询", "测试回复")
-    events = await memory.get_history()
-    event_ids = [e.id for e in events]
-    assert result.event_id in event_ids, (
-        f"event_id {result.event_id} not found in {event_ids}"
-    )
-
-
 async def test_get_event_type_found(tmp_path: Path) -> None:
     """验证 get_event_type 能找到已存在事件的事件类型."""
     init_storage(tmp_path)

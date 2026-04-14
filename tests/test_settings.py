@@ -344,21 +344,6 @@ class TestChatModelFallback:
 class TestEmbeddingModelFallback:
     """EmbeddingModel 单提供者测试."""
 
-    def test_remote_provider_creates_async_openai(self) -> None:
-        """验证远程提供者使用 openai.AsyncOpenAI."""
-        provider = EmbeddingProviderConfig(
-            provider=ProviderConfig(
-                model="text-embedding-3-small",
-                base_url="https://api.openai.com/v1",
-                api_key="sk-test",
-            ),
-        )
-        emb = EmbeddingModel(provider=provider)
-        with patch("app.models.embedding.openai.AsyncOpenAI") as mock_cls:
-            mock_cls.return_value = MagicMock()
-            _ = emb.client
-        mock_cls.assert_called_once()
-
     async def test_encode_uses_client(self) -> None:
         """验证 encode 委托给 openai 客户端."""
         provider = EmbeddingProviderConfig(

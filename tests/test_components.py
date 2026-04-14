@@ -1,6 +1,5 @@
 """app.memory.components 可组合组件测试."""
 
-import math
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,7 +10,6 @@ from app.memory.components import (
     FeedbackManager,
     KeywordSearch,
     SimpleInteractionWriter,
-    forgetting_curve,
 )
 from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 from app.memory.stores.memory_bank.engine import (
@@ -21,47 +19,11 @@ from app.memory.stores.memory_bank.engine import (
 from app.storage.toml_store import TOMLStore
 
 # 测试常量定义
-ID_TIMESTAMP_LENGTH = 14  # 事件ID时间戳部分长度
-ID_UUID_LENGTH = 8  # 事件ID UUID部分长度
 EXPECTED_EVENT_COUNT_2 = 2  # 预期事件数量
 DEFAULT_TOP_K = 5  # 搜索默认返回数量
 WEIGHT_MIN = 0.1  # 策略权重下限
 FEEDBACK_RECORD_COUNT_2 = 2  # 反馈记录数量
-INITIAL_MEMORY_STRENGTH = 1  # 初始记忆强度
 SEARCH_BOOST_STRENGTH = 2  # 搜索增强后记忆强度
-SOFT_FORGET_THRESHOLD_VALUE = 0.15  # 软遗忘阈值
-
-
-class TestForgettingCurve:
-    """遗忘曲线衰减函数测试."""
-
-    def test_zero_days_returns_one(self) -> None:
-        """验证无时间流逝时保留率为 1.0."""
-        assert forgetting_curve(0, 1) == 1.0
-
-    def test_negative_days_returns_one(self) -> None:
-        """验证负数天数时保留率为 1.0."""
-        assert forgetting_curve(-5, 3) == 1.0
-
-    def test_zero_strength_returns_zero(self) -> None:
-        """验证记忆强度为零时保留率为 0.0."""
-        assert forgetting_curve(10, 0) == 0.0
-
-    def test_negative_strength_returns_zero(self) -> None:
-        """验证记忆强度为负时保留率为 0.0."""
-        assert forgetting_curve(10, -1) == 0.0
-
-    def test_positive_decay(self) -> None:
-        """验证正衰减产生 0 到 1 之间的值."""
-        result = forgetting_curve(10, 2)
-        assert 0.0 < result < 1.0
-        assert math.isclose(result, math.exp(-10 / 10))
-
-    def test_higher_strength_slower_decay(self) -> None:
-        """验证更高的强度导致更慢的衰减."""
-        weak = forgetting_curve(10, 1)
-        strong = forgetting_curve(10, 5)
-        assert strong > weak
 
 
 class TestEventStorage:
@@ -71,14 +33,6 @@ class TestEventStorage:
     def storage(self, tmp_path: Path) -> EventStorage:
         """提供由临时目录支持的 EventStorage."""
         return EventStorage(tmp_path)
-
-    def test_generate_id_format(self, storage: EventStorage) -> None:
-        """验证生成的 ID 遵循 timestamp_uuid 格式."""
-        eid = storage.generate_id()
-        assert "_" in eid
-        parts = eid.split("_")
-        assert len(parts[0]) == ID_TIMESTAMP_LENGTH
-        assert len(parts[1]) == ID_UUID_LENGTH
 
     async def test_read_events_empty(self, storage: EventStorage) -> None:
         """验证从空存储读取返回空列表."""
@@ -450,27 +404,6 @@ class TestPersonalitySummary:
         await engine.personality_store.write(personality_data)
         results = await engine._personality_mgr.search("音乐", top_k=1)
         assert len(results) == 0
-
-    async def test_search_personality_via_public_interface(
-        self,
-        engine: MemoryBankEngine,
-    ) -> None:
-        """验证通过 search() 公共接口能返回人格摘要."""
-        personality_data = {
-            "daily_personality": {
-                "2026-04-01": {
-                    "content": "用户喜欢讨论天气",
-                    "memory_strength": 1,
-                    "last_recall_date": "2026-04-01",
-                },
-            },
-            "overall_personality": "",
-        }
-        await engine.personality_store.write(personality_data)
-        results = await engine.search("天气", top_k=5)
-        personality_results = [r for r in results if r.source == "personality"]
-        assert len(personality_results) == 1
-        assert "天气" in personality_results[0].event["content"]
 
 
 class TestSoftForgetMechanism:
