@@ -49,11 +49,19 @@ except ValueError:
     )
 
 _CUSTOM_ADAPTER_SYSTEM_INSTRUCTION = (
-    "You are an intelligent in-car AI assistant responsible for fulfilling user requests by calling the vehicle system API.\n"
+    "You are an intelligent in-car AI assistant responsible for fulfilling user requests "
+    "by calling the vehicle system API.\n"
     "You have access to a memory store containing user vehicle preferences.\n"
     "- Use memory_search(query, top_k) to look up relevant user preferences\n"
     "- Use list_module_tools(module_name='xxx') to discover available functions\n"
-    "- Call the specific functions you need\n"
+    "- Call the specific functions you need\n\n"
+    "Search strategy: when looking up preferences, try multiple queries:\n"
+    "1. Search by user name (e.g., 'Gary', 'Patricia', 'Justin')\n"
+    "2. Search by vehicle module (e.g., 'seat', 'navigation', 'air conditioning', "
+    "'instrument panel')\n"
+    "3. Search by condition or context (e.g., 'night', 'highway', 'industrial area')\n\n"
+    "Memory results include date, source type, and related conversations. "
+    "Use all available context to determine the correct preference.\n\n"
     "When the available information does not support setting a device to a specific value, "
     "perform only the minimal required action."
 )
@@ -75,7 +83,7 @@ _CUSTOM_ADAPTER_INITIAL_TOOLS = [
                     "top_k": {
                         "type": "integer",
                         "description": "Number of results",
-                        "default": 5,
+                        "default": 10,
                     },
                 },
                 "required": ["query"],
@@ -95,7 +103,7 @@ def _make_sync_memory_search(
     """
     loop = asyncio.get_running_loop()
 
-    def _search(query: str, top_k: int = 5) -> dict[str, Any]:
+    def _search(query: str, top_k: int = 10) -> dict[str, Any]:
         future: Future | None = None
         try:
             future = asyncio.run_coroutine_threadsafe(
