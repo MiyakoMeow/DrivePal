@@ -422,10 +422,15 @@ class TestSoftForgetMechanism:
         """验证软遗忘只应用于未匹配的记忆."""
         await engine.write(MemoryEvent(content="匹配事件"))
         await engine.write(MemoryEvent(content="完全不相关事件"))
+        events = await storage.read_events()
+        unmatched = next(e for e in events if e["content"] == "完全不相关事件")
+        unmatched["last_recall_date"] = "2020-01-01"
+        unmatched["memory_strength"] = 1
+        await storage.write_events(events)
         await engine.search("匹配事件")
         events = await storage.read_events()
         matched = next(e for e in events if e["content"] == "匹配事件")
         unmatched = next(e for e in events if e["content"] == "完全不相关事件")
         assert matched.get("forgotten") is not True
-        if unmatched.get("forgotten"):
-            assert matched["memory_strength"] > unmatched["memory_strength"]
+        assert unmatched.get("forgotten") is True
+        assert matched["memory_strength"] > unmatched["memory_strength"]
