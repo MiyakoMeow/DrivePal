@@ -7,16 +7,16 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from benchmark.VehicleMemBench import BenchMemoryMode
-from benchmark.VehicleMemBench.reporter import (
+from benchmark.VehicleMemBench.markdown_formatters import (
     _format_calls,
     _format_reasoning_type,
-    _md_memory_type_detail,
-    _md_overview,
-    _md_query_analysis,
-    _md_reasoning_cross_comparison,
-    _md_summary,
     _num,
     generate_markdown_report,
+    md_memory_type_detail,
+    md_overview,
+    md_query_analysis,
+    md_reasoning_cross_comparison,
+    md_summary,
 )
 
 
@@ -242,11 +242,11 @@ class TestFormatCalls:
 
 
 class TestMdOverview:
-    """_md_overview 测试."""
+    """md_overview 测试."""
 
     def test_contains_header_and_table(self) -> None:
         """测试总览包含标题和各类记忆类型行."""
-        md = _md_overview(_make_report_data())
+        md = md_overview(_make_report_data())
         assert "## 1. 总览" in md
         assert "| gold" in md
         assert "| none" in md
@@ -255,13 +255,13 @@ class TestMdOverview:
 
     def test_shows_delta_for_non_gold(self) -> None:
         """测试非 gold 类型显示相对 gold 的百分比差值."""
-        md = _md_overview(_make_report_data())
+        md = md_overview(_make_report_data())
         assert "Δ%" in md
         assert "-76.19%" in md
 
     def test_gold_no_delta_column(self) -> None:
         """测试 gold 行的 Delta 列显示为横杠."""
-        md = _md_overview(_make_report_data())
+        md = md_overview(_make_report_data())
         lines = md.split("\n")
         gold_lines = [
             line for line in lines if line.startswith("| gold |") and "| - |" in line
@@ -273,7 +273,7 @@ class TestMdOverview:
 
     def test_shows_total_failed(self) -> None:
         """测试显示失败数量."""
-        md = _md_overview(_make_report_data())
+        md = md_overview(_make_report_data())
         lines = md.split("\n")
         gold_line = next(line for line in lines if line.startswith("| gold |"))
         none_line = next(line for line in lines if line.startswith("| none |"))
@@ -285,12 +285,12 @@ class TestMdOverview:
 
     def test_shows_memory_score_for_non_gold(self) -> None:
         """测试显示memory score."""
-        md = _md_overview(_make_report_data())
+        md = md_overview(_make_report_data())
         assert "23.80%" in md
 
     def test_empty_report_data(self) -> None:
         """测试空数据时显示无数据提示."""
-        md = _md_overview({})
+        md = md_overview({})
         assert "## 1. 总览" in md
         assert "无数据" in md
 
@@ -306,7 +306,7 @@ class TestMdOverview:
                 "total_failed": 0,
             },
         }
-        md = _md_overview(none_data)
+        md = md_overview(none_data)
         lines = md.split("\n")
         data_lines = [line for line in lines if line.startswith("| none |")]
         assert len(data_lines) == 1
@@ -318,12 +318,12 @@ class TestMdOverview:
 
 
 class TestMdMemoryTypeDetail:
-    """_md_memory_type_detail 测试."""
+    """md_memory_type_detail 测试."""
 
     def test_gold_section(self) -> None:
         """测试 gold 类型详细段落包含关键指标."""
         data = _make_report_data()
-        md = _md_memory_type_detail(
+        md = md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
         )
         assert "### gold" in md
@@ -335,7 +335,7 @@ class TestMdMemoryTypeDetail:
         """测试非 gold 类型段落显示与 gold 的对比."""
         data = _make_report_data()
         gold_metric = data[BenchMemoryMode.GOLD]
-        md = _md_memory_type_detail(
+        md = md_memory_type_detail(
             BenchMemoryMode.NONE, data[BenchMemoryMode.NONE], gold_metric
         )
         assert "与 Gold 对比" in md
@@ -343,7 +343,7 @@ class TestMdMemoryTypeDetail:
     def test_gold_no_comparison(self) -> None:
         """测试 gold 类型段落不包含与自身的对比."""
         data = _make_report_data()
-        md = _md_memory_type_detail(
+        md = md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
         )
         assert "与 Gold 对比" not in md
@@ -351,7 +351,7 @@ class TestMdMemoryTypeDetail:
     def test_shows_reasoning_type_table(self) -> None:
         """测试按推理类型细分表格包含预期标签和数据."""
         data = _make_report_data()
-        md = _md_memory_type_detail(
+        md = md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
         )
         assert "| 偏好冲突 |" in md
@@ -361,7 +361,7 @@ class TestMdMemoryTypeDetail:
     def test_shows_academic_explanation(self) -> None:
         """测试详细分析包含指标学术说明."""
         data = _make_report_data()
-        md = _md_memory_type_detail(
+        md = md_memory_type_detail(
             BenchMemoryMode.GOLD, data[BenchMemoryMode.GOLD], None
         )
         assert "Exact Match Rate" in md
@@ -379,7 +379,7 @@ class TestMdMemoryTypeDetail:
             "avg_output_token": 100.0,
             "total_failed": 0,
         }
-        md = _md_memory_type_detail(BenchMemoryMode.GOLD, metric, None)
+        md = md_memory_type_detail(BenchMemoryMode.GOLD, metric, None)
         assert "按推理类型细分" not in md
 
     def test_gold_esm_zero_no_comparison(self) -> None:
@@ -404,28 +404,28 @@ class TestMdMemoryTypeDetail:
             "avg_output_token": 100.0,
             "total_failed": 0,
         }
-        md = _md_memory_type_detail(BenchMemoryMode.NONE, none_metric, gold_metric_zero)
+        md = md_memory_type_detail(BenchMemoryMode.NONE, none_metric, gold_metric_zero)
         assert "与 Gold 对比" not in md
 
 
 class TestMdReasoningCrossComparison:
-    """_md_reasoning_cross_comparison 测试."""
+    """md_reasoning_cross_comparison 测试."""
 
     def test_contains_section_header(self) -> None:
         """测试交叉对比包含正确的节标题."""
-        md = _md_reasoning_cross_comparison(_make_report_data())
+        md = md_reasoning_cross_comparison(_make_report_data())
         assert "## 3. 按推理类型交叉对比" in md
 
     def test_contains_table_with_types(self) -> None:
         """测试交叉对比表格包含各推理类型和记忆类型."""
-        md = _md_reasoning_cross_comparison(_make_report_data())
+        md = md_reasoning_cross_comparison(_make_report_data())
         assert "| 偏好冲突 |" in md
         assert "gold" in md
         assert "none" in md
 
     def test_bolds_max_esm(self) -> None:
         """测试最高 ESM 值以加粗显示."""
-        md = _md_reasoning_cross_comparison(_make_report_data())
+        md = md_reasoning_cross_comparison(_make_report_data())
         lines = md.split("\n")
         pref_lines = [
             line for line in lines if "偏好冲突" in line and line.startswith("|")
@@ -442,44 +442,44 @@ class TestMdReasoningCrossComparison:
 
     def test_empty_data(self) -> None:
         """测试空数据时显示无数据提示."""
-        md = _md_reasoning_cross_comparison({})
+        md = md_reasoning_cross_comparison({})
         assert "无数据" in md
 
 
 class TestMdQueryAnalysis:
-    """_md_query_analysis 测试."""
+    """md_query_analysis 测试."""
 
     def test_contains_section_header(self) -> None:
         """测试查询分析包含正确的节标题."""
-        md = _md_query_analysis(_make_all_results())
+        md = md_query_analysis(_make_all_results())
         assert "## 4. 单条查询分析" in md
 
     def test_shows_success_case(self) -> None:
         """测试成功匹配案例在输出中展示."""
-        md = _md_query_analysis(_make_all_results())
+        md = md_query_analysis(_make_all_results())
         assert "完全匹配" in md
         assert "Gary got into the driver" in md
 
     def test_shows_overmodification_case(self) -> None:
         """测试过度修改案例在输出中展示."""
-        md = _md_query_analysis(_make_all_results())
+        md = md_query_analysis(_make_all_results())
         assert "过度修改" in md
         assert "Patricia was driving" in md
 
     def test_shows_omission_case(self) -> None:
         """测试遗漏调用案例在输出中展示."""
-        md = _md_query_analysis(_make_all_results())
+        md = md_query_analysis(_make_all_results())
         assert "遗漏" in md
 
     def test_empty_results(self) -> None:
         """测试空查询数据时显示无数据提示."""
-        md = _md_query_analysis({})
+        md = md_query_analysis({})
         assert "无查询数据" in md
 
     def test_skips_empty_query_list(self) -> None:
         """测试空查询列表的记忆类型不出现在输出中."""
         results = {BenchMemoryMode.GOLD: []}
-        md = _md_query_analysis(results)
+        md = md_query_analysis(results)
         assert "### gold" not in md
 
     def test_fp_sorted_descending(self) -> None:
@@ -490,7 +490,7 @@ class TestMdQueryAnalysis:
             _make_query("mid-fp", fp=3, fn=0),
         ]
         results = {BenchMemoryMode.GOLD: queries}
-        md = _md_query_analysis(results)
+        md = md_query_analysis(results)
         lines = md.split("\n")
         fp_values = [
             int(line.split("=")[1])
@@ -509,7 +509,7 @@ class TestMdQueryAnalysis:
             _make_query("mid-fn", fp=0, fn=3),
         ]
         results = {BenchMemoryMode.GOLD: queries}
-        md = _md_query_analysis(results)
+        md = md_query_analysis(results)
         lines = md.split("\n")
         fn_values = [
             int(line.split("=")[1])
@@ -522,16 +522,16 @@ class TestMdQueryAnalysis:
 
 
 class TestMdSummary:
-    """_md_summary 测试."""
+    """md_summary 测试."""
 
     def test_contains_section_header(self) -> None:
         """测试总结包含正确的节标题."""
-        md = _md_summary(_make_report_data())
+        md = md_summary(_make_report_data())
         assert "## 5. 总结" in md
 
     def test_contains_ranking(self) -> None:
         """测试总结包含按 ESM 排名的记忆类型."""
-        md = _md_summary(_make_report_data())
+        md = md_summary(_make_report_data())
         assert "1." in md
         assert "gold" in md
         assert "none" in md
@@ -541,7 +541,7 @@ class TestMdSummary:
 
     def test_gold_highest_rank(self) -> None:
         """测试 gold 类型排名最高."""
-        md = _md_summary(_make_report_data())
+        md = md_summary(_make_report_data())
         assert "42.00%" in md
         assert "10.00%" in md
         gold_42_pos = md.find("gold")
@@ -552,14 +552,14 @@ class TestMdSummary:
 
     def test_empty_data(self) -> None:
         """测试空数据时总结显示无数据提示."""
-        md = _md_summary({})
+        md = md_summary({})
         assert "无数据" in md
 
     def test_gold_only_no_theoretical_limit(self) -> None:
         """测试仅 GOLD 类型时不输出理论上限段落."""
         data = _make_report_data()
         gold_only = {BenchMemoryMode.GOLD: data[BenchMemoryMode.GOLD]}
-        md = _md_summary(gold_only)
+        md = md_summary(gold_only)
         assert "理论上限" not in md
         assert "gold" in md
 
@@ -567,7 +567,7 @@ class TestMdSummary:
         """测试非 GOLD 无 memory_score 时显示 0.00%."""
         data = _make_report_data()
         del data[BenchMemoryMode.NONE]["memory_score"]
-        md = _md_summary(data)
+        md = md_summary(data)
         assert "0.00%" in md
         assert "理论上限" in md
 
