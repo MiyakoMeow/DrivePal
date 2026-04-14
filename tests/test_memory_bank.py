@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.memory.memory import MemoryModule
-from app.memory.schemas import MemoryEvent
+from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.stores.memory_bank.summarization import (
     DAILY_SUMMARY_THRESHOLD,
@@ -148,20 +148,15 @@ class TestNameBonus:
         self,
         backend: MemoryBankStore,
     ) -> None:
-        """验证 query 中的名称与事件 content 匹配时分数更高."""
-        await backend.write(
-            MemoryEvent(content="Alice: I like green seats", date_group="2025-03-01"),
-        )
-        await backend.write(
-            MemoryEvent(
-                content="Bob: I prefer blue dashboard", date_group="2025-03-01"
-            ),
-        )
-        results = await backend.search("Alice seat preference")
-        alice_results = [r for r in results if "Alice" in r.event.get("content", "")]
-        bob_results = [r for r in results if "Bob" in r.event.get("content", "")]
-        if alice_results and bob_results:
-            assert alice_results[0].score > bob_results[0].score
+        """验证 _apply_name_bonus 对包含匹配名称的结果加分."""
+        known_names = frozenset({"alice", "bob"})
+        r_alice = SearchResult(event={"content": "Alice: seat"}, score=1.0)
+        r_bob = SearchResult(event={"content": "Bob: seat"}, score=1.0)
+        backend._engine._apply_name_bonus([r_alice, r_bob], known_names, "Alice seat")
+        assert r_alice.score > r_bob.score
+        expected_bonus = 1.0 * 1.3
+        assert r_alice.score == expected_bonus
+        assert r_bob.score == 1.0
 
     async def test_name_bonus_no_effect_without_names(
         self,
