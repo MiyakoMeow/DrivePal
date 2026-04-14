@@ -8,30 +8,36 @@ from app.memory.schemas import MemoryEvent, SearchResult
 if TYPE_CHECKING:
     from app.memory.interfaces import MemoryStore
 
-_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+(.+)$")
+_LINE_PATTERN = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}\]\s+([^:]+):\s(.+)$")
 
 
 def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
-    """将历史文本转换为交互记录."""
+    """将历史文本按 (date, speaker) 分组转换为交互记录."""
     if not history_text.strip():
         return []
-    records = []
-    for i, raw_line in enumerate(history_text.strip().splitlines()):
+    groups: dict[tuple[str, str], list[str]] = {}
+    for _, raw_line in enumerate(history_text.strip().splitlines()):
         line = raw_line.strip()
         if not line:
             continue
-        m = _TIMESTAMP_PATTERN.match(line)
+        m = _LINE_PATTERN.match(line)
         if m:
             date_group = m.group(1)
-            content = m.group(2)
+            speaker_name = m.group(2).strip()
+            content = m.group(3)
         else:
             date_group = "unknown"
+            speaker_name = "unknown"
             content = line
+        key = (date_group, speaker_name)
+        groups.setdefault(key, []).append(f"{speaker_name}: {content}")
+    records = []
+    for (date_group, speaker_name), lines in groups.items():
         records.append(
             MemoryEvent(
-                id=f"hist_{i}",
-                content=content,
-                description=content,
+                id=f"hist_{date_group}_{speaker_name}",
+                content="\n".join(lines),
+                description="",
                 type="general",
                 date_group=date_group,
                 memory_strength=1,

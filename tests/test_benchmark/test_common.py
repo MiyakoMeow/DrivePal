@@ -18,16 +18,25 @@ SAMPLE_HISTORY = "[2025-03-03 08:30] Gary Allen: I like the seat heating on leve
 
 EXPECTED_RECORD_COUNT = 3
 EXPECTED_SEARCH_COUNT = 2
+EXPECTED_GROUPED_RECORD_COUNT = 2
 
 
 def test_history_to_interaction_records() -> None:
-    """测试将历史文本转换为交互记录."""
+    """测试将历史文本按 (date, speaker) 分组转换为交互记录."""
     records = history_to_interaction_records(SAMPLE_HISTORY)
     assert len(records) == EXPECTED_RECORD_COUNT
-    assert records[0].content == "Gary Allen: I like the seat heating on level 3"
-    assert records[0].date_group == "2025-03-03"
-    assert records[1].date_group == "2025-03-03"
-    assert records[2].date_group == "2025-03-05"
+    gary_0303 = [
+        r for r in records if r.date_group == "2025-03-03" and "Gary Allen" in r.content
+    ][0]
+    assert "seat heating on level 3" in gary_0303.content
+    justin_0303 = [
+        r
+        for r in records
+        if r.date_group == "2025-03-03" and "Justin Martinez" in r.content
+    ][0]
+    assert "That sounds comfortable" in justin_0303.content
+    gary_0305 = [r for r in records if r.date_group == "2025-03-05"][0]
+    assert "dashboard dim" in gary_0305.content
 
 
 def test_history_to_interaction_records_empty() -> None:
@@ -118,3 +127,27 @@ async def test_store_client_delegates_to_store() -> None:
     client = StoreClient(FakeStore())  # ty: ignore[invalid-argument-type]
     results = await client.search(query="test", top_k=5)
     assert len(results) == 1
+
+
+def test_history_to_interaction_records_groups_same_speaker_same_day() -> None:
+    """测试同用户同天的多行发言合并为一条记录."""
+    history = (
+        "[2025-03-10 08:00] Alice: I love green\n"
+        "[2025-03-10 08:01] Bob: Nice\n"
+        "[2025-03-10 08:02] Alice: Also blue\n"
+    )
+    records = history_to_interaction_records(history)
+    assert len(records) == EXPECTED_GROUPED_RECORD_COUNT
+    alice = [r for r in records if "Alice" in r.content][0]
+    assert "I love green" in alice.content
+    assert "Also blue" in alice.content
+    assert alice.date_group == "2025-03-10"
+
+
+def test_history_to_interaction_records_malformed_lines() -> None:
+    """测试格式异常的行归入 unknown 组."""
+    history = "this has no timestamp\n[2025-03-10 08:00] Alice: hello\n"
+    records = history_to_interaction_records(history)
+    assert len(records) == EXPECTED_GROUPED_RECORD_COUNT
+    unknown = [r for r in records if r.date_group == "unknown"][0]
+    assert "this has no timestamp" in unknown.content
