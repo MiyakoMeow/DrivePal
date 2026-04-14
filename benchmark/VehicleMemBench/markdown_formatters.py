@@ -30,6 +30,21 @@ def _format_reasoning_type(rt: str | None) -> str:
     return _REASONING_TYPE_LABELS.get(rt or "", rt or "")
 
 
+def md_header(
+    timestamp_display: str,
+    model_name: str,
+    type_names: str,
+) -> str:
+    """生成报告头内容."""
+    lines = [
+        "# VehicleMemBench 基准测试报告\n",
+        f"- 生成时间：{timestamp_display}",
+        f"- 评估模型：{model_name}",
+        f"- 记忆类型：{type_names}\n",
+    ]
+    return "\n".join(lines)
+
+
 def _format_calls(calls: list[dict[str, Any]]) -> str:
     """将工具调用列表格式化为函数名列表."""
     if not calls:
