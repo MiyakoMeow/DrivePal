@@ -311,21 +311,6 @@ uv run pytest tests/ -v --test-llm --test-embedding
 | **总体摘要触发** | 每次运行时无条件重新生成 | 仅当 `daily_summaries` 数量 ≥ 3 且有新增时触发 |
 | **摘要不可变性** | 无保护——每次运行覆盖已有摘要 | 有保护——检查 `isinstance(dict)` 跳过已生成条目 + `_inflight` 防并发 |
 
-#### 3.2 关键阈值
-
-| 阈值 | 值 | 位置 |
-|------|-----|------|
-| `DAILY_SUMMARY_THRESHOLD` | 2 | 每日摘要触发所需事件数 |
-| `OVERALL_SUMMARY_THRESHOLD` | 3 | 生成总体摘要所需日摘要数 |
-| `SOFT_FORGET_THRESHOLD` | 0.15 | 软遗忘 retention 阈值 |
-| `SOFT_FORGET_STRENGTH` | 0 | 软遗忘时 memory_strength 设为此值 |
-| `AGGREGATION_SIMILARITY_THRESHOLD` | 0.8 | 余弦相似度聚合阈值 |
-| `OVERLAP_RATIO_THRESHOLD` | 0.5 | 字符重叠聚合阈值 |
-| `EMBEDDING_MIN_SIMILARITY` | 0.3 | 向量搜索最低相似度 |
-| `SUMMARY_WEIGHT` | 0.8 | 摘要/个性在搜索评分中的权重 |
-
----
-
 **评估**：本项目的增量触发 + 不可变性 + 并发保护是显著的工程改进，避免了重复 LLM 调用和竞态条件。
 
 #### 3.2 摘要输入来源差异
@@ -341,6 +326,11 @@ uv run pytest tests/ -v --test-llm --test-embedding
 ### 四、人格分析
 
 #### 4.1 人格摘要的遗忘曲线（增强）
+
+| 阈值 | 值 | 说明 |
+|------|-----|------|
+| `PERSONALITY_SUMMARY_THRESHOLD` | 2 | 每日个性摘要触发所需事件数 |
+| `OVERALL_PERSONALITY_THRESHOLD` | 3 | 生成总体个性画像所需日摘要数 |
 
 **原始仓库**：`personality` 字段是纯文本，没有 `memory_strength`，不参与遗忘曲线。
 

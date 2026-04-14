@@ -58,7 +58,7 @@ uv run python run_benchmark.py report --output path/to/report.json
 
 `report` 命令收集 `data/benchmark/` 下的评估结果，先生成 JSON 报告（可通过 `--output` 自定义路径），再基于其生成带时间戳的 Markdown 报告（如 `report-20260414-120000-000000.md`），包含：
 - 各记忆类型的 Exact Match Rate、Field-Level / Value-Level 指标
-- 按推理类型分组的细分统计（偏好冲突、条件约束、错误纠正、共指消解、状态迁移）
+- 按推理类型分组的细分统计（偏好冲突、条件约束、错误修正、共指消解、状态迁移）
 - 效率指标（平均工具调用数、平均输出 token 数）
 - 相对 gold 的 memory_score（当 gold 类型存在时）
 
