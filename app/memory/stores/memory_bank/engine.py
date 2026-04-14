@@ -30,7 +30,7 @@ class EmbeddingModelRequiredError(RuntimeError):
 
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
-OVERLAP_RATIO_THRESHOLD = 0.5
+OVERLAP_RATIO_THRESHOLD = 0.45
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
@@ -375,29 +375,40 @@ class MemoryBankEngine:
         )
 
     async def _should_append_to_event(self, interaction: dict) -> str | None:
+        """判断交互是否应追加到当日某条已有事件（扫描全部当日事件，取最高相似度）."""
         events = await self._storage.read_events()
         if not events:
             return None
         today = datetime.now(UTC).date().isoformat()
-        recent = events[-1]
-        if recent.get("date_group") != today:
+        today_events = [e for e in events if e.get("date_group") == today]
+        if not today_events:
             return None
         if self.embedding_model:
             query_vec = await self.embedding_model.encode(interaction["query"])
-            event_vec = await self.embedding_model.encode(recent.get("content", ""))
-            similarity = cosine_similarity(query_vec, event_vec)
-            return (
-                recent["id"] if similarity >= AGGREGATION_SIMILARITY_THRESHOLD else None
-            )
-        content_lower = recent.get("content", "").lower()
+            best_id = None
+            best_sim = AGGREGATION_SIMILARITY_THRESHOLD
+            for event in today_events:
+                event_vec = await self.embedding_model.encode(event.get("content", ""))
+                similarity = cosine_similarity(query_vec, event_vec)
+                if similarity >= best_sim:
+                    best_sim = similarity
+                    best_id = event["id"]
+            return best_id
         query_lower = interaction["query"].lower()
         query_chars = list(set(query_lower))
         if not query_chars:
             return None
-        overlap = sum(1 for c in query_chars if c in content_lower)
-        if overlap / len(query_chars) >= OVERLAP_RATIO_THRESHOLD:
-            return recent["id"]
-        return None
+        best_id = None
+        best_overlap = OVERLAP_RATIO_THRESHOLD
+        for event in today_events:
+            content_lower = event.get("content", "").lower()
+            overlap = sum(1 for c in query_chars if c in content_lower) / len(
+                query_chars,
+            )
+            if overlap >= best_overlap:
+                best_overlap = overlap
+                best_id = event["id"]
+        return best_id
 
     async def _update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:
