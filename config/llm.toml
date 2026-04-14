@@ -1,17 +1,17 @@
 [model_groups.default]
-models = ["openrouter/qwen/qwen3.5-9b"]
+models = ["openrouter/qwen/qwen3.5-9b?temperature=0.0"]
 
 [model_groups.benchmark]
-models = ["openrouter/qwen/qwen3.5-9b"]
+models = ["openrouter/qwen/qwen3.5-9b?temperature=0.0"]
 
 [model_groups.smart]
-models = ["deepseek/deepseek-chat"]
+models = ["deepseek/deepseek-chat?temperature=0.0"]
 
 [model_groups.fast]
 models = ["zhipuai-coding-plan/glm-4.7-flashx?temperature=0.1"]
 
 [model_groups.balanced]
-models = ["minimax-cn/MiniMax-M2.5"]
+models = ["minimax-cn/MiniMax-M2.5?temperature=0.0"]
 
 [model_providers.local]
 base_url = "http://127.0.0.1:50721/v1"
