@@ -318,8 +318,9 @@ uv run pytest tests/ -v --test-llm --test-embedding
 | `DAILY_SUMMARY_THRESHOLD` | 2 | 每日摘要触发所需事件数 |
 | `OVERALL_SUMMARY_THRESHOLD` | 3 | 生成总体摘要所需日摘要数 |
 | `SOFT_FORGET_THRESHOLD` | 0.15 | 软遗忘 retention 阈值 |
+| `SOFT_FORGET_STRENGTH` | 0 | 软遗忘时 memory_strength 设为此值 |
 | `AGGREGATION_SIMILARITY_THRESHOLD` | 0.8 | 余弦相似度聚合阈值 |
-| `OVERLAP_RATIO_THRESHOLD` | 0.5 | 关键词重叠聚合阈值 |
+| `OVERLAP_RATIO_THRESHOLD` | 0.5 | 字符重叠聚合阈值 |
 | `EMBEDDING_MIN_SIMILARITY` | 0.3 | 向量搜索最低相似度 |
 | `SUMMARY_WEIGHT` | 0.8 | 摘要/个性在搜索评分中的权重 |
 
