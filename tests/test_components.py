@@ -374,7 +374,7 @@ class TestPersonalitySummary:
 
     async def test_personality_prompt_is_preference_profile(
         self,
-        engine: MemoryBankEngine,
+        engine: MemoryBankEngine,  # noqa: ARG002
     ) -> None:
         """验证人格分析 prompt 使用偏好画像模板."""
         source = inspect.getsource(PersonalityManager.maybe_summarize)
@@ -382,7 +382,7 @@ class TestPersonalitySummary:
 
     async def test_overall_personality_prompt_is_preference_summary(
         self,
-        engine: MemoryBankEngine,
+        engine: MemoryBankEngine,  # noqa: ARG002
     ) -> None:
         """验证总体人格 prompt 使用偏好汇总模板."""
         source = inspect.getsource(PersonalityManager.generate_overall_text)
