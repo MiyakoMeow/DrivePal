@@ -36,6 +36,7 @@ TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
 FORGET_INTERVAL_SECONDS = 300
+_FORGET_NEVER = -float("inf")
 
 
 class MemoryBankEngine:
@@ -59,7 +60,7 @@ class MemoryBankEngine:
         self._lock = asyncio.Lock()
         self._personality_mgr = PersonalityManager(data_dir)
         self._summary_mgr = SummaryManager(data_dir)
-        self._last_forget_time: float = 0.0
+        self._last_forget_time: float = _FORGET_NEVER
 
     @property
     def summaries_store(self) -> TOMLStore:
