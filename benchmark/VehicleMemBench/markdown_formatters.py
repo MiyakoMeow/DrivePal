@@ -59,6 +59,25 @@ def md_experiment_groups() -> str:
     return "\n".join(lines)
 
 
+def md_metric_definitions() -> str:
+    """生成指标定义."""
+    lines = [
+        "## 3. 指标含义\n",
+        "| 指标 | 描述 |",
+        "|---|------|",
+        "| ESM (Exact Match Rate) | 最终车辆状态与真值完全匹配的比例 |",
+        "| F1 Positive | 字段级 F1，评估是否修改了正确的字段（字段级） |",
+        "| F1 Change | 值级 F1，评估修改后的值是否正确（值级） |",
+        "| F1 Negative | 负类 F1，评估是否避免了不应修改的字段被错误修改 |",
+        "| Memory Score | 相对于 GOLD 理论上限的 ESM 比值 |",
+        "| Δ% (vs Gold) | 与 GOLD 的 ESM 差距百分比 |",
+        "| Avg Calls | 平均预测工具调用数 |",
+        "| Avg Tokens | 平均输出 token 数 |",
+        "| 失败数 | 执行失败的查询数量 |\n",
+    ]
+    return "\n".join(lines)
+
+
 def _format_calls(calls: list[dict[str, Any]]) -> str:
     """将工具调用列表格式化为函数名列表."""
     if not calls:
