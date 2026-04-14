@@ -200,6 +200,10 @@ flowchart TD
  - **个性分析**：`PersonalityManager` 管理每日个性摘要和总体个性画像
 - **结果展开**：检索命中事件时，自动附加其关联的原始交互记录
 
+#### 与原始 MemoryBank 论文的实现对比
+
+基于 [MemoryBank-SiliconFriend](https://github.com/zhongwanjun/MemoryBank-SiliconFriend)（论文 [MemoryBank: Enhancing Large Language Models with Long-Term Memory](https://arxiv.org/pdf/2305.10250.pdf)）实现。核心机制（遗忘曲线、记忆强化、双层摘要、人格分析）均已覆盖，同时在事件聚合、搜索评分等方面做了工程改进。详细的逐行对比分析见 [DEV.md - MemoryBank 实现差异分析](./DEV.md#memorybank-实现差异分析)。
+
 #### 可组合组件架构
 
 `app/memory/components.py` 提供独立可复用的组件，各 Store 通过组合而非继承共享行为：

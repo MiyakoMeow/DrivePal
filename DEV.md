@@ -226,3 +226,149 @@ uv run pytest tests/ -v --test-llm --test-embedding
 | **数据集** | HuggingFace Datasets |
 | **基准测试** | VehicleMemBench (vendor 子模块) |
 | **开发工具** | uv (包管理), pytest (测试, asyncio_mode=auto), ruff (lint, 扩展规则集), ty (类型检查) |
+
+---
+
+## MemoryBank 实现差异分析
+
+基于 [MemoryBank-SiliconFriend](https://github.com/zhongwanjun/MemoryBank-SiliconFriend)（论文 [MemoryBank: Enhancing Large Language Models with Long-Term Memory](https://arxiv.org/pdf/2305.10250.pdf)）原始仓库的逐行对比。
+
+### 一、遗忘机制
+
+#### 1.1 遗忘触发时机与方式（根本性差异）
+
+| 维度 | 原始仓库 | 本项目 |
+|------|---------|--------|
+| **触发点** | 会话启动时一次性批量处理（`MemoryForgetterLoader.initial_load_forget_and_save`） | 每次搜索时逐次处理（`MemoryBankEngine._strengthen_and_forget`） |
+| **遗忘方式** | 概率性随机（`random.random() > retention_probability` 即删除） | 确定性阈值（`retention < SOFT_FORGET_THRESHOLD` 即标记） |
+| **遗忘结果** | 硬删除——从数组中 `.pop()`，甚至级联删除 summary | 软标记——`memory_strength = 0` + `forgotten = True` |
+
+**原始仓库**（[forget_memory.py:115-131](https://github.com/zhongwanjun/MemoryBank-SiliconFriend/blob/main/memory_bank/memory_retrieval/forget_memory.py#L115)）：对每条记忆独立掷骰子（`random.random() > retention_probability`），未通过的记忆从数组中 `.pop()` 硬删除；若该日所有对话均被遗忘，则级联删除对应 summary。
+
+**本项目**（`app/memory/stores/memory_bank/engine.py:257-274`）：遍历所有事件，命中检索的强化（`strength += 1`），未命中的计算 retention，低于 `SOFT_FORGET_THRESHOLD=0.15` 时设置 `memory_strength = 0` + `forgotten = True`，仅标记不删除。
+
+**差异分析**：
+
+- 原始的随机遗忘更接近论文语义——Ebbinghaus 遗忘曲线描述的是记忆保持的**概率**，同一记忆在不同时刻可能存活也可能遗忘，具有不可预测性。本项目的确定性阈值使相同 `strength + days_elapsed` 总是产生相同结果，丧失了随机性。
+- 原始在启动时遗忘、运行期间不遗忘；本项目在每次搜索时遗忘——渐进式遗忘 vs 批量遗忘。
+- 原始的硬删除 + 连带删除 summary 是级联的；本项目没有级联逻辑。
+
+**评估**：确定性软遗忘在工程上更安全（可恢复），但损失了论文核心卖点"模拟人类随机遗忘"。如需精确复现论文语义，可引入概率性遗忘选项。
+
+#### 1.2 Summary 的遗忘处理
+
+**原始仓库**：summary 条目也参与遗忘曲线，拥有独立的 `memory_strength` 和 `last_recall_date`（`forget_memory.py:138-146`），同样进入向量索引。此外 summary 会被**连带删除**——该日所有对话被遗忘时 summary 也被移除。
+
+**本项目**：summary 通过 `strengthen_summaries` 有独立强化逻辑，但**没有遗忘逻辑**——summary 永远不会被遗忘，记忆强度仅影响搜索排序分数。
+
+**评估**：保留所有 summary 是更安全的工程选择，summary 是高度压缩信息，遗忘 summary 会丢失大量上下文。
+
+---
+
+### 二、检索机制
+
+#### 2.1 向量索引架构
+
+| 维度 | 原始仓库 | 本项目 |
+|------|---------|--------|
+| **索引类型** | FAISS（ANN）或 LlamaIndex | 无索引，全量遍历 + 余弦相似度 |
+| **搜索算法** | FAISS 近似最近邻，O(log n) | 暴力搜索，O(n) |
+| **文档分块** | ChineseTextSplitter + 按 source 聚合相邻块 | 无分块，每事件独立检索单元 |
+| **top_k** | 默认 6 | 默认 3（搜索接口默认 10） |
+
+**原始仓库的关键特性——相邻块聚合**（`forget_memory.py:187-230`）：
+
+原始仓库重写了 FAISS 的 `similarity_search_with_score_by_vector`，在返回 top-k 结果后向两侧扩展相同 `source`（日期）的相邻块，直到总长度超过 `CHUNK_SIZE`（200 字符），保证同一日期的片段被拼接返回。本项目以单条事件为单位存储，天然不需要分块与拼接。
+
+**评估**：对当前规模（单用户、车载场景）全量遍历足够。未来扩展到大规模记忆时再引入 FAISS。
+
+#### 2.2 搜索评分公式（改进）
+
+**原始仓库**：搜索分数仅来自 FAISS 向量距离，遗忘曲线不参与搜索评分——仅在加载时决定是否保留到索引中（二值效应）。
+
+**本项目**（`engine.py:226`）：搜索分数 = `similarity * retention`，遗忘曲线成为连续权重——被强化过的记忆排名更高，长期未被回忆的记忆排名更低。这是有意的设计改进，更符合"记忆逐渐模糊"的直觉。
+
+#### 2.3 关键词搜索回退（新增）
+
+**原始仓库**：无回退机制，FAISS 不可用则直接失败。
+
+**本项目**（`engine.py:102-107`）：embedding 搜索无结果时自动回退到关键词搜索。纯工程改进。
+
+---
+
+### 三、摘要机制
+
+#### 3.1 触发条件与不可变性
+
+| 维度 | 原始仓库 | 本项目 |
+|------|---------|--------|
+| **每日摘要触发** | 手动/批量——`summarize_memory()` 由用户主动调用，遍历所有未摘要日期 | 自动/增量——每次写入事件时检查，达阈值 2 条事件触发 |
+| **总体摘要触发** | 每次运行时无条件重新生成 | 仅当 `daily_summaries` 数量 ≥ 3 且有新增时触发 |
+| **摘要不可变性** | 无保护——每次运行覆盖已有摘要 | 有保护——检查 `isinstance(dict)` 跳过已生成条目 + `_inflight` 防并发 |
+
+**评估**：本项目的增量触发 + 不可变性 + 并发保护是显著的工程改进，避免了重复 LLM 调用和竞态条件。
+
+#### 3.2 摘要输入来源差异
+
+**原始仓库**（`summarize_memory.py:67-77`）：使用**原始对话文本**（完整的 query + response 对）。
+
+**本项目**（`summarization.py:169-171`）：使用**事件的 `content` 字段**。对于通过 `write_interaction()` 写入的事件，`content` 可能已被 `_update_event_summary` 摘要过（`engine.py:411`），存在"对摘要做摘要"的精度损失风险。
+
+**改进建议**：生成每日摘要时优先使用 `interactions` 中的原始 query/response，确保摘要输入是原始对话。
+
+---
+
+### 四、人格分析
+
+#### 4.1 人格摘要的遗忘曲线（增强）
+
+**原始仓库**：`personality` 字段是纯文本，没有 `memory_strength`，不参与遗忘曲线。
+
+**本项目**（`personality.py:56-61`）：personality 条目拥有 `memory_strength` 和 `last_recall_date`，搜索时受遗忘曲线影响（`score = retention * SUMMARY_WEIGHT * 0.8`），且被检索命中时会强化。
+
+**评估**：本项目的做法更合理。原始仓库中 personality 不受遗忘影响是设计遗漏——人格特质应随时间淡化（人会改变）。额外的 `SUMMARY_WEIGHT * 0.8` 降权使人格搜索结果排名低于事件，语义合理。
+
+#### 4.2 总体人格的生成策略
+
+**原始仓库**：每次运行 `summarize_memory()` 时无条件重新生成 `overall_personality`。
+
+**本项目**（`personality.py:136-220`）：仅在 `daily_personality` 数量 ≥ `OVERALL_PERSONALITY_THRESHOLD=3` 且有新增条目时触发，带并发保护（snapshot count 校验，防止生成期间数据变更导致覆盖丢失）。
+
+---
+
+### 五、交互记录与事件聚合（新增能力）
+
+**原始仓库**：对话以扁平结构存储在 `history[date] = [{query, response}]` 中，每条对话独立记忆。
+
+**本项目**：引入 Event + Interaction 两级模型——多个语义相近的交互可聚合为同一事件：
+
+- `_should_append_to_event`（`engine.py:366-389`）：基于余弦相似度 ≥ 0.8 或字符重叠 ≥ 50% 判定
+- `_update_event_summary`（`engine.py:391-414`）：聚合后用 LLM 重新摘要事件 content
+- 检索命中事件时，自动附加其关联的所有原始交互记录（`_expand_event_interactions`）
+
+**评估**：这是最大的架构改进。原始仓库中同一主题的多次对话分散存储，检索时需多次匹配才能拼凑完整上下文。事件聚合将相关交互归组，一次命中即可带回完整上下文。
+
+---
+
+### 六、未实现部分的价值评估
+
+| 原始仓库特性 | 实现价值 | 说明 |
+|-------------|---------|------|
+| **概率性随机遗忘** | 中 | 论文语义还原的关键特性，建议作为可选参数实现（`ForgetStrategy.PROBABILISTIC`） |
+| **FAISS 向量索引** | 低（当前） | 单用户车载场景全量遍历足够，未来大规模记忆时再引入 |
+| **LlamaIndex 路径** | 无 | 与 FAISS 功能重复，无需额外依赖 |
+| **多用户隔离** | 视需求 | 车载单驾驶员场景不需要，家庭用车/多驾驶员时再添加 |
+| **Summary 连带遗忘** | 低 | 保留 summary 更安全，级联删除的收益有限 |
+| **双语 Prompt 模板** | 低 | 当前场景中文足够 |
+| **相邻块聚合检索** | 低 | 本项目以单条事件为检索单元，不需要分块拼接 |
+
+---
+
+### 七、改进建议优先级
+
+| 优先级 | 改进项 | 理由 |
+|--------|--------|------|
+| 中 | 概率性遗忘选项 | 论文语义还原，benchmark 可复现性 |
+| 中 | 摘要输入使用原始对话 | 避免对摘要做摘要的精度损失 |
+| 低 | FAISS 向量索引 | 当前规模不需要 |
+| 低 | 多用户隔离 | 视产品需求 |
