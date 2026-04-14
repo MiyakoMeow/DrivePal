@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from vendor_adapter.VehicleMemBench import BenchMemoryMode
+    from benchmark.VehicleMemBench import BenchMemoryMode
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 VENDOR_DIR = PROJECT_ROOT / "vendor" / "VehicleMemBench"

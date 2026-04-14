@@ -7,11 +7,11 @@ from typing import Any
 
 import aiofiles
 
-from vendor_adapter.VehicleMemBench import BenchMemoryMode  # noqa: TC001
-from vendor_adapter.VehicleMemBench.paths import (
+from benchmark.VehicleMemBench import BenchMemoryMode  # noqa: TC001
+from benchmark.VehicleMemBench.paths import (
     BENCHMARK_DIR,
 )
-from vendor_adapter.VehicleMemBench.paths import (
+from benchmark.VehicleMemBench.paths import (
     prep_path as _prep_path,
 )
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_prep_free(mtype: BenchMemoryMode) -> bool:
-    from vendor_adapter.VehicleMemBench.strategies import STRATEGIES  # noqa: PLC0415
+    from benchmark.VehicleMemBench.strategies import STRATEGIES  # noqa: PLC0415
 
     s = STRATEGIES[mtype]
     return not s.needs_history() and not s.needs_agent_for_prep()

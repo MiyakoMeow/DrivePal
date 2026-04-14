@@ -6,9 +6,9 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from vendor_adapter.VehicleMemBench import BenchMemoryMode
-from vendor_adapter.VehicleMemBench.model_config import get_benchmark_config
-from vendor_adapter.VehicleMemBench.paths import (
+from benchmark.VehicleMemBench import BenchMemoryMode
+from benchmark.VehicleMemBench.model_config import get_benchmark_config
+from benchmark.VehicleMemBench.paths import (
     ensure_output_dir,
 )
 

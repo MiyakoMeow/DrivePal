@@ -9,20 +9,20 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.memory.stores.memory_bank import MemoryBankStore
-from vendor_adapter.VehicleMemBench import BenchMemoryMode
-from vendor_adapter.VehicleMemBench.model_config import (
+from benchmark.VehicleMemBench import BenchMemoryMode
+from benchmark.VehicleMemBench.model_config import (
     get_store_chat_model,
     get_store_embedding_model,
 )
-from vendor_adapter.VehicleMemBench.paths import (
+from benchmark.VehicleMemBench.paths import (
     setup_vehiclemembench_path as _,  # noqa: F401
 )
-from vendor_adapter.VehicleMemBench.strategies.common import (
+from benchmark.VehicleMemBench.strategies.common import (
     StoreClient,
     format_search_results,
     history_to_interaction_records,
 )
-from vendor_adapter.VehicleMemBench.strategies.exceptions import (
+from benchmark.VehicleMemBench.strategies.exceptions import (
     VehicleMemBenchError,
 )
 

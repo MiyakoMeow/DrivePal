@@ -8,7 +8,7 @@ from app.memory.schemas import (
     MemoryEvent,
     SearchResult,
 )
-from vendor_adapter.VehicleMemBench.strategies.common import (
+from benchmark.VehicleMemBench.strategies.common import (
     StoreClient,
     format_search_results,
     history_to_interaction_records,

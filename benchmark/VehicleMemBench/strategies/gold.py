@@ -1,10 +1,10 @@
-"""无记忆策略."""
+"""黄金记忆策略."""
 
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from vendor_adapter.VehicleMemBench import BenchMemoryMode
-from vendor_adapter.VehicleMemBench.paths import (
+from benchmark.VehicleMemBench import BenchMemoryMode
+from benchmark.VehicleMemBench.paths import (
     setup_vehiclemembench_path as _,  # noqa: F401
 )
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from evaluation.agent_client import AgentClient
 
 
-class NoneEvaluator:
-    """None 模式评估器：不使用历史文本."""
+class GoldEvaluator:
+    """Gold 模式评估器：使用黄金记忆文本."""
 
     def __init__(
         self,
@@ -34,26 +34,26 @@ class NoneEvaluator:
         self,
         task: dict[str, Any],
         task_id: int,
-        gold_memory: str,  # noqa: ARG002
+        gold_memory: str,
     ) -> dict[str, Any] | None:
-        """评估单个 query，不使用历史."""
+        """评估单个 query，使用黄金记忆."""
         async with self._semaphore:
             return await asyncio.to_thread(
                 process_task_direct,
-                {**task, "history_text": ""},
+                {**task, "history_text": gold_memory},
                 task_id,
                 self._agent_client,
                 self._reflect_num,
             )
 
 
-class NoneStrategy:
-    """无记忆策略：直接调用，不使用任何记忆."""
+class GoldStrategy:
+    """黄金记忆策略：直接注入 gold_memory 作为历史."""
 
     @property
     def mode(self) -> BenchMemoryMode:
         """返回策略模式."""
-        return BenchMemoryMode.NONE
+        return BenchMemoryMode.GOLD
 
     def needs_history(self) -> bool:
         """是否需要历史文本."""
@@ -70,7 +70,7 @@ class NoneStrategy:
         agent_client: AgentClient | None,  # noqa: ARG002
         semaphore: asyncio.Semaphore,  # noqa: ARG002
     ) -> dict[str, Any] | None:
-        """无记忆策略无需准备."""
+        """黄金记忆策略无需准备."""
         return None
 
     async def create_evaluator(
@@ -80,6 +80,6 @@ class NoneStrategy:
         file_num: int,  # noqa: ARG002
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
-    ) -> NoneEvaluator:
-        """创建 None 模式评估器."""
-        return NoneEvaluator(agent_client, reflect_num, query_semaphore)
+    ) -> GoldEvaluator:
+        """创建 Gold 模式评估器."""
+        return GoldEvaluator(agent_client, reflect_num, query_semaphore)
