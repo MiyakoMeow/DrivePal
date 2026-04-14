@@ -21,7 +21,7 @@ concurrency = 4
 [model_providers.openrouter]
 base_url = "https://openrouter.ai/api/v1"
 api_key_env = "OPENROUTER_API_KEY"
-concurrency = 4
+concurrency = 16
 
 [model_providers.minimax-cn]
 base_url = "https://api.minimaxi.com/v1"
