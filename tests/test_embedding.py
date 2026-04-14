@@ -41,8 +41,8 @@ class TestEmbeddingForMemorySearch:
         memory = MemoryModule(tmp_path, embedding_model=embedding)
         await memory.write(MemoryEvent(content="明天下午三点项目评审会议"))
         results = await memory.search("天气预报查询", mode=MemoryMode.MEMORY_BANK)
-        if results:
-            assert results[0].score < SIMILARITY_THRESHOLD
+        assert len(results) > 0, "语义无关查询应返回结果"
+        assert results[0].score < SIMILARITY_THRESHOLD
 
 
 @pytest.mark.embedding
@@ -70,5 +70,5 @@ class TestEmbeddingForMemoryBankRetrieval:
         backend = MemoryBankStore(tmp_path, embedding_model=embedding)
         await backend.write(MemoryEvent(content="明天下午三点项目评审会议"))
         results = await backend.search("今晚吃什么好呢")
-        if results:
-            assert results[0].score < SIMILARITY_THRESHOLD
+        assert len(results) > 0, "低相似度查询应返回结果"
+        assert results[0].score < SIMILARITY_THRESHOLD
