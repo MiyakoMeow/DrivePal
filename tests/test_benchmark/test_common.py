@@ -44,21 +44,43 @@ def test_format_search_results_empty() -> None:
 
 
 def test_format_search_results_with_events() -> None:
-    """测试格式化带事件搜索结果."""
+    """测试格式化带事件搜索结果包含元信息."""
     results = [
         SearchResult(
-            event={"content": "Gary prefers seat heating level 3", "id": "1"},
+            event={
+                "content": "Gary prefers seat heating level 3",
+                "id": "1",
+                "date_group": "2025-03-03",
+                "memory_strength": 2,
+                "last_recall_date": "2025-03-03",
+            },
             score=0.9,
+            source="event",
+            interactions=[
+                {"query": "seat heating level 3", "response": "Done"},
+            ],
         ),
         SearchResult(
-            event={"content": "Gary likes dashboard dim at night", "id": "2"},
+            event={
+                "content": "Gary likes dashboard dim at night",
+                "id": "2",
+                "date_group": "2025-03-05",
+                "memory_strength": 1,
+                "last_recall_date": "2025-03-05",
+            },
             score=0.8,
+            source="event",
         ),
     ]
     text, count = format_search_results(results)
     assert count == EXPECTED_SEARCH_COUNT
-    assert "seat heating" in text
-    assert "dashboard dim" in text
+    assert "Memory Result 1" in text
+    assert "2025-03-03" in text
+    assert "Strength: 2" in text
+    assert "seat heating level 3" in text
+    assert "Related interactions" in text
+    assert "Memory Result 2" in text
+    assert "2025-03-05" in text
 
 
 @pytest.mark.asyncio

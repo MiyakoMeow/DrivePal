@@ -250,12 +250,12 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **原始仓库**（[forget_memory.py:115-131](https://github.com/zhongwanjun/MemoryBank-SiliconFriend/blob/main/memory_bank/memory_retrieval/forget_memory.py#L115)）：对每条记忆独立掷骰子（`random.random() > retention_probability`），未通过的记忆从数组中 `.pop()` 硬删除；若该日所有对话均被遗忘，则级联删除对应 summary。
 
-**本项目**（`app/memory/stores/memory_bank/engine.py:257-274`）：遍历所有事件，命中检索的强化（`strength += 1`），未命中的计算 retention，低于 `SOFT_FORGET_THRESHOLD=0.15` 时设置 `memory_strength = 0` + `forgotten = True`，仅标记不删除。
+**本项目**（`app/memory/stores/memory_bank/engine.py`）：搜索时遍历所有事件，命中检索的强化（`strength += 1`），搜索末尾调用 `forget_expired()` 对未命中的计算 retention，低于 `SOFT_FORGET_THRESHOLD=0.15` 时设置 `memory_strength = 0` + `forgotten = True`，仅标记不删除。
 
 **差异分析**：
 
 - 原始的随机遗忘更接近论文语义——Ebbinghaus 遗忘曲线描述的是记忆保持的**概率**，同一记忆在不同时刻可能存活也可能遗忘，具有不可预测性。本项目的确定性阈值使相同 `strength + days_elapsed` 总是产生相同结果，丧失了随机性。
-- 原始在启动时遗忘、运行期间不遗忘；本项目在每次搜索时遗忘——渐进式遗忘 vs 批量遗忘。
+- 原始在启动时遗忘、运行期间不遗忘；本项目在每次搜索末尾遗忘——渐进式遗忘 vs 批量遗忘。
 - 原始的硬删除 + 连带删除 summary 是级联的；本项目没有级联逻辑。
 
 **评估**：确定性软遗忘在工程上更安全（可恢复），但损失了论文核心卖点"模拟人类随机遗忘"。如需精确复现论文语义，可引入概率性遗忘选项。
@@ -317,9 +317,9 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **原始仓库**（`summarize_memory.py:67-77`）：使用**原始对话文本**（完整的 query + response 对）。
 
-**本项目**（`summarization.py:169-171`）：使用**事件的 `content` 字段**。对于通过 `write_interaction()` 写入的事件，`content` 可能已被 `_update_event_summary` 摘要过（`engine.py:411`），存在"对摘要做摘要"的精度损失风险。
+**本项目**（`summarization.py:170-185`）：优先使用 `interactions` 中的原始 query/response 对作为摘要输入，无交互记录时 fallback 到事件的 `content` 字段。
 
-**改进建议**：生成每日摘要时优先使用 `interactions` 中的原始 query/response，确保摘要输入是原始对话。
+**评估**：本项目的做法已对齐原始仓库的摘要输入来源，使用原始对话文本而非已摘要的 `content`，避免了"对摘要做摘要"的精度损失。
 
 ---
 
@@ -359,8 +359,8 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **本项目**：引入 Event + Interaction 两级模型——多个语义相近的交互可聚合为同一事件：
 
-- `_should_append_to_event`（`engine.py:366-389`）：基于余弦相似度 ≥ 0.8 或字符重叠 ≥ 50% 判定
-- `_update_event_summary`（`engine.py:391-414`）：聚合后用 LLM 重新摘要事件 content
+- `_should_append_to_event`（`engine.py:383-417`）：扫描全部当日事件取最高相似度，基于余弦相似度 ≥ 0.8 或字符重叠 ≥ 45% 判定
+- `_update_event_summary`（`engine.py:419-442`）：聚合后用 LLM 重新摘要事件 content
 - 检索命中事件时，自动附加其关联的所有原始交互记录（`_expand_event_interactions`）
 
 **评估**：这是最大的架构改进。原始仓库中同一主题的多次对话分散存储，检索时需多次匹配才能拼凑完整上下文。事件聚合将相关交互归组，一次命中即可带回完整上下文。
@@ -386,6 +386,6 @@ uv run pytest tests/ -v --test-llm --test-embedding
 | 优先级 | 改进项 | 理由 |
 |--------|--------|------|
 | 中 | 概率性遗忘选项 | 论文语义还原，benchmark 可复现性 |
-| 中 | 摘要输入使用原始对话 | 避免对摘要做摘要的精度损失 |
+| ~~中~~ | ~~摘要输入使用原始对话~~ | ✅ 已实现（`summarization.py:170-185`） |
 | 低 | FAISS 向量索引 | 当前规模不需要 |
 | 低 | 多用户隔离 | 视产品需求 |

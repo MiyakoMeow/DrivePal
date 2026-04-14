@@ -1,7 +1,7 @@
 """记忆适配器通用工具函数."""
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from app.memory.schemas import MemoryEvent, SearchResult
 
@@ -41,22 +41,38 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
 
 
 def format_search_results(results: list[SearchResult]) -> tuple[str, int]:
-    """将搜索结果格式化为文本和数量."""
+    """将搜索结果格式化为结构化文本和数量."""
     if not results:
         return ("", 0)
     texts = []
-    for r in results:
-        raw: Any = ""
+    for idx, r in enumerate(results, 1):
         if isinstance(r.event, dict):
-            raw = r.event.get("content", "")
+            event = r.event
         elif hasattr(r.event, "content"):
-            raw = getattr(r.event, "content", "")
+            event = {"content": getattr(r.event, "content", "")}
         else:
-            raw = r.event
-        content = str(raw) if raw is not None else ""
-        if content:
-            texts.append(content)
-    return ("\n".join(texts), len(texts))
+            event = {"content": str(r.event) if r.event is not None else ""}
+        content = str(event.get("content", ""))
+        if not content:
+            continue
+        date_group = event.get("date_group", "unknown")
+        source = r.source
+        strength = event.get("memory_strength", "?")
+        parts = [
+            f"--- Memory Result {idx} ---",
+            f"Date: {date_group} | Source: {source} | Strength: {strength}",
+            f"Content: {content}",
+        ]
+        if r.interactions:
+            parts.append("Related interactions:")
+            for i, interaction in enumerate(r.interactions, 1):
+                q = interaction.get("query", "")
+                resp = interaction.get("response", "")
+                parts.append(f"  [{i}] Query: {q}")
+                if resp:
+                    parts.append(f"      Response: {resp}")
+        texts.append("\n".join(parts))
+    return ("\n\n".join(texts), len(texts))
 
 
 class StoreClient:

@@ -30,7 +30,7 @@ class EmbeddingModelRequiredError(RuntimeError):
 
 
 AGGREGATION_SIMILARITY_THRESHOLD = 0.8
-OVERLAP_RATIO_THRESHOLD = 0.5
+OVERLAP_RATIO_THRESHOLD = 0.45
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
@@ -85,7 +85,10 @@ class MemoryBankEngine:
         await self._storage.append_raw(event.model_dump())
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
-        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
+        interactions = await self._interactions_store.read()
+        await self._summary_mgr.maybe_summarize(
+            today, group_events, self.chat_model, interactions
+        )
         return event.id
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
@@ -136,12 +139,13 @@ class MemoryBankEngine:
         )
 
         if event_ids:
-            await self._strengthen_and_forget(event_ids)
+            await self._strengthen_matched(event_ids)
         if summary_keys:
             await self._summary_mgr.strengthen_summaries(summary_keys)
         if personality_keys:
             await self._personality_mgr.strengthen(personality_keys)
 
+        await self.forget_expired()
         return await self._expand_event_interactions(top_results)
 
     def _get_searchable_text(self, event: dict) -> str:
@@ -246,11 +250,11 @@ class MemoryBankEngine:
             result.interactions = interaction_by_event.get(eid, [])
         return results
 
-    async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
+    async def _strengthen_matched(self, matched_ids: set[str]) -> None:
+        """强化匹配事件的记忆强度（不含遗忘逻辑）."""
         if not matched_ids:
             return
         today = datetime.now(UTC).date().isoformat()
-        today_date = datetime.now(UTC).date()
         async with self._lock:
             all_events = await self._storage.read_events()
             updated = False
@@ -259,19 +263,6 @@ class MemoryBankEngine:
                     event["memory_strength"] = event.get("memory_strength", 1) + 1
                     event["last_recall_date"] = today
                     updated = True
-                else:
-                    strength = event.get("memory_strength", 1)
-                    last_recall = event.get("last_recall_date", today_date.isoformat())
-                    try:
-                        last_date = date.fromisoformat(last_recall)
-                        days_elapsed = (today_date - last_date).days
-                    except ValueError, TypeError:
-                        days_elapsed = 0
-                    retention = forgetting_curve(days_elapsed, strength)
-                    if retention < SOFT_FORGET_THRESHOLD:
-                        event["memory_strength"] = SOFT_FORGET_STRENGTH
-                        event["forgotten"] = True
-                        updated = True
             if updated:
                 await self._storage.write_events(all_events)
 
@@ -286,6 +277,30 @@ class MemoryBankEngine:
                     updated = True
             if updated:
                 await self._interactions_store.write(all_interactions)
+
+    async def forget_expired(self) -> None:
+        """遗忘过期事件（在搜索末尾自动调用，也可独立调用）."""
+        today_date = datetime.now(UTC).date()
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            updated = False
+            for event in all_events:
+                if event.get("forgotten"):
+                    continue
+                strength = event.get("memory_strength", 1)
+                last_recall = event.get("last_recall_date", today_date.isoformat())
+                try:
+                    last_date = date.fromisoformat(last_recall)
+                    days_elapsed = (today_date - last_date).days
+                except ValueError, TypeError:
+                    days_elapsed = 0
+                retention = forgetting_curve(days_elapsed, strength)
+                if retention < SOFT_FORGET_THRESHOLD:
+                    event["memory_strength"] = SOFT_FORGET_STRENGTH
+                    event["forgotten"] = True
+                    updated = True
+            if updated:
+                await self._storage.write_events(all_events)
 
     async def write_interaction(
         self,
@@ -350,8 +365,10 @@ class MemoryBankEngine:
 
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
-        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
         interactions = await self._interactions_store.read()
+        await self._summary_mgr.maybe_summarize(
+            today, group_events, self.chat_model, interactions
+        )
         await self._personality_mgr.maybe_summarize(
             today,
             events,
@@ -364,29 +381,42 @@ class MemoryBankEngine:
         )
 
     async def _should_append_to_event(self, interaction: dict) -> str | None:
+        """判断交互是否应追加到当日某条已有事件（扫描全部当日事件，取最高相似度）."""
         events = await self._storage.read_events()
         if not events:
             return None
         today = datetime.now(UTC).date().isoformat()
-        recent = events[-1]
-        if recent.get("date_group") != today:
+        today_events = [e for e in events if e.get("date_group") == today]
+        if not today_events:
             return None
         if self.embedding_model:
             query_vec = await self.embedding_model.encode(interaction["query"])
-            event_vec = await self.embedding_model.encode(recent.get("content", ""))
-            similarity = cosine_similarity(query_vec, event_vec)
-            return (
-                recent["id"] if similarity >= AGGREGATION_SIMILARITY_THRESHOLD else None
+            event_vecs = await self.embedding_model.batch_encode(
+                [e.get("content", "") for e in today_events]
             )
-        content_lower = recent.get("content", "").lower()
+            best_id = None
+            best_sim = AGGREGATION_SIMILARITY_THRESHOLD
+            for event, event_vec in zip(today_events, event_vecs, strict=True):
+                similarity = cosine_similarity(query_vec, event_vec)
+                if similarity >= best_sim:
+                    best_sim = similarity
+                    best_id = event["id"]
+            return best_id
         query_lower = interaction["query"].lower()
         query_chars = list(set(query_lower))
         if not query_chars:
             return None
-        overlap = sum(1 for c in query_chars if c in content_lower)
-        if overlap / len(query_chars) >= OVERLAP_RATIO_THRESHOLD:
-            return recent["id"]
-        return None
+        best_id = None
+        best_overlap = OVERLAP_RATIO_THRESHOLD
+        for event in today_events:
+            content_lower = event.get("content", "").lower()
+            overlap = sum(1 for c in query_chars if c in content_lower) / len(
+                query_chars,
+            )
+            if overlap >= best_overlap:
+                best_overlap = overlap
+                best_id = event["id"]
+        return best_id
 
     async def _update_event_summary(self, event_id: str) -> None:
         if not self.chat_model:

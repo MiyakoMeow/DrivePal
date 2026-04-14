@@ -144,6 +144,7 @@ class SummaryManager:
         date_group: str,
         events: list[dict],
         chat_model: ChatModel | None,
+        interactions: list[dict] | None = None,
     ) -> None:
         """事件数量达到阈值时生成日常摘要.
 
@@ -166,9 +167,22 @@ class SummaryManager:
             if not self._should_generate_daily(date_group, daily_summaries):
                 return
             self._inflight_daily_summaries.add(date_group)
-            content = "\n".join(
-                e.get("content", "") for e in events if e.get("content")
-            )
+            interaction_by_id = {i.get("id"): i for i in (interactions or [])}
+            raw_parts: list[str] = []
+            for e in events:
+                e_interactions = [
+                    interaction_by_id[iid]
+                    for iid in e.get("interaction_ids", [])
+                    if iid in interaction_by_id
+                ]
+                if e_interactions:
+                    raw_parts.extend(
+                        f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
+                        for i in e_interactions
+                    )
+                elif e.get("content"):
+                    raw_parts.append(e["content"])
+            content = "\n".join(raw_parts)
 
         prompt = f"请简洁总结以下事件（一句话）：\n{content}"
         needs_overall_update = False
