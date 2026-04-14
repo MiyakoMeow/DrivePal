@@ -85,7 +85,10 @@ class MemoryBankEngine:
         await self._storage.append_raw(event.model_dump())
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
-        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
+        interactions = await self._interactions_store.read()
+        await self._summary_mgr.maybe_summarize(
+            today, group_events, self.chat_model, interactions
+        )
         return event.id
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
@@ -361,8 +364,10 @@ class MemoryBankEngine:
 
         events = await self._storage.read_events()
         group_events = [e for e in events if e.get("date_group") == today]
-        await self._summary_mgr.maybe_summarize(today, group_events, self.chat_model)
         interactions = await self._interactions_store.read()
+        await self._summary_mgr.maybe_summarize(
+            today, group_events, self.chat_model, interactions
+        )
         await self._personality_mgr.maybe_summarize(
             today,
             events,
