@@ -70,6 +70,10 @@ class MemoryBankStore:
         """写入事件."""
         return await self._engine.write(event)
 
+    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+        """批量写入事件."""
+        return await self._engine.write_batch(events)
+
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆."""
         return await self._engine.search(query, top_k)

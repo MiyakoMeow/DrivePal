@@ -225,8 +225,9 @@ class MemoryBankStrategy:
                     chat_model=chat_model,
                     embedding_model=embedding_model,
                 )
-                for record in history_to_interaction_records(history_text):
-                    await store.write(record)
+                records = history_to_interaction_records(history_text)
+                if records:
+                    await store.write_batch(records)
                 if store_dir.exists():
                     backup_dir = store_dir.with_suffix(f".bak_{temp_dir.name}")
                     await asyncio.to_thread(

@@ -96,6 +96,32 @@ class MemoryBankEngine:
         )
         return event.id
 
+    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+        """批量写入事件，仅在最后按日期分组触发摘要."""
+        ids: list[str] = []
+        for ev in events:
+            event = ev.model_copy(deep=True)
+            event.id = self._storage.generate_id()
+            event.created_at = datetime.now(UTC).isoformat()
+            if not event.date_group:
+                event.date_group = datetime.now(UTC).date().isoformat()
+            if not event.last_recall_date:
+                event.last_recall_date = event.date_group
+            event.memory_strength = 1
+            await self._storage.append_raw(event.model_dump())
+            ids.append(event.id)
+        all_events = await self._storage.read_events()
+        date_groups = {
+            e.get("date_group", "") for e in all_events if e.get("date_group")
+        }
+        interactions = await self._interactions_store.read()
+        for dg in sorted(date_groups):
+            group_events = [e for e in all_events if e.get("date_group") == dg]
+            await self._summary_mgr.maybe_summarize(
+                dg, group_events, self.chat_model, interactions
+            )
+        return ids
+
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆事件与摘要."""
         if not query.strip():

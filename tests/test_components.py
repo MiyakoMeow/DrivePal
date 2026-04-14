@@ -325,6 +325,36 @@ class TestMemoryBankEngineWrite:
         events = await storage.read_events()
         assert events[0]["last_recall_date"] == "2025-06-01"
 
+    async def test_write_batch_returns_ids(
+        self,
+        engine: MemoryBankEngine,
+    ) -> None:
+        """验证 write_batch 返回所有事件 ID."""
+        events = [
+            MemoryEvent(content="事件1"),
+            MemoryEvent(content="事件2"),
+        ]
+        ids = await engine.write_batch(events)
+        assert len(ids) == len(events)
+        assert all(isinstance(i, str) and len(i) > 0 for i in ids)
+
+    async def test_write_batch_preserves_date_groups(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证 write_batch 保留不同的 date_group."""
+        await engine.write_batch(
+            [
+                MemoryEvent(content="三月事件", date_group="2025-03-10"),
+                MemoryEvent(content="四月事件", date_group="2025-04-15"),
+            ]
+        )
+        events = await storage.read_events()
+        dates = {e["date_group"] for e in events}
+        assert "2025-03-10" in dates
+        assert "2025-04-15" in dates
+
 
 class TestMemoryBankEngineWriteInteraction:
     """MemoryBankEngine.write_interaction 测试."""
