@@ -27,6 +27,8 @@ uv run python run_benchmark.py report
 uv run python run_benchmark.py report --output path/to/report.json
 ```
 
+> **注意**：`run_benchmark.py` 位于项目根目录（不是 `benchmark/` 子目录）。
+
 ### CLI 参数
 
 | 参数 | 默认值 | 适用命令 | 说明 |
@@ -50,14 +52,15 @@ uv run python run_benchmark.py report --output path/to/report.json
 
 每个策略实现 `MemoryStrategy` Protocol，统一 prepare → create_evaluator 流程。
 
-> **注意**：VehicleMemBench 上游框架还支持 `summary` 类型，本项目适配器未实现。本项目 `kv` 策略对应上游框架的 `key_value` 类型。详见 [BENCHMARK-VehicleMemBench.md](BENCHMARK-VehicleMemBench.md)。
+> **注意**：`gold` 类型是计算 `memory_score` 的基准，若不包含 gold 则该指标不会计算。VehicleMemBench 上游框架还支持 `summary` 类型，本项目适配器未实现。本项目 `kv` 策略对应上游框架的 `key_value` 类型。详见 [BENCHMARK-VehicleMemBench.md](BENCHMARK-VehicleMemBench.md)。
 
 ### 报告生成
 
-`report` 命令收集 `data/benchmark/` 下的评估结果，先生成 JSON 报告（可通过 `--output` 自定义路径），再基于其生成 Markdown 报告至同目录，包含：
+`report` 命令收集 `data/benchmark/` 下的评估结果，先生成 JSON 报告（可通过 `--output` 自定义路径），再基于其生成带时间戳的 Markdown 报告（如 `report-20260414-120000-000000.md`），包含：
 - 各记忆类型的 Exact Match Rate、Field-Level / Value-Level 指标
-- 按推理类型分组的细分统计
+- 按推理类型分组的细分统计（偏好冲突、条件约束、错误修正、共指消解、状态迁移）
 - 效率指标（平均工具调用数、平均输出 token 数）
+- 相对 gold 的 memory_score（当 gold 类型存在时）
 
 ### 注意事项
 

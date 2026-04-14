@@ -151,7 +151,7 @@ result, event_id, stages = await workflow.run_with_stages(
 
 | 数据类别 | 字段 | 说明 |
 |----------|------|------|
-| **驾驶员状态** | `emotion`, `workload`, `fatigueLevel` | 情绪（5级）、工作负荷（4级）、疲劳度（0~1） |
+| **驾驶员状态** | `emotion`, `workload`, `fatigue_level` | 情绪（5级）、工作负荷（4级）、疲劳度（0~1） |
 | **时空信息** | `currentLocation`, `destination`, `etaMinutes`, `heading` | 经纬度、街道地址、车速 |
 | **交通状况** | `congestionLevel`, `incidents`, `estimatedDelayMinutes` | 拥堵等级（4级）、事故列表 |
 | **驾驶场景** | `scenario` | parked / city_driving / highway / traffic_jam |
@@ -164,12 +164,12 @@ result, event_id, stages = await workflow.run_with_stages(
 
 | 规则 | 条件 | 约束 |
 |------|------|------|
-| 高速仅音频 | `scenario == "highway"` | `allowed_channels: [audio]`, 最大频率 30min |
-| 疲劳抑制 | `fatigueLevel > 0.7` | 仅允许紧急提醒, `allowed_channels: [audio]` |
-| 过载延后 | `workload == "overloaded"` | 延后提醒 |
+| 高速仅音频 | `scenario == "highway"` | `allowed_channels: [audio]`, `max_frequency_minutes: 30` |
+| 疲劳抑制 | `fatigue_level > 0.7` | `only_urgent: true`, `allowed_channels: [audio]` |
+| 过载延后 | `workload == "overloaded"` | `postpone: true` |
 | 停车全通道 | `scenario == "parked"` | `allowed_channels: [visual, audio, detailed]` |
 
-多规则匹配时按优先级合并：`allowed_channels` 取交集，`only_urgent` / `postpone` 取布尔或。
+多规则匹配时按优先级合并：`allowed_channels` 取交集（空集时回退到 `{"visual", "audio", "detailed"}`），`only_urgent` / `postpone` 取布尔或。
 
 ---
 
@@ -194,10 +194,10 @@ flowchart TD
 ```
 
 - **遗忘曲线**：`retention = e^(-days / (5 × strength))`，模拟人类记忆衰减
-- **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存
-- **自动聚合**：语义相似的交互自动聚合为同一事件（余弦相似度 ≥ 0.8 或关键词重叠 ≥ 50%）
+- **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存（事件和关联的交互记录都会被强化）
+- **自动聚合**：写入交互时检查与当日最后一条事件的相似度（余弦相似度 ≥ 0.8 或字符重叠 ≥ 50%），满足则聚合
 - **层级摘要**：`SummaryManager` 管理事件数达到日阈值后生成 daily_summary，达到总阈值后生成 overall_summary
- - **个性分析**：`PersonalityManager` 管理每日个性摘要和总体个性画像
+  - **个性分析**：`PersonalityManager` 管理每日个性摘要和总体个性画像
 - **结果展开**：检索命中事件时，自动附加其关联的原始交互记录
 
 #### 与原始 MemoryBank 论文的实现对比
@@ -222,6 +222,12 @@ flowchart TD
 
 - **accept**：对应事件类型权重 +0.1（上限1.0）
 - **ignore**：对应事件类型权重 -0.1（下限0.1）
+
+**关键阈值**：
+- 遗忘曲线软阈值：`SOFT_FORGET_THRESHOLD = 0.15`
+- 聚合相似度阈值：余弦相似度 ≥ 0.8 或字符重叠 ≥ 50%
+- 向量搜索最低相似度：`EMBEDDING_MIN_SIMILARITY = 0.3`
+- 搜索评分权重：摘要/个性 `SUMMARY_WEIGHT = 0.8`
 
 ---
 

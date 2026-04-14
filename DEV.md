@@ -131,7 +131,7 @@ data/
 ├── memorybank_summaries.toml # MemoryBank 层级摘要
 │   ├── daily_summaries: {}   # {date → {content, memory_strength, event_count}}
 │   └── overall_summary: ""   # 总摘要
-├── memorybank_personality.toml # MemoryBank 个性分析
+├── memorybank_personality.toml # MemoryBank 个性分析（运行时自动初始化）
 ├── contexts.toml            # 上下文缓存
 ├── preferences.toml         # 用户偏好
 ├── feedback.toml            # 用户反馈记录
@@ -150,6 +150,11 @@ store.write(data)      # 写入数据
 store.append(item)     # 追加单项（仅list类型）
 store.update(key, val) # 更新键值（仅dict类型）
 ```
+
+**运行时自动初始化的文件**：
+
+以下文件不在 `init_data.py` 预创建，由 `TOMLStore` 在首次读取时自动生成：
+- `memorybank_personality.toml`：首次读取时自动创建 `{"daily_personality": {}, "overall_personality": ""}`
 
 ---
 
@@ -322,6 +327,11 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 #### 4.1 人格摘要的遗忘曲线（增强）
 
+| 阈值 | 值 | 说明 |
+|------|-----|------|
+| `PERSONALITY_SUMMARY_THRESHOLD` | 2 | 每日个性摘要触发所需事件数 |
+| `OVERALL_PERSONALITY_THRESHOLD` | 3 | 生成总体个性画像所需日摘要数 |
+
 **原始仓库**：`personality` 字段是纯文本，没有 `memory_strength`，不参与遗忘曲线。
 
 **本项目**（`personality.py:56-61`）：personality 条目拥有 `memory_strength` 和 `last_recall_date`，搜索时受遗忘曲线影响（`score = retention * SUMMARY_WEIGHT * 0.8`），且被检索命中时会强化。
@@ -333,6 +343,13 @@ uv run pytest tests/ -v --test-llm --test-embedding
 **原始仓库**：每次运行 `summarize_memory()` 时无条件重新生成 `overall_personality`。
 
 **本项目**（`personality.py:136-220`）：仅在 `daily_personality` 数量 ≥ `OVERALL_PERSONALITY_THRESHOLD=3` 且有新增条目时触发，带并发保护（snapshot count 校验，防止生成期间数据变更导致覆盖丢失）。
+
+#### 4.3 关键阈值
+
+| 阈值 | 值 | 位置 |
+|------|-----|------|
+| `PERSONALITY_SUMMARY_THRESHOLD` | 2 | 每日个性摘要触发所需事件数 |
+| `OVERALL_PERSONALITY_THRESHOLD` | 3 | 生成总体个性画像所需日摘要数 |
 
 ---
 
