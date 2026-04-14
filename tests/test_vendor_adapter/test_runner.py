@@ -178,6 +178,10 @@ def test_run_skips_existing_query_files(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
         MagicMock,
     )
+    monkeypatch.setattr(
+        "vendor_adapter.VehicleMemBench.runner._query_concurrency_limit",
+        lambda: 1,
+    )
 
     asyncio.run(run(file_range="99", memory_types="gold"))
 
@@ -248,3 +252,8 @@ def test_report_reads_hierarchical_queries(
 
 def test_imports_available() -> None:
     """测试 vendor 导入可用."""
+    from vendor_adapter.VehicleMemBench import (
+        loader,  # noqa: F401
+        model_config,  # noqa: F401
+        strategies,  # noqa: F401
+    )
