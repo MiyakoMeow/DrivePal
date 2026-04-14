@@ -123,7 +123,7 @@ graph TB
 |--------|----------|------|----------|
 | `none` | Raw History | 无历史信息，让模型直接预测 | 基线性能 |
 | `gold` | Gold Memory | 直接提供真实最新用户偏好 | 理论性能上界 |
-| `summary` | Recursive Summarization | 将历史压缩为层次化摘要 | 摘要推理能力 |
+| `summary` | Recursive Summarization | 将历史压缩为层次化摘要 | 摘要推理能力（本项目未实现） |
 | `key_value` | Key-Value Store | 将偏好组织为结构化键值对 | 精确检索能力 |
 | `memory_bank` | MemoryBank | 基于遗忘曲线的分层记忆（本项目实现） | 遗忘曲线检索能力 |
 
@@ -442,38 +442,23 @@ At [时间], [用户] got in the car.
 
 **定义**：对话中使用代词或描述性引用指代特定用户，智能体需要正确解析指代对象。
 
-**认知过程**：
-
-```mermaid
-flowchart TB
-    A[查询中的指代词] --> B{指代词类型}
-    B -->|代词| C1[他/她/它]
-    B -->|所有格| C2[我的/他的/她的]
-    B -->|描述| C3[我的侄子/<br/>那个医生]
-    
-    C1 --> D[根据上下文确定对象]
-    C2 --> D
-    C3 --> D
-    D --> E[查找对应用户偏好]
-    E --> F[执行操作]
-```
-
-**指代消解规则**：
-
-| 指代词 | 可能指代 | 消解依据 |
-|--------|----------|----------|
-| 他 | Gary/Justin/侄子 | 句法位置、性别 |
-| 我的侄子 | Justin的侄子 | 关系声明 |
-| 那个工程师 | Patricia | 职业描述 |
-| 他侄子 | Gary的侄子/Justin的侄子 | 亲属关系 |
-
 **典型问题模板**：
 ```text
 At [时间], [用户] was driving [指代对象].
 [用户] said: '[包含指代的请求]'
 ```
 
-#### 2.4.5 推理类型分布
+#### 2.4.5 状态迁移（state_shift）
+
+**定义**：用户偏好随时间发生变化，智能体需要记忆最新的偏好设置。
+
+**典型问题模板**：
+```text
+At [时间], [用户] adjusted the [setting] to [value].
+At [later时间], [用户] said: '[参考历史的请求]'
+```
+
+#### 2.4.6 推理类型分布
 
 ```mermaid
 pie title 问题类型分布（估算）
@@ -1081,7 +1066,7 @@ graph TB
 
 | 变量 | 选项 | 说明 |
 |------|------|------|
-| 记忆类型 | `none`, `gold`, `summary`, `key_value`, `memory_bank` | 不同的记忆构建方式 |
+| 记忆类型 | `none`, `gold`, `summary`, `key_value`, `memory_bank` | 不同的记忆构建方式（`summary` 本项目未实现） |
 | 是否启用思考 | `true`, `false` | 是否启用模型思考能力 |
 | 基础模型 | 可配置 | 如 Qwen、GPT-4 等 |
 
@@ -1115,19 +1100,21 @@ graph TB
 
 | 控制变量 | 默认值范围 | 说明 |
 |----------|------------|------|
-| `max_workers` | 5-10 | 并行评估的线程数 |
+| `max_workers` | 5-10 | 并行评估的线程数（本项目使用 `BENCHMARK_QUERY_CONCURRENCY` 环境变量） |
 | `max_retries` | 3 | API 调用失败重试次数 |
 | `reflect_num` | 10-20 | 智能体反思/推理次数上限 |
-| `benchmark_dir` | benchmark/qa_data | QA 数据目录 |
-| `history_dir` | benchmark/history | 历史数据目录 |
+| `benchmark_dir` | benchmark/qa_data | QA 数据目录（使用 `paths.py` 中常量） |
+| `history_dir` | benchmark/history | 历史数据目录（使用 `paths.py` 中常量） |
 
 ### 6.4 实验设计矩阵
+
+> **注意**：本项目适配器仅实现 `none`, `gold`, `kv`, `memory_bank` 四种记忆类型。`summary` 和外部记忆系统（mem0, memos 等）未实现。
 
 | 实验编号 | 记忆类型 | 记忆系统 | 思考能力 | 预期目标 |
 |----------|----------|----------|----------|----------|
 | 1 | none | - | false | 基线性能 |
 | 2 | gold | - | false | 理论上限 |
-| 3 | summary | - | true | 摘要能力 |
+| 3 | summary（未实现） | - | true | 摘要能力 |
 | 4 | key_value | - | true | 检索能力 |
 | 5 | memory_bank | - | true | 遗忘曲线记忆 |
 | 6 | - | mem0 | true | Mem0 系统性能 |
@@ -1263,9 +1250,9 @@ flowchart TB
 | `--enable_thinking` | 是否启用思考模式 | `true`, `false` | both |
 | `--file_range` | 评估文件范围 | `1-50`, `1,3,5` | both |
 | `--reflect_num` | 智能体反思轮数上限 | `10`, `20` | both |
-| `--max_workers` | 并行工作线程数 | `5`, `8`, `10` | both |
-| `--benchmark_dir` | QA 数据目录 | `benchmark/qa_data` | both |
-| `--history_dir` | 历史数据目录 | `benchmark/history` | memorysystem add |
+| `--max_workers` | 并行工作线程数 | `5`, `8`, `10` | both（仅上游框架，本项目使用 `BENCHMARK_QUERY_CONCURRENCY`） |
+| `--benchmark_dir` | QA 数据目录 | `benchmark/qa_data` | both（上游框架参数） |
+| `--history_dir` | 历史数据目录 | `benchmark/history` | memorysystem add（上游框架参数） |
 
 ---
 
