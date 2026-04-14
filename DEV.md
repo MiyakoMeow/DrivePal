@@ -244,7 +244,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 | 维度 | 原始仓库 | 本项目 |
 |------|---------|--------|
-| **触发点** | 会话启动时一次性批量处理（`MemoryForgetterLoader.initial_load_forget_and_save`） | 每次搜索时逐次处理（`MemoryBankEngine._strengthen_and_forget`） |
+| **触发点** | 会话启动时一次性批量处理（`MemoryForgetterLoader.initial_load_forget_and_save`） | 每次搜索末尾调用 `forget_expired()`（`MemoryBankEngine`） |
 | **遗忘方式** | 概率性随机（`random.random() > retention_probability` 即删除） | 确定性阈值（`retention < SOFT_FORGET_THRESHOLD` 即标记） |
 | **遗忘结果** | 硬删除——从数组中 `.pop()`，甚至级联删除 summary | 软标记——`memory_strength = 0` + `forgotten = True` |
 
@@ -259,6 +259,8 @@ uv run pytest tests/ -v --test-llm --test-embedding
 - 原始的硬删除 + 连带删除 summary 是级联的；本项目没有级联逻辑。
 
 **评估**：确定性软遗忘在工程上更安全（可恢复），但损失了论文核心卖点"模拟人类随机遗忘"。如需精确复现论文语义，可引入概率性遗忘选项。
+
+**遗忘节流机制**：本项目为避免每次搜索都遍历所有事件进行遗忘判断，实现了 `FORGET_INTERVAL_SECONDS = 300` 的节流机制——两次遗忘判断间隔至少 5 分钟。
 
 #### 1.2 Summary 的遗忘处理
 
@@ -280,6 +282,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 | **搜索算法** | FAISS 近似最近邻，O(log n) | 暴力搜索，O(n) |
 | **文档分块** | ChineseTextSplitter + 按 source 聚合相邻块 | 无分块，每事件独立检索单元 |
 | **top_k** | 默认 6 | 默认 3（搜索接口默认 10） |
+| **最低相似度阈值** | 依赖 FAISS | `EMBEDDING_MIN_SIMILARITY = 0.2`（`engine.py`） |
 
 **原始仓库的关键特性——相邻块聚合**（`forget_memory.py:187-230`）：
 
@@ -291,13 +294,20 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **原始仓库**：搜索分数仅来自 FAISS 向量距离，遗忘曲线不参与搜索评分——仅在加载时决定是否保留到索引中（二值效应）。
 
-**本项目**（`engine.py:226`）：搜索分数 = `similarity * retention`，遗忘曲线成为连续权重——被强化过的记忆排名更高，长期未被回忆的记忆排名更低。这是有意的设计改进，更符合"记忆逐渐模糊"的直觉。
+**本项目**（`engine.py`）：搜索分数 = `similarity * retention`，遗忘曲线成为连续权重——被强化过的记忆排名更高，长期未被回忆的记忆排名更低。这是有意的设计改进，更符合"记忆逐渐模糊"的直觉。
+
+**搜索评分增强**：
+
+本项目在基础遗忘曲线评分上新增两项调节机制：
+
+- **名称匹配加分**（`_NAME_BONUS = 1.3`）：搜索结果与对话中识别出的说话人名称匹配时，乘以 1.3 加权系数
+- **时效性衰减**（`_MAX_RECENCY_PENALTY = 0.7`, `_RECENCY_DECAY_RATE = 0.003`）：随着时间推移，记忆得分乘以时效性系数，最小不低于 0.7
 
 #### 2.3 关键词搜索回退（新增）
 
 **原始仓库**：无回退机制，FAISS 不可用则直接失败。
 
-**本项目**（`engine.py:102-107`）：embedding 搜索无结果时自动回退到关键词搜索。纯工程改进。
+**本项目**（`engine.py`）：embedding 搜索无结果时自动回退到关键词搜索。纯工程改进。
 
 ---
 
@@ -362,6 +372,8 @@ uv run pytest tests/ -v --test-llm --test-embedding
 - `_should_append_to_event`（`engine.py:383-417`）：扫描全部当日事件取最高相似度，基于余弦相似度 ≥ 0.8 或字符重叠 ≥ 45% 判定
 - `_update_event_summary`（`engine.py:419-442`）：聚合后用 LLM 重新摘要事件 content
 - 检索命中事件时，自动附加其关联的所有原始交互记录（`_expand_event_interactions`）
+
+**聚合阈值**：字符重叠阈值 `OVERLAP_RATIO_THRESHOLD = 0.45`（原始仓库为 0.5），相似度阈值 `AGGREGATION_SIMILARITY_THRESHOLD = 0.8`。
 
 **评估**：这是最大的架构改进。原始仓库中同一主题的多次对话分散存储，检索时需多次匹配才能拼凑完整上下文。事件聚合将相关交互归组，一次命中即可带回完整上下文。
 
