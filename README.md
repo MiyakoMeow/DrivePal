@@ -151,7 +151,7 @@ result, event_id, stages = await workflow.run_with_stages(
 
 | 数据类别 | 字段 | 说明 |
 |----------|------|------|
-| **驾驶员状态** | `emotion`, `workload`, `fatigueLevel` | 情绪（5级）、工作负荷（4级）、疲劳度（0~1） |
+| **驾驶员状态** | `emotion`, `workload`, `fatigue_level` | 情绪（5级）、工作负荷（4级）、疲劳度（0~1） |
 | **时空信息** | `currentLocation`, `destination`, `etaMinutes`, `heading` | 经纬度、街道地址、车速 |
 | **交通状况** | `congestionLevel`, `incidents`, `estimatedDelayMinutes` | 拥堵等级（4级）、事故列表 |
 | **驾驶场景** | `scenario` | parked / city_driving / highway / traffic_jam |
@@ -164,12 +164,12 @@ result, event_id, stages = await workflow.run_with_stages(
 
 | 规则 | 条件 | 约束 |
 |------|------|------|
-| 高速仅音频 | `scenario == "highway"` | `allowed_channels: [audio]`, 最大频率 30min |
-| 疲劳抑制 | `fatigueLevel > 0.7` | 仅允许紧急提醒, `allowed_channels: [audio]` |
-| 过载延后 | `workload == "overloaded"` | 延后提醒 |
+| 高速仅音频 | `scenario == "highway"` | `allowed_channels: [audio]`, `max_frequency_minutes: 30` |
+| 疲劳抑制 | `fatigue_level > 0.7` | `only_urgent: true`, `allowed_channels: [audio]` |
+| 过载延后 | `workload == "overloaded"` | `postpone: true` |
 | 停车全通道 | `scenario == "parked"` | `allowed_channels: [visual, audio, detailed]` |
 
-多规则匹配时按优先级合并：`allowed_channels` 取交集，`only_urgent` / `postpone` 取布尔或。
+多规则匹配时按优先级合并：`allowed_channels` 取交集（空集时回退到 `{"visual", "audio", "detailed"}`），`only_urgent` / `postpone` 取布尔或。
 
 ---
 

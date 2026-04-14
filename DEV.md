@@ -131,7 +131,7 @@ data/
 ├── memorybank_summaries.toml # MemoryBank 层级摘要
 │   ├── daily_summaries: {}   # {date → {content, memory_strength, event_count}}
 │   └── overall_summary: ""   # 总摘要
-├── memorybank_personality.toml # MemoryBank 个性分析
+├── memorybank_personality.toml # MemoryBank 个性分析（运行时自动初始化）
 ├── contexts.toml            # 上下文缓存
 ├── preferences.toml         # 用户偏好
 ├── feedback.toml            # 用户反馈记录
@@ -333,6 +333,13 @@ uv run pytest tests/ -v --test-llm --test-embedding
 **原始仓库**：每次运行 `summarize_memory()` 时无条件重新生成 `overall_personality`。
 
 **本项目**（`personality.py:136-220`）：仅在 `daily_personality` 数量 ≥ `OVERALL_PERSONALITY_THRESHOLD=3` 且有新增条目时触发，带并发保护（snapshot count 校验，防止生成期间数据变更导致覆盖丢失）。
+
+#### 4.3 关键阈值
+
+| 阈值 | 值 | 位置 |
+|------|-----|------|
+| `PERSONALITY_SUMMARY_THRESHOLD` | 2 | 每日个性摘要触发所需事件数 |
+| `OVERALL_PERSONALITY_THRESHOLD` | 3 | 生成总体个性画像所需日摘要数 |
 
 ---
 
