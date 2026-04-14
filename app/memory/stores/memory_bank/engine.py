@@ -391,10 +391,12 @@ class MemoryBankEngine:
             return None
         if self.embedding_model:
             query_vec = await self.embedding_model.encode(interaction["query"])
+            event_vecs = await self.embedding_model.batch_encode(
+                [e.get("content", "") for e in today_events]
+            )
             best_id = None
             best_sim = AGGREGATION_SIMILARITY_THRESHOLD
-            for event in today_events:
-                event_vec = await self.embedding_model.encode(event.get("content", ""))
+            for event, event_vec in zip(today_events, event_vecs, strict=True):
                 similarity = cosine_similarity(query_vec, event_vec)
                 if similarity >= best_sim:
                     best_sim = similarity
