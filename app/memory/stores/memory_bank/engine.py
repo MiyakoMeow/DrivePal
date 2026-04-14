@@ -102,8 +102,8 @@ class MemoryBankEngine:
         if self.embedding_model is None:
             event_results = await self._search_by_keyword(query, events, top_k)
         else:
-            event_results = await self._search_by_embedding(query, events, top_k)
-            if not event_results:
+            event_results = await self._safe_embedding_search(query, events, top_k)
+            if event_results is None:
                 event_results = await self._search_by_keyword(query, events, top_k)
         summary_results = await self._summary_mgr.search_summaries(
             query,
@@ -177,6 +177,19 @@ class MemoryBankEngine:
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
 
+    async def _safe_embedding_search(
+        self,
+        query: str,
+        events: list[dict],
+        top_k: int,
+    ) -> list[SearchResult] | None:
+        """尝试向量搜索，失败时返回 None 以触发关键字回退."""
+        try:
+            return await self._search_by_embedding(query, events, top_k)
+        except (OSError, RuntimeError) as e:
+            logger.warning("Embedding search failed, fallback to keyword: %s", e)
+            return None
+
     async def _search_by_embedding(
         self,
         query: str,
@@ -185,11 +198,7 @@ class MemoryBankEngine:
     ) -> list[SearchResult]:
         if self.embedding_model is None:
             raise EmbeddingModelRequiredError
-        try:
-            query_vector = await self.embedding_model.encode(query)
-        except (OSError, ValueError, RuntimeError) as e:
-            logger.warning("Embedding query encode failed, fallback to keyword: %s", e)
-            return []
+        query_vector = await self.embedding_model.encode(query)
         event_text_pairs = [
             (event, text)
             for event in events
@@ -197,13 +206,9 @@ class MemoryBankEngine:
         ]
         if not event_text_pairs:
             return []
-        try:
-            all_event_vectors = await self.embedding_model.batch_encode(
-                [text for _, text in event_text_pairs]
-            )
-        except (OSError, ValueError, RuntimeError) as e:
-            logger.warning("Embedding batch encode failed, fallback to keyword: %s", e)
-            return []
+        all_event_vectors = await self.embedding_model.batch_encode(
+            [text for _, text in event_text_pairs]
+        )
         today = datetime.now(UTC).date()
         results = []
         for (event, _text), event_vector in zip(

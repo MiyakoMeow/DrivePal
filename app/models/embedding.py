@@ -17,7 +17,16 @@ _background_tasks: set[asyncio.Task[None]] = set()
 
 _BATCH_SIZE = 32
 _RETRY_ATTEMPTS = 3
-_RETRY_DELAY_SECONDS = 1.0
+_RETRY_BASE_DELAY_SECONDS = 1.0
+_MAX_RETRY_DELAY_SECONDS = 10.0
+
+_RETRYABLE_EXCEPTIONS = (
+    OSError,
+    openai.APIConnectionError,
+    openai.APITimeoutError,
+    openai.RateLimitError,
+    openai.InternalServerError,
+)
 
 
 def _finalize_background_task(task: asyncio.Task[None]) -> None:
@@ -118,6 +127,55 @@ class EmbeddingModel:
         resp = await client.embeddings.create(model=model, input=text)
         return resp.data[0].embedding
 
+    async def _encode_batch_with_retry(
+        self,
+        client: openai.AsyncOpenAI,
+        model: str,
+        batch: list[str],
+        start: int,
+        total: int,
+    ) -> list[list[float]]:
+        """对单批文本进行编码，含重试逻辑."""
+        last_error: Exception | None = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                resp = await client.embeddings.create(model=model, input=batch)
+            except _RETRYABLE_EXCEPTIONS as e:
+                last_error = e
+                logger.warning(
+                    "Embedding batch %d-%d failed (attempt %d/%d): %s",
+                    start,
+                    min(start + _BATCH_SIZE, total),
+                    attempt + 1,
+                    _RETRY_ATTEMPTS,
+                    e,
+                )
+            else:
+                if not resp.data:
+                    msg = "No embedding data received"
+                    last_error = ValueError(msg)
+                    logger.warning(
+                        "Embedding batch %d-%d returned empty data (attempt %d/%d)",
+                        start,
+                        min(start + _BATCH_SIZE, total),
+                        attempt + 1,
+                        _RETRY_ATTEMPTS,
+                    )
+                else:
+                    return [
+                        d.embedding for d in sorted(resp.data, key=lambda x: x.index)
+                    ]
+            if attempt < _RETRY_ATTEMPTS - 1:
+                delay = min(
+                    _RETRY_BASE_DELAY_SECONDS * (2**attempt),
+                    _MAX_RETRY_DELAY_SECONDS,
+                )
+                await asyncio.sleep(delay)
+        if last_error is not None:
+            raise last_error
+        msg = "Embedding batch encode failed after all retries"
+        raise RuntimeError(msg)
+
     async def _async_batch_encode_with_openai(
         self,
         client: openai.AsyncOpenAI,
@@ -129,43 +187,10 @@ class EmbeddingModel:
         total = len(texts)
         for start in range(0, total, _BATCH_SIZE):
             batch = texts[start : start + _BATCH_SIZE]
-            last_error: Exception | None = None
-            for attempt in range(_RETRY_ATTEMPTS):
-                try:
-                    resp = await client.embeddings.create(model=model, input=batch)
-                except Exception as e:  # noqa: BLE001
-                    last_error = e
-                    logger.warning(
-                        "Embedding batch %d-%d failed (attempt %d/%d): %s",
-                        start,
-                        min(start + _BATCH_SIZE, total),
-                        attempt + 1,
-                        _RETRY_ATTEMPTS,
-                        e,
-                    )
-                else:
-                    if not resp.data:
-                        msg = "No embedding data received"
-                        last_error = ValueError(msg)
-                        logger.warning(
-                            "Embedding batch %d-%d returned empty data (attempt %d/%d)",
-                            start,
-                            min(start + _BATCH_SIZE, total),
-                            attempt + 1,
-                            _RETRY_ATTEMPTS,
-                        )
-                    else:
-                        batch_vectors = [
-                            d.embedding
-                            for d in sorted(resp.data, key=lambda x: x.index)
-                        ]
-                        all_vectors.extend(batch_vectors)
-                        break
-                if attempt < _RETRY_ATTEMPTS - 1:
-                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
-            else:
-                if last_error is not None:
-                    raise last_error
+            batch_vectors = await self._encode_batch_with_retry(
+                client, model, batch, start, total
+            )
+            all_vectors.extend(batch_vectors)
         return all_vectors
 
     async def encode(self, text: str) -> list[float]:
