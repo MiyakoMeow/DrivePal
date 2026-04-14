@@ -45,6 +45,20 @@ def md_header(
     return "\n".join(lines)
 
 
+def md_experiment_groups() -> str:
+    """生成实验组介绍."""
+    lines = [
+        "## 2. 实验组介绍\n",
+        "| 实验组 | 记忆类型 | 描述 | 理论意义 |",
+        "|---|---|---|---|",
+        "| none | Raw History | 无历史信息，让模型直接预测 | 基线性能 |",
+        "| gold | Gold Memory | 直接提供真实最新用户偏好 | 理论性能上界 |",
+        "| key_value | Key-Value Store | 将偏好组织为结构化键值对 | 精确检索能力 |",
+        "| memory_bank | MemoryBank | 基于遗忘曲线的分层记忆 | 遗忘曲线检索能力 |\n",
+    ]
+    return "\n".join(lines)
+
+
 def _format_calls(calls: list[dict[str, Any]]) -> str:
     """将工具调用列表格式化为函数名列表."""
     if not calls:
