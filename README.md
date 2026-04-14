@@ -223,6 +223,12 @@ flowchart TD
 - **accept**：对应事件类型权重 +0.1（上限1.0）
 - **ignore**：对应事件类型权重 -0.1（下限0.1）
 
+**关键阈值**：
+- 遗忘曲线软阈值：`SOFT_FORGET_THRESHOLD = 0.15`
+- 聚合相似度阈值：余弦相似度 ≥ 0.8 或字符重叠 ≥ 50%
+- 向量搜索最低相似度：`EMBEDDING_MIN_SIMILARITY = 0.3`
+- 搜索评分权重：摘要/个性 `SUMMARY_WEIGHT = 0.8`
+
 ---
 
 ### 4. 基准测试

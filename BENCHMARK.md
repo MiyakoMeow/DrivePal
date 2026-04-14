@@ -27,6 +27,8 @@ uv run python run_benchmark.py report
 uv run python run_benchmark.py report --output path/to/report.json
 ```
 
+> **注意**：`run_benchmark.py` 位于项目根目录（不是 `benchmark/` 子目录）。
+
 ### CLI 参数
 
 | 参数 | 默认值 | 适用命令 | 说明 |

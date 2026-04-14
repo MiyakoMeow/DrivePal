@@ -151,6 +151,11 @@ store.append(item)     # 追加单项（仅list类型）
 store.update(key, val) # 更新键值（仅dict类型）
 ```
 
+**运行时自动初始化的文件**：
+
+以下文件不在 `init_data.py` 预创建，由 `TOMLStore` 在首次读取时自动生成：
+- `memorybank_personality.toml`：首次读取时自动创建 `{"daily_personality": {}, "overall_personality": ""}`
+
 ---
 
 ## 测试
@@ -305,6 +310,20 @@ uv run pytest tests/ -v --test-llm --test-embedding
 | **每日摘要触发** | 手动/批量——`summarize_memory()` 由用户主动调用，遍历所有未摘要日期 | 自动/增量——每次写入事件时检查，达阈值 2 条事件触发 |
 | **总体摘要触发** | 每次运行时无条件重新生成 | 仅当 `daily_summaries` 数量 ≥ 3 且有新增时触发 |
 | **摘要不可变性** | 无保护——每次运行覆盖已有摘要 | 有保护——检查 `isinstance(dict)` 跳过已生成条目 + `_inflight` 防并发 |
+
+#### 3.2 关键阈值
+
+| 阈值 | 值 | 位置 |
+|------|-----|------|
+| `DAILY_SUMMARY_THRESHOLD` | 2 | 每日摘要触发所需事件数 |
+| `OVERALL_SUMMARY_THRESHOLD` | 3 | 生成总体摘要所需日摘要数 |
+| `SOFT_FORGET_THRESHOLD` | 0.15 | 软遗忘 retention 阈值 |
+| `AGGREGATION_SIMILARITY_THRESHOLD` | 0.8 | 余弦相似度聚合阈值 |
+| `OVERLAP_RATIO_THRESHOLD` | 0.5 | 关键词重叠聚合阈值 |
+| `EMBEDDING_MIN_SIMILARITY` | 0.3 | 向量搜索最低相似度 |
+| `SUMMARY_WEIGHT` | 0.8 | 摘要/个性在搜索评分中的权重 |
+
+---
 
 **评估**：本项目的增量触发 + 不可变性 + 并发保护是显著的工程改进，避免了重复 LLM 调用和竞态条件。
 
