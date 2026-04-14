@@ -195,7 +195,7 @@ def test_report_reads_hierarchical_queries(
     """验证 report 读取分层查询结果."""
     monkeypatch.setattr("benchmark.VehicleMemBench.paths.OUTPUT_DIR", tmp_path)
     monkeypatch.setattr(
-        "benchmark.VehicleMemBench.reporter_impl.get_benchmark_config",
+        "benchmark.VehicleMemBench.reporter.get_benchmark_config",
         type("Cfg", (), {"model": "test-model"}),
     )
 
