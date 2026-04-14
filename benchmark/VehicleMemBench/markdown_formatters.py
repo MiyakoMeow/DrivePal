@@ -713,29 +713,13 @@ def generate_markdown_report(
     type_names = ", ".join(mt.value for mt in report_data) if report_data else "无"
 
     parts: list[str] = [
-        "# VehicleMemBench 基准测试报告\n",
-        f"- 生成时间：{timestamp_display}",
-        f"- 评估模型：{model_name}",
-        f"- 记忆类型：{type_names}\n",
-        md_overview(report_data),
+        md_header(timestamp_display, model_name, type_names),
+        md_experiment_groups(),
+        md_metric_definitions(),
+        md_results_table(report_data),
+        md_results_detail(report_data),
+        md_analysis(report_data, all_results),
     ]
-
-    gold_metric = report_data.get(BenchMemoryMode.GOLD)
-    if report_data:
-        detail_parts: list[str] = ["## 2. 记忆类型详细分析\n"]
-        detail_parts.extend(
-            md_memory_type_detail(
-                mtype,
-                metric,
-                gold_metric if mtype != BenchMemoryMode.GOLD else None,
-            )
-            for mtype, metric in report_data.items()
-        )
-        parts.extend(detail_parts)
-
-    parts.append(md_reasoning_cross_comparison(report_data))
-    parts.append(md_query_analysis(all_results))
-    parts.append(md_summary(report_data))
 
     content = "\n".join(parts)
     filename = f"report-{now.strftime('%Y%m%d-%H%M%S-%f')}.md"
