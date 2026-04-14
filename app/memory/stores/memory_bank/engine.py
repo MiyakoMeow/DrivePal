@@ -136,7 +136,7 @@ class MemoryBankEngine:
         )
 
         if event_ids:
-            await self._strengthen_and_forget(event_ids)
+            await self._strengthen_matched(event_ids)
         if summary_keys:
             await self._summary_mgr.strengthen_summaries(summary_keys)
         if personality_keys:
@@ -246,11 +246,11 @@ class MemoryBankEngine:
             result.interactions = interaction_by_event.get(eid, [])
         return results
 
-    async def _strengthen_and_forget(self, matched_ids: set[str]) -> None:
+    async def _strengthen_matched(self, matched_ids: set[str]) -> None:
+        """强化匹配事件的记忆强度（不含遗忘逻辑）."""
         if not matched_ids:
             return
         today = datetime.now(UTC).date().isoformat()
-        today_date = datetime.now(UTC).date()
         async with self._lock:
             all_events = await self._storage.read_events()
             updated = False
@@ -259,19 +259,6 @@ class MemoryBankEngine:
                     event["memory_strength"] = event.get("memory_strength", 1) + 1
                     event["last_recall_date"] = today
                     updated = True
-                else:
-                    strength = event.get("memory_strength", 1)
-                    last_recall = event.get("last_recall_date", today_date.isoformat())
-                    try:
-                        last_date = date.fromisoformat(last_recall)
-                        days_elapsed = (today_date - last_date).days
-                    except ValueError, TypeError:
-                        days_elapsed = 0
-                    retention = forgetting_curve(days_elapsed, strength)
-                    if retention < SOFT_FORGET_THRESHOLD:
-                        event["memory_strength"] = SOFT_FORGET_STRENGTH
-                        event["forgotten"] = True
-                        updated = True
             if updated:
                 await self._storage.write_events(all_events)
 
@@ -286,6 +273,30 @@ class MemoryBankEngine:
                     updated = True
             if updated:
                 await self._interactions_store.write(all_interactions)
+
+    async def forget_expired(self) -> None:
+        """遗忘过期事件（独立于搜索流程，由外部按需调用）."""
+        today_date = datetime.now(UTC).date()
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            updated = False
+            for event in all_events:
+                if event.get("forgotten"):
+                    continue
+                strength = event.get("memory_strength", 1)
+                last_recall = event.get("last_recall_date", today_date.isoformat())
+                try:
+                    last_date = date.fromisoformat(last_recall)
+                    days_elapsed = (today_date - last_date).days
+                except ValueError, TypeError:
+                    days_elapsed = 0
+                retention = forgetting_curve(days_elapsed, strength)
+                if retention < SOFT_FORGET_THRESHOLD:
+                    event["memory_strength"] = SOFT_FORGET_STRENGTH
+                    event["forgotten"] = True
+                    updated = True
+            if updated:
+                await self._storage.write_events(all_events)
 
     async def write_interaction(
         self,

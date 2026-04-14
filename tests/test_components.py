@@ -382,12 +382,12 @@ class TestSoftForgetMechanism:
         """提供不带嵌入或聊天模型的 MemoryBankEngine."""
         return MemoryBankEngine(tmp_path, storage)
 
-    async def test_soft_forget_reduces_low_retention_events(
+    async def test_search_does_not_forget_unmatched(
         self,
         engine: MemoryBankEngine,
         storage: EventStorage,
     ) -> None:
-        """验证 retention 过低的事件被软遗忘."""
+        """验证搜索时不遗忘未匹配事件（遗忘已分离到独立方法）."""
         await engine.write(MemoryEvent(content="旧事件"))
         await engine.write(MemoryEvent(content="新事件"))
         events = await storage.read_events()
@@ -399,8 +399,8 @@ class TestSoftForgetMechanism:
         updated_events = await storage.read_events()
         forgotten = next((e for e in updated_events if e["content"] == "旧事件"), None)
         assert forgotten is not None
-        assert forgotten["forgotten"] is True
-        assert forgotten["memory_strength"] == SOFT_FORGET_STRENGTH
+        assert forgotten.get("forgotten") is not True
+        assert forgotten["memory_strength"] == 1
 
     async def test_soft_forget_preserves_matched_events(
         self,
@@ -414,12 +414,34 @@ class TestSoftForgetMechanism:
         event = events[0]
         assert event.get("forgotten") is not True
 
-    async def test_soft_forget_only_applies_to_unmatched(
+    async def test_forget_expired_marks_old_events(
         self,
         engine: MemoryBankEngine,
         storage: EventStorage,
     ) -> None:
-        """验证软遗忘只应用于未匹配的记忆."""
+        """验证 forget_expired 正确遗忘过期事件."""
+        await engine.write(MemoryEvent(content="旧事件"))
+        await engine.write(MemoryEvent(content="新事件"))
+        events = await storage.read_events()
+        old_event = next(e for e in events if e["content"] == "旧事件")
+        old_event["last_recall_date"] = "2020-01-01"
+        old_event["memory_strength"] = 1
+        await storage.write_events(events)
+        await engine.forget_expired()
+        updated_events = await storage.read_events()
+        forgotten = next((e for e in updated_events if e["content"] == "旧事件"), None)
+        assert forgotten is not None
+        assert forgotten["forgotten"] is True
+        assert forgotten["memory_strength"] == SOFT_FORGET_STRENGTH
+        fresh = next(e for e in updated_events if e["content"] == "新事件")
+        assert fresh.get("forgotten") is not True
+
+    async def test_forget_expired_preserves_fresh_events(
+        self,
+        engine: MemoryBankEngine,
+        storage: EventStorage,
+    ) -> None:
+        """验证 forget_expired 保留新近事件."""
         await engine.write(MemoryEvent(content="匹配事件"))
         await engine.write(MemoryEvent(content="完全不相关事件"))
         events = await storage.read_events()
@@ -427,7 +449,7 @@ class TestSoftForgetMechanism:
         unmatched["last_recall_date"] = "2020-01-01"
         unmatched["memory_strength"] = 1
         await storage.write_events(events)
-        await engine.search("匹配事件")
+        await engine.forget_expired()
         events = await storage.read_events()
         matched = next(e for e in events if e["content"] == "匹配事件")
         unmatched = next(e for e in events if e["content"] == "完全不相关事件")
