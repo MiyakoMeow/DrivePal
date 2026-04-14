@@ -1,6 +1,7 @@
 """记忆适配器通用工具函数."""
 
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.memory.schemas import MemoryEvent, SearchResult
@@ -15,6 +16,7 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
     """将历史文本按 (date, speaker) 分组转换为交互记录."""
     if not history_text.strip():
         return []
+    today_str = datetime.now(UTC).date().isoformat()
     groups: dict[tuple[str, str], list[str]] = {}
     for _, raw_line in enumerate(history_text.strip().splitlines()):
         line = raw_line.strip()
@@ -41,6 +43,7 @@ def history_to_interaction_records(history_text: str) -> list[MemoryEvent]:
                 type="general",
                 date_group=date_group,
                 memory_strength=1,
+                last_recall_date=today_str,
             ),
         )
     return records
