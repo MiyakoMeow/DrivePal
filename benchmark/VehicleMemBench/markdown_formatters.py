@@ -449,6 +449,203 @@ def md_query_analysis(  # noqa: C901
     return "\n".join(lines)
 
 
+def md_analysis(
+    report_data: dict[BenchMemoryMode, dict[str, Any]],
+    all_results: dict[BenchMemoryMode, list[dict[str, Any]]],
+) -> str:
+    """生成结果分析章节."""
+    lines = ["## 5. 结果分析\n"]
+
+    if not report_data:
+        lines.append("无数据。\n")
+        return "\n".join(lines)
+
+    lines.append(md_analysis_overview(report_data))
+    lines.append(md_analysis_cross_reasoning(report_data))
+    lines.append(md_analysis_query_cases(all_results))
+
+    return "\n".join(lines)
+
+
+def md_analysis_overview(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
+    """生成各记忆类型表现分析."""
+    lines: list[str] = ["### 5.1 各记忆类型表现分析\n"]
+
+    total_tasks = sum(
+        int(_num(m.get("completed_tasks"))) + int(_num(m.get("total_failed")))
+        for m in report_data.values()
+    )
+    n_types = len(report_data)
+
+    sorted_types = sorted(
+        report_data.items(),
+        key=lambda x: (
+            -1 if x[1].get("build_error") else _num(x[1].get("exact_match_rate"))
+        ),
+        reverse=True,
+    )
+
+    lines.append(
+        f"本次评估共测试了 {n_types} 种记忆类型，"
+        f"共完成 {total_tasks} 条查询评估。"
+        f"按完全匹配率（ESM）排名：\n"
+    )
+    for rank, (mtype, metric) in enumerate(sorted_types, 1):
+        if metric.get("build_error"):
+            lines.append(f"{rank}. {mtype.value}（指标构建失败）")
+        else:
+            esm = _num(metric.get("exact_match_rate"))
+            lines.append(f"{rank}. {mtype.value}（ESM={esm:.2%}）")
+    lines.append("")
+
+    gold_metric = report_data.get(BenchMemoryMode.GOLD)
+    if gold_metric:
+        gold_esm = _num(gold_metric.get("exact_match_rate"))
+        non_gold = [(mt, m) for mt, m in sorted_types if mt != BenchMemoryMode.GOLD]
+        if non_gold:
+            best_mt, best_metric = non_gold[0]
+            ms = (
+                _num(best_metric.get("memory_score"))
+                if "memory_score" in best_metric
+                else 0
+            )
+            lines.append(
+                f"GOLD 类型作为理论上限达到 {gold_esm:.2%}，"
+                f"最优非 GOLD 类型 {best_mt.value} "
+                f"达到其 {ms:.2%} 的水平。\n"
+            )
+
+    return "\n".join(lines)
+
+
+def md_analysis_cross_reasoning(
+    report_data: dict[BenchMemoryMode, dict[str, Any]],
+) -> str:
+    """生成按推理类型交叉对比分析."""
+    lines: list[str] = ["### 5.2 按推理类型交叉对比\n"]
+
+    if not report_data:
+        lines.append("无数据。\n")
+        return "\n".join(lines)
+
+    all_reasoning_types: set[str] = set()
+    for metric in report_data.values():
+        all_reasoning_types.update((metric.get("by_reasoning_type") or {}).keys())
+    sorted_rt = sorted(all_reasoning_types)
+
+    mtypes = sorted(report_data.keys())
+    header = "| 推理类型 | " + " | ".join(mt.value for mt in mtypes) + " |"
+    sep = "|---|" + "|".join("---" for _ in mtypes) + "|"
+    lines.append(header)
+    lines.append(sep)
+
+    rt_best: dict[str, tuple[BenchMemoryMode, float]] = {}
+    for rt in sorted_rt:
+        label = _format_reasoning_type(rt)
+        values: list[tuple[float, BenchMemoryMode]] = []
+        for mt in mtypes:
+            rt_data = (report_data[mt].get("by_reasoning_type") or {}).get(rt) or {}
+            esm = _num(rt_data.get("exact_match_rate"))
+            values.append((esm, mt))
+        max_esm = max(v for v, _ in values) if values else 0
+        best_mt = next(
+            (mt for esm, mt in values if esm == max_esm and max_esm > 0), None
+        )
+        if best_mt is not None:
+            rt_best[rt] = (best_mt, max_esm)
+        cells: list[str] = []
+        for esm, _mt in values:
+            cell = f"{esm:.2%}"
+            if esm == max_esm and max_esm > 0:
+                cell = f"**{cell}**"
+            cells.append(cell)
+        lines.append(f"| {label} | " + " | ".join(cells) + " |")
+
+    if rt_best:
+        parts: list[str] = []
+        for rt, (best_mt, best_esm) in sorted(rt_best.items()):
+            label = _format_reasoning_type(rt)
+            parts.append(f"{label}上，{best_mt.value}（{best_esm:.2%}）表现最佳")
+        lines.append("；".join(parts) + "。")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def md_analysis_query_cases(  # noqa: C901
+    all_results: dict[BenchMemoryMode, list[dict[str, Any]]],
+) -> str:
+    """生成问题案例分析."""
+    lines: list[str] = ["### 5.3 问题案例分析\n"]
+
+    if not all_results:
+        lines.append("无查询数据。\n")
+        return "\n".join(lines)
+
+    def _query_sort_key(q: dict[str, Any]) -> tuple[str, int, int]:
+        return (
+            str(q.get("memory_type", "")),
+            int(_num(q.get("source_file", 0))),
+            int(_num(q.get("task_id", 0))),
+        )
+
+    for mtype, queries in all_results.items():
+        if not queries:
+            continue
+        lines.append(f"#### {mtype.value}\n")
+
+        successes = [q for q in queries if q.get("exact_match")]
+        successes.sort(key=_query_sort_key)
+        if successes:
+            lines.append("**完全匹配案例（前3条）：**\n")
+            for q in successes[:3]:
+                lines.extend(_format_query_entry(q, ["  - 完全匹配: ✅"]))
+
+        non_match = [q for q in queries if not q.get("exact_match")]
+        fp_candidates = [
+            q for q in non_match if _num((q.get("state_score") or {}).get("FP")) > 0
+        ]
+        fp_sorted = sorted(
+            fp_candidates,
+            key=lambda q: (
+                -_num((q.get("state_score") or {}).get("FP")),
+                *_query_sort_key(q),
+            ),
+        )
+        if fp_sorted:
+            lines.append("**过度修改案例（FP 最高，前3条）：**\n")
+            for q in fp_sorted[:3]:
+                state_score = q.get("state_score") or {}
+                fp = _num(state_score.get("FP"))
+                diffs = state_score.get("differences") or []
+                extra: list[str] = [f"  - FP={fp}"]
+                extra.extend(f"  - 差异: {d}" for d in diffs)
+                lines.extend(_format_query_entry(q, extra))
+
+        fn_candidates = [
+            q for q in non_match if _num((q.get("tool_score") or {}).get("fn")) > 0
+        ]
+        fn_sorted = sorted(
+            fn_candidates,
+            key=lambda q: (
+                -_num((q.get("tool_score") or {}).get("fn")),
+                *_query_sort_key(q),
+            ),
+        )
+        if fn_sorted:
+            lines.append("**遗漏调用案例（tool_score.fn 最高，前3条）：**\n")
+            for q in fn_sorted[:3]:
+                tool_score = q.get("tool_score") or {}
+                fn = _num(tool_score.get("fn"))
+                state_score = q.get("state_score") or {}
+                diffs = state_score.get("differences") or []
+                extra = [f"  - FN={fn}"]
+                extra.extend(f"  - 差异: {d}" for d in diffs)
+                lines.extend(_format_query_entry(q, extra))
+
+    return "\n".join(lines)
+
+
 def md_summary(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
     """生成第5节：总结."""
     lines: list[str] = ["## 5. 总结\n"]
