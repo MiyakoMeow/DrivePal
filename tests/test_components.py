@@ -4,6 +4,7 @@ import inspect
 import math
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -548,3 +549,108 @@ class TestForgettingCurve:
         fast = forgetting_curve(10, 1, decay_base=5)
         slow = forgetting_curve(10, 1, decay_base=20)
         assert slow > fast
+
+
+class TestSummaryPersonalityEmbeddingSearch:
+    """Summary/Personality embedding 搜索测试."""
+
+    @pytest.fixture
+    def engine_with_mock_embedding(
+        self,
+        tmp_path: Path,
+    ) -> tuple[MemoryBankEngine, MagicMock]:
+        """提供带 mock embedding 模型的引擎."""
+        storage = EventStorage(tmp_path)
+        embedding = MagicMock()
+        engine = MemoryBankEngine(tmp_path, storage, embedding_model=embedding)
+        return engine, embedding
+
+    async def test_summary_uses_embedding_search(
+        self,
+        engine_with_mock_embedding: tuple[MemoryBankEngine, MagicMock],
+    ) -> None:
+        """验证 summary 搜索使用 embedding 模型."""
+        engine, embedding = engine_with_mock_embedding
+        await engine.summaries_store.write(
+            {
+                "daily_summaries": {
+                    "2025-03-10": {
+                        "content": "Gary prefers green instrument panel",
+                        "memory_strength": 1,
+                        "last_recall_date": "2025-03-10",
+                    },
+                },
+                "overall_summary": "",
+            }
+        )
+        embedding.encode = AsyncMock(return_value=[0.1] * 10)
+        embedding.batch_encode = AsyncMock(return_value=[[0.1] * 10])
+        await engine._search_summaries_by_embedding(
+            "instrument panel color",
+            {
+                "2025-03-10": {
+                    "content": "Gary prefers green instrument panel",
+                    "memory_strength": 1,
+                    "last_recall_date": "2025-03-10",
+                }
+            },
+            top_k=3,
+        )
+        embedding.batch_encode.assert_called_once()
+
+    async def test_personality_uses_embedding_search(
+        self,
+        engine_with_mock_embedding: tuple[MemoryBankEngine, MagicMock],
+    ) -> None:
+        """验证 personality 搜索使用 embedding 模型."""
+        engine, embedding = engine_with_mock_embedding
+        await engine.personality_store.write(
+            {
+                "daily_personality": {
+                    "2025-03-10": {
+                        "content": "Gary likes green settings",
+                        "memory_strength": 1,
+                        "last_recall_date": "2025-03-10",
+                    },
+                },
+                "overall_personality": "",
+            }
+        )
+        embedding.encode = AsyncMock(return_value=[0.1] * 10)
+        embedding.batch_encode = AsyncMock(return_value=[[0.1] * 10])
+        await engine._search_personality_by_embedding(
+            "color preference",
+            {
+                "daily_personality": {
+                    "2025-03-10": {
+                        "content": "Gary likes green settings",
+                        "memory_strength": 1,
+                        "last_recall_date": "2025-03-10",
+                    },
+                },
+                "overall_personality": "",
+            },
+            top_k=3,
+        )
+        embedding.batch_encode.assert_called_once()
+
+    async def test_summary_fallback_to_keyword_without_embedding(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """验证无 embedding 时 summary 回退到关键词搜索."""
+        storage = EventStorage(tmp_path)
+        engine = MemoryBankEngine(tmp_path, storage)
+        daily_summaries = {
+            "2025-03-10": {
+                "content": "Gary prefers green instrument panel",
+                "memory_strength": 1,
+                "last_recall_date": "2025-03-10",
+            },
+        }
+        results = await engine._search_summaries_by_embedding(
+            "instrument panel",
+            daily_summaries,
+            top_k=3,
+        )
+        assert len(results) >= 1

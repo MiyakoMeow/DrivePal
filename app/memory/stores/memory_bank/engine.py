@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.memory.components import EventStorage, forgetting_curve
+from app.memory.components import SUMMARY_WEIGHT, EventStorage, forgetting_curve
 from app.memory.schemas import InteractionResult, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.personality import PersonalityManager
 from app.memory.stores.memory_bank.summarization import SummaryManager
@@ -39,7 +39,7 @@ SOFT_FORGET_STRENGTH = 0
 class MemoryBankEngine:
     """记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
 
-    EMBEDDING_MIN_SIMILARITY = 0.3
+    EMBEDDING_MIN_SIMILARITY = 0.2
 
     def __init__(
         self,
@@ -110,12 +110,16 @@ class MemoryBankEngine:
             event_results = await self._safe_embedding_search(query, events, top_k)
             if event_results is None or len(event_results) == 0:
                 event_results = await self._search_by_keyword(query, events, top_k)
-        summary_results = await self._summary_mgr.search_summaries(
+        summary_results = await self._search_summaries_by_embedding(
             query,
             daily_summaries,
-            top_k=1,
+            top_k=3,
         )
-        personality_results = await self._personality_mgr.search(query, top_k=1)
+        personality_results = await self._search_personality_by_embedding(
+            query,
+            personality_data,
+            top_k=3,
+        )
         all_results = event_results + summary_results + personality_results
         all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
@@ -233,6 +237,130 @@ class MemoryBankEngine:
             if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
                 results.append(
                     SearchResult(event=dict(event), score=score, source="event"),
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
+    async def _search_summaries_by_embedding(
+        self,
+        query: str,
+        daily_summaries: dict,
+        top_k: int = 3,
+    ) -> list[SearchResult]:
+        """Embedding 搜索 summary，无 embedding_model 时回退到关键词搜索."""
+        if self.embedding_model is None or not daily_summaries:
+            return await self._summary_mgr.search_summaries(
+                query,
+                daily_summaries,
+                top_k,
+            )
+        today = datetime.now(UTC).date()
+        pairs: list[tuple[str, str, dict]] = []
+        for date_group, summary_data in daily_summaries.items():
+            if isinstance(summary_data, dict):
+                content = summary_data.get("content", "")
+                strength = summary_data.get("memory_strength", 1)
+                last_recall = summary_data.get("last_recall_date", date_group)
+            else:
+                content = str(summary_data)
+                strength = 1
+                last_recall = date_group
+            if content.strip():
+                pairs.append(
+                    (
+                        date_group,
+                        content,
+                        {
+                            "strength": strength,
+                            "last_recall": last_recall,
+                        },
+                    )
+                )
+        if not pairs:
+            return []
+        query_vec = await self.embedding_model.encode(query)
+        texts = [t for _, t, _ in pairs]
+        all_vecs = await self.embedding_model.batch_encode(texts)
+        results = []
+        for (date_group, content, meta), vec in zip(pairs, all_vecs, strict=True):
+            similarity = cosine_similarity(query_vec, vec)
+            try:
+                last_date = date.fromisoformat(str(meta["last_recall"]))
+                days_elapsed = (today - last_date).days
+            except ValueError, TypeError:
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, meta["strength"])
+            score = similarity * retention * SUMMARY_WEIGHT
+            if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
+                results.append(
+                    SearchResult(
+                        event={
+                            "content": content,
+                            "date_group": date_group,
+                            "memory_strength": meta["strength"],
+                            "last_recall_date": meta["last_recall"],
+                        },
+                        score=score,
+                        source="daily_summary",
+                    )
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
+    async def _search_personality_by_embedding(
+        self,
+        query: str,
+        personality_data: dict,
+        top_k: int = 3,
+    ) -> list[SearchResult]:
+        """Embedding 搜索 personality，无 embedding_model 时回退到关键词搜索."""
+        daily_personality = personality_data.get("daily_personality", {})
+        if self.embedding_model is None or not daily_personality:
+            return await self._personality_mgr.search(query, top_k)
+        today = datetime.now(UTC).date()
+        pairs: list[tuple[str, str, dict]] = []
+        for date_group, data in daily_personality.items():
+            if not isinstance(data, dict):
+                continue
+            content = data.get("content", "")
+            if content.strip():
+                pairs.append(
+                    (
+                        date_group,
+                        content,
+                        {
+                            "strength": data.get("memory_strength", 1),
+                            "last_recall": data.get("last_recall_date", date_group),
+                        },
+                    )
+                )
+        if not pairs:
+            return []
+        query_vec = await self.embedding_model.encode(query)
+        texts = [t for _, t, _ in pairs]
+        all_vecs = await self.embedding_model.batch_encode(texts)
+        results = []
+        for (date_group, content, meta), vec in zip(pairs, all_vecs, strict=True):
+            similarity = cosine_similarity(query_vec, vec)
+            try:
+                last_date = date.fromisoformat(str(meta["last_recall"]))
+                days_elapsed = (today - last_date).days
+            except ValueError, TypeError:
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, meta["strength"])
+            score = similarity * retention * SUMMARY_WEIGHT * 0.8
+            if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
+                results.append(
+                    SearchResult(
+                        event={
+                            "content": content,
+                            "date_group": date_group,
+                            "memory_strength": meta["strength"],
+                            "last_recall_date": meta["last_recall"],
+                        },
+                        score=score,
+                        source="personality",
+                    )
                 )
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
