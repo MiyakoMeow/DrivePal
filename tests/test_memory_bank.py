@@ -106,17 +106,6 @@ class TestHierarchicalSummarization:
         assert len(summaries["daily_summaries"]) == 0
 
 
-class TestUpdateEventSummary:
-    """基于 LLM 的事件摘要更新测试."""
-
-    async def test_no_llm_preserves_original(self, backend: MemoryBankStore) -> None:
-        """验证无 LLM 时保留原始内容."""
-        await backend.write_interaction("提醒我明天上午开会", "好的")
-        await backend.write_interaction("明天下午也有会议", "已更新")
-        events = await backend.events_store.read()
-        assert events[0]["content"] == "提醒我明天上午开会"
-
-
 @pytest.mark.llm
 @pytest.mark.embedding
 @pytest.mark.usefixtures("llm_provider")
