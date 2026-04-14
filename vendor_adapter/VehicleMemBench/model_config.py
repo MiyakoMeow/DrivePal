@@ -33,6 +33,22 @@ class BenchmarkConfig:
     model: str
     temperature: float
     max_tokens: int
+    concurrency: int = 4
+
+
+def _parse_concurrency(raw: str | int | None) -> int:
+    """将 concurrency 配置解析为正整数."""
+    default = 4
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError, TypeError:
+        return default
+    if value <= 0:
+        msg = f"concurrency 必须为正整数，得到 {value!r}"
+        raise BenchmarkConfigError(msg)
+    return value
 
 
 @lru_cache(maxsize=1)
@@ -53,6 +69,7 @@ def get_benchmark_config() -> BenchmarkConfig:
         model=provider["model"],
         temperature=float(provider["temperature"]),
         max_tokens=int(provider["max_tokens"]) if provider.get("max_tokens") else 8192,
+        concurrency=_parse_concurrency(provider.get("concurrency")),
     )
 
 

@@ -109,6 +109,7 @@ def get_model_group_providers(name: str) -> list[dict]:
                 "api_key": api_key,
                 "temperature": resolved.params.get("temperature", 0.7),
                 "max_tokens": resolved.params.get("max_tokens"),
+                "concurrency": provider_config.get("concurrency", 4),
             },
         )
     return result

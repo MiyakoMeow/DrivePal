@@ -36,14 +36,25 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-try:
-    _QUERY_CONCURRENCY_LIMIT = int(os.environ.get("BENCHMARK_QUERY_CONCURRENCY", "4"))
-except ValueError:
-    _QUERY_CONCURRENCY_LIMIT = 4
-    logger.warning(
-        "BENCHMARK_QUERY_CONCURRENCY 环境变量值无效，使用默认值 %d",
-        _QUERY_CONCURRENCY_LIMIT,
-    )
+
+def _get_query_concurrency_limit() -> int:
+    """获取查询并发上限，优先使用环境变量，否则从 provider 配置读取."""
+    env_val = os.environ.get("BENCHMARK_QUERY_CONCURRENCY")
+    if env_val is not None:
+        try:
+            return int(env_val)
+        except ValueError:
+            logger.warning(
+                "BENCHMARK_QUERY_CONCURRENCY 环境变量值无效，使用配置值",
+            )
+    return get_benchmark_config().concurrency
+
+
+@lru_cache(maxsize=1)
+def _query_concurrency_limit() -> int:
+    """获取查询并发上限（延迟解析，避免导入时副作用）."""
+    return _get_query_concurrency_limit()
+
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 
@@ -110,7 +121,7 @@ async def prepare(
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
     ensure_output_dir()
-    semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
+    semaphore = asyncio.Semaphore(_query_concurrency_limit())
 
     strategies_list = [STRATEGIES[t] for t in types]
     agent_client = _resolve_agent_client(types)
@@ -188,7 +199,7 @@ async def run(
     qa_pairs = await asyncio.gather(*(load_qa_safe(f) for f in file_nums))
     qa_cache = dict(qa_pairs)
     prep_cache = await load_prep_cache(file_nums, types)
-    query_semaphore = asyncio.Semaphore(_QUERY_CONCURRENCY_LIMIT)
+    query_semaphore = asyncio.Semaphore(_query_concurrency_limit())
 
     async def _run_one_type(fnum: int, mtype: BenchMemoryMode) -> None:
         if (mtype, fnum) not in prep_cache:
