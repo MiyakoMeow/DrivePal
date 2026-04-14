@@ -78,6 +78,49 @@ def md_metric_definitions() -> str:
     return "\n".join(lines)
 
 
+def md_results_table(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
+    """生成实验结果总表（横向对比）."""
+    lines = ["## 4. 实验结果\n"]
+    if not report_data:
+        lines.append("无数据。\n")
+        return "\n".join(lines)
+
+    has_gold = BenchMemoryMode.GOLD in report_data
+    gold_esm = _num(report_data.get(BenchMemoryMode.GOLD, {}).get("exact_match_rate"))
+
+    if not has_gold:
+        lines.append("注意：未包含 GOLD 类型数据，Memory Score 和 Δ% 列不可用。\n")
+
+    header = "| 记忆类型 | ESM | F1 Positive | F1 Change | Memory Score | Δ% (vs Gold) | Avg Calls | Avg Tokens | 失败数 |"
+    sep = "|---|---|---|---|---|---|---|---|---|"
+    lines.append(header)
+    lines.append(sep)
+
+    for mtype, metric in report_data.items():
+        if metric.get("build_error"):
+            lines.append(
+                f"| {mtype.value} | 指标构建失败 | - | - | - | - | - | - | - |"
+            )
+            continue
+        esm = _num(metric.get("exact_match_rate"))
+        f1_pos = _num(metric.get("state_f1_positive"))
+        f1_chg = _num(metric.get("state_f1_change"))
+        ms = f"{_num(metric['memory_score']):.2%}" if "memory_score" in metric else "-"
+        calls = _num(metric.get("avg_pred_calls"))
+        tokens = _num(metric.get("avg_output_token"))
+        failed = _num(metric.get("total_failed"))
+        if has_gold and mtype != BenchMemoryMode.GOLD and gold_esm > 0:
+            delta = (esm - gold_esm) / gold_esm
+            delta_str = f"{delta:.2%}"
+        else:
+            delta_str = "-"
+        lines.append(
+            f"| {mtype.value} | {esm:.2%} | {f1_pos:.4f} | {f1_chg:.4f} | {ms} | {delta_str} | {calls:.1f} | {tokens:.1f} | {failed} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _format_calls(calls: list[dict[str, Any]]) -> str:
     """将工具调用列表格式化为函数名列表."""
     if not calls:
