@@ -121,6 +121,69 @@ def md_results_table(report_data: dict[BenchMemoryMode, dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def md_results_detail(
+    report_data: dict[BenchMemoryMode, dict[str, Any]],
+) -> str:
+    """生成各记忆类型详细指标."""
+    lines = ["### 4.1 详细指标\n"]
+    if not report_data:
+        lines.append("无数据。\n")
+        return "\n".join(lines)
+
+    for mtype, metric in report_data.items():
+        lines.append(f"#### {mtype.value}\n")
+        if metric.get("build_error"):
+            lines.append(
+                "**指标构建失败**：该记忆类型的评估结果无法正常聚合，请检查原始数据。\n"
+            )
+            continue
+
+        esm = _num(metric.get("exact_match_rate"))
+        f1_pos = _num(metric.get("state_f1_positive"))
+        f1_chg = _num(metric.get("state_f1_change"))
+        f1_neg = _num(metric.get("state_f1_negative"))
+        chg_acc = _num(metric.get("change_accuracy"))
+        calls = _num(metric.get("avg_pred_calls"))
+        tokens = _num(metric.get("avg_output_token"))
+        failed = _num(metric.get("total_failed"))
+
+        lines.append("| 指标 | 值 |")
+        lines.append("|---|--- |")
+        lines.append(f"| Exact Match Rate (ESM) | {esm:.2%} |")
+        lines.append(f"| F1 Positive | {f1_pos:.4f} |")
+        lines.append(f"| F1 Change | {f1_chg:.4f} |")
+        lines.append(f"| F1 Negative | {f1_neg:.4f} |")
+        lines.append(f"| Change Accuracy | {chg_acc:.4f} |")
+        lines.append(f"| Avg Pred Calls | {calls:.1f} |")
+        lines.append(f"| Avg Output Token | {tokens:.1f} |")
+        lines.append(f"| 失败查询数 | {failed} |")
+        if "memory_score" in metric:
+            lines.append(f"| Memory Score | {_num(metric['memory_score']):.2%} |")
+        lines.append("")
+
+        by_rt = metric.get("by_reasoning_type", {})
+        if by_rt:
+            lines.append("**按推理类型细分：**\n")
+            lines.append(
+                "| 推理类型 | 样本数 | ESM | F1 Positive | F1 Change | Avg Calls |"
+            )
+            lines.append("|---|---|---|---|---|---|")
+            for rt, raw_rt_metric in by_rt.items():
+                rt_metric = raw_rt_metric or {}
+                label = _format_reasoning_type(rt)
+                rt_count = _num(rt_metric.get("count"))
+                rt_esm = _num(rt_metric.get("exact_match_rate"))
+                rt_f1p = _num(rt_metric.get("state_f1_positive"))
+                rt_f1c = _num(rt_metric.get("state_f1_change"))
+                rt_calls = _num(rt_metric.get("avg_pred_calls"))
+                lines.append(
+                    f"| {label} | {rt_count} | {rt_esm:.2%} | {rt_f1p:.4f} | {rt_f1c:.4f} | {rt_calls:.1f} |"
+                )
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 def _format_calls(calls: list[dict[str, Any]]) -> str:
     """将工具调用列表格式化为函数名列表."""
     if not calls:
