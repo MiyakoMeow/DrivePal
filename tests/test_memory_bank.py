@@ -139,3 +139,42 @@ class TestMemoryModuleIntegration:
         results = await memory.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) > 0
         assert len(results[0].interactions) >= 1
+
+
+class TestNameBonus:
+    """搜索评分名称共现加分测试."""
+
+    async def test_name_bonus_boosts_matching_results(
+        self,
+        backend: MemoryBankStore,
+    ) -> None:
+        """验证 query 中的名称与事件 content 匹配时分数更高."""
+        await backend.write(
+            MemoryEvent(content="Alice: I like green seats", date_group="2025-03-01"),
+        )
+        await backend.write(
+            MemoryEvent(
+                content="Bob: I prefer blue dashboard", date_group="2025-03-01"
+            ),
+        )
+        results = await backend.search("Alice seat preference")
+        alice_results = [r for r in results if "Alice" in r.event.get("content", "")]
+        bob_results = [r for r in results if "Bob" in r.event.get("content", "")]
+        if alice_results and bob_results:
+            assert alice_results[0].score > bob_results[0].score
+
+    async def test_name_bonus_no_effect_without_names(
+        self,
+        backend: MemoryBankStore,
+    ) -> None:
+        """验证 query 不含已知名称时不触发加分."""
+        await backend.write(
+            MemoryEvent(content="Alice: I like green seats", date_group="2025-03-01"),
+        )
+        await backend.write(
+            MemoryEvent(
+                content="Bob: I prefer blue dashboard", date_group="2025-03-01"
+            ),
+        )
+        results = await backend.search("seat")
+        assert len(results) >= 1

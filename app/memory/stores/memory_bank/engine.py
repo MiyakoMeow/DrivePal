@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import time
 import uuid
 from datetime import UTC, date, datetime
@@ -37,6 +38,11 @@ SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
 FORGET_INTERVAL_SECONDS = 300
 _FORGET_NEVER = -float("inf")
+_SPEAKER_PATTERN = re.compile(r"^([^:\n]{2,40}):\s", re.MULTILINE)
+_NAME_BONUS = 1.3
+_MAX_RECENCY_PENALTY = 0.7
+_RECENCY_DECAY_RATE = 0.003
+_MIN_NAME_LENGTH = 2
 
 
 class MemoryBankEngine:
@@ -61,6 +67,7 @@ class MemoryBankEngine:
         self._personality_mgr = PersonalityManager(data_dir)
         self._summary_mgr = SummaryManager(data_dir)
         self._last_forget_time: float = _FORGET_NEVER
+        self._speaker_names_cache: frozenset[str] | None = None
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -95,6 +102,7 @@ class MemoryBankEngine:
         await self._summary_mgr.maybe_summarize(
             date_group, group_events, self.chat_model, interactions
         )
+        self._speaker_names_cache = None
         return event.id
 
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
@@ -120,12 +128,14 @@ class MemoryBankEngine:
             await self._summary_mgr.maybe_summarize(
                 dg, group_events, self.chat_model, interactions
             )
+        self._speaker_names_cache = None
         return ids
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆事件与摘要."""
         if not query.strip():
             return []
+        today = datetime.now(UTC).date()
         events = await self._storage.read_events()
         summaries = await self.summaries_store.read()
         daily_summaries = summaries.get("daily_summaries", {})
@@ -150,6 +160,9 @@ class MemoryBankEngine:
             top_k=3,
         )
         all_results = event_results + summary_results + personality_results
+        known_names = await self._extract_speaker_names()
+        self._apply_name_bonus(all_results, known_names, query)
+        self._apply_recency_factor(all_results, today)
         all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
 
@@ -483,6 +496,60 @@ class MemoryBankEngine:
                 await self._storage.write_events(all_events)
         self._last_forget_time = time.monotonic()
 
+    async def _extract_speaker_names(self) -> frozenset[str]:
+        """从已存储事件中提取说话人名称，结果缓存."""
+        if self._speaker_names_cache is not None:
+            return self._speaker_names_cache
+        events = await self._storage.read_events()
+        names: set[str] = set()
+        for event in events:
+            for m in _SPEAKER_PATTERN.finditer(event.get("content", "")):
+                name = m.group(1).strip().lower()
+                if len(name) >= _MIN_NAME_LENGTH:
+                    names.add(name)
+                    parts = name.split()
+                    if len(parts) > 1:
+                        names.add(parts[0])
+        self._speaker_names_cache = frozenset(names)
+        return self._speaker_names_cache
+
+    def _apply_name_bonus(
+        self,
+        results: list[SearchResult],
+        known_names: frozenset[str],
+        query: str,
+    ) -> None:
+        """当 query 中出现的名称也在结果 content 中时给予加分."""
+        if not known_names:
+            return
+        query_lower = query.lower()
+        matched = {n for n in known_names if n in query_lower}
+        if not matched:
+            return
+        for r in results:
+            content_lower = r.event.get("content", "").lower()
+            if any(n in content_lower for n in matched):
+                r.score *= _NAME_BONUS
+
+    def _apply_recency_factor(
+        self,
+        results: list[SearchResult],
+        today: date,
+    ) -> None:
+        """基于 date_group 计算温和的时间衰减."""
+        for r in results:
+            dg = r.event.get("date_group", "")
+            if not dg:
+                continue
+            try:
+                event_date = date.fromisoformat(dg)
+                days = (today - event_date).days
+            except ValueError:
+                continue
+            if days > 0:
+                recency = max(_MAX_RECENCY_PENALTY, 1.0 - days * _RECENCY_DECAY_RATE)
+                r.score *= recency
+
     async def write_interaction(
         self,
         query: str,
@@ -556,6 +623,7 @@ class MemoryBankEngine:
             interactions,
             self.chat_model,
         )
+        self._speaker_names_cache = None
         return InteractionResult(
             event_id=resolved_event_id,
             interaction_id=interaction_id,
