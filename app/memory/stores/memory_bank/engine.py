@@ -1,6 +1,7 @@
 """MemoryBankEngine: 记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -16,6 +17,8 @@ from app.storage.toml_store import TOMLStore
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingModelRequiredError(RuntimeError):
@@ -99,8 +102,8 @@ class MemoryBankEngine:
         if self.embedding_model is None:
             event_results = await self._search_by_keyword(query, events, top_k)
         else:
-            event_results = await self._search_by_embedding(query, events, top_k)
-            if not event_results:
+            event_results = await self._safe_embedding_search(query, events, top_k)
+            if event_results is None or len(event_results) == 0:
                 event_results = await self._search_by_keyword(query, events, top_k)
         summary_results = await self._summary_mgr.search_summaries(
             query,
@@ -173,6 +176,19 @@ class MemoryBankEngine:
             )
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
+
+    async def _safe_embedding_search(
+        self,
+        query: str,
+        events: list[dict],
+        top_k: int,
+    ) -> list[SearchResult] | None:
+        """尝试向量搜索，失败时返回 None 以触发关键字回退."""
+        try:
+            return await self._search_by_embedding(query, events, top_k)
+        except (OSError, RuntimeError) as e:
+            logger.warning("Embedding search failed, fallback to keyword: %s", e)
+            return None
 
     async def _search_by_embedding(
         self,

@@ -178,6 +178,10 @@ def test_run_skips_existing_query_files(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
         MagicMock,
     )
+    monkeypatch.setattr(
+        "vendor_adapter.VehicleMemBench.runner._query_concurrency_limit",
+        lambda: 1,
+    )
 
     asyncio.run(run(file_range="99", memory_types="gold"))
 
@@ -244,7 +248,3 @@ def test_report_reads_hierarchical_queries(
     md_content = md_files[0].read_text(encoding="utf-8")
     assert "# VehicleMemBench 基准测试报告" in md_content
     assert "memory_bank" in md_content
-
-
-def test_imports_available() -> None:
-    """测试 vendor 导入可用."""
