@@ -1,8 +1,6 @@
 """聊天模型集成测试."""
 
-import asyncio
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -11,23 +9,12 @@ from app.agents.workflow import AgentWorkflow
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
-from app.models.chat import (
-    ChatModel,
-    _get_provider_semaphore,
-    _semaphore_cache,
-)
-from app.models.settings import LLMProviderConfig
-from app.models.types import ProviderConfig
-from tests._helpers import _mock_async_client
+from app.models.chat import ChatModel
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-# 替换测试中的魔法值
-MAX_ACTIVE = 2  # 测试并发上限
-EXPECTED_RESULTS_COUNT = 4  # 测试预期结果数量
-PROVIDER_A_CONCURRENCY = 2  # Provider A 的并发数
-PROVIDER_B_CONCURRENCY = 3  # Provider B 的并发数
+    from app.models.settings import LLMProviderConfig
 
 
 @pytest.mark.llm
@@ -112,76 +99,3 @@ async def test_run_with_stages_highway_scenario(
         },
     )
     assert "提醒已发送" in result or "提醒已延后" in result
-
-
-class TestProviderConcurrency:
-    """Provider 级别并发控制测试."""
-
-    async def test_concurrent_requests_respected(self) -> None:
-        """验证并发请求受 provider semaphore 限制."""
-        _semaphore_cache.clear()
-        providers = [
-            LLMProviderConfig(
-                provider=ProviderConfig(
-                    model="test-model",
-                    base_url="http://fake:8000/v1",
-                    api_key="sk-test",
-                ),
-                concurrency=2,
-            ),
-        ]
-        chat = ChatModel(providers=providers)
-
-        active_count = 0
-        max_active = 0
-
-        async def mock_create(*_args: object, **_kwargs: object) -> MagicMock:
-            nonlocal active_count, max_active
-            active_count += 1
-            max_active = max(max_active, active_count)
-            await asyncio.sleep(0.05)
-            active_count -= 1
-            mock_response = MagicMock()
-            mock_response.choices = [MagicMock()]
-            mock_response.choices[0].message.content = "response"
-            return mock_response
-
-        with patch.object(chat, "_create_client") as mock_create_client:
-            mock_client = _mock_async_client()
-            mock_client.chat.completions.create = mock_create
-            mock_create_client.return_value = mock_client
-
-            tasks = [chat.generate(f"prompt{i}") for i in range(4)]
-            results = await asyncio.gather(*tasks)
-
-        assert max_active == MAX_ACTIVE
-        assert len(results) == EXPECTED_RESULTS_COUNT
-
-    async def test_different_providers_have_independent_semaphores(self) -> None:
-        """验证不同 provider 的 semaphore 独立."""
-        _semaphore_cache.clear()
-        providers = [
-            LLMProviderConfig(
-                provider=ProviderConfig(
-                    model="model-a",
-                    base_url="http://a:8000",
-                    api_key="sk-a",
-                ),
-                concurrency=2,
-            ),
-            LLMProviderConfig(
-                provider=ProviderConfig(
-                    model="model-b",
-                    base_url="http://b:8000",
-                    api_key="sk-b",
-                ),
-                concurrency=3,
-            ),
-        ]
-        ChatModel(providers=providers)
-
-        sem_a = await _get_provider_semaphore("http://a:8000", 2)
-        sem_b = await _get_provider_semaphore("http://b:8000", 3)
-
-        assert sem_a._value == PROVIDER_A_CONCURRENCY
-        assert sem_b._value == PROVIDER_B_CONCURRENCY

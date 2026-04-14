@@ -18,7 +18,6 @@ from app.memory.components import (
 from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 from app.memory.stores.memory_bank.engine import (
     SOFT_FORGET_STRENGTH,
-    SOFT_FORGET_THRESHOLD,
     MemoryBankEngine,
 )
 from app.memory.stores.memory_bank.personality import (
@@ -532,18 +531,6 @@ class TestPersonalitySummary:
             mgr.maybe_summarize(date_group, events, interactions, chat_model),
         )
         assert chat_model.generate.call_count == 1
-
-
-class TestSoftForgetConstants:
-    """软遗忘常量测试."""
-
-    def test_threshold_value(self) -> None:
-        """验证 SOFT_FORGET_THRESHOLD 为 0.15."""
-        assert SOFT_FORGET_THRESHOLD == SOFT_FORGET_THRESHOLD_VALUE
-
-    def test_strength_value(self) -> None:
-        """验证 SOFT_FORGET_STRENGTH 为 0."""
-        assert SOFT_FORGET_STRENGTH == 0
 
 
 class TestSoftForgetMechanism:

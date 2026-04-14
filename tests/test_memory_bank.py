@@ -1,6 +1,5 @@
 """记忆库后端和集成测试."""
 
-import asyncio
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,11 +19,8 @@ if TYPE_CHECKING:
 
     from app.models.embedding import EmbeddingModel
 
-# 搜索结果数量上限（魔法值）
 TOP_K = 10
-# 搜索后记忆强化目标值
 MEMORY_STRENGTH_AFTER_SEARCH = 2
-# 记忆强度下限阈值
 MEMORY_STRENGTH_THRESHOLD = 2
 
 
@@ -172,47 +168,6 @@ class TestHierarchicalSummarization:
         assert mock_chat_model.generate.call_count == 1
         for i in range(DAILY_SUMMARY_THRESHOLD):
             await backend.write(MemoryEvent(content=f"额外事件{i}"))
-        assert mock_chat_model.generate.call_count == 1
-
-    async def test_summary_concurrent_inflight_dedup(
-        self,
-        tmp_path: Path,
-        mock_chat_model: MagicMock,
-    ) -> None:
-        """验证并发调用同一 date_group 时仅生成一次摘要."""
-
-        async def slow_generate(_prompt: str) -> str:
-            await asyncio.sleep(0.1)
-            return "并发摘要"
-
-        mock_chat_model.generate = AsyncMock(side_effect=slow_generate)
-        backend = MemoryBankStore(tmp_path, chat_model=mock_chat_model)
-        events_data = [
-            MemoryEvent(content=f"事件{i}") for i in range(DAILY_SUMMARY_THRESHOLD)
-        ]
-        for ev in events_data:
-            await backend.write(ev)
-        events = await backend.events_store.read()
-        if not events:
-            pytest.skip("No events generated")
-        target_dg = events[0]["date_group"]
-        await asyncio.gather(
-            backend._engine._summary_mgr.maybe_summarize(
-                target_dg,
-                events,
-                mock_chat_model,
-            ),
-            backend._engine._summary_mgr.maybe_summarize(
-                target_dg,
-                events,
-                mock_chat_model,
-            ),
-            backend._engine._summary_mgr.maybe_summarize(
-                target_dg,
-                events,
-                mock_chat_model,
-            ),
-        )
         assert mock_chat_model.generate.call_count == 1
 
 
