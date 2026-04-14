@@ -64,14 +64,14 @@ def test_file_output_dir() -> None:
 
 def test_prep_path() -> None:
     """测试 prep_path 生成正确的 prep.json 路径."""
-    p = prep_path(BenchMemoryMode.KV, 7)
-    assert p == OUTPUT_DIR / "kv" / "file_7" / "prep.json"
+    p = prep_path(BenchMemoryMode.KEY_VALUE, 7)
+    assert p == OUTPUT_DIR / "key_value" / "file_7" / "prep.json"
 
 
 def test_query_result_path() -> None:
     """测试 query_result_path 生成正确的查询结果路径."""
-    p = query_result_path(BenchMemoryMode.KV, 12, 4)
-    assert p == OUTPUT_DIR / "kv" / "file_12" / "query_4.json"
+    p = query_result_path(BenchMemoryMode.KEY_VALUE, 12, 4)
+    assert p == OUTPUT_DIR / "key_value" / "file_12" / "query_4.json"
 
 
 def test_prepare_gold_creates_dir_and_skips(

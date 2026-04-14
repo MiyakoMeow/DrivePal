@@ -59,13 +59,13 @@ class KvEvaluator:
             )
 
 
-class KvMemoryStrategy:
+class KeyValueMemoryStrategy:
     """键值记忆策略：提取历史中的 KV 对，用于查询评估."""
 
     @property
     def mode(self) -> BenchMemoryMode:
         """返回策略模式."""
-        return BenchMemoryMode.KV
+        return BenchMemoryMode.KEY_VALUE
 
     def needs_history(self) -> bool:
         """是否需要历史文本."""
@@ -84,7 +84,7 @@ class KvMemoryStrategy:
     ) -> dict[str, Any] | None:
         """构建 KV 存储."""
         if agent_client is None:
-            msg = f"[kv] agent_client 为 None，无法 prepare (output_dir={output_dir})"
+            msg = f"[key_value] agent_client 为 None，无法 prepare (output_dir={output_dir})"
             raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
         async with semaphore:
@@ -93,7 +93,7 @@ class KvMemoryStrategy:
                 agent_client,
                 daily,
             )
-        return {"type": BenchMemoryMode.KV, "store": store.to_dict()}
+        return {"type": BenchMemoryMode.KEY_VALUE, "store": store.to_dict()}
 
     async def create_evaluator(
         self,
@@ -108,13 +108,13 @@ class KvMemoryStrategy:
         if prep_data is None:
             msg = f"prep_data 为 None (file_num={file_num})"
             raise VehicleMemBenchError(
-                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+                msg, file_num=file_num, memory_type=BenchMemoryMode.KEY_VALUE
             )
         store_data = prep_data.get("store")
         if store_data is None:
             msg = f"prep_data 缺少 'store' 字段 (file_num={file_num})"
             raise VehicleMemBenchError(
-                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+                msg, file_num=file_num, memory_type=BenchMemoryMode.KEY_VALUE
             )
         if not isinstance(store_data, dict):
             msg = (
@@ -122,7 +122,7 @@ class KvMemoryStrategy:
                 f"得到 {type(store_data).__name__} (file_num={file_num})"
             )
             raise VehicleMemBenchError(
-                msg, file_num=file_num, memory_type=BenchMemoryMode.KV
+                msg, file_num=file_num, memory_type=BenchMemoryMode.KEY_VALUE
             )
         store.store = store_data
         return KvEvaluator(agent_client, store, reflect_num, query_semaphore)

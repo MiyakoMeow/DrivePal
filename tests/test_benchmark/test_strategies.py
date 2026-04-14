@@ -16,7 +16,8 @@ def test_strategies_registry_has_all_modes() -> None:
     [
         (BenchMemoryMode.NONE, False, False),
         (BenchMemoryMode.GOLD, False, False),
-        (BenchMemoryMode.KV, True, True),
+        (BenchMemoryMode.KEY_VALUE, True, True),
+        (BenchMemoryMode.SUMMARY, True, True),
         (BenchMemoryMode.MEMORY_BANK, True, False),
     ],
 )

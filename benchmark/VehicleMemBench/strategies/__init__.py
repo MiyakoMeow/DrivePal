@@ -66,13 +66,24 @@ class MemoryStrategy(Protocol):
 
 
 from benchmark.VehicleMemBench.strategies.gold import GoldStrategy  # noqa: E402
-from benchmark.VehicleMemBench.strategies.kv import KvMemoryStrategy  # noqa: E402
+from benchmark.VehicleMemBench.strategies.key_value import (  # noqa: E402
+    KeyValueMemoryStrategy,
+)
 from benchmark.VehicleMemBench.strategies.memory_bank import (  # noqa: E402
     MemoryBankStrategy,
 )
 from benchmark.VehicleMemBench.strategies.none import NoneStrategy  # noqa: E402
+from benchmark.VehicleMemBench.strategies.summary import (  # noqa: E402
+    SummaryMemoryStrategy,
+)
 
 STRATEGIES: dict[BenchMemoryMode, MemoryStrategy] = {
     s.mode: s
-    for s in [NoneStrategy(), GoldStrategy(), KvMemoryStrategy(), MemoryBankStrategy()]
+    for s in [
+        NoneStrategy(),
+        GoldStrategy(),
+        KeyValueMemoryStrategy(),
+        SummaryMemoryStrategy(),
+        MemoryBankStrategy(),
+    ]
 }

@@ -8,5 +8,6 @@ class BenchMemoryMode(StrEnum):
 
     NONE = "none"
     GOLD = "gold"
-    KV = "kv"
+    KEY_VALUE = "key_value"
     MEMORY_BANK = "memory_bank"
+    SUMMARY = "summary"
