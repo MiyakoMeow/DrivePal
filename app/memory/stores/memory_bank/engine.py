@@ -103,7 +103,7 @@ class MemoryBankEngine:
             event_results = await self._search_by_keyword(query, events, top_k)
         else:
             event_results = await self._safe_embedding_search(query, events, top_k)
-            if event_results is None:
+            if event_results is None or len(event_results) == 0:
                 event_results = await self._search_by_keyword(query, events, top_k)
         summary_results = await self._summary_mgr.search_summaries(
             query,
