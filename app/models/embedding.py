@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
 _background_tasks: set[asyncio.Task[None]] = set()
 
+_BATCH_SIZE = 32
+_RETRY_ATTEMPTS = 3
+_RETRY_DELAY_SECONDS = 1.0
+
 
 def _finalize_background_task(task: asyncio.Task[None]) -> None:
     """回收后台任务并消费异常，避免未检索异常告警."""
@@ -120,9 +124,49 @@ class EmbeddingModel:
         model: str,
         texts: list[str],
     ) -> list[list[float]]:
-        """使用openai异步接口批量编码文本."""
-        resp = await client.embeddings.create(model=model, input=texts)
-        return [d.embedding for d in sorted(resp.data, key=lambda x: x.index)]
+        """使用openai异步接口批量编码文本（含分批与重试）."""
+        all_vectors: list[list[float]] = []
+        total = len(texts)
+        for start in range(0, total, _BATCH_SIZE):
+            batch = texts[start : start + _BATCH_SIZE]
+            last_error: Exception | None = None
+            for attempt in range(_RETRY_ATTEMPTS):
+                try:
+                    resp = await client.embeddings.create(model=model, input=batch)
+                except Exception as e:  # noqa: BLE001
+                    last_error = e
+                    logger.warning(
+                        "Embedding batch %d-%d failed (attempt %d/%d): %s",
+                        start,
+                        min(start + _BATCH_SIZE, total),
+                        attempt + 1,
+                        _RETRY_ATTEMPTS,
+                        e,
+                    )
+                else:
+                    if not resp.data:
+                        msg = "No embedding data received"
+                        last_error = ValueError(msg)
+                        logger.warning(
+                            "Embedding batch %d-%d returned empty data (attempt %d/%d)",
+                            start,
+                            min(start + _BATCH_SIZE, total),
+                            attempt + 1,
+                            _RETRY_ATTEMPTS,
+                        )
+                    else:
+                        batch_vectors = [
+                            d.embedding
+                            for d in sorted(resp.data, key=lambda x: x.index)
+                        ]
+                        all_vectors.extend(batch_vectors)
+                        break
+                if attempt < _RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
+            else:
+                if last_error is not None:
+                    raise last_error
+        return all_vectors
 
     async def encode(self, text: str) -> list[float]:
         """编码文本为向量."""

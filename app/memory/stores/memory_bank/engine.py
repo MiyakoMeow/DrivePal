@@ -1,6 +1,7 @@
 """MemoryBankEngine: 记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -16,6 +17,8 @@ from app.storage.toml_store import TOMLStore
 if TYPE_CHECKING:
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingModelRequiredError(RuntimeError):
@@ -182,7 +185,11 @@ class MemoryBankEngine:
     ) -> list[SearchResult]:
         if self.embedding_model is None:
             raise EmbeddingModelRequiredError
-        query_vector = await self.embedding_model.encode(query)
+        try:
+            query_vector = await self.embedding_model.encode(query)
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.warning("Embedding query encode failed, fallback to keyword: %s", e)
+            return []
         event_text_pairs = [
             (event, text)
             for event in events
@@ -190,9 +197,13 @@ class MemoryBankEngine:
         ]
         if not event_text_pairs:
             return []
-        all_event_vectors = await self.embedding_model.batch_encode(
-            [text for _, text in event_text_pairs]
-        )
+        try:
+            all_event_vectors = await self.embedding_model.batch_encode(
+                [text for _, text in event_text_pairs]
+            )
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.warning("Embedding batch encode failed, fallback to keyword: %s", e)
+            return []
         today = datetime.now(UTC).date()
         results = []
         for (event, _text), event_vector in zip(
