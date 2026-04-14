@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.memory.memory import MemoryModule
-from app.memory.schemas import MemoryEvent
+from app.memory.schemas import MemoryEvent, SearchResult
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.stores.memory_bank.summarization import (
     DAILY_SUMMARY_THRESHOLD,
@@ -139,3 +139,37 @@ class TestMemoryModuleIntegration:
         results = await memory.search("测试", mode=MemoryMode.MEMORY_BANK)
         assert len(results) > 0
         assert len(results[0].interactions) >= 1
+
+
+class TestNameBonus:
+    """搜索评分名称共现加分测试."""
+
+    async def test_name_bonus_boosts_matching_results(
+        self,
+        backend: MemoryBankStore,
+    ) -> None:
+        """验证 _apply_name_bonus 对包含匹配名称的结果加分."""
+        known_names = frozenset({"alice", "bob"})
+        r_alice = SearchResult(event={"content": "Alice: seat"}, score=1.0)
+        r_bob = SearchResult(event={"content": "Bob: seat"}, score=1.0)
+        backend._engine._apply_name_bonus([r_alice, r_bob], known_names, "Alice seat")
+        assert r_alice.score > r_bob.score
+        expected_bonus = 1.0 * 1.3
+        assert r_alice.score == expected_bonus
+        assert r_bob.score == 1.0
+
+    async def test_name_bonus_no_effect_without_names(
+        self,
+        backend: MemoryBankStore,
+    ) -> None:
+        """验证 query 不含已知名称时不触发加分."""
+        await backend.write(
+            MemoryEvent(content="Alice: I like green seats", date_group="2025-03-01"),
+        )
+        await backend.write(
+            MemoryEvent(
+                content="Bob: I prefer blue dashboard", date_group="2025-03-01"
+            ),
+        )
+        results = await backend.search("seat")
+        assert len(results) >= 1
