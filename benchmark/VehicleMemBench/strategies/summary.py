@@ -108,6 +108,15 @@ class SummaryMemoryStrategy:
             raise VehicleMemBenchError(
                 msg, file_num=file_num, memory_type=BenchMemoryMode.SUMMARY
             )
+        prep_type = prep_data.get("type")
+        if prep_type != BenchMemoryMode.SUMMARY:
+            msg = (
+                f"prep_data['type'] 不匹配，期望 {BenchMemoryMode.SUMMARY}，"
+                f"得到 {prep_type} (file_num={file_num})"
+            )
+            raise VehicleMemBenchError(
+                msg, file_num=file_num, memory_type=BenchMemoryMode.SUMMARY
+            )
         memory_text = prep_data.get("memory")
         if memory_text is None:
             msg = f"prep_data 缺少 'memory' 字段 (file_num={file_num})"

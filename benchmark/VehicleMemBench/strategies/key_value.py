@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class KvEvaluator:
+class KeyValueEvaluator:
     """KV 模式评估器：使用预构建的 KV 存储."""
 
     def __init__(
@@ -102,7 +102,7 @@ class KeyValueMemoryStrategy:
         file_num: int,
         reflect_num: int,
         query_semaphore: asyncio.Semaphore,
-    ) -> KvEvaluator:
+    ) -> KeyValueEvaluator:
         """创建 KV 模式评估器."""
         store = VMBMemoryStore()
         if prep_data is None:
@@ -125,4 +125,4 @@ class KeyValueMemoryStrategy:
                 msg, file_num=file_num, memory_type=BenchMemoryMode.KEY_VALUE
             )
         store.store = store_data
-        return KvEvaluator(agent_client, store, reflect_num, query_semaphore)
+        return KeyValueEvaluator(agent_client, store, reflect_num, query_semaphore)
