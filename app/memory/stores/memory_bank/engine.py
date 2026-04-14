@@ -279,7 +279,7 @@ class MemoryBankEngine:
                 await self._interactions_store.write(all_interactions)
 
     async def forget_expired(self) -> None:
-        """遗忘过期事件（独立于搜索流程，由外部按需调用）."""
+        """遗忘过期事件（在搜索末尾自动调用，也可独立调用）."""
         today_date = datetime.now(UTC).date()
         async with self._lock:
             all_events = await self._storage.read_events()
