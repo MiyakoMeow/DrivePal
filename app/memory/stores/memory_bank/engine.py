@@ -100,6 +100,7 @@ class MemoryBankEngine:
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
         """批量写入事件，仅在最后按日期分组触发摘要."""
         ids: list[str] = []
+        new_date_groups: set[str] = set()
         for ev in events:
             event = ev.model_copy(deep=True)
             event.id = self._storage.generate_id()
@@ -109,14 +110,12 @@ class MemoryBankEngine:
             if not event.last_recall_date:
                 event.last_recall_date = event.date_group
             event.memory_strength = 1
+            new_date_groups.add(event.date_group)
             await self._storage.append_raw(event.model_dump())
             ids.append(event.id)
         all_events = await self._storage.read_events()
-        date_groups = {
-            e.get("date_group", "") for e in all_events if e.get("date_group")
-        }
         interactions = await self._interactions_store.read()
-        for dg in sorted(date_groups):
+        for dg in sorted(new_date_groups):
             group_events = [e for e in all_events if e.get("date_group") == dg]
             await self._summary_mgr.maybe_summarize(
                 dg, group_events, self.chat_model, interactions
@@ -308,9 +307,20 @@ class MemoryBankEngine:
                 )
         if not pairs:
             return []
-        query_vec = await self.embedding_model.encode(query)
-        texts = [t for _, t, _ in pairs]
-        all_vecs = await self.embedding_model.batch_encode(texts)
+        try:
+            query_vec = await self.embedding_model.encode(query)
+            texts = [t for _, t, _ in pairs]
+            all_vecs = await self.embedding_model.batch_encode(texts)
+        except (OSError, RuntimeError) as e:
+            logger.warning(
+                "Summary embedding search failed, fallback to keyword: %s",
+                e,
+            )
+            return await self._summary_mgr.search_summaries(
+                query,
+                daily_summaries,
+                top_k,
+            )
         results = []
         for (date_group, content, meta), vec in zip(pairs, all_vecs, strict=True):
             similarity = cosine_similarity(query_vec, vec)
@@ -366,9 +376,16 @@ class MemoryBankEngine:
                 )
         if not pairs:
             return []
-        query_vec = await self.embedding_model.encode(query)
-        texts = [t for _, t, _ in pairs]
-        all_vecs = await self.embedding_model.batch_encode(texts)
+        try:
+            query_vec = await self.embedding_model.encode(query)
+            texts = [t for _, t, _ in pairs]
+            all_vecs = await self.embedding_model.batch_encode(texts)
+        except (OSError, RuntimeError) as e:
+            logger.warning(
+                "Personality embedding search failed, fallback to keyword: %s",
+                e,
+            )
+            return await self._personality_mgr.search(query, top_k)
         results = []
         for (date_group, content, meta), vec in zip(pairs, all_vecs, strict=True):
             similarity = cosine_similarity(query_vec, vec)

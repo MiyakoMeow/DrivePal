@@ -41,6 +41,8 @@ def forgetting_curve(
         return 1.0
     if strength <= 0:
         return 0.0
+    if decay_base <= 0:
+        return 0.0
     return math.exp(-days_elapsed / (decay_base * strength))
 
 
