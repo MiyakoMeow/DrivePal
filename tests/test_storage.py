@@ -52,8 +52,13 @@ async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
     assert strategies["reminder_weights"]["general"] < GENERAL_WEIGHT_AFTER_IGNORE_MAX
 
 
+@pytest.mark.llm
 async def test_feedback_history_appended(tmp_path: Path) -> None:
-    """验证每条反馈记录都追加到反馈历史."""
+    """验证每条反馈记录都追加到反馈历史.
+
+    注意：此测试写入2个事件，会触发 DAILY_SUMMARY_THRESHOLD=2，
+    从而调用 LLM 生成摘要，因此需要 @pytest.mark.llm 标记。
+    """
     memory = MemoryModule(tmp_path)
     eid1 = await memory.write(MemoryEvent(content="会议A", type="meeting"))
     eid2 = await memory.write(MemoryEvent(content="会议B", type="meeting"))

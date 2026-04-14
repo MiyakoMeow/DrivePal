@@ -84,6 +84,10 @@ def test_prepare_gold_creates_dir_and_skips(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
         MagicMock,
     )
+    monkeypatch.setattr(
+        "vendor_adapter.VehicleMemBench.runner._query_concurrency_limit",
+        lambda: 1,
+    )
 
     asyncio.run(prepare(file_range="1", memory_types="gold"))
     gold_dir = tmp_path / "gold" / "file_1"
@@ -105,6 +109,10 @@ def test_prepare_none_creates_dir_and_skips(
     monkeypatch.setattr(
         "vendor_adapter.VehicleMemBench.runner._get_agent_client",
         MagicMock,
+    )
+    monkeypatch.setattr(
+        "vendor_adapter.VehicleMemBench.runner._query_concurrency_limit",
+        lambda: 1,
     )
 
     asyncio.run(prepare(file_range="1", memory_types="none"))
