@@ -33,6 +33,7 @@ class BenchmarkConfig:
     model: str
     temperature: float
     max_tokens: int
+    concurrency: int = 4
 
 
 @lru_cache(maxsize=1)
@@ -53,6 +54,7 @@ def get_benchmark_config() -> BenchmarkConfig:
         model=provider["model"],
         temperature=float(provider["temperature"]),
         max_tokens=int(provider["max_tokens"]) if provider.get("max_tokens") else 8192,
+        concurrency=int(provider["concurrency"]) if provider.get("concurrency") else 4,
     )
 
 

@@ -36,14 +36,21 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-try:
-    _QUERY_CONCURRENCY_LIMIT = int(os.environ.get("BENCHMARK_QUERY_CONCURRENCY", "4"))
-except ValueError:
-    _QUERY_CONCURRENCY_LIMIT = 4
-    logger.warning(
-        "BENCHMARK_QUERY_CONCURRENCY 环境变量值无效，使用默认值 %d",
-        _QUERY_CONCURRENCY_LIMIT,
-    )
+
+def _get_query_concurrency_limit() -> int:
+    """获取查询并发上限，优先使用环境变量，否则从 provider 配置读取."""
+    env_val = os.environ.get("BENCHMARK_QUERY_CONCURRENCY")
+    if env_val is not None:
+        try:
+            return int(env_val)
+        except ValueError:
+            logger.warning(
+                "BENCHMARK_QUERY_CONCURRENCY 环境变量值无效，使用配置值",
+            )
+    return get_benchmark_config().concurrency
+
+
+_QUERY_CONCURRENCY_LIMIT: int = _get_query_concurrency_limit()
 
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 
