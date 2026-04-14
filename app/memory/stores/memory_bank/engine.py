@@ -2,12 +2,13 @@
 
 import asyncio
 import logging
+import time
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.memory.components import EventStorage, forgetting_curve
+from app.memory.components import SUMMARY_WEIGHT, EventStorage, forgetting_curve
 from app.memory.schemas import InteractionResult, MemoryEvent, SearchResult
 from app.memory.stores.memory_bank.personality import PersonalityManager
 from app.memory.stores.memory_bank.summarization import SummaryManager
@@ -34,12 +35,14 @@ OVERLAP_RATIO_THRESHOLD = 0.45
 TOP_K = 3
 SOFT_FORGET_THRESHOLD = 0.15
 SOFT_FORGET_STRENGTH = 0
+FORGET_INTERVAL_SECONDS = 300
+_FORGET_NEVER = -float("inf")
 
 
 class MemoryBankEngine:
     """记忆库引擎，支持遗忘曲线、记忆强化与自动摘要."""
 
-    EMBEDDING_MIN_SIMILARITY = 0.3
+    EMBEDDING_MIN_SIMILARITY = 0.2
 
     def __init__(
         self,
@@ -57,6 +60,7 @@ class MemoryBankEngine:
         self._lock = asyncio.Lock()
         self._personality_mgr = PersonalityManager(data_dir)
         self._summary_mgr = SummaryManager(data_dir)
+        self._last_forget_time: float = _FORGET_NEVER
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -78,18 +82,45 @@ class MemoryBankEngine:
         event = event.model_copy(deep=True)
         event.id = self._storage.generate_id()
         event.created_at = datetime.now(UTC).isoformat()
-        today = datetime.now(UTC).date().isoformat()
+        if not event.date_group:
+            event.date_group = datetime.now(UTC).date().isoformat()
+        if not event.last_recall_date:
+            event.last_recall_date = event.date_group
         event.memory_strength = 1
-        event.last_recall_date = today
-        event.date_group = today
         await self._storage.append_raw(event.model_dump())
+        date_group = event.date_group
         events = await self._storage.read_events()
-        group_events = [e for e in events if e.get("date_group") == today]
+        group_events = [e for e in events if e.get("date_group") == date_group]
         interactions = await self._interactions_store.read()
         await self._summary_mgr.maybe_summarize(
-            today, group_events, self.chat_model, interactions
+            date_group, group_events, self.chat_model, interactions
         )
         return event.id
+
+    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+        """批量写入事件，仅在最后按日期分组触发摘要."""
+        ids: list[str] = []
+        new_date_groups: set[str] = set()
+        for ev in events:
+            event = ev.model_copy(deep=True)
+            event.id = self._storage.generate_id()
+            event.created_at = datetime.now(UTC).isoformat()
+            if not event.date_group:
+                event.date_group = datetime.now(UTC).date().isoformat()
+            if not event.last_recall_date:
+                event.last_recall_date = event.date_group
+            event.memory_strength = 1
+            new_date_groups.add(event.date_group)
+            await self._storage.append_raw(event.model_dump())
+            ids.append(event.id)
+        all_events = await self._storage.read_events()
+        interactions = await self._interactions_store.read()
+        for dg in sorted(new_date_groups):
+            group_events = [e for e in all_events if e.get("date_group") == dg]
+            await self._summary_mgr.maybe_summarize(
+                dg, group_events, self.chat_model, interactions
+            )
+        return ids
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆事件与摘要."""
@@ -108,12 +139,16 @@ class MemoryBankEngine:
             event_results = await self._safe_embedding_search(query, events, top_k)
             if event_results is None or len(event_results) == 0:
                 event_results = await self._search_by_keyword(query, events, top_k)
-        summary_results = await self._summary_mgr.search_summaries(
+        summary_results = await self._search_summaries_by_embedding(
             query,
             daily_summaries,
-            top_k=1,
+            top_k=3,
         )
-        personality_results = await self._personality_mgr.search(query, top_k=1)
+        personality_results = await self._search_personality_by_embedding(
+            query,
+            personality_data,
+            top_k=3,
+        )
         all_results = event_results + summary_results + personality_results
         all_results.sort(key=lambda x: x.score, reverse=True)
         top_results = all_results[:top_k]
@@ -235,6 +270,148 @@ class MemoryBankEngine:
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
 
+    async def _search_summaries_by_embedding(
+        self,
+        query: str,
+        daily_summaries: dict,
+        top_k: int = 3,
+    ) -> list[SearchResult]:
+        """Embedding 搜索 summary，无 embedding_model 时回退到关键词搜索."""
+        if self.embedding_model is None or not daily_summaries:
+            return await self._summary_mgr.search_summaries(
+                query,
+                daily_summaries,
+                top_k,
+            )
+        today = datetime.now(UTC).date()
+        pairs: list[tuple[str, str, dict]] = []
+        for date_group, summary_data in daily_summaries.items():
+            if isinstance(summary_data, dict):
+                content = summary_data.get("content", "")
+                strength = summary_data.get("memory_strength", 1)
+                last_recall = summary_data.get("last_recall_date", date_group)
+            else:
+                content = str(summary_data)
+                strength = 1
+                last_recall = date_group
+            if content.strip():
+                pairs.append(
+                    (
+                        date_group,
+                        content,
+                        {
+                            "strength": strength,
+                            "last_recall": last_recall,
+                        },
+                    )
+                )
+        if not pairs:
+            return []
+        try:
+            query_vec = await self.embedding_model.encode(query)
+            texts = [t for _, t, _ in pairs]
+            all_vecs = await self.embedding_model.batch_encode(texts)
+        except (OSError, RuntimeError) as e:
+            logger.warning(
+                "Summary embedding search failed, fallback to keyword: %s",
+                e,
+            )
+            return await self._summary_mgr.search_summaries(
+                query,
+                daily_summaries,
+                top_k,
+            )
+        results = []
+        for (date_group, content, meta), vec in zip(pairs, all_vecs, strict=True):
+            similarity = cosine_similarity(query_vec, vec)
+            try:
+                last_date = date.fromisoformat(str(meta["last_recall"]))
+                days_elapsed = (today - last_date).days
+            except ValueError, TypeError:
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, meta["strength"])
+            score = similarity * retention * SUMMARY_WEIGHT
+            if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
+                results.append(
+                    SearchResult(
+                        event={
+                            "content": content,
+                            "date_group": date_group,
+                            "memory_strength": meta["strength"],
+                            "last_recall_date": meta["last_recall"],
+                        },
+                        score=score,
+                        source="daily_summary",
+                    )
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
+    async def _search_personality_by_embedding(
+        self,
+        query: str,
+        personality_data: dict,
+        top_k: int = 3,
+    ) -> list[SearchResult]:
+        """Embedding 搜索 personality，无 embedding_model 时回退到关键词搜索."""
+        daily_personality = personality_data.get("daily_personality", {})
+        if self.embedding_model is None or not daily_personality:
+            return await self._personality_mgr.search(query, top_k)
+        today = datetime.now(UTC).date()
+        pairs: list[tuple[str, str, dict]] = []
+        for date_group, data in daily_personality.items():
+            if not isinstance(data, dict):
+                continue
+            content = data.get("content", "")
+            if content.strip():
+                pairs.append(
+                    (
+                        date_group,
+                        content,
+                        {
+                            "strength": data.get("memory_strength", 1),
+                            "last_recall": data.get("last_recall_date", date_group),
+                        },
+                    )
+                )
+        if not pairs:
+            return []
+        try:
+            query_vec = await self.embedding_model.encode(query)
+            texts = [t for _, t, _ in pairs]
+            all_vecs = await self.embedding_model.batch_encode(texts)
+        except (OSError, RuntimeError) as e:
+            logger.warning(
+                "Personality embedding search failed, fallback to keyword: %s",
+                e,
+            )
+            return await self._personality_mgr.search(query, top_k)
+        results = []
+        for (date_group, content, meta), vec in zip(pairs, all_vecs, strict=True):
+            similarity = cosine_similarity(query_vec, vec)
+            try:
+                last_date = date.fromisoformat(str(meta["last_recall"]))
+                days_elapsed = (today - last_date).days
+            except ValueError, TypeError:
+                days_elapsed = 0
+            retention = forgetting_curve(days_elapsed, meta["strength"])
+            score = similarity * retention * SUMMARY_WEIGHT * 0.8
+            if similarity >= self.EMBEDDING_MIN_SIMILARITY and score > 0:
+                results.append(
+                    SearchResult(
+                        event={
+                            "content": content,
+                            "date_group": date_group,
+                            "memory_strength": meta["strength"],
+                            "last_recall_date": meta["last_recall"],
+                        },
+                        score=score,
+                        source="personality",
+                    )
+                )
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
     async def _expand_event_interactions(
         self,
         results: list[SearchResult],
@@ -278,8 +455,11 @@ class MemoryBankEngine:
             if updated:
                 await self._interactions_store.write(all_interactions)
 
-    async def forget_expired(self) -> None:
-        """遗忘过期事件（在搜索末尾自动调用，也可独立调用）."""
+    async def forget_expired(self, *, force: bool = False) -> None:
+        """遗忘过期事件（带节流，在搜索末尾自动调用）."""
+        now = time.monotonic()
+        if not force and (now - self._last_forget_time) < FORGET_INTERVAL_SECONDS:
+            return
         today_date = datetime.now(UTC).date()
         async with self._lock:
             all_events = await self._storage.read_events()
@@ -301,6 +481,7 @@ class MemoryBankEngine:
                     updated = True
             if updated:
                 await self._storage.write_events(all_events)
+        self._last_forget_time = time.monotonic()
 
     async def write_interaction(
         self,
@@ -429,7 +610,12 @@ class MemoryBankEngine:
             f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
             for i in child_interactions
         )
-        prompt = f"请简洁总结以下交互记录（一句话）：\n{combined}"
+        prompt = (
+            "Summarize the following interaction, preserving all vehicle-related preferences "
+            "and specific setting values mentioned.\n"
+            "Include user names and any conditions or context for each preference.\n\n"
+            f"Interactions:\n{combined}\n\nSummary:"
+        )
         try:
             summary_text = await self.chat_model.generate(prompt)
         except OSError, ValueError, RuntimeError:

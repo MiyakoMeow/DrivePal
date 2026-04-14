@@ -59,9 +59,18 @@ _CUSTOM_ADAPTER_SYSTEM_INSTRUCTION = (
     "1. Search by user name (e.g., 'Gary', 'Patricia', 'Justin')\n"
     "2. Search by vehicle module (e.g., 'seat', 'navigation', 'air conditioning', "
     "'instrument panel')\n"
-    "3. Search by condition or context (e.g., 'night', 'highway', 'industrial area')\n\n"
+    "3. Search by condition or context (e.g., 'night', 'highway', 'industrial area')\n"
+    "4. For conflicting preferences: search for ALL users' preferences on the same module, "
+    "then determine who is the current driver/passenger\n"
+    "5. For error correction: search multiple times with related keywords to find the "
+    "latest/corrected value\n"
+    "6. For conditional preferences: combine condition keywords with module names in your search "
+    "(e.g., 'night instrument panel', 'highway seat')\n\n"
     "Memory results include date, source type, and related conversations. "
-    "Use all available context to determine the correct preference.\n\n"
+    "Use all available context to determine the correct preference.\n"
+    "Recent preferences override older ones when values conflict.\n"
+    "After searching, if you find partial information, search again with different keywords "
+    "to get the complete picture.\n\n"
     "When the available information does not support setting a device to a specific value, "
     "perform only the minimal required action."
 )
@@ -216,8 +225,9 @@ class MemoryBankStrategy:
                     chat_model=chat_model,
                     embedding_model=embedding_model,
                 )
-                for record in history_to_interaction_records(history_text):
-                    await store.write(record)
+                records = history_to_interaction_records(history_text)
+                if records:
+                    await store.write_batch(records)
                 if store_dir.exists():
                     backup_dir = store_dir.with_suffix(f".bak_{temp_dir.name}")
                     await asyncio.to_thread(

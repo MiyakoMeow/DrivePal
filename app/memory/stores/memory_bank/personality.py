@@ -172,12 +172,17 @@ class PersonalityManager:
                 f"用户: {i.get('query', '')}\n系统: {i.get('response', '')}"
                 for i in group_interactions
             )
-        prompt = f"""Based on the following dialogue, please summarize user's personality traits and emotions,
-        and devise response strategies based on your speculation. Dialogue content:
-        {combined}
-
-        User's personality traits, emotions, and response strategy are:
-        """
+        prompt = (
+            "Based on the following conversation, create a detailed user vehicle preference profile.\n"
+            "Extract for each user:\n"
+            "- Their driving style and habits\n"
+            "- Preferred vehicle settings and why\n"
+            "- How they express their preferences (directly, indirectly, through stories)\n"
+            "- Patterns in their preferences (e.g., safety-focused, comfort-oriented, aesthetics-driven)\n"
+            "- Any relationships between their profession/lifestyle and vehicle choices\n\n"
+            f"Conversation:\n{combined}\n\n"
+            "User vehicle preference profiles:"
+        )
         needs_overall_update = False
         latest_personality_data: dict = {}
         try:
@@ -234,13 +239,13 @@ class PersonalityManager:
             if isinstance(data, dict)
         ]
         combined = "\n".join(all_summaries)
-        prompt = f"""The following are the user's exhibited personality traits and emotions throughout multiple dialogues,
-        along with appropriate response strategies for the current situation:
-        {combined}
-
-        Please provide a highly concise and general summary of the user's personality and the most appropriate
-        response strategy for the AI lover, summarized as:
-        """
+        prompt = (
+            "Synthesize the following daily user preference profiles into a comprehensive summary.\n"
+            "Focus on consistent patterns and the most important preferences for each user.\n"
+            "Resolve any contradictions by preferring the most recent preference.\n\n"
+            f"Daily profiles:\n{combined}\n\n"
+            "Final user preference summary:"
+        )
         try:
             return await chat_model.generate(prompt)
         except Exception:

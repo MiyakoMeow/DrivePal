@@ -184,7 +184,16 @@ class SummaryManager:
                     raw_parts.append(e["content"])
             content = "\n".join(raw_parts)
 
-        prompt = f"请简洁总结以下事件（一句话）：\n{content}"
+        prompt = (
+            "Analyze the following conversation and extract ALL vehicle-related preferences mentioned.\n"
+            "For each preference, include:\n"
+            "- Who stated it (user name)\n"
+            "- What vehicle module/setting it relates to\n"
+            "- The specific preference or value\n"
+            "- Any conditions mentioned (time of day, weather, location, driving scenario)\n\n"
+            f"Conversation:\n{content}\n\n"
+            "Extracted vehicle preferences:"
+        )
         needs_overall_update = False
         try:
             summary_text = await chat_model.generate(prompt)
@@ -218,7 +227,16 @@ class SummaryManager:
             else:
                 all_summaries.append(f"[{date_group}] {summary_data}")
         combined = "\n".join(all_summaries)
-        prompt = f"请简洁总结以下每日摘要（两到三句话）：\n{combined}"
+        prompt = (
+            "Synthesize the following daily vehicle preference summaries into a comprehensive user preference profile.\n"
+            "For each user, consolidate their preferences across all days, noting:\n"
+            "- Core preferences (settings they consistently prefer)\n"
+            "- Conditional preferences (settings that depend on context)\n"
+            "- Recent changes or corrections to earlier preferences\n"
+            "- Conflicting preferences between users\n\n"
+            f"Daily summaries:\n{combined}\n\n"
+            "Consolidated preference profiles:"
+        )
         try:
             overall = await chat_model.generate(prompt)
         except Exception:
