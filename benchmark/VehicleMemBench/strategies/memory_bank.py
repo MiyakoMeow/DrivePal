@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import shutil
+import sys
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -38,6 +39,29 @@ if TYPE_CHECKING:
     from evaluation.agent_client import AgentClient
 
 logger = logging.getLogger(__name__)
+
+try:
+    from tqdm import tqdm
+except ImportError:
+
+    class _NoOpProgressBar:
+        """tqdm 不可用时的无操作替代类."""
+
+        def update(self, n: int = 1) -> None:
+            """空操作."""
+
+        def close(self) -> None:
+            """空操作."""
+
+        @staticmethod
+        def write(s: str) -> None:
+            """输出到终端."""
+            sys.stdout.write(s + "\n")
+
+    def tqdm(*_args: object, **_kwargs: object) -> _NoOpProgressBar:
+        """Tqdm 不可用时的无操作替代工厂函数."""
+        return _NoOpProgressBar()
+
 
 try:
     _SEARCH_TIMEOUT = int(os.environ.get("BENCHMARK_SEARCH_TIMEOUT", str(12 * 3600)))
@@ -218,8 +242,15 @@ class MemoryBankStrategy:
             )
             records = history_to_interaction_records(history_text)
             if records:
-                async with semaphore:
-                    await store.write_batch(records)
+                pbar = tqdm(total=len(records), desc="Writing events to memory bank")
+                try:
+                    async with semaphore:
+                        await store.write_batch(
+                            records,
+                            progress_fn=lambda _cur, _total: pbar.update(1),
+                        )
+                finally:
+                    pbar.close()
             await _fix_benchmark_recency(store)
             if store_dir.exists():
                 backup_dir = store_dir.with_suffix(f".bak_{temp_dir.name}")

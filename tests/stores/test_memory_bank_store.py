@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from app.memory.schemas import InteractionResult
+from app.memory.schemas import InteractionResult, MemoryEvent
 from app.memory.stores.memory_bank import MemoryBankStore
 
 if TYPE_CHECKING:
@@ -67,3 +67,24 @@ class TestWriteInteraction:
         ]
         assert len(meeting_events) == 1
         assert len(meeting_events[0]["interaction_ids"]) == MIN_AGGREGATED_INTERACTIONS
+
+
+class TestWriteBatch:
+    """write_batch 功能测试."""
+
+    async def test_write_batch_progress_fn_called(
+        self,
+        store: MemoryBankStore,
+    ) -> None:
+        """验证 write_batch 透传 progress_fn 回调."""
+        events = [
+            MemoryEvent(content="事件1"),
+            MemoryEvent(content="事件2"),
+        ]
+        calls: list[tuple[int, int]] = []
+        await store.write_batch(
+            events, progress_fn=lambda cur, total: calls.append((cur, total))
+        )
+        assert len(calls) == len(events)
+        assert calls[0] == (1, len(events))
+        assert calls[1] == (2, len(events))
