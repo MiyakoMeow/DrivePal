@@ -45,6 +45,8 @@ _NAME_BONUS = 1.3
 _MAX_RECENCY_PENALTY = 0.7
 _RECENCY_DECAY_RATE = 0.003
 _MIN_NAME_LENGTH = 2
+MAX_RETRIES = 3
+RETRY_BASE_SECONDS = 2.0
 
 
 class MemoryBankEngine:
@@ -131,13 +133,61 @@ class MemoryBankEngine:
                 progress_fn(i + 1, len(events))
         all_events = await self._storage.read_events()
         interactions = await self._interactions_store.read()
-        for dg in sorted(new_date_groups):
-            group_events = [e for e in all_events if e.get("date_group") == dg]
-            await self._summary_mgr.maybe_summarize(
-                dg, group_events, self.chat_model, interactions
-            )
+        events_map: dict[str, list[dict]] = {}
+        for dg in new_date_groups:
+            events_map[dg] = [e for e in all_events if e.get("date_group") == dg]
+
+        summary_tasks = [
+            self._summarize_date_group(dg, events_map[dg], interactions)
+            for dg in sorted(new_date_groups)
+        ]
+        personality_tasks = [
+            self._summarize_personality_date_group(dg, events_map[dg], interactions)
+            for dg in sorted(new_date_groups)
+        ]
+        await asyncio.gather(*summary_tasks, *personality_tasks, return_exceptions=True)
         self._speaker_names_cache = None
         return ids
+
+    async def _summarize_date_group(
+        self, date_group: str, group_events: list[dict], interactions: list[dict]
+    ) -> None:
+        """带重试的摘要任务."""
+        content_hash = self._summary_mgr._compute_events_hash(group_events)  # noqa: SLF001
+        if await self._summary_mgr.should_skip(date_group, content_hash):
+            return
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                await self._summary_mgr.maybe_summarize(
+                    date_group, group_events, self.chat_model, interactions
+                )
+                await self._summary_mgr.record_hash(date_group, content_hash)
+                return  # noqa: TRY300
+            except Exception as e:  # noqa: BLE001
+                if attempt == MAX_RETRIES - 1:
+                    logger.error("Failed after %d retries: %s", date_group, e)  # noqa: TRY400
+                await asyncio.sleep(RETRY_BASE_SECONDS * (attempt + 1))
+
+    async def _summarize_personality_date_group(
+        self, date_group: str, group_events: list[dict], interactions: list[dict]
+    ) -> None:
+        """带重试的人格分析任务."""
+        content_hash = self._personality_mgr._compute_events_hash(group_events)  # noqa: SLF001
+        if await self._personality_mgr.should_skip(date_group, content_hash):
+            return
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                await self._personality_mgr.maybe_summarize(
+                    date_group, group_events, interactions, self.chat_model
+                )
+                await self._personality_mgr.record_hash(date_group, content_hash)
+                return  # noqa: TRY300
+            except Exception as e:  # noqa: BLE001
+                if attempt == MAX_RETRIES - 1:
+                    logger.error("Failed after %d retries: %s", date_group, e)  # noqa: TRY400
+                await asyncio.sleep(RETRY_BASE_SECONDS * (attempt + 1))
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆事件与摘要."""
