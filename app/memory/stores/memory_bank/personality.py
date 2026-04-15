@@ -1,6 +1,7 @@
 """人格分析管理器."""
 
 import asyncio
+import hashlib
 import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -30,12 +31,34 @@ class PersonalityManager:
             lambda: {"daily_personality": {}, "overall_personality": ""},
         )
         self._personality_lock = asyncio.Lock()
+        self._content_lock = asyncio.Lock()
+        self._content_hashes: dict[str, str] = {}
         self._inflight_daily_personality: set[str] = set()
 
     @property
     def personality_store(self) -> TOMLStore:
         """人格摘要存储."""
         return self._store
+
+    @staticmethod
+    def _compute_events_hash(events: list[dict]) -> str:
+        """计算事件内容的 SHA256 hash."""
+        parts = sorted(
+            e.get("id", "") + e.get("content", "") + e.get("description", "")
+            for e in events
+        )
+        combined = "".join(parts)
+        return hashlib.sha256(combined.encode()).hexdigest()
+
+    async def should_skip(self, date_group: str, content_hash: str) -> bool:
+        """判断是否跳过（在锁内检查）."""
+        async with self._content_lock:
+            return self._content_hashes.get(date_group) == content_hash
+
+    async def record_hash(self, date_group: str, content_hash: str) -> None:
+        """记录 hash（在锁内写入）."""
+        async with self._content_lock:
+            self._content_hashes[date_group] = content_hash
 
     async def search(self, query: str, top_k: int) -> list[SearchResult]:
         """基于关键词匹配搜索人格摘要，retention权重为 SUMMARY_WEIGHT * 0.8."""
