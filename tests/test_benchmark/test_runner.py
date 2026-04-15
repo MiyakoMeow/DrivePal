@@ -85,7 +85,7 @@ def test_prepare_gold_creates_dir_and_skips(
         MagicMock,
     )
     monkeypatch.setattr(
-        "benchmark.VehicleMemBench.runner._query_concurrency_limit",
+        "benchmark.VehicleMemBench.runner._get_query_concurrency_limit",
         lambda: 1,
     )
 
@@ -111,7 +111,7 @@ def test_prepare_none_creates_dir_and_skips(
         MagicMock,
     )
     monkeypatch.setattr(
-        "benchmark.VehicleMemBench.runner._query_concurrency_limit",
+        "benchmark.VehicleMemBench.runner._get_query_concurrency_limit",
         lambda: 1,
     )
 
@@ -179,7 +179,7 @@ def test_run_skips_existing_query_files(
         MagicMock,
     )
     monkeypatch.setattr(
-        "benchmark.VehicleMemBench.runner._query_concurrency_limit",
+        "benchmark.VehicleMemBench.runner._get_query_concurrency_limit",
         lambda: 1,
     )
 
