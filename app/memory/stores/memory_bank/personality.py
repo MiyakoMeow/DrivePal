@@ -1,7 +1,6 @@
 """人格分析管理器."""
 
 import asyncio
-import hashlib
 import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -9,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from app.memory.components import SUMMARY_WEIGHT, forgetting_curve
 from app.memory.schemas import SearchResult
+from app.memory.utils import compute_events_hash
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
@@ -42,13 +42,8 @@ class PersonalityManager:
 
     @staticmethod
     def _compute_events_hash(events: list[dict]) -> str:
-        """计算事件内容的 SHA256 hash."""
-        parts = sorted(
-            e.get("id", "") + e.get("content", "") + e.get("description", "")
-            for e in events
-        )
-        combined = "".join(parts)
-        return hashlib.sha256(combined.encode()).hexdigest()
+        """计算事件内容的 SHA256 hash（委托给共享工具函数）."""
+        return compute_events_hash(events)
 
     async def should_skip(self, date_group: str, content_hash: str) -> bool:
         """判断是否跳过（在锁内检查）."""
