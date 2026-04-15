@@ -5,7 +5,6 @@ import logging
 import os
 import shutil
 import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -90,25 +89,9 @@ _CUSTOM_ADAPTER_INITIAL_TOOLS = [
 async def _fix_benchmark_recency(store: MemoryBankStore) -> None:
     """修正 benchmark 场景下事件和摘要的 recency 日期.
 
-    benchmark 的历史数据 date_group 为过去的日期，
-    导致遗忘曲线计算 retention 趋近于零。
-    将 last_recall_date 统一更新为当天以避免此问题。
+    委托给 store.reset_forgetting_state() 处理 events、summaries、personality 三类数据。
     """
-    today_str = datetime.now(UTC).date().isoformat()
-
-    events = await store.events_store.read()
-    for event in events:
-        event["last_recall_date"] = today_str
-        event.setdefault("memory_strength", 1)
-        event.pop("forgotten", None)
-    await store.events_store.write(events)
-
-    summaries = await store.summaries_store.read()
-    for data in summaries.get("daily_summaries", {}).values():
-        if isinstance(data, dict):
-            data["last_recall_date"] = today_str
-            data.setdefault("memory_strength", 1)
-    await store.summaries_store.write(summaries)
+    await store.reset_forgetting_state()
 
 
 def _make_sync_memory_search(

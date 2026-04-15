@@ -496,6 +496,45 @@ class MemoryBankEngine:
                 await self._storage.write_events(all_events)
         self._last_forget_time = time.monotonic()
 
+    async def reset_forgetting_state(self) -> None:
+        """重置所有记忆数据的遗忘状态（benchmark 专用）.
+
+        将 memory_strength 设为 max(current, 1)，
+        last_recall_date 更新为当天，
+        删除 forgotten 标记。
+        """
+        today = datetime.now(UTC).date().isoformat()
+        async with self._lock:
+            all_events = await self._storage.read_events()
+            if all_events:
+                for event in all_events:
+                    event["memory_strength"] = max(event.get("memory_strength", 1), 1)
+                    event["last_recall_date"] = today
+                    event.pop("forgotten", None)
+                await self._storage.write_events(all_events)
+
+            summaries_data = await self.summaries_store.read()
+            daily_summaries = summaries_data.get("daily_summaries", {})
+            if daily_summaries:
+                for data in daily_summaries.values():
+                    if not isinstance(data, dict):
+                        continue
+                    data["memory_strength"] = max(data.get("memory_strength", 1), 1)
+                    data["last_recall_date"] = today
+                    data.pop("forgotten", None)
+                await self.summaries_store.write(summaries_data)
+
+            personality_data = await self.personality_store.read()
+            daily_personality = personality_data.get("daily_personality", {})
+            if daily_personality:
+                for data in daily_personality.values():
+                    if not isinstance(data, dict):
+                        continue
+                    data["memory_strength"] = max(data.get("memory_strength", 1), 1)
+                    data["last_recall_date"] = today
+                    data.pop("forgotten", None)
+                await self.personality_store.write(personality_data)
+
     async def _extract_speaker_names(self) -> frozenset[str]:
         """从已存储事件中提取说话人名称，结果缓存."""
         if self._speaker_names_cache is not None:
