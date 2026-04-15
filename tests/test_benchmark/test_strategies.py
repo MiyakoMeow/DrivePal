@@ -10,6 +10,7 @@ import pytest
 from benchmark.VehicleMemBench import BenchMemoryMode
 from benchmark.VehicleMemBench.strategies import STRATEGIES
 from benchmark.VehicleMemBench.strategies.key_value import KeyValueMemoryStrategy
+from benchmark.VehicleMemBench.strategies.memory_bank import MemoryBankStrategy
 from benchmark.VehicleMemBench.strategies.summary import SummaryMemoryStrategy
 
 if TYPE_CHECKING:
@@ -229,3 +230,16 @@ def test_key_value_prepare_checkpoint_resume(
     assert result is not None
     assert result["type"] == BenchMemoryMode.KEY_VALUE
     assert not partial_file.exists()
+
+
+def test_memory_bank_strategy_accepts_evaluator_semaphore() -> None:
+    """MemoryBankStrategy 构造函数应接受可选的 evaluator_semaphore."""
+    sem = asyncio.Semaphore(4)
+    strategy = MemoryBankStrategy(evaluator_semaphore=sem)
+    assert strategy._evaluator_semaphore is sem
+
+
+def test_memory_bank_strategy_default_no_semaphore() -> None:
+    """MemoryBankStrategy 默认不应限流."""
+    strategy = MemoryBankStrategy()
+    assert strategy._evaluator_semaphore is None

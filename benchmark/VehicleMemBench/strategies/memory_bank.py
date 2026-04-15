@@ -208,6 +208,13 @@ class MemoryBankEvaluator:
 class MemoryBankStrategy:
     """记忆库策略：使用嵌入向量 + LLM 构建可搜索的记忆存储."""
 
+    def __init__(
+        self,
+        evaluator_semaphore: asyncio.Semaphore | None = None,
+    ) -> None:
+        """初始化记忆库策略."""
+        self._evaluator_semaphore = evaluator_semaphore
+
     @property
     def mode(self) -> BenchMemoryMode:
         """返回策略模式."""
@@ -312,11 +319,18 @@ class MemoryBankStrategy:
             chat_model=chat_model,
             embedding_model=embedding_model,
         )
-        search_client = StoreClient(store)
-        return MemoryBankEvaluator(
-            agent_client,
-            search_client,
-            reflect_num,
-            file_num,
-            query_semaphore,
-        )
+        if self._evaluator_semaphore is not None:
+            await self._evaluator_semaphore.acquire()
+        try:
+            await store.warmup_embeddings()
+            search_client = StoreClient(store)
+            return MemoryBankEvaluator(
+                agent_client,
+                search_client,
+                reflect_num,
+                file_num,
+                query_semaphore,
+            )
+        finally:
+            if self._evaluator_semaphore is not None:
+                self._evaluator_semaphore.release()

@@ -26,6 +26,7 @@ from .paths import (  # noqa: F401
 )
 from .reporter import report  # noqa: F401
 from .strategies import STRATEGIES, VehicleMemBenchError
+from .strategies.memory_bank import MemoryBankStrategy
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -174,6 +175,16 @@ async def prepare(
         logger.error("[prepare] done with %d failures", len(failures))
 
 
+def _inject_evaluator_semaphore(types: list[BenchMemoryMode]) -> None:
+    """若 types 包含 MEMORY_BANK，创建带限流的策略实例注入注册表."""
+    if BenchMemoryMode.MEMORY_BANK not in types:
+        return
+    evaluator_semaphore = asyncio.Semaphore(_get_query_concurrency_limit() * 2)
+    STRATEGIES[BenchMemoryMode.MEMORY_BANK] = MemoryBankStrategy(
+        evaluator_semaphore=evaluator_semaphore
+    )
+
+
 async def run(
     file_range: str = "1-50",
     memory_types: str = "none,gold,key_value,summary,memory_bank",
@@ -195,6 +206,7 @@ async def run(
     qa_cache = dict(qa_pairs)
     prep_cache = await load_prep_cache(file_nums, types)
     query_semaphore = asyncio.Semaphore(_get_query_concurrency_limit())
+    _inject_evaluator_semaphore(types)
 
     async def _run_one_type(fnum: int, mtype: BenchMemoryMode) -> None:
         if (mtype, fnum) not in prep_cache:
