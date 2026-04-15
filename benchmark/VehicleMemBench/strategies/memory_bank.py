@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import shutil
+import sys
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -43,21 +44,23 @@ try:
     from tqdm import tqdm
 except ImportError:
 
-    class tqdm:  # noqa: N801
+    class _NoOpProgressBar:
         """tqdm 不可用时的无操作替代类."""
 
-        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003, D107
-            pass
+        def update(self, n: int = 1) -> None:
+            """空操作."""
 
-        def update(self, n: int = 1) -> None:  # noqa: D102
-            pass
-
-        def close(self) -> None:  # noqa: D102
-            pass
+        def close(self) -> None:
+            """空操作."""
 
         @staticmethod
-        def write(s: str) -> None:  # noqa: D102
-            print(s)  # noqa: T201
+        def write(s: str) -> None:
+            """输出到终端."""
+            sys.stdout.write(s + "\n")
+
+    def tqdm(*_args: object, **_kwargs: object) -> _NoOpProgressBar:
+        """Tqdm 不可用时的无操作替代工厂函数."""
+        return _NoOpProgressBar()
 
 
 try:

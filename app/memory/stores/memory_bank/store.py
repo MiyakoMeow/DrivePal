@@ -1,6 +1,5 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
-from collections.abc import Callable  # noqa: TC003
 from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
@@ -13,6 +12,7 @@ from app.memory.schemas import (
 from app.memory.stores.memory_bank.engine import MemoryBankEngine
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from app.models.chat import ChatModel

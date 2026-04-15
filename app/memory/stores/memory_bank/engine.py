@@ -5,7 +5,6 @@ import logging
 import re
 import time
 import uuid
-from collections.abc import Callable  # noqa: TC003
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -18,6 +17,8 @@ from app.memory.utils import cosine_similarity
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
