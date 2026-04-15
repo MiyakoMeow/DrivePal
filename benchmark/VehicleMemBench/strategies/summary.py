@@ -1,8 +1,11 @@
 """递归摘要记忆策略."""
 
 import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Any
+
+import aiofiles
 
 from benchmark.VehicleMemBench import BenchMemoryMode
 from benchmark.VehicleMemBench.paths import (
@@ -81,14 +84,32 @@ class SummaryMemoryStrategy:
         agent_client: AgentClient | None,
         semaphore: asyncio.Semaphore,
     ) -> dict[str, Any] | None:
-        """构建递归摘要记忆."""
+        """构建递归摘要记忆，支持断点续传."""
         if agent_client is None:
             msg = f"[summary] agent_client 为 None，无法 prepare (output_dir={output_dir})"
             raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
         accumulated_memory = ""
+        processed_dates: list[str] = []
+        daily_snapshots: dict[str, str] = {}
         sorted_dates = sorted(daily.keys())
-        for date_key in sorted_dates:
+
+        partial_file = output_dir / "prep.partial.json"
+        try:
+            if await asyncio.to_thread(partial_file.exists):
+                async with aiofiles.open(partial_file, encoding="utf-8") as f:
+                    partial = json.loads(await f.read())
+                accumulated_memory = partial.get("memory", "")
+                processed_dates = partial.get("_processed_dates", [])
+                daily_snapshots = partial.get("_daily_snapshots", {})
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("损坏的 partial 文件，从头开始: %s: %s", partial_file, e)
+            processed_dates = []
+            daily_snapshots = {}
+
+        remaining = [d for d in sorted_dates if d not in processed_dates]
+
+        for date_key in remaining:
             async with semaphore:
                 accumulated_memory, _, _ = await asyncio.to_thread(
                     summarize_day_with_previous_memory,
@@ -97,6 +118,21 @@ class SummaryMemoryStrategy:
                     daily[date_key],
                     accumulated_memory,
                 )
+            processed_dates.append(date_key)
+            daily_snapshots[date_key] = accumulated_memory
+            await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
+            partial_data = {
+                "type": BenchMemoryMode.SUMMARY,
+                "memory": accumulated_memory,
+                "_processed_dates": processed_dates,
+                "_daily_snapshots": daily_snapshots,
+            }
+            async with aiofiles.open(partial_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(partial_data, ensure_ascii=False, indent=2))
+
+        if await asyncio.to_thread(partial_file.exists):
+            await asyncio.to_thread(partial_file.unlink)
+
         return {"type": BenchMemoryMode.SUMMARY, "memory": accumulated_memory}
 
     async def create_evaluator(
