@@ -1,6 +1,7 @@
 """MemoryBank 摘要管理器."""
 
 import asyncio
+import hashlib
 import logging
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -30,12 +31,34 @@ class SummaryManager:
             lambda: {"daily_summaries": {}, "overall_summary": ""},
         )
         self._lock = asyncio.Lock()
+        self._content_lock = asyncio.Lock()
+        self._content_hashes: dict[str, str] = {}
         self._inflight_daily_summaries: set[str] = set()
 
     @property
     def summaries_store(self) -> TOMLStore:
         """摘要存储."""
         return self._summaries_store
+
+    @staticmethod
+    def _compute_events_hash(events: list[dict]) -> str:
+        """计算事件内容的 SHA256 hash."""
+        parts = sorted(
+            e.get("id", "") + e.get("content", "") + e.get("description", "")
+            for e in events
+        )
+        combined = "".join(parts)
+        return hashlib.sha256(combined.encode()).hexdigest()
+
+    async def should_skip(self, date_group: str, content_hash: str) -> bool:
+        """判断是否跳过（在锁内检查）."""
+        async with self._content_lock:
+            return self._content_hashes.get(date_group) == content_hash
+
+    async def record_hash(self, date_group: str, content_hash: str) -> None:
+        """记录 hash（在锁内写入）."""
+        async with self._content_lock:
+            self._content_hashes[date_group] = content_hash
 
     async def search_summaries(
         self,
