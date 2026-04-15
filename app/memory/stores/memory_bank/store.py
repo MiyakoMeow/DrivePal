@@ -62,6 +62,11 @@ class MemoryBankStore:
         return self._engine.summaries_store
 
     @property
+    def personality_store(self) -> TOMLStore:
+        """人格存储."""
+        return self._engine.personality_store
+
+    @property
     def interactions_store(self) -> TOMLStore:
         """交互存储."""
         return self._engine.interactions_store
@@ -104,3 +109,7 @@ class MemoryBankStore:
     ) -> InteractionResult:
         """写入交互记录."""
         return await self._engine.write_interaction(query, response, event_type)
+
+    async def reset_forgetting_state(self) -> None:
+        """重置遗忘状态."""
+        await self._engine.reset_forgetting_state()

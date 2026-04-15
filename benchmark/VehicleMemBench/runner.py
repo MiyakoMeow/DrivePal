@@ -50,12 +50,6 @@ def _get_query_concurrency_limit() -> int:
     return get_benchmark_config().concurrency
 
 
-@lru_cache(maxsize=1)
-def _query_concurrency_limit() -> int:
-    """获取查询并发上限（延迟解析，避免导入时副作用）."""
-    return _get_query_concurrency_limit()
-
-
 SUPPORTED_MEMORY_TYPES: frozenset[BenchMemoryMode] = frozenset(BenchMemoryMode)
 
 
@@ -121,7 +115,7 @@ async def prepare(
     file_nums = parse_file_range(file_range)
     types = _parse_memory_types(memory_types)
     ensure_output_dir()
-    semaphore = asyncio.Semaphore(_query_concurrency_limit())
+    semaphore = asyncio.Semaphore(_get_query_concurrency_limit())
 
     strategies_list = [STRATEGIES[t] for t in types]
     agent_client = _resolve_agent_client(types)
@@ -199,7 +193,7 @@ async def run(
     qa_pairs = await asyncio.gather(*(load_qa_safe(f) for f in file_nums))
     qa_cache = dict(qa_pairs)
     prep_cache = await load_prep_cache(file_nums, types)
-    query_semaphore = asyncio.Semaphore(_query_concurrency_limit())
+    query_semaphore = asyncio.Semaphore(_get_query_concurrency_limit())
 
     async def _run_one_type(fnum: int, mtype: BenchMemoryMode) -> None:
         if (mtype, fnum) not in prep_cache:
