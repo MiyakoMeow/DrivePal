@@ -1,5 +1,6 @@
 """记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
 
+from collections.abc import Callable  # noqa: TC003
 from typing import TYPE_CHECKING
 
 from app.memory.components import EventStorage, FeedbackManager
@@ -75,9 +76,13 @@ class MemoryBankStore:
         """写入事件."""
         return await self._engine.write(event)
 
-    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+    async def write_batch(
+        self,
+        events: list[MemoryEvent],
+        progress_fn: Callable[[int, int], None] | None = None,
+    ) -> list[str]:
         """批量写入事件."""
-        return await self._engine.write_batch(events)
+        return await self._engine.write_batch(events, progress_fn=progress_fn)
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆."""
