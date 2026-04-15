@@ -8,6 +8,7 @@ import pytest
 
 from benchmark.VehicleMemBench import BenchMemoryMode
 from benchmark.VehicleMemBench.strategies import STRATEGIES
+from benchmark.VehicleMemBench.strategies.key_value import KeyValueMemoryStrategy
 from benchmark.VehicleMemBench.strategies.summary import SummaryMemoryStrategy
 
 if TYPE_CHECKING:
@@ -76,3 +77,46 @@ def test_summary_prepare_calls_per_day(
     assert result is not None
     assert result["type"] == BenchMemoryMode.SUMMARY
     assert result["memory"] == "memory_after_2024-01-16"
+
+
+def test_key_value_prepare_calls_per_day(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """key_value prepare 应逐日调用 build_memory_kv_for_day，每次获取信号量."""
+    strategy = KeyValueMemoryStrategy()
+    semaphore = asyncio.Semaphore(2)
+    agent_client = MagicMock()
+
+    daily = {"2024-01-15": ["msg1"], "2024-01-16": ["msg2"]}
+
+    call_log: list[str] = []
+    mock_store = MagicMock()
+
+    def fake_split(_text: str) -> dict[str, list[str]]:
+        return daily
+
+    def fake_build_kv_day(
+        _client, date, _conversations, _memory_store, _reflect_num=10
+    ):
+        call_log.append(date)
+        return [{"name": "mock", "args": {}, "result": {}}]
+
+    monkeypatch.setattr(
+        "benchmark.VehicleMemBench.strategies.key_value.split_history_by_day",
+        fake_split,
+    )
+    monkeypatch.setattr(
+        "benchmark.VehicleMemBench.strategies.key_value.build_memory_kv_for_day",
+        fake_build_kv_day,
+    )
+    monkeypatch.setattr(
+        "benchmark.VehicleMemBench.strategies.key_value.VMBMemoryStore",
+        lambda: mock_store,
+    )
+
+    result = asyncio.run(strategy.prepare("history", tmp_path, agent_client, semaphore))
+
+    assert call_log == ["2024-01-15", "2024-01-16"]
+    assert result is not None
+    assert result["type"] == BenchMemoryMode.KEY_VALUE

@@ -12,7 +12,7 @@ from benchmark.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
 
 from evaluation.model_evaluation import (  # isort: skip
     MemoryStore as VMBMemoryStore,
-    build_memory_key_value,
+    build_memory_kv_for_day,
     process_task_with_kv_memory,
     split_history_by_day,
 )
@@ -87,12 +87,17 @@ class KeyValueMemoryStrategy:
             msg = f"[key_value] agent_client 为 None，无法 prepare (output_dir={output_dir})"
             raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
-        async with semaphore:
-            store, _, _ = await asyncio.to_thread(
-                build_memory_key_value,
-                agent_client,
-                daily,
-            )
+        store = VMBMemoryStore()
+        sorted_dates = sorted(daily.keys())
+        for date_key in sorted_dates:
+            async with semaphore:
+                await asyncio.to_thread(
+                    build_memory_kv_for_day,
+                    agent_client,
+                    date_key,
+                    daily[date_key],
+                    store,
+                )
         return {"type": BenchMemoryMode.KEY_VALUE, "store": store.to_dict()}
 
     async def create_evaluator(
