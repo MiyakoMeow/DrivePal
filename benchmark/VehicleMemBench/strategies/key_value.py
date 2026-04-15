@@ -1,8 +1,11 @@
 """键值记忆策略."""
 
 import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Any
+
+import aiofiles
 
 from benchmark.VehicleMemBench import BenchMemoryMode
 from benchmark.VehicleMemBench.paths import (
@@ -82,14 +85,33 @@ class KeyValueMemoryStrategy:
         agent_client: AgentClient | None,
         semaphore: asyncio.Semaphore,
     ) -> dict[str, Any] | None:
-        """构建 KV 存储."""
+        """构建 KV 存储，支持断点续传."""
         if agent_client is None:
             msg = f"[key_value] agent_client 为 None，无法 prepare (output_dir={output_dir})"
             raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
         store = VMBMemoryStore()
+        processed_dates: list[str] = []
+        daily_snapshots: dict[str, str] = {}
         sorted_dates = sorted(daily.keys())
-        for date_key in sorted_dates:
+
+        partial_file = output_dir / "prep.partial.json"
+        try:
+            if partial_file.exists():
+                async with aiofiles.open(partial_file, encoding="utf-8") as f:
+                    partial = json.loads(await f.read())
+                store_data = partial.get("store", {})
+                store.store = store_data
+                processed_dates = partial.get("_processed_dates", [])
+                daily_snapshots = partial.get("_daily_snapshots", {})
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("损坏的 partial 文件，从头开始: %s: %s", partial_file, e)
+            processed_dates = []
+            daily_snapshots = {}
+
+        remaining = [d for d in sorted_dates if d not in processed_dates]
+
+        for date_key in remaining:
             async with semaphore:
                 await asyncio.to_thread(
                     build_memory_kv_for_day,
@@ -98,6 +120,20 @@ class KeyValueMemoryStrategy:
                     daily[date_key],
                     store,
                 )
+            processed_dates.append(date_key)
+            await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
+            partial_data = {
+                "type": BenchMemoryMode.KEY_VALUE,
+                "store": store.to_dict(),
+                "_processed_dates": processed_dates,
+                "_daily_snapshots": daily_snapshots,
+            }
+            async with aiofiles.open(partial_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(partial_data, ensure_ascii=False, indent=2))
+
+        if partial_file.exists():
+            await asyncio.to_thread(partial_file.unlink)
+
         return {"type": BenchMemoryMode.KEY_VALUE, "store": store.to_dict()}
 
     async def create_evaluator(
