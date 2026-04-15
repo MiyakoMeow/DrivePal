@@ -1,6 +1,10 @@
 """MemoryBankStore 测试 - 仅存储级别测试."""
 
+from __future__ import annotations
+
+import asyncio
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -88,3 +92,50 @@ class TestWriteBatch:
         assert len(calls) == len(events)
         assert calls[0] == (1, len(events))
         assert calls[1] == (2, len(events))
+
+
+def test_embedding_cache_reduces_batch_encode_calls(
+    tmp_path: Path,
+) -> None:
+    """warmup_embeddings 应缓存向量，后续 search 不再调用 batch_encode."""
+    mock_embedding = AsyncMock()
+    encode_call_count = 0
+
+    async def fake_encode(_text: str) -> list[float]:
+        nonlocal encode_call_count
+        encode_call_count += 1
+        return [0.1] * 10
+
+    async def fake_batch_encode(texts: list[str]) -> list[list[float]]:
+        nonlocal encode_call_count
+        encode_call_count += len(texts)
+        return [[0.1] * 10 for _ in texts]
+
+    mock_embedding.encode = fake_encode
+    mock_embedding.batch_encode = fake_batch_encode
+
+    mock_chat = MagicMock()
+
+    store = MemoryBankStore(
+        data_dir=tmp_path,
+        embedding_model=mock_embedding,
+        chat_model=mock_chat,
+    )
+
+    event = MemoryEvent(
+        id="test_1",
+        content="用户喜欢温度22度",
+        description="",
+        type="general",
+        date_group="2024-01-15",
+        memory_strength=1,
+        last_recall_date="2024-01-15",
+    )
+    asyncio.run(store.write(event))
+
+    asyncio.run(store.warmup_embeddings())
+    count_after_warmup = encode_call_count
+
+    asyncio.run(store.search("温度", top_k=5))
+
+    assert encode_call_count == count_after_warmup + 1

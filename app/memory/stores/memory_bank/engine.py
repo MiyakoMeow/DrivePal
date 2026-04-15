@@ -70,6 +70,10 @@ class MemoryBankEngine:
         self._summary_mgr = SummaryManager(data_dir)
         self._last_forget_time: float = _FORGET_NEVER
         self._speaker_names_cache: frozenset[str] | None = None
+        self._event_text_cache: list[tuple[dict, str]] | None = None
+        self._event_vector_cache: list[list[float]] | None = None
+        self._summary_vector_cache: dict[str, list[float]] | None = None
+        self._personality_vector_cache: dict[str, list[float]] | None = None
 
     @property
     def summaries_store(self) -> TOMLStore:
@@ -259,20 +263,30 @@ class MemoryBankEngine:
         if self.embedding_model is None:
             raise EmbeddingModelRequiredError
         query_vector = await self.embedding_model.encode(query)
-        event_text_pairs = [
-            (event, text)
-            for event in events
-            if (text := self._get_searchable_text(event)).strip()
-        ]
-        if not event_text_pairs:
-            return []
-        all_event_vectors = await self.embedding_model.batch_encode(
-            [text for _, text in event_text_pairs]
-        )
         today = datetime.now(UTC).date()
+
+        if (
+            self._event_text_cache is not None
+            and self._event_vector_cache is not None
+            and len(self._event_text_cache) == len(events)
+        ):
+            event_pairs = self._event_text_cache
+            all_event_vectors = self._event_vector_cache
+        else:
+            event_pairs = [
+                (event, text)
+                for event in events
+                if (text := self._get_searchable_text(event)).strip()
+            ]
+            if not event_pairs:
+                return []
+            all_event_vectors = await self.embedding_model.batch_encode(
+                [text for _, text in event_pairs]
+            )
+
         results = []
         for (event, _text), event_vector in zip(
-            event_text_pairs, all_event_vectors, strict=True
+            event_pairs, all_event_vectors, strict=True
         ):
             similarity = cosine_similarity(query_vector, event_vector)
             strength = event.get("memory_strength", 1)
@@ -290,6 +304,83 @@ class MemoryBankEngine:
                 )
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
+
+    async def warmup_embeddings(self) -> None:
+        """预计算并缓存所有 embedding 向量."""
+        if self.embedding_model is None:
+            return
+        events = await self._storage.read_events()
+        self._event_text_cache = [
+            (event, text)
+            for event in events
+            if (text := self._get_searchable_text(event)).strip()
+        ]
+        if self._event_text_cache:
+            texts = [text for _, text in self._event_text_cache]
+            self._event_vector_cache = await self.embedding_model.batch_encode(texts)
+
+        summaries = await self.summaries_store.read()
+        daily_summaries = summaries.get("daily_summaries", {})
+        self._summary_vector_cache = await self._warmup_summary_vectors(daily_summaries)
+
+        personality_data = await self.personality_store.read()
+        daily_personality = personality_data.get("daily_personality", {})
+        self._personality_vector_cache = await self._warmup_personality_vectors(
+            daily_personality
+        )
+
+        logger.info(
+            "Embedding cache warmed up: %d events, %d summaries, %d personalities",
+            len(self._event_text_cache or []),
+            len(self._summary_vector_cache or {}),
+            len(self._personality_vector_cache or {}),
+        )
+
+    async def _warmup_summary_vectors(
+        self, daily_summaries: dict
+    ) -> dict[str, list[float]]:
+        """预计算 summary 向量."""
+        if not daily_summaries or self.embedding_model is None:
+            return {}
+        pairs: list[tuple[str, str]] = []
+        for date_group, summary_data in daily_summaries.items():
+            content = (
+                summary_data.get("content", "")
+                if isinstance(summary_data, dict)
+                else str(summary_data)
+            )
+            if content.strip():
+                pairs.append((date_group, content))
+        if not pairs:
+            return {}
+        texts = [t for _, t in pairs]
+        try:
+            vectors = await self.embedding_model.batch_encode(texts)
+        except OSError, RuntimeError:
+            return {}
+        return {dg: vec for (dg, _), vec in zip(pairs, vectors, strict=True)}
+
+    async def _warmup_personality_vectors(
+        self, daily_personality: dict
+    ) -> dict[str, list[float]]:
+        """预计算 personality 向量."""
+        if not daily_personality or self.embedding_model is None:
+            return {}
+        pairs: list[tuple[str, str]] = []
+        for date_group, data in daily_personality.items():
+            if not isinstance(data, dict):
+                continue
+            content = data.get("content", "")
+            if content.strip():
+                pairs.append((date_group, content))
+        if not pairs:
+            return {}
+        texts = [t for _, t in pairs]
+        try:
+            vectors = await self.embedding_model.batch_encode(texts)
+        except OSError, RuntimeError:
+            return {}
+        return {dg: vec for (dg, _), vec in zip(pairs, vectors, strict=True)}
 
     async def _search_summaries_by_embedding(
         self,

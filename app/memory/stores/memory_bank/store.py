@@ -118,3 +118,7 @@ class MemoryBankStore:
     async def reset_forgetting_state(self) -> None:
         """重置遗忘状态."""
         await self._engine.reset_forgetting_state()
+
+    async def warmup_embeddings(self) -> None:
+        """预计算并缓存所有 embedding 向量."""
+        await self._engine.warmup_embeddings()
