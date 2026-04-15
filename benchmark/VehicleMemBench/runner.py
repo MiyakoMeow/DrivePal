@@ -19,6 +19,7 @@ from .paths import (  # noqa: F401
     VENDOR_DIR,
     ensure_output_dir,
     file_output_dir,
+    prep_partial_path,
     prep_path,
     query_result_path,
     setup_vehiclemembench_path,

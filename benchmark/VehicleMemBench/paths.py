@@ -42,6 +42,11 @@ def prep_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
     return file_output_dir(memory_type, file_num) / "prep.json"
 
 
+def prep_partial_path(memory_type: BenchMemoryMode, file_num: int) -> Path:
+    """返回指定记忆类型和文件编号的 partial prep 数据路径."""
+    return file_output_dir(memory_type, file_num) / "prep.partial.json"
+
+
 def query_result_path(
     memory_type: BenchMemoryMode, file_num: int, event_index: int
 ) -> Path:

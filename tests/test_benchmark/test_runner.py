@@ -16,6 +16,7 @@ from benchmark.VehicleMemBench.runner import (
     VENDOR_DIR,
     file_output_dir,
     parse_file_range,
+    prep_partial_path,
     prep_path,
     prepare,
     query_result_path,
@@ -248,3 +249,9 @@ def test_report_reads_hierarchical_queries(
     md_content = md_files[0].read_text(encoding="utf-8")
     assert "# VehicleMemBench 基准测试报告" in md_content
     assert "memory_bank" in md_content
+
+
+def test_prep_partial_path() -> None:
+    """测试 prep_partial_path 生成正确的 partial 路径."""
+    p = prep_partial_path(BenchMemoryMode.SUMMARY, 7)
+    assert p == OUTPUT_DIR / "summary" / "file_7" / "prep.partial.json"
