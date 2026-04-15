@@ -355,6 +355,25 @@ class TestMemoryBankEngineWrite:
         assert "2025-03-10" in dates
         assert "2025-04-15" in dates
 
+    async def test_write_batch_progress_fn_called(
+        self,
+        engine: MemoryBankEngine,
+    ) -> None:
+        """验证 write_batch 调用 progress_fn 回调."""
+        events = [
+            MemoryEvent(content="事件1", date_group="2025-01-01"),
+            MemoryEvent(content="事件2", date_group="2025-01-02"),
+            MemoryEvent(content="事件3", date_group="2025-01-03"),
+        ]
+        calls: list[tuple[int, int]] = []
+        await engine.write_batch(
+            events, progress_fn=lambda cur, total: calls.append((cur, total))
+        )
+        assert len(calls) == len(events)
+        assert calls[0] == (1, len(events))
+        assert calls[1] == (2, len(events))
+        assert calls[2] == (3, len(events))
+
 
 class TestMemoryBankEngineWriteInteraction:
     """MemoryBankEngine.write_interaction 测试."""

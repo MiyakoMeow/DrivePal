@@ -5,6 +5,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Callable  # noqa: TC003
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -105,11 +106,15 @@ class MemoryBankEngine:
         self._speaker_names_cache = None
         return event.id
 
-    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+    async def write_batch(
+        self,
+        events: list[MemoryEvent],
+        progress_fn: Callable[[int, int], None] | None = None,
+    ) -> list[str]:
         """批量写入事件，仅在最后按日期分组触发摘要."""
         ids: list[str] = []
         new_date_groups: set[str] = set()
-        for ev in events:
+        for i, ev in enumerate(events):
             event = ev.model_copy(deep=True)
             event.id = self._storage.generate_id()
             event.created_at = datetime.now(UTC).isoformat()
@@ -121,6 +126,8 @@ class MemoryBankEngine:
             new_date_groups.add(event.date_group)
             await self._storage.append_raw(event.model_dump())
             ids.append(event.id)
+            if progress_fn is not None:
+                progress_fn(i + 1, len(events))
         all_events = await self._storage.read_events()
         interactions = await self._interactions_store.read()
         for dg in sorted(new_date_groups):
