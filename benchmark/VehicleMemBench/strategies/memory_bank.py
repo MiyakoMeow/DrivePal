@@ -40,6 +40,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 try:
+    from tqdm import tqdm
+except ImportError:
+
+    class tqdm:  # noqa: N801
+        """tqdm 不可用时的无操作替代类."""
+
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003, D107
+            pass
+
+        def update(self, n: int = 1) -> None:  # noqa: D102
+            pass
+
+        def close(self) -> None:  # noqa: D102
+            pass
+
+        @staticmethod
+        def write(s: str) -> None:  # noqa: D102
+            print(s)  # noqa: T201
+
+
+try:
     _SEARCH_TIMEOUT = int(os.environ.get("BENCHMARK_SEARCH_TIMEOUT", str(12 * 3600)))
 except ValueError:
     _SEARCH_TIMEOUT = 12 * 3600
@@ -218,8 +239,15 @@ class MemoryBankStrategy:
             )
             records = history_to_interaction_records(history_text)
             if records:
-                async with semaphore:
-                    await store.write_batch(records)
+                pbar = tqdm(total=len(records), desc="Writing events to memory bank")
+                try:
+                    async with semaphore:
+                        await store.write_batch(
+                            records,
+                            progress_fn=lambda _cur, _total: pbar.update(1),
+                        )
+                finally:
+                    pbar.close()
             await _fix_benchmark_recency(store)
             if store_dir.exists():
                 backup_dir = store_dir.with_suffix(f".bak_{temp_dir.name}")
