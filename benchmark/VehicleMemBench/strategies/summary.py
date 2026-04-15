@@ -11,9 +11,9 @@ from benchmark.VehicleMemBench.paths import (
 from benchmark.VehicleMemBench.strategies.exceptions import VehicleMemBenchError
 
 from evaluation.model_evaluation import (  # isort: skip
-    build_memory_recursive_summary,
     process_task_with_memory,
     split_history_by_day,
+    summarize_day_with_previous_memory,
 )
 
 if TYPE_CHECKING:
@@ -86,13 +86,18 @@ class SummaryMemoryStrategy:
             msg = f"[summary] agent_client 为 None，无法 prepare (output_dir={output_dir})"
             raise VehicleMemBenchError(msg)
         daily = split_history_by_day(history_text)
-        async with semaphore:
-            memory_text, _, _ = await asyncio.to_thread(
-                build_memory_recursive_summary,
-                agent_client,
-                daily,
-            )
-        return {"type": BenchMemoryMode.SUMMARY, "memory": memory_text}
+        accumulated_memory = ""
+        sorted_dates = sorted(daily.keys())
+        for date_key in sorted_dates:
+            async with semaphore:
+                accumulated_memory, _, _ = await asyncio.to_thread(
+                    summarize_day_with_previous_memory,
+                    agent_client,
+                    date_key,
+                    daily[date_key],
+                    accumulated_memory,
+                )
+        return {"type": BenchMemoryMode.SUMMARY, "memory": accumulated_memory}
 
     async def create_evaluator(
         self,
