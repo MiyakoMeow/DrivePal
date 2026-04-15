@@ -52,9 +52,9 @@ class TestResetForgettingState:
         events[0]["last_recall_date"] = "2020-01-01"
         await store.events_store.write(events)
 
+        today = datetime.now(UTC).date().isoformat()
         await store.reset_forgetting_state()
 
-        today = datetime.now(UTC).date().isoformat()
         events = await store.events_store.read()
         assert events[0]["last_recall_date"] == today
 
@@ -120,9 +120,9 @@ class TestResetForgettingState:
         }
         await store.personality_store.write(personality_data)
 
+        today = datetime.now(UTC).date().isoformat()
         await store.reset_forgetting_state()
 
-        today = datetime.now(UTC).date().isoformat()
         personality = await store.personality_store.read()
         entry = personality["daily_personality"]["2025-01-01"]
         assert entry["last_recall_date"] == today
