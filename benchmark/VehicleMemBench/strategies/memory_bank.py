@@ -207,45 +207,43 @@ class MemoryBankStrategy:
         """构建记忆库存储."""
         store_dir = output_dir / "store"
         temp_dir = output_dir / f".store_temp_{uuid.uuid4().hex}"
-        async with semaphore:
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                chat_model = get_store_chat_model()
-                embedding_model = get_store_embedding_model()
-                store = MemoryBankStore(
-                    data_dir=temp_dir,
-                    chat_model=chat_model,
-                    embedding_model=embedding_model,
-                )
-                records = history_to_interaction_records(history_text)
-                if records:
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            chat_model = get_store_chat_model()
+            embedding_model = get_store_embedding_model()
+            store = MemoryBankStore(
+                data_dir=temp_dir,
+                chat_model=chat_model,
+                embedding_model=embedding_model,
+            )
+            records = history_to_interaction_records(history_text)
+            if records:
+                async with semaphore:
                     await store.write_batch(records)
-                await _fix_benchmark_recency(store)
-                if store_dir.exists():
-                    backup_dir = store_dir.with_suffix(f".bak_{temp_dir.name}")
-                    await asyncio.to_thread(
-                        shutil.move, str(store_dir), str(backup_dir)
-                    )
-                else:
-                    backup_dir = None
-                try:
-                    await asyncio.to_thread(shutil.move, str(temp_dir), str(store_dir))
-                except Exception:
-                    if backup_dir is not None:
-                        if store_dir.exists():
-                            await asyncio.to_thread(shutil.rmtree, store_dir)
-                        await asyncio.to_thread(
-                            shutil.move, str(backup_dir), str(store_dir)
-                        )
-                    raise
-                if backup_dir is not None and backup_dir.exists():
-                    try:
-                        await asyncio.to_thread(shutil.rmtree, backup_dir)
-                    except OSError as e:
-                        logger.warning("清理备份目录失败: %s: %s", backup_dir, e)
+            await _fix_benchmark_recency(store)
+            if store_dir.exists():
+                backup_dir = store_dir.with_suffix(f".bak_{temp_dir.name}")
+                await asyncio.to_thread(shutil.move, str(store_dir), str(backup_dir))
+            else:
+                backup_dir = None
+            try:
+                await asyncio.to_thread(shutil.move, str(temp_dir), str(store_dir))
             except Exception:
-                await asyncio.to_thread(shutil.rmtree, temp_dir, ignore_errors=True)
+                if backup_dir is not None:
+                    if store_dir.exists():
+                        await asyncio.to_thread(shutil.rmtree, store_dir)
+                    await asyncio.to_thread(
+                        shutil.move, str(backup_dir), str(store_dir)
+                    )
                 raise
+            if backup_dir is not None and backup_dir.exists():
+                try:
+                    await asyncio.to_thread(shutil.rmtree, backup_dir)
+                except OSError as e:
+                    logger.warning("清理备份目录失败: %s: %s", backup_dir, e)
+        except Exception:
+            await asyncio.to_thread(shutil.rmtree, temp_dir, ignore_errors=True)
+            raise
         return {"type": BenchMemoryMode.MEMORY_BANK, "data_dir": str(store_dir)}
 
     async def create_evaluator(
