@@ -30,6 +30,7 @@ exclude = [".agents/**", "vendor/**"]
     "RUF015",  # 测试中使用列表切片是常见做法
     "FURB171",  # 测试中成员测试是常见做法
     "RUF043",  # pytest.raises match参数中正则模式常见
+    "ANN",  # 测试方法无需类型注解
 ]
 
 [format]
