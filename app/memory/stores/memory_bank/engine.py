@@ -7,7 +7,7 @@ import time
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from app.memory.components import SUMMARY_WEIGHT, EventStorage, forgetting_curve
 from app.memory.schemas import InteractionResult, MemoryEvent, SearchResult
@@ -17,10 +17,21 @@ from app.memory.utils import cosine_similarity
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
+
+
+class _ManagerProtocol(Protocol):
+    """管理器协议（用于 _retry_summarize 类型标注）."""
+
+    def _compute_events_hash(self, events: list[dict]) -> str: ...
+
+    async def should_skip(self, date_group: str, content_hash: str) -> bool: ...
+
+    async def record_hash(self, date_group: str, content_hash: str) -> None: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +56,8 @@ _NAME_BONUS = 1.3
 _MAX_RECENCY_PENALTY = 0.7
 _RECENCY_DECAY_RATE = 0.003
 _MIN_NAME_LENGTH = 2
+MAX_RETRIES = 3
+RETRY_BASE_SECONDS = 2.0
 
 
 class MemoryBankEngine:
@@ -131,13 +144,102 @@ class MemoryBankEngine:
                 progress_fn(i + 1, len(events))
         all_events = await self._storage.read_events()
         interactions = await self._interactions_store.read()
-        for dg in sorted(new_date_groups):
-            group_events = [e for e in all_events if e.get("date_group") == dg]
-            await self._summary_mgr.maybe_summarize(
-                dg, group_events, self.chat_model, interactions
-            )
+        events_map: dict[str, list[dict]] = {}
+        for dg in new_date_groups:
+            events_map[dg] = [e for e in all_events if e.get("date_group") == dg]
+
+        summary_tasks = [
+            self._summarize_date_group(dg, events_map[dg], interactions)
+            for dg in sorted(new_date_groups)
+        ]
+        personality_tasks = [
+            self._summarize_personality_date_group(dg, events_map[dg], interactions)
+            for dg in sorted(new_date_groups)
+        ]
+        results = await asyncio.gather(
+            *summary_tasks, *personality_tasks, return_exceptions=True
+        )
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                if i < len(summary_tasks):
+                    dg = sorted(new_date_groups)[i]
+                    logger.error("[%s] _summarize_date_group failed: %s", dg, result)
+                else:
+                    j = i - len(summary_tasks)
+                    dg = sorted(new_date_groups)[j]
+                    logger.error(
+                        "[%s] _summarize_personality_date_group failed: %s", dg, result
+                    )
         self._speaker_names_cache = None
         return ids
+
+    async def _retry_summarize(
+        self,
+        date_group: str,
+        group_events: list[dict],
+        _interactions: list[dict],
+        manager: _ManagerProtocol,
+        summarize_coro: Callable[[], Awaitable[None]],
+    ) -> None:
+        """带重试的摘要任务共享逻辑.
+
+        Args:
+            date_group: 日期分组标识
+            group_events: 该分组的事件列表
+            _interactions: 交互记录列表（已通过闭包传递）
+            manager: SummaryManager 或 PersonalityManager 实例
+            summarize_coro: 实际执行摘要的协程函数
+
+        """
+        content_hash = manager._compute_events_hash(group_events)  # noqa: SLF001
+        if await manager.should_skip(date_group, content_hash):
+            return
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                await summarize_coro()
+                await manager.record_hash(date_group, content_hash)
+                return  # noqa: TRY300
+            except Exception:
+                if attempt == MAX_RETRIES - 1:
+                    coro_name = getattr(
+                        summarize_coro, "__name__", repr(summarize_coro)
+                    )
+                    logger.exception(
+                        "[%s] %s failed after %d retries",
+                        date_group,
+                        coro_name,
+                        MAX_RETRIES,
+                    )
+                await asyncio.sleep(RETRY_BASE_SECONDS * (attempt + 1))
+
+    async def _summarize_date_group(
+        self, date_group: str, group_events: list[dict], interactions: list[dict]
+    ) -> None:
+        """带重试的摘要任务."""
+        await self._retry_summarize(
+            date_group,
+            group_events,
+            interactions,
+            self._summary_mgr,
+            lambda: self._summary_mgr.maybe_summarize(
+                date_group, group_events, self.chat_model, interactions
+            ),
+        )
+
+    async def _summarize_personality_date_group(
+        self, date_group: str, group_events: list[dict], interactions: list[dict]
+    ) -> None:
+        """带重试的人格分析任务."""
+        await self._retry_summarize(
+            date_group,
+            group_events,
+            interactions,
+            self._personality_mgr,
+            lambda: self._personality_mgr.maybe_summarize(
+                date_group, group_events, interactions, self.chat_model
+            ),
+        )
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆事件与摘要."""

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from app.memory.components import SUMMARY_WEIGHT, forgetting_curve
 from app.memory.schemas import SearchResult
+from app.memory.utils import compute_events_hash
 from app.storage.toml_store import TOMLStore
 
 if TYPE_CHECKING:
@@ -30,12 +31,29 @@ class SummaryManager:
             lambda: {"daily_summaries": {}, "overall_summary": ""},
         )
         self._lock = asyncio.Lock()
+        self._content_lock = asyncio.Lock()
+        self._content_hashes: dict[str, str] = {}
         self._inflight_daily_summaries: set[str] = set()
 
     @property
     def summaries_store(self) -> TOMLStore:
         """摘要存储."""
         return self._summaries_store
+
+    @staticmethod
+    def _compute_events_hash(events: list[dict]) -> str:
+        """计算事件内容的 SHA256 hash（委托给共享工具函数）."""
+        return compute_events_hash(events)
+
+    async def should_skip(self, date_group: str, content_hash: str) -> bool:
+        """判断是否跳过（在锁内检查）."""
+        async with self._content_lock:
+            return self._content_hashes.get(date_group) == content_hash
+
+    async def record_hash(self, date_group: str, content_hash: str) -> None:
+        """记录 hash（在锁内写入）."""
+        async with self._content_lock:
+            self._content_hashes[date_group] = content_hash
 
     async def search_summaries(
         self,
