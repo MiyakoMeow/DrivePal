@@ -85,6 +85,11 @@
       "source": "wshobson/agents",
       "sourceType": "github",
       "computedHash": "0a68c672384c5c6aa7acb286c18f8eb9dce53a058062a8951ac0adca4d01d4ea"
+    },
+    "skill-thesis-writer": {
+      "source": "yanlin-cheng/skill-thesis-writer",
+      "sourceType": "github",
+      "computedHash": "c71442307be462e85a1a24f075769d7b91d035f8e72864a2ac7b75a0c0855088"
     }
   }
 }
