@@ -24,20 +24,21 @@
         packages = [
           python
           pkgs.uv
+          pkgs.ruff
+          pkgs.ty
         ];
 
         env = {
           UV_PYTHON = python.interpreter;
           UV_NO_SYNC = "1";
           UV_PYTHON_DOWNLOADS = "never";
+          NIX_LD_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
         };
 
         shellHook = ''
           unset PYTHONPATH
           export REPO_ROOT=$(git rev-parse --show-toplevel)
-          export LD_LIBRARY_PATH="${
-            pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ]
-          }:$LD_LIBRARY_PATH"
+          export LD_LIBRARY_PATH="$NIX_LD_PATH:$LD_LIBRARY_PATH"
         '';
       };
     };
