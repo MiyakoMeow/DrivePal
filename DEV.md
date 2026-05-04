@@ -7,14 +7,11 @@
 所有 LLM、Embedding 模型配置统一在 `config/llm.toml` 管理，Python 侧由 `app/models/settings.py` 加载（`LLMSettings.load()`）。配置采用 **model_groups + model_providers** 组合模式：
 
 - **model_providers**：定义 provider（`base_url`/`api_key`/`api_key_env`），如 `local`、`minimax-cn`、`deepseek`
-- **model_groups**：通过 `"provider/model?params"` 字符串引用 provider，如 `default`、`benchmark`、`smart`、`fast`、`balanced`
+- **model_groups**：通过 `"provider/model?params"` 字符串引用 provider，如 `default`、`smart`、`fast`、`balanced`
 
 ```toml
 [model_groups.default]
 models = ["local/qwen3.5-2b"]
-
-[model_groups.benchmark]
-models = ["local/qwen3.5-2b?temperature=0.0&max_tokens=8192"]
 
 [model_providers.local]
 base_url = "http://127.0.0.1:50721/v1"
@@ -34,18 +31,6 @@ model = "local/text-embedding-bge-m3"
 - `concurrency`：每个 provider 的最大并发请求数（默认 4），使用 semaphore 实现
 - 当同一 provider 被多个 model_groups 引用时，共享同一个 semaphore
 
-**Judge 模型配置：**
-
-可选配置独立的 judge 评估模型（用于 benchmark 评估），支持配置文件或环境变量：
-
-```toml
-[judge]
-model = "local/qwen3.5-2b"
-temperature = 0.1
-```
-
-环境变量覆盖：`JUDGE_MODEL`、`JUDGE_BASE_URL`、`JUDGE_API_KEY`、`JUDGE_TEMPERATURE`
-
 **HTTP 客户端超时：**
 - `app/models/_http.py` 统一配置所有 LLM/Embedding HTTP 客户端超时
 - read timeout 设为 12 小时，避免长时推理任务中途断开
@@ -61,9 +46,7 @@ temperature = 0.1
 | `MINIMAX_API_KEY` | MiniMax provider API Key（用于 `balanced` 模型组） |
 | `DEEPSEEK_API_KEY` | DeepSeek provider API Key（用于 `smart` 模型组） |
 | `ZHIPU_API_KEY` | 智谱 provider API Key（用于 `fast` 模型组） |
-| `JUDGE_MODEL` | Judge 评估模型（如 `local/qwen3.5-2b`） |
-| `BENCHMARK_QUERY_CONCURRENCY` | Benchmark 评估查询并发数（默认 `4`） |
-| `BENCHMARK_SEARCH_TIMEOUT` | Benchmark memory_bank 搜索超时秒数（默认 `43200`） |
+
 
 ---
 
@@ -194,11 +177,6 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 | 文件 | 说明 |
 |------|------|
-| `tests/test_benchmark/test_common.py` | 适配器通用工具函数 |
-| `tests/test_benchmark/test_model_config.py` | 模型字符串解析 |
-| `tests/test_benchmark/test_runner.py` | VehicleMemBench 运行器 |
-| `tests/test_benchmark/test_reporter_md.py` | 结果收集与 Markdown 报告生成 |
-| `tests/test_benchmark/test_strategies.py` | 记忆策略注册表与接口 |
 | `tests/stores/test_memory_bank_store.py` | MemoryBank 后端 |
 | `tests/test_context_schemas.py` | 驾驶上下文数据模型 |
 | `tests/test_graphql.py` | GraphQL 端点测试 |
@@ -229,7 +207,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 | **记忆系统** | MemoryBank (Ebbinghaus遗忘曲线+分层摘要+个性分析) |
 | **数据存储** | TOML文件 (tomllib + tomli-w) |
 | **数据集** | HuggingFace Datasets |
-| **基准测试** | VehicleMemBench (vendor 子模块) |
+
 | **开发工具** | uv (包管理), pytest (测试, asyncio_mode=auto), ruff (lint, 扩展规则集), ty (类型检查) |
 
 ---

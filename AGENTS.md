@@ -31,10 +31,4 @@
 
 - `README.md` — 项目概述、功能介绍、快速开始指南
 - `DEV.md` — 开发指南（配置、API、测试）及 MemoryBank 实现差异分析
-- `BENCHMARK.md` — 基准测试使用说明与结果分析
-- `BENCHMARK-VehicleMemBench.md` — VehicleMemBench 基准测试框架说明
-
-## 注意事项
-
-- 禁止修改 `vendor` 目录下的 `VehicleMemBench` 子模块中的文件。
 
