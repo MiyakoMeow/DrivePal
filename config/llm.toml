@@ -1,9 +1,6 @@
 [model_groups.default]
 models = ["openrouter/qwen/qwen3.5-9b?temperature=0.0"]
 
-[model_groups.benchmark]
-models = ["openrouter/qwen/qwen3.5-9b?temperature=0.0"]
-
 [model_groups.smart]
 models = ["deepseek/deepseek-chat?temperature=0.0"]
 

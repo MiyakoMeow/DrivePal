@@ -1,6 +1,6 @@
 # 知行车秘 - 车载AI智能体原型系统
 
-基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略的基准评估（基于 VehicleMemBench 基准测试框架）。
+基于大语言模型的车载智能提醒与日程管理智能体，支持多种记忆检索策略的基准评估。
 
 ---
 
@@ -12,9 +12,8 @@
   - [多Agent工作流](#1-多agent工作流)
   - [上下文注入与规则引擎](#2-上下文注入与规则引擎)
   - [记忆检索系统](#3-记忆检索系统)
-  - [基准测试](#4-基准测试)
-  - [GraphQL API](#5-graphql-api)
-  - [模拟测试工作台](#6-模拟测试工作台)
+  - [GraphQL API](#4-graphql-api)
+  - [模拟测试工作台](#5-模拟测试工作台)
 - [快速开始](#快速开始)
 - [开发指南](#开发指南)
 - [License](#license)
@@ -78,28 +77,11 @@ thesis-cockpit-memo/
 │   ├── storage/                  # 存储模块
 │   │   ├── toml_store.py         # TOML文件存储引擎
 │   │   └── init_data.py          # 数据目录初始化
-├── benchmark/               # VehicleMemBench适配器层
-│   └── VehicleMemBench/
-│       ├── __init__.py           # BenchMemoryMode 枚举
-│       ├── model_config.py       # 模型字符串解析（provider/model?params）
-│       ├── runner.py             # VehicleMemBench运行器（编排层）
-│       ├── loader.py             # QA/历史/prep数据异步加载
-│       ├── paths.py              # 路径常量与sys.path初始化
-│       ├── reporter.py           # 结果收集与Markdown报告生成
-│       └── strategies/           # 记忆策略实现（策略模式）
-│           ├── none.py           #   无记忆策略
-│           ├── gold.py           #   黄金记忆策略
-│           ├── kv.py             #   键值存储策略
-│           ├── memory_bank.py    #   MemoryBank策略
-│           ├── common.py         #   策略共享工具
-│           └── exceptions.py     #   策略异常定义
 ├── config/                       # 配置文件
 │   └── llm.toml                  # 模型组+Provider配置
 ├── data/                         # 数据目录（运行时生成）
-├── vendor/VehicleMemBench        # 基准测试子模块
 ├── tests/                        # 测试
 ├── webui/                        # 模拟测试工作台（Web UI）
-├── run_benchmark.py              # VehicleMemBench CLI
 ├── main.py                       # 服务入口
 └── pyproject.toml                # 项目配置
 ```
@@ -231,13 +213,7 @@ flowchart TD
 
 ---
 
-### 4. 基准测试
-
-详见 [BENCHMARK.md](./BENCHMARK.md)。
-
----
-
-### 5. GraphQL API
+### 4. GraphQL API
 
 基于 [Strawberry GraphQL](https://strawberry.rocks/) 的 code-first GraphQL API，与 FastAPI 集成。
 
@@ -306,7 +282,7 @@ mutation { deleteScenarioPreset(id: "abc123") }
 
 ---
 
-### 6. 模拟测试工作台
+### 5. 模拟测试工作台
 
 基于纯 HTML/CSS/JavaScript 的单页应用，作为场景模拟与工作流调试工具：
 
