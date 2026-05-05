@@ -260,7 +260,7 @@ class RetrievalPipeline:
                     old = _safe_memory_strength(
                         metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
                     )
-                    metadata[mi]["memory_strength"] = old + 1.0
+                    metadata[mi]["memory_strength"] = min(old + 1.0, 10.0)
 
         for r in merged:
             _clean_search_result(r)

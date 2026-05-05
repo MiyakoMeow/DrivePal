@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 GENERATION_EMPTY = "GENERATION_EMPTY"
-_GENERATION_EMPTY = GENERATION_EMPTY  # 向后兼容
 _SUMMARY_SYSTEM_PROMPT = (
     "You are an in-car AI assistant with expertise in remembering "
     "vehicle preferences, driving habits, and in-car conversation context."
@@ -72,7 +71,11 @@ class Summarizer:
         daily_sums = [m for m in meta if m.get("type") == "daily_summary"]
         if not daily_sums:
             return None
-        parts = ["Please provide a highly concise summary..."]
+        parts = [
+            "Please provide a highly concise summary of the following in-car "
+            "conversation summaries, capturing the essential vehicle preferences, "
+            "user habits, and key information as succinctly as possible."
+        ]
         parts.extend(f"\n{m.get('text', '')}" for m in daily_sums)
         parts.append("\nSummarization: ")
         result = await self._llm.call(
@@ -81,7 +84,7 @@ class Summarizer:
         if result:
             extra["overall_summary"] = result
             return result
-        extra["overall_summary"] = _GENERATION_EMPTY
+        extra["overall_summary"] = GENERATION_EMPTY
         return None
 
     async def get_daily_personality(self, date_key: str) -> str | None:
@@ -136,7 +139,7 @@ class Summarizer:
         if result:
             extra["overall_personality"] = result
             return result
-        extra["overall_personality"] = _GENERATION_EMPTY
+        extra["overall_personality"] = GENERATION_EMPTY
         return None
 
     @staticmethod
