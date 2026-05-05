@@ -78,6 +78,9 @@ class MemoryBankStore:
         self, query: str, response: str, event_type: str = "reminder"
     ) -> InteractionResult:
         """记录一次交互到记忆库."""
+        if not self._embedding_model:
+            msg = "embedding_model required"
+            raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
@@ -106,6 +109,8 @@ class MemoryBankStore:
         return InteractionResult(event_id=str(fid))
 
     async def _background_summarize(self, date_key: str) -> None:
+        if not self._summarizer or not self._embedding_model:
+            return
         try:
             text = await self._summarizer.get_daily_summary(date_key)
             if text:
@@ -165,6 +170,9 @@ class MemoryBankStore:
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件."""
+        if not self._embedding_model:
+            msg = "embedding_model required"
+            raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
