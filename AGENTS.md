@@ -22,7 +22,7 @@
 
 ### Python 版本说明
 
-- `except ValueError, TypeError:` 是 Python 3.14 新增的 PEP-3110 语法（允许逗号分隔多异常类型），
+- `except ValueError, TypeError:` 是 Python 3.14 新增的语法（允许逗号分隔多异常类型），
   非 Python 2 残留。ruff 已默认禁用对此语法的旧式检查。
 
 ## 代码规范
