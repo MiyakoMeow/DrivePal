@@ -99,6 +99,9 @@ class Summarizer:
         """
         extra = self._index.get_extra()
         existing = extra.setdefault("daily_personalities", {})
+        if not isinstance(existing, dict):
+            existing = {}
+            extra["daily_personalities"] = existing
         if date_key in existing:
             return None
         texts = [
@@ -128,7 +131,7 @@ class Summarizer:
         if extra.get("overall_personality"):
             return None
         dailies = extra.get("daily_personalities", {})
-        if not dailies:
+        if not isinstance(dailies, dict) or not dailies:
             return None
         parts = ["The following are analyses..."]
         parts.extend(f"\nAt {date}, {text}" for date, text in sorted(dailies.items()))
