@@ -220,8 +220,10 @@ class RetrievalPipeline:
         self._embedding_model = embedding_model
         self._chunk_size = _resolve_chunk_size()
 
-    async def search(self, query: str, top_k: int = 5) -> list[dict]:
+    async def search(self, query: str, top_k: int = 5) -> list[dict]:  # noqa: C901
         """执行四阶段检索管道。"""
+        if top_k <= 0:
+            return []
         query_emb = await self._embedding_model.encode(query)
         index_total = self._index.total
         if index_total == 0:
@@ -241,7 +243,7 @@ class RetrievalPipeline:
         # 此处不再重复调用。
 
         merged = self._apply_speaker_filter(merged, query)
-
+        merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
         for r in merged:
@@ -255,7 +257,7 @@ class RetrievalPipeline:
                     all_mi.append(mi)
             for mi in all_mi:
                 if 0 <= mi < len(metadata):
-                    old = float(
+                    old = _safe_memory_strength(
                         metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
                     )
                     metadata[mi]["memory_strength"] = old + 1.0
@@ -360,7 +362,10 @@ class RetrievalPipeline:
     def _apply_speaker_filter(self, results: list[dict], query: str) -> list[dict]:
         ql = query.lower()
         speakers_in_query = {
-            s for r in results for s in (r.get("speakers") or []) if s.lower() in ql
+            s
+            for r in results
+            for s in (r.get("speakers") or [])
+            if _word_in_text(s.lower(), ql)
         }
         if not speakers_in_query:
             return results
