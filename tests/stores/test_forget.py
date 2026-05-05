@@ -3,6 +3,7 @@
 import pytest
 
 from app.memory.stores.memory_bank.forget import (
+    ForgetMode,
     ForgettingCurve,
     forgetting_retention,
 )
@@ -93,3 +94,83 @@ class TestForgettingCurve:
         entries[0]["forgotten"] = False
         fc.maybe_forget(entries, reference_date="2026-05-05")
         assert entries[0].get("forgotten") is False  # 节流，未执行遗忘
+
+
+class TestProbabilisticForgetting:
+    """概率性遗忘模式测试。"""
+
+    def test_probabilistic_maybe_forget_returns_ids(self):
+        """概率模式下 maybe_forget 返回被遗忘条目的 FAISS ID。"""
+        fc = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        entries = [
+            {
+                "faiss_id": 0,
+                "memory_strength": 1,
+                "timestamp": "2026-01-01T00:00:00",
+                "last_recall_date": "2026-01-01",
+            },
+            {
+                "faiss_id": 1,
+                "memory_strength": 5,
+                "timestamp": "2026-05-05T00:00:00",
+                "last_recall_date": "2026-05-05",
+            },
+        ]
+        ids = fc.maybe_forget(entries, reference_date="2026-05-05")
+        # 第一条 strength=1, 125天 → retention≈0, 必遗忘
+        assert 0 in ids
+        assert entries[0].get("forgotten") is True
+
+    def test_deterministic_returns_empty_ids(self):
+        """确定性模式 maybe_forget 返回空列表。"""
+        fc = ForgettingCurve(mode=ForgetMode.DETERMINISTIC)
+        entries = [
+            {
+                "faiss_id": 0,
+                "memory_strength": 1,
+                "timestamp": "2026-01-01T00:00:00",
+                "last_recall_date": "2026-01-01",
+            },
+        ]
+        ids = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert ids == []
+
+    def test_summary_exempt_in_probabilistic(self):
+        """概率模式下每日摘要豁免遗忘。"""
+        fc = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        entries = [
+            {
+                "faiss_id": 0,
+                "memory_strength": 1,
+                "timestamp": "2026-01-01T00:00:00",
+                "type": "daily_summary",
+            },
+        ]
+        ids = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert ids == []
+
+    def test_probabilistic_reproducible_with_seed(self):
+        """固定 seed 产生可复现的遗忘结果。"""
+        fc1 = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        fc2 = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        entries1 = [
+            {
+                "faiss_id": i,
+                "memory_strength": 2,
+                "timestamp": "2026-03-01T00:00:00",
+                "last_recall_date": "2026-03-01",
+            }
+            for i in range(20)
+        ]
+        entries2 = [
+            {
+                "faiss_id": i,
+                "memory_strength": 2,
+                "timestamp": "2026-03-01T00:00:00",
+                "last_recall_date": "2026-03-01",
+            }
+            for i in range(20)
+        ]
+        ids1 = fc1.maybe_forget(entries1, reference_date="2026-05-05")
+        ids2 = fc2.maybe_forget(entries2, reference_date="2026-05-05")
+        assert ids1 == ids2

@@ -100,7 +100,10 @@ class MemoryBankStore:
             },
         )
         if self._forgetting_enabled:
-            self._forget.maybe_forget(self._index.get_metadata())
+            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
+            if forgotten_ids:
+                await self._index.remove_vectors(forgotten_ids)
+                await self._index.save()
         await self._index.save()
         if self._summarizer:
             task = asyncio.create_task(self._background_summarize(date_key))
@@ -135,7 +138,9 @@ class MemoryBankStore:
         if self._index.total == 0 or not self._retrieval:
             return []
         if self._forgetting_enabled:
-            self._forget.maybe_forget(self._index.get_metadata())
+            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
+            if forgotten_ids:
+                await self._index.remove_vectors(forgotten_ids)
         results = await self._retrieval.search(query, top_k)
         extra = self._index.get_extra()
         prepend = []
@@ -191,7 +196,10 @@ class MemoryBankStore:
             },
         )
         if self._forgetting_enabled:
-            self._forget.maybe_forget(self._index.get_metadata())
+            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
+            if forgotten_ids:
+                await self._index.remove_vectors(forgotten_ids)
+                await self._index.save()
         await self._index.save()
         if self._summarizer:
             task = asyncio.create_task(self._background_summarize(date_key))
