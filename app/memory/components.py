@@ -66,7 +66,8 @@ class FeedbackManager:
         async with _strategy_locks_lock:
             if str(self.data_dir) not in _strategy_locks:
                 _strategy_locks[str(self.data_dir)] = asyncio.Lock()
-            return _strategy_locks[str(self.data_dir)]
+            lock = _strategy_locks[str(self.data_dir)]
+        return lock  # noqa: RET504 — return 故意移出 async with 块
 
     async def _write_feedback(self, feedback: FeedbackData) -> None:
         """写入反馈记录."""
