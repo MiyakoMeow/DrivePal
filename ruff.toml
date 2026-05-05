@@ -17,7 +17,7 @@ ignore = [
     "RUF002",  # docstring全角字符检查（中文项目无需修改）
     "RUF003",  # 注释全角字符检查（中文项目无需修改）
 ]
-exclude = [".agents/**", "vendor/**"]
+exclude = [".agents/**"]
 
 [lint.per-file-ignores]
 "adapters/runner.py" = ["E402"]
@@ -33,4 +33,4 @@ exclude = [".agents/**", "vendor/**"]
 ]
 
 [format]
-exclude = ["vendor/**", ".agents/**"]
+exclude = [".agents/**"]

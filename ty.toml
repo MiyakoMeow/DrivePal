@@ -1,8 +1,8 @@
 [src]
-exclude = [".agents/**", "vendor/**"]
+exclude = [".agents/**"]
 
 [analysis]
-allowed-unresolved-imports = ["evaluation.**"]
+replace-imports-with-any = ["faiss"]
 
 [rules]
 all = "error"

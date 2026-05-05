@@ -6,6 +6,10 @@
 
 - 使用 `Python 3.14` + `uv`。
 
+### Nix 环境提示
+
+如果当前系统为 NixOS，请使用 `nix develop --command` 运行命令。
+
 ## 检查配置：
 
 - 每次修改后：
@@ -31,4 +35,3 @@
 
 - `README.md` — 项目概述、功能介绍、快速开始指南
 - `DEV.md` — 开发指南（配置、API、测试）及 MemoryBank 实现差异分析
-
