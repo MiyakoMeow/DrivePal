@@ -8,7 +8,8 @@ if TYPE_CHECKING:
     from .llm import LlmClient
 
 logger = logging.getLogger(__name__)
-_GENERATION_EMPTY = "GENERATION_EMPTY"
+GENERATION_EMPTY = "GENERATION_EMPTY"
+_GENERATION_EMPTY = GENERATION_EMPTY  # 向后兼容
 _SUMMARY_SYSTEM_PROMPT = (
     "You are an in-car AI assistant with expertise in remembering "
     "vehicle preferences, driving habits, and in-car conversation context."

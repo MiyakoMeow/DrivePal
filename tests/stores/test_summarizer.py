@@ -9,7 +9,7 @@ import pytest
 from app.memory.stores.memory_bank.faiss_index import FaissIndex
 from app.memory.stores.memory_bank.summarizer import Summarizer
 
-pytestmark = pytest.mark.test_llm
+TEST_EMBEDDING = [0.1] * 1536
 
 
 @pytest.mark.asyncio
@@ -20,7 +20,7 @@ async def test_get_daily_summary_returns_text():
         await idx.load()
         await idx.add_vector(
             "Gary likes seat at 30",
-            [0.1] * 1536,
+            TEST_EMBEDDING,
             "2024-06-15T00:00:00",
             {"source": "2024-06-15"},
         )
@@ -41,7 +41,7 @@ async def test_get_daily_summary_returns_none_when_exists():
         await idx.load()
         await idx.add_vector(
             "test",
-            [0.1] * 1536,
+            TEST_EMBEDDING,
             "2024-06-15T00:00:00",
             {"source": "summary_2024-06-15", "type": "daily_summary"},
         )
@@ -58,7 +58,7 @@ async def test_get_daily_summary_none_on_empty_llm():
         idx = FaissIndex(Path(tmp))
         await idx.load()
         await idx.add_vector(
-            "test", [0.1] * 1536, "2024-06-15T00:00:00", {"source": "2024-06-15"}
+            "test", TEST_EMBEDDING, "2024-06-15T00:00:00", {"source": "2024-06-15"}
         )
         mock_llm = AsyncMock()
         mock_llm.call = AsyncMock(return_value=None)

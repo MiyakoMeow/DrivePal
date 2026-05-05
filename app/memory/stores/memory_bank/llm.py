@@ -11,8 +11,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 LLM_MAX_RETRIES = 3
-LLM_MAX_TOKENS = 400
-LLM_TEMPERATURE = 0.7
 LLM_TRIM_START = 1800
 LLM_TRIM_STEP = 200
 LLM_TRIM_MIN = 500
@@ -28,7 +26,7 @@ class LlmClient:
     async def call(
         self, prompt: str, *, system_prompt: str | None = None
     ) -> str | None:
-        """调用 ChatModel.generate()，重试时自动截断 prompt 末尾上下文。
+        """调用 ChatModel.generate()，重试时自动截断 prompt 头部（保留末尾最新内容）。
 
         AllProviderFailedError 外的不明异常会传播到上层，不在此处静默吞掉。
         """

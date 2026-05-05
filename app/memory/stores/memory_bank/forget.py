@@ -24,8 +24,10 @@ def forgetting_retention(days_elapsed: float, strength: float) -> float:
         0~1 的留存率。
 
     """
-    if days_elapsed <= 0 or strength <= 0:
-        return 1.0 if days_elapsed <= 0 else 0.0
+    if days_elapsed <= 0:
+        return 1.0
+    if strength <= 0:
+        return 0.0
     return math.exp(-days_elapsed / (FORGETTING_TIME_SCALE * strength))
 
 

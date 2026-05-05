@@ -18,7 +18,7 @@ from app.memory.stores.memory_bank.faiss_index import FaissIndex
 from app.memory.stores.memory_bank.forget import ForgettingCurve
 from app.memory.stores.memory_bank.llm import LlmClient
 from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
-from app.memory.stores.memory_bank.summarizer import Summarizer
+from app.memory.stores.memory_bank.summarizer import GENERATION_EMPTY, Summarizer
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -135,7 +135,7 @@ class MemoryBankStore:
             return []
         if self._forgetting_enabled:
             self._forget.maybe_forget(self._index.get_metadata())
-        results = await self._retrieval.search(query, top_k + 1)
+        results = await self._retrieval.search(query, top_k)
         extra = self._index.get_extra()
         prepend = []
         for key, label in [
@@ -143,7 +143,7 @@ class MemoryBankStore:
             ("overall_personality", "User vehicle preferences and habits"),
         ]:
             val = extra.get(key, "")
-            if val and val != "GENERATION_EMPTY":
+            if val and val != GENERATION_EMPTY:
                 prepend.append(f"{label}: {val}")
         out: list[SearchResult] = []
         if prepend:
@@ -164,7 +164,7 @@ class MemoryBankStore:
                 score=float(r.get("score", 0.0)),
                 source=r.get("source", "event"),
             )
-            for r in results
+            for r in results[: max(0, top_k - len(prepend))]
         )
         return out
 

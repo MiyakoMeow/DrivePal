@@ -289,15 +289,20 @@ class RetrievalPipeline:
 
             pos = meta_idx + 1
             while pos < len(metadata) and metadata[pos].get("source") == source:
-                neighbor_indices.append(pos)
+                if not metadata[pos].get("forgotten"):
+                    neighbor_indices.append(pos)
                 pos += 1
 
             pos = meta_idx - 1
             while pos >= 0 and metadata[pos].get("source") == source:
-                neighbor_indices.append(pos)
+                if not metadata[pos].get("forgotten"):
+                    neighbor_indices.append(pos)
                 pos -= 1
 
             neighbor_indices.sort()
+            # 确保原始命中点始终在候选列表中（可能已被跳过）
+            if meta_idx not in neighbor_indices:
+                neighbor_indices.insert(0, meta_idx)
 
             trim_queue = deque(neighbor_indices)
             total = sum(len(metadata[i].get("text", "")) for i in trim_queue)
