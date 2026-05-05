@@ -9,6 +9,8 @@ from app.memory.schemas import FeedbackData, MemoryEvent
 from app.storage.init_data import init_storage
 from app.storage.toml_store import TOMLStore
 
+pytestmark = [pytest.mark.embedding]
+
 # 接受反馈后 meeting 策略权重目标值
 MEETING_WEIGHT_AFTER_ACCEPT = 0.6
 # 忽略反馈后 general 策略权重上限

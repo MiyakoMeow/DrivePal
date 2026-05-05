@@ -136,6 +136,7 @@ def test_feedback_invalid_action(isolated_app: TestClient) -> None:
     assert "errors" in result
 
 
+@pytest.mark.embedding
 async def test_feedback_success_updates_strategy_weight(
     isolated_app: TestClient,
 ) -> None:

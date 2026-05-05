@@ -33,8 +33,8 @@ class ForgettingCurve:
     """管理遗忘曲线判定逻辑，控制执行频率。"""
 
     def __init__(self) -> None:
-        """初始化遗忘曲线，重置计时器。"""
-        self._last_forget_time: float = 0.0
+        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。"""
+        self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
 
     def maybe_forget(
         self, metadata: list[dict], reference_date: str | None = None
