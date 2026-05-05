@@ -73,7 +73,13 @@ class FaissIndex:
                 if ep.exists():
                     e: dict = json.loads(ep.read_text())
                     self._extra = e if isinstance(e, dict) else {}
-            except Exception as exc:  # noqa: BLE001
+            except (
+                json.JSONDecodeError,
+                OSError,
+                TypeError,
+                ValueError,
+                RuntimeError,
+            ) as exc:
                 logger.warning("FaissIndex corrupted, removing bad files: %s", exc)
                 ip.unlink(missing_ok=True)
                 mp.unlink(missing_ok=True)
