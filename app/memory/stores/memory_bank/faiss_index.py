@@ -74,7 +74,10 @@ class FaissIndex:
                     e: dict = json.loads(ep.read_text())
                     self._extra = e if isinstance(e, dict) else {}
             except Exception as exc:  # noqa: BLE001
-                logger.warning("FaissIndex corrupted, deferring rebuild: %s", exc)
+                logger.warning("FaissIndex corrupted, removing bad files: %s", exc)
+                ip.unlink(missing_ok=True)
+                mp.unlink(missing_ok=True)
+                ep.unlink(missing_ok=True)
 
     async def save(self) -> None:
         """将索引与元数据持久化到磁盘。"""
@@ -189,7 +192,7 @@ class FaissIndex:
         self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(self._metadata)}
 
     def get_metadata(self) -> list[dict]:
-        """返回所有元数据。"""
+        """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）。"""
         return self._metadata
 
     def get_extra(self) -> dict:
