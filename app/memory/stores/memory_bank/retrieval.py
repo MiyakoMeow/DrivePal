@@ -220,7 +220,7 @@ class RetrievalPipeline:
         self._embedding_model = embedding_model
         self._chunk_size = _resolve_chunk_size()
 
-    async def search(self, query: str, top_k: int = 5) -> list[dict]:  # noqa: C901
+    async def search(self, query: str, top_k: int = 5) -> list[dict]:  # noqa: C901, PLR0912
         """执行四阶段检索管道。"""
         if top_k <= 0:
             return []
@@ -246,6 +246,7 @@ class RetrievalPipeline:
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
+        updated = False
         for r in merged:
             all_mi: list[int] = []
             ai = r.get("_all_meta_indices")
@@ -260,11 +261,15 @@ class RetrievalPipeline:
                     old = _safe_memory_strength(
                         metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
                     )
-                    metadata[mi]["memory_strength"] = min(old + 1.0, 10.0)
+                    capped = min(old + 1.0, 10.0)
+                    if capped != old:
+                        metadata[mi]["memory_strength"] = capped
+                        updated = True
 
         for r in merged:
             _clean_search_result(r)
-        await self._index.save()
+        if updated:
+            await self._index.save()
         return merged
 
     def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:  # noqa: C901, PLR0912, PLR0915
