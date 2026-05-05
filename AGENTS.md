@@ -20,6 +20,11 @@
 - 任务完成后：
   1. `uv run pytest`（不要加参数）
 
+### Python 版本说明
+
+- `except ValueError, TypeError:` 是 Python 3.14 新增的 PEP-758 语法（允许逗号分隔多异常类型），
+  非 Python 2 残留。ruff 已默认禁用对此语法的旧式检查。
+
 ## 代码规范
 
 ### 代码注释
