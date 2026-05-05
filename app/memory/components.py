@@ -1,92 +1,17 @@
 """MemoryStore 可组合组件."""
 
 import asyncio
-import math
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from app.memory.schemas import (
     FeedbackData,
-    InteractionResult,
-    MemoryEvent,
     SearchResult,
 )
 from app.storage.toml_store import TOMLStore
 
 SUMMARY_WEIGHT = 0.8
-
-
-class ActionRequiredError(ValueError):
-    """action 字段为必需的异常."""
-
-    MSG = "action is required"
-
-    def __init__(self) -> None:
-        """初始化异常，使用类常量消息."""
-        super().__init__(self.MSG)
-
-
-DEFAULT_DECAY_BASE = 5
-
-
-def forgetting_curve(
-    days_elapsed: int,
-    strength: int,
-    decay_base: int = DEFAULT_DECAY_BASE,
-) -> float:
-    """遗忘曲线衰减函数."""
-    if days_elapsed <= 0:
-        return 1.0
-    if strength <= 0:
-        return 0.0
-    if decay_base <= 0:
-        return 0.0
-    return math.exp(-days_elapsed / (decay_base * strength))
-
-
-class EventStorage:
-    """事件 JSON 文件 CRUD + ID 生成."""
-
-    def __init__(self, data_dir: Path) -> None:
-        """初始化事件存储."""
-        self._store = TOMLStore(data_dir, Path("events.toml"), list)
-        self.data_dir = data_dir
-
-    @property
-    def store(self) -> TOMLStore:
-        """事件存储."""
-        return self._store
-
-    def generate_id(self) -> str:
-        """生成唯一事件 ID."""
-        return f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-
-    async def read_events(self) -> list[dict]:
-        """读取所有事件."""
-        return await self._store.read()
-
-    async def write_events(self, events: list[dict]) -> None:
-        """覆写全部事件."""
-        await self._store.write(events)
-
-    async def append_event(self, event: MemoryEvent) -> str:
-        """追加事件并返回 ID."""
-        event = event.model_copy(deep=True)
-        event.id = self.generate_id()
-        event.created_at = datetime.now(UTC).isoformat()
-        await self._store.append(event.model_dump())
-        return event.id
-
-    async def append_raw(self, event: dict) -> None:
-        """追加原始事件字典."""
-        await self._store.append(event)
-
-    async def find_event_by_id(self, event_id: str) -> dict | None:
-        """按 ID 查找事件."""
-        events = await self.read_events()
-        return next((e for e in events if e.get("id") == event_id), None)
 
 
 class KeywordSearch:
@@ -107,6 +32,16 @@ class KeywordSearch:
             or query_lower in e.get("description", "").lower()
         ]
         return [SearchResult(event=e) for e in matched[:top_k]]
+
+
+class ActionRequiredError(ValueError):
+    """action 字段为必需的异常."""
+
+    MSG = "action is required"
+
+    def __init__(self) -> None:
+        """初始化异常,使用类常量消息."""
+        super().__init__(self.MSG)
 
 
 _strategy_locks: dict[str, asyncio.Lock] = {}
@@ -171,26 +106,3 @@ class FeedbackManager:
         async with lock:
             await self._write_feedback(feedback)
             await self._update_strategy(feedback.type, feedback.action)
-
-
-class SimpleInteractionWriter:
-    """简单交互写入（创建 MemoryEvent 写入 EventStorage）."""
-
-    def __init__(self, storage: EventStorage) -> None:
-        """初始化交互写入器."""
-        self._storage = storage
-
-    async def write_interaction(
-        self,
-        query: str,
-        response: str,
-        event_type: str = "reminder",
-    ) -> InteractionResult:
-        """写入交互记录."""
-        event = MemoryEvent(
-            content=query,
-            type=event_type,
-            description=response,
-        )
-        event_id = await self._storage.append_event(event)
-        return InteractionResult(event_id=event_id)

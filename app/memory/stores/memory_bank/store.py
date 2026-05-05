@@ -1,27 +1,46 @@
-"""记忆库后端，基于遗忘曲线的记忆存储、聚合与摘要功能."""
+"""基于 FAISS 的记忆存储，MemoryStore Protocol 实现。"""
 
+import asyncio
+import contextlib
+import logging
+import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from app.memory.components import EventStorage, FeedbackManager
+from app.memory.components import FeedbackManager
 from app.memory.schemas import (
     FeedbackData,
     InteractionResult,
     MemoryEvent,
     SearchResult,
 )
-from app.memory.stores.memory_bank.engine import MemoryBankEngine
+from app.memory.stores.memory_bank.faiss_index import FaissIndex
+from app.memory.stores.memory_bank.forget import ForgettingCurve
+from app.memory.stores.memory_bank.llm import LlmClient
+from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
+from app.memory.stores.memory_bank.summarizer import Summarizer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
 
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
-    from app.storage.toml_store import TOMLStore
+
+logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _finalize_task(task: asyncio.Task[None]) -> None:
+    _background_tasks.discard(task)
+    with contextlib.suppress(asyncio.CancelledError):
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("Background task failed: %s", exc)
 
 
 class MemoryBankStore:
-    """记忆库后端，支持遗忘曲线、记忆强化与自动摘要."""
+    """基于 FAISS 的记忆存储，MemoryStore Protocol 实现。"""
 
     store_name = "memory_bank"
     requires_embedding = True
@@ -33,67 +52,158 @@ class MemoryBankStore:
         data_dir: Path,
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
-        **_kwargs: dict,
+        **_kwargs: object,
     ) -> None:
         """初始化记忆库存储."""
-        self._storage = EventStorage(data_dir)
-        self._engine = MemoryBankEngine(
-            data_dir,
-            self._storage,
-            embedding_model,
-            chat_model,
-        )
+        self._data_dir = data_dir
+        self._index = FaissIndex(data_dir)
+        self._forget = ForgettingCurve()
         self._feedback = FeedbackManager(data_dir)
-        self.embedding_model = embedding_model
-        self.chat_model = chat_model
+        self._embedding_model = embedding_model
+        self._chat_model = chat_model
+        self._retrieval = (
+            RetrievalPipeline(self._index, embedding_model) if embedding_model else None
+        )
+        self._llm = LlmClient(chat_model) if chat_model else None
+        self._summarizer = Summarizer(self._llm, self._index) if self._llm else None
+        self._forgetting_enabled = os.getenv(
+            "MEMORYBANK_ENABLE_FORGETTING", "0"
+        ).lower() in (
+            "1",
+            "true",
+            "yes",
+        )
 
-    @property
-    def events_store(self) -> TOMLStore:
-        """事件存储."""
-        return self._storage.store
+    async def write_interaction(
+        self, query: str, response: str, event_type: str = "reminder"
+    ) -> InteractionResult:
+        """记录一次交互到记忆库."""
+        await self._index.load()
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        ts = datetime.now(UTC).isoformat()
+        text = (
+            f"Conversation content on {date_key}:[|User|]: {query}; [|AI|]: {response}"
+        )
+        emb = await self._embedding_model.encode(text)
+        fid = await self._index.add_vector(
+            text,
+            emb,
+            ts,
+            {
+                "source": date_key,
+                "speakers": ["User", "AI"],
+                "raw_content": query,
+                "event_type": event_type,
+            },
+        )
+        if self._forgetting_enabled:
+            self._forget.maybe_forget(self._index.get_metadata())
+        await self._index.save()
+        if self._summarizer:
+            task = asyncio.create_task(self._background_summarize(date_key))
+            _background_tasks.add(task)
+            task.add_done_callback(_finalize_task)
+        return InteractionResult(event_id=str(fid))
 
-    @property
-    def strategies_store(self) -> TOMLStore:
-        """策略存储."""
-        return self._feedback.strategies_store
-
-    @property
-    def summaries_store(self) -> TOMLStore:
-        """摘要存储."""
-        return self._engine.summaries_store
-
-    @property
-    def personality_store(self) -> TOMLStore:
-        """人格存储."""
-        return self._engine.personality_store
-
-    @property
-    def interactions_store(self) -> TOMLStore:
-        """交互存储."""
-        return self._engine.interactions_store
-
-    async def write(self, event: MemoryEvent) -> str:
-        """写入事件."""
-        return await self._engine.write(event)
-
-    async def write_batch(
-        self,
-        events: list[MemoryEvent],
-        progress_fn: Callable[[int, int], None] | None = None,
-    ) -> list[str]:
-        """批量写入事件."""
-        return await self._engine.write_batch(events, progress_fn=progress_fn)
+    async def _background_summarize(self, date_key: str) -> None:
+        try:
+            text = await self._summarizer.get_daily_summary(date_key)
+            if text:
+                emb = await self._embedding_model.encode(text)
+                await self._index.add_vector(
+                    text,
+                    emb,
+                    f"{date_key}T00:00:00",
+                    {"type": "daily_summary", "source": f"summary_{date_key}"},
+                )
+            await self._summarizer.get_overall_summary()
+            await self._summarizer.get_daily_personality(date_key)
+            await self._summarizer.get_overall_personality()
+            await self._index.save()
+        except Exception:
+            logger.exception("background summarization failed")
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆."""
-        return await self._engine.search(query, top_k)
+        await self._index.load()
+        if self._index.total == 0 or not self._retrieval:
+            return []
+        if self._forgetting_enabled:
+            self._forget.maybe_forget(self._index.get_metadata())
+        results = await self._retrieval.search(query, top_k + 1)
+        extra = self._index.get_extra()
+        prepend = []
+        for key, label in [
+            ("overall_summary", "Overall summary of past memories"),
+            ("overall_personality", "User vehicle preferences and habits"),
+        ]:
+            val = extra.get(key, "")
+            if val and val != "GENERATION_EMPTY":
+                prepend.append(f"{label}: {val}")
+        out: list[SearchResult] = []
+        if prepend:
+            out.append(
+                SearchResult(
+                    event={"content": "\n".join(prepend), "type": "overall_context"},
+                    score=float("inf"),
+                    source="overall",
+                )
+            )
+        out.extend(
+            SearchResult(
+                event={
+                    "content": r.get("text", ""),
+                    "source": r.get("source", ""),
+                    "memory_strength": int(r.get("memory_strength", 1)),
+                },
+                score=float(r.get("score", 0.0)),
+                source=r.get("source", "event"),
+            )
+            for r in results
+        )
+        return out
+
+    async def write(self, event: MemoryEvent) -> str:
+        """写入事件."""
+        await self._index.load()
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        ts = datetime.now(UTC).isoformat()
+        text = f"Conversation content on {date_key}:[|System|]: {event.content}"
+        emb = await self._embedding_model.encode(text)
+        fid = await self._index.add_vector(
+            text,
+            emb,
+            ts,
+            {
+                "source": date_key,
+                "speakers": ["System"],
+                "raw_content": event.content,
+                "event_type": event.type,
+            },
+        )
+        if self._forgetting_enabled:
+            self._forget.maybe_forget(self._index.get_metadata())
+        await self._index.save()
+        if self._summarizer:
+            task = asyncio.create_task(self._background_summarize(date_key))
+            _background_tasks.add(task)
+            task.add_done_callback(_finalize_task)
+        return str(fid)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         """获取历史事件."""
-        events = await self._storage.read_events()
-        if limit <= 0:
-            return []
-        return [MemoryEvent(**e) for e in events[-limit:]]
+        await self._index.load()
+        entries = [
+            m for m in self._index.get_metadata() if m.get("type") != "daily_summary"
+        ]
+        return [
+            MemoryEvent(
+                content=m.get("raw_content") or m.get("text", ""),
+                type=m.get("event_type", "reminder"),
+                memory_strength=int(m.get("memory_strength", 1)),
+            )
+            for m in entries[-limit:]
+        ]
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈."""
@@ -101,20 +211,8 @@ class MemoryBankStore:
 
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""
-        event = await self._storage.find_event_by_id(event_id)
-        if event is None:
-            return None
-        return event.get("type")
-
-    async def write_interaction(
-        self,
-        query: str,
-        response: str,
-        event_type: str = "reminder",
-    ) -> InteractionResult:
-        """写入交互记录."""
-        return await self._engine.write_interaction(query, response, event_type)
-
-    async def reset_forgetting_state(self) -> None:
-        """重置遗忘状态."""
-        await self._engine.reset_forgetting_state()
+        await self._index.load()
+        for m in self._index.get_metadata():
+            if str(m.get("faiss_id")) == event_id:
+                return m.get("event_type") or "reminder"
+        return None
