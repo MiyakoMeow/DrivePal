@@ -59,10 +59,10 @@ class ForgettingCurve:
     ) -> None:
         """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。"""
         self._mode = mode if mode is not None else _resolve_forget_mode()
-        self._rng = (
+        self._rng: random.Random | None = (
             random.Random(seed)  # noqa: S311
             if self._mode == ForgetMode.PROBABILISTIC
-            else random
+            else None
         )
         self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
 
@@ -103,14 +103,14 @@ class ForgettingCurve:
                 continue
             retention = forgetting_retention(days, strength_float)
 
-            if self._mode == ForgetMode.PROBABILISTIC:
+            if self._rng is not None:
                 should_forget = self._rng.random() > retention
             else:
                 should_forget = retention < SOFT_FORGET_THRESHOLD
 
             if should_forget:
                 entry["forgotten"] = True
-                if self._mode == ForgetMode.PROBABILISTIC:
+                if self._rng is not None:
                     fid = entry.get("faiss_id")
                     if fid is not None:
                         forgotten_ids.append(fid)

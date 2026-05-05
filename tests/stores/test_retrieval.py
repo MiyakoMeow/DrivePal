@@ -1,5 +1,6 @@
 """RetrievalPipeline 单元测试。"""
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -157,12 +158,22 @@ def test_clean_search_result_no_delimiter_unchanged():
 
 def test_adaptive_chunk_few_entries_returns_default():
     """不足 10 条时回退 DEFAULT_CHUNK_SIZE=1500。"""
-    meta = [{"text": "hello"}] * 5
-    assert _get_effective_chunk_size(meta) == DEFAULT_CHUNK_SIZE
+    popped = os.environ.pop("MEMORYBANK_CHUNK_SIZE", None)
+    try:
+        meta = [{"text": "hello"}] * 5
+        assert _get_effective_chunk_size(meta) == DEFAULT_CHUNK_SIZE
+    finally:
+        if popped is not None:
+            os.environ["MEMORYBANK_CHUNK_SIZE"] = popped
 
 
 def test_adaptive_chunk_many_entries_uses_p90():
     """10 条以上时基于 P90 ×3 计算。"""
-    meta = [{"text": "x" * n} for n in range(1, 101)]
-    sz = _get_effective_chunk_size(meta)
-    assert sz == 270  # noqa: PLR2004
+    popped = os.environ.pop("MEMORYBANK_CHUNK_SIZE", None)
+    try:
+        meta = [{"text": "x" * n} for n in range(1, 101)]
+        sz = _get_effective_chunk_size(meta)
+        assert sz == 270  # noqa: PLR2004
+    finally:
+        if popped is not None:
+            os.environ["MEMORYBANK_CHUNK_SIZE"] = popped
