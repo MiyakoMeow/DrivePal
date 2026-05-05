@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from app.memory.components import FeedbackManager, KeywordSearch
+from app.memory.components import (
+    ActionRequiredError,
+    FeedbackManager,
+    KeywordSearch,
+)
 from app.memory.schemas import FeedbackData
 from app.storage.toml_store import TOMLStore
 
@@ -96,6 +100,14 @@ class TestFeedbackManager:
         )
         strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
         assert strategies["reminder_weights"]["general"] == pytest.approx(0.4)
+
+    async def test_action_none_raises_error(self, manager: FeedbackManager) -> None:
+        """验证 action=None 时抛出 ActionRequiredError."""
+        with pytest.raises(ActionRequiredError):
+            await manager.update_feedback(
+                "eid",
+                FeedbackData(action=None, type="test"),
+            )
 
     async def test_accept_capped_at_one(
         self,

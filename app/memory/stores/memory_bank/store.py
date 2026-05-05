@@ -221,7 +221,11 @@ class MemoryBankStore:
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""
         await self._index.load()
-        for m in self._index.get_metadata():
-            if str(m.get("faiss_id")) == event_id:
-                return m.get("event_type") or "reminder"
+        try:
+            fid = int(event_id)
+        except ValueError, TypeError:
+            return None
+        m = self._index.get_metadata_by_id(fid)
+        if m is not None:
+            return m.get("event_type") or "reminder"
         return None

@@ -201,6 +201,13 @@ class FaissIndex:
         """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）。"""
         return self._metadata
 
+    def get_metadata_by_id(self, faiss_id: int) -> dict | None:
+        """O(1) 按 faiss_id 查找元数据条目。"""
+        mi = self._id_to_meta.get(faiss_id)
+        if mi is None:
+            return None
+        return self._metadata[mi]
+
     def get_extra(self) -> dict:
         """返回额外元数据（总体摘要/人格）。"""
         return self._extra
