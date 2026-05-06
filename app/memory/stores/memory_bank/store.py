@@ -144,7 +144,7 @@ class MemoryBankStore:
                 await self._index.remove_vectors(forgotten_ids)
         await self._index.save()
         if self._background:
-            self._background.schedule_summarize(date_key)
+            await self._background.schedule_summarize(date_key)
         return InteractionResult(event_id=str(fid))
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
@@ -210,7 +210,7 @@ class MemoryBankStore:
                 await self._index.remove_vectors(forgotten_ids)
         await self._index.save()
         if self._background:
-            self._background.schedule_summarize(date_key)
+            await self._background.schedule_summarize(date_key)
         return str(fid)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
@@ -221,6 +221,7 @@ class MemoryBankStore:
         ]
         return [
             MemoryEvent(
+                id=str(m.get("faiss_id", "")),
                 content=m.get("raw_content") or m.get("text", ""),
                 type=m.get("event_type", "reminder"),
                 memory_strength=int(m.get("memory_strength", 1)),

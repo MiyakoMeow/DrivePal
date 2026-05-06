@@ -48,7 +48,7 @@ class TestBackgroundWorker:
         mock_index,
     ):
         """调度后完整摘要流水线被触发。"""
-        worker.schedule_summarize("2026-05-06")
+        await worker.schedule_summarize("2026-05-06")
         await worker.drain()
         mock_summarizer.get_daily_summary.assert_awaited_once_with("2026-05-06")
         mock_encoder.encode.assert_awaited_once()
@@ -60,13 +60,13 @@ class TestBackgroundWorker:
     async def test_no_encoder_skips_encode(self, mock_index, mock_summarizer):
         """无 encoder 时不调用 add_vector。"""
         worker = BackgroundWorker(mock_index, mock_summarizer, encoder=None)
-        worker.schedule_summarize("2026-05-06")
+        await worker.schedule_summarize("2026-05-06")
         await worker.drain()
         mock_index.add_vector.assert_not_awaited()
 
     async def test_no_summarizer_skips_all(self, mock_index, mock_encoder):
         """无 summarizer 时跳过所有操作。"""
         worker = BackgroundWorker(mock_index, summarizer=None, encoder=mock_encoder)
-        worker.schedule_summarize("2026-05-06")
+        await worker.schedule_summarize("2026-05-06")
         await worker.drain()
         mock_index.add_vector.assert_not_awaited()
