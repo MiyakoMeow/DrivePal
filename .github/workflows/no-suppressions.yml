@@ -7,8 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  scan:
-    name: No inline noqa / type:ignore
+  noqa:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -16,8 +15,7 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - name: Scan for # noqa comments
-        run: |
+      - run: |
           matches=$(grep -rn --include='*.py' \
             --exclude-dir=.agents \
             --exclude-dir=.github \
@@ -32,8 +30,15 @@ jobs:
           fi
           echo "No # noqa comments found. Clean!"
 
-      - name: Scan for # type: comments
-        run: |
+  type-ignore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - run: |
           matches=$(grep -rn --include='*.py' \
             --exclude-dir=.agents \
             --exclude-dir=.github \
