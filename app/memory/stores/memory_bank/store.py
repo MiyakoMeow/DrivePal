@@ -1,42 +1,31 @@
 """基于 FAISS 的记忆存储，MemoryStore Protocol 实现。"""
 
-import asyncio
-import contextlib
+from __future__ import annotations
+
 import logging
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from app.memory.components import FeedbackManager
 from app.memory.schemas import (
     FeedbackData,
     InteractionResult,
     MemoryEvent,
     SearchResult,
 )
-from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.forget import ForgettingCurve
-from app.memory.stores.memory_bank.llm import LlmClient
-from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
-from app.memory.stores.memory_bank.summarizer import GENERATION_EMPTY, Summarizer
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
-    from app.models.chat import ChatModel
+    from app.memory.interfaces import (
+        FeedbackHandler,
+        ForgettingStrategy,
+        RetrievalStrategy,
+        SearchEnricher,
+        VectorIndex,
+    )
+    from app.memory.worker import BackgroundWorker
     from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
-
-_background_tasks: set[asyncio.Task[None]] = set()
-
-
-def _finalize_task(task: asyncio.Task[None]) -> None:
-    _background_tasks.discard(task)
-    with contextlib.suppress(asyncio.CancelledError):
-        exc = task.exception()
-        if exc is not None:
-            logger.warning("Background task failed: %s", exc)
 
 
 class MemoryBankStore:
@@ -45,27 +34,25 @@ class MemoryBankStore:
     store_name = "memory_bank"
     requires_embedding = True
     requires_chat = True
-    supports_interaction = True
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
-        data_dir: Path,
-        embedding_model: EmbeddingModel | None = None,
-        chat_model: ChatModel | None = None,
-        **_kwargs: object,
+        index: VectorIndex,
+        retrieval: RetrievalStrategy,
+        embedding_model: EmbeddingModel,
+        enricher: SearchEnricher | None = None,
+        forgetting: ForgettingStrategy | None = None,
+        feedback: FeedbackHandler | None = None,
+        background: BackgroundWorker | None = None,
     ) -> None:
-        """初始化记忆库存储."""
-        self._data_dir = data_dir
-        self._index = FaissIndex(data_dir)
-        self._forget = ForgettingCurve()
-        self._feedback = FeedbackManager(data_dir)
+        """初始化记忆库存储，依赖注入子组件。"""
+        self._index = index
+        self._retrieval = retrieval
         self._embedding_model = embedding_model
-        self._chat_model = chat_model
-        self._retrieval = (
-            RetrievalPipeline(self._index, embedding_model) if embedding_model else None
-        )
-        self._llm = LlmClient(chat_model) if chat_model else None
-        self._summarizer = Summarizer(self._llm, self._index) if self._llm else None
+        self._enricher = enricher
+        self._forgetting = forgetting
+        self._feedback = feedback
+        self._background = background
         self._forgetting_enabled = os.getenv(
             "MEMORYBANK_ENABLE_FORGETTING", "0"
         ).lower() in (
@@ -100,36 +87,17 @@ class MemoryBankStore:
             },
         )
         if self._forgetting_enabled:
-            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
+            forgotten_ids = (
+                self._forgetting.maybe_forget(self._index.get_metadata())
+                if self._forgetting
+                else None
+            )
             if forgotten_ids:
                 await self._index.remove_vectors(forgotten_ids)
         await self._index.save()
-        if self._summarizer:
-            task = asyncio.create_task(self._background_summarize(date_key))
-            _background_tasks.add(task)
-            task.add_done_callback(_finalize_task)
+        if self._background:
+            self._background.schedule_summarize(date_key)
         return InteractionResult(event_id=str(fid))
-
-    async def _background_summarize(self, date_key: str) -> None:
-        if not self._summarizer or not self._embedding_model:
-            return
-        try:
-            text = await self._summarizer.get_daily_summary(date_key)
-            if text:
-                emb = await self._embedding_model.encode(text)
-                await self._index.add_vector(
-                    text,
-                    emb,
-                    f"{date_key}T00:00:00",
-                    {"type": "daily_summary", "source": f"summary_{date_key}"},
-                )
-                await self._index.save()  # 尽早持久化日摘要
-            await self._summarizer.get_overall_summary()
-            await self._summarizer.get_daily_personality(date_key)
-            await self._summarizer.get_overall_personality()
-            await self._index.save()
-        except Exception:
-            logger.exception("background summarization failed")
 
     async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """搜索记忆."""
@@ -137,31 +105,17 @@ class MemoryBankStore:
         if self._index.total == 0 or not self._retrieval:
             return []
         if self._forgetting_enabled:
-            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
+            forgotten_ids = (
+                self._forgetting.maybe_forget(self._index.get_metadata())
+                if self._forgetting
+                else None
+            )
             if forgotten_ids is not None:
                 if forgotten_ids:
                     await self._index.remove_vectors(forgotten_ids)
                 await self._index.save()
         results = await self._retrieval.search(query, top_k)
-        extra = self._index.get_extra()
-        prepend = []
-        for key, label in [
-            ("overall_summary", "Overall summary of past memories"),
-            ("overall_personality", "User vehicle preferences and habits"),
-        ]:
-            val = extra.get(key, "")
-            if val and val != GENERATION_EMPTY:
-                prepend.append(f"{label}: {val}")
-        out: list[SearchResult] = []
-        if prepend:
-            out.append(
-                SearchResult(
-                    event={"content": "\n".join(prepend), "type": "overall_context"},
-                    score=float("inf"),
-                    source="overall",
-                )
-            )
-        out.extend(
+        out = [
             SearchResult(
                 event={
                     "content": r.get("text", ""),
@@ -171,8 +125,10 @@ class MemoryBankStore:
                 score=float(r.get("score", 0.0)),
                 source=r.get("source", "event"),
             )
-            for r in results[: max(0, top_k - len(prepend))]
-        )
+            for r in results
+        ]
+        if self._enricher:
+            out = await self._enricher.enrich(out, self._index.get_extra())
         return out
 
     async def write(self, event: MemoryEvent) -> str:
@@ -197,14 +153,16 @@ class MemoryBankStore:
             },
         )
         if self._forgetting_enabled:
-            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
+            forgotten_ids = (
+                self._forgetting.maybe_forget(self._index.get_metadata())
+                if self._forgetting
+                else None
+            )
             if forgotten_ids:
                 await self._index.remove_vectors(forgotten_ids)
         await self._index.save()
-        if self._summarizer:
-            task = asyncio.create_task(self._background_summarize(date_key))
-            _background_tasks.add(task)
-            task.add_done_callback(_finalize_task)
+        if self._background:
+            self._background.schedule_summarize(date_key)
         return str(fid)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
@@ -224,7 +182,8 @@ class MemoryBankStore:
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈."""
-        await self._feedback.update_feedback(event_id, feedback)
+        if self._feedback:
+            await self._feedback.update_feedback(event_id, feedback)
 
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""

@@ -2,11 +2,20 @@
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+from app.memory.components import FeedbackManager
+from app.memory.enricher import OverallContextEnricher
+from app.memory.interfaces import InteractiveMemoryStore, VectorIndex
 from app.memory.stores.memory_bank import MemoryBankStore
+from app.memory.stores.memory_bank.faiss_index import FaissIndex
+from app.memory.stores.memory_bank.forget import ForgettingCurve
+from app.memory.stores.memory_bank.llm import LlmClient
+from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
+from app.memory.stores.memory_bank.summarizer import Summarizer
 from app.memory.types import MemoryMode
-from app.models.chat import get_chat_model
+from app.memory.worker import BackgroundWorker
+from app.models.chat import ChatModel, get_chat_model
 from app.models.embedding import get_cached_embedding_model
 
 
@@ -30,7 +39,6 @@ if TYPE_CHECKING:
         MemoryEvent,
         SearchResult,
     )
-    from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
@@ -86,16 +94,42 @@ class MemoryModule:
         if mode not in _STORES_REGISTRY:
             raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
-        kwargs: dict[str, Any] = {"data_dir": self._data_dir}
-        if getattr(store_cls, "requires_embedding", False):  # type: ignore[attr-defined]
-            if self._embedding_model is None:
-                self._embedding_model = get_cached_embedding_model()
-            kwargs["embedding_model"] = self._embedding_model
-        if getattr(store_cls, "requires_chat", False):  # type: ignore[attr-defined]
-            if self._chat_model is None:
-                self._chat_model = get_chat_model()
-            kwargs["chat_model"] = self._chat_model
-        return store_cls(**kwargs)
+
+        data_dir = self._data_dir
+
+        index: VectorIndex = FaissIndex(data_dir)
+
+        embedding = self._embedding_model
+        if embedding is None and getattr(store_cls, "requires_embedding", False):
+            embedding = get_cached_embedding_model()
+        assert embedding is not None  # noqa: S101
+
+        chat = self._chat_model
+        if chat is None and getattr(store_cls, "requires_chat", False):
+            chat = get_chat_model()
+
+        retrieval = RetrievalPipeline(index, embedding)
+        forgetting = ForgettingCurve()
+        feedback = FeedbackManager(data_dir)
+
+        summarizer_svc = None
+        background = None
+        if chat:
+            llm = LlmClient(chat)
+            summarizer_svc = Summarizer(llm, index)
+            background = BackgroundWorker(index, summarizer_svc, embedding)
+
+        enricher = OverallContextEnricher()
+
+        return MemoryBankStore(
+            index=index,
+            retrieval=retrieval,
+            embedding_model=embedding,
+            enricher=enricher,
+            forgetting=forgetting,
+            feedback=feedback,
+            background=background,
+        )
 
     async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
         """写入记忆事件."""
@@ -112,10 +146,10 @@ class MemoryModule:
     ) -> InteractionResult:
         """写入交互记录."""
         store = await self._get_store(self._resolve_mode(mode))
-        if not getattr(store, "supports_interaction", False):  # type: ignore[attr-defined]
+        if not isinstance(store, InteractiveMemoryStore):
             msg = f"Store '{store.store_name}' does not support write_interaction"
             raise NotImplementedError(msg)
-        return await store.write_interaction(query, response, event_type)  # type: ignore
+        return await store.write_interaction(query, response, event_type)
 
     async def search(
         self,

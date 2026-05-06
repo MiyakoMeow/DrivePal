@@ -1,6 +1,6 @@
 """MemoryStore 结构化接口定义（Protocol）及所有子组件依赖抽象。"""
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from app.memory.schemas import (
@@ -23,6 +23,7 @@ class MemoryStore(Protocol):
     async def get_event_type(self, event_id: str) -> str | None: ...
 
 
+@runtime_checkable
 class InteractiveMemoryStore(MemoryStore, Protocol):
     """支持交互记录的扩展接口。"""
 
