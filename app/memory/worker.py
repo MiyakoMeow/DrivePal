@@ -29,12 +29,21 @@ class BackgroundWorker:
         self._summarizer = summarizer
         self._encoder = encoder
         self._tasks: set[asyncio.Task[None]] = set()
+        self._summarize_tasks: dict[str, asyncio.Task[None]] = {}
 
     def schedule_summarize(self, date_key: str) -> None:
-        """调度后台摘要任务。"""
+        """调度后台摘要任务，相同 date_key 合并。"""
+        if date_key in self._summarize_tasks:
+            return
         task = asyncio.create_task(self._run_summarize(date_key))
         self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        self._summarize_tasks[date_key] = task
+
+        def _cleanup(t: asyncio.Task[None]) -> None:
+            self._tasks.discard(t)
+            self._summarize_tasks.pop(date_key, None)
+
+        task.add_done_callback(_cleanup)
 
     async def drain(self) -> None:
         """等待所有后台任务完成。"""

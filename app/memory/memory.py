@@ -6,17 +6,9 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from app.memory.components import FeedbackManager
-from app.memory.enricher import OverallContextEnricher
-from app.memory.interfaces import InteractiveMemoryStore, VectorIndex
-from app.memory.stores.memory_bank import MemoryBankStore, MemoryBankStoreConfig
-from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.forget import ForgettingCurve
-from app.memory.stores.memory_bank.llm import LlmClient
-from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
-from app.memory.stores.memory_bank.summarizer import Summarizer
+from app.memory.interfaces import InteractiveMemoryStore
+from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.types import MemoryMode
-from app.memory.worker import BackgroundWorker
 from app.models.chat import ChatModel, get_chat_model
 from app.models.embedding import EmbeddingModel, get_cached_embedding_model
 
@@ -116,39 +108,9 @@ class MemoryModule:
         if mode not in _STORES_REGISTRY:
             raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
-
-        data_dir = self._data_dir
-
-        index: VectorIndex = FaissIndex(data_dir)
         embedding = self._resolve_embedding(store_cls)
         chat = self._resolve_chat(store_cls)
-
-        if embedding is None:
-            msg = f"Store {store_cls.store_name} requires embedding_model"
-            raise RuntimeError(msg)
-
-        retrieval = RetrievalPipeline(index, embedding)
-        forgetting = ForgettingCurve()
-        feedback = FeedbackManager(data_dir)
-
-        summarizer_svc = None
-        background = None
-        if chat is not None:
-            llm = LlmClient(chat)
-            summarizer_svc = Summarizer(llm, index)
-            background = BackgroundWorker(index, summarizer_svc, embedding)
-
-        enricher = OverallContextEnricher()
-
-        config = MemoryBankStoreConfig(
-            index=index,
-            retrieval=retrieval,
-            embedding_model=embedding,
-            enricher=enricher,
-            forgetting=forgetting,
-            feedback=feedback,
-            background=background,
-        )
+        config = store_cls.create_default_config(self._data_dir, embedding, chat)
         return store_cls(config)
 
     async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:

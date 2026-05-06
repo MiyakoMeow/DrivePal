@@ -8,14 +8,24 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from app.memory.components import FeedbackManager
+from app.memory.enricher import OverallContextEnricher
 from app.memory.schemas import (
     FeedbackData,
     InteractionResult,
     MemoryEvent,
     SearchResult,
 )
+from app.memory.stores.memory_bank.faiss_index import FaissIndex
+from app.memory.stores.memory_bank.forget import ForgettingCurve
+from app.memory.stores.memory_bank.llm import LlmClient
+from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
+from app.memory.stores.memory_bank.summarizer import Summarizer
+from app.memory.worker import BackgroundWorker
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from app.memory.interfaces import (
         FeedbackHandler,
         ForgettingStrategy,
@@ -23,7 +33,7 @@ if TYPE_CHECKING:
         SearchEnricher,
         VectorIndex,
     )
-    from app.memory.worker import BackgroundWorker
+    from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
@@ -40,6 +50,7 @@ class MemoryBankStoreConfig:
     forgetting: ForgettingStrategy | None = None
     feedback: FeedbackHandler | None = None
     background: BackgroundWorker | None = None
+    forgetting_enabled: bool = False
 
 
 class MemoryBankStore:
@@ -48,6 +59,44 @@ class MemoryBankStore:
     store_name = "memory_bank"
     requires_embedding = True
     requires_chat = True
+
+    @classmethod
+    def create_default_config(
+        cls,
+        data_dir: Path,
+        embedding_model: EmbeddingModel | None,
+        chat_model: ChatModel | None,
+    ) -> MemoryBankStoreConfig:
+        """构造默认 MemoryBankStoreConfig。"""
+        index: FaissIndex = FaissIndex(data_dir)
+        if embedding_model is None:
+            msg = f"{cls.store_name} requires embedding_model"
+            raise RuntimeError(msg)
+        retrieval = RetrievalPipeline(index, embedding_model)
+        forgetting = ForgettingCurve()
+        feedback = FeedbackManager(data_dir)
+        summarizer_svc = None
+        background = None
+        if chat_model is not None:
+            llm = LlmClient(chat_model)
+            summarizer_svc = Summarizer(llm, index)
+            background = BackgroundWorker(index, summarizer_svc, embedding_model)
+        enricher = OverallContextEnricher()
+        forgetting_enabled = os.getenv("MEMORYBANK_ENABLE_FORGETTING", "0").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        return MemoryBankStoreConfig(
+            index=index,
+            retrieval=retrieval,
+            embedding_model=embedding_model,
+            enricher=enricher,
+            forgetting=forgetting,
+            feedback=feedback,
+            background=background,
+            forgetting_enabled=forgetting_enabled,
+        )
 
     def __init__(self, config: MemoryBankStoreConfig) -> None:
         """初始化记忆库存储，接收参数对象。"""
@@ -58,13 +107,7 @@ class MemoryBankStore:
         self._forgetting = config.forgetting
         self._feedback = config.feedback
         self._background = config.background
-        self._forgetting_enabled = os.getenv(
-            "MEMORYBANK_ENABLE_FORGETTING", "0"
-        ).lower() in (
-            "1",
-            "true",
-            "yes",
-        )
+        self._forgetting_enabled = config.forgetting_enabled
 
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"

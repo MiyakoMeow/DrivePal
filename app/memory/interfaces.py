@@ -1,20 +1,34 @@
 """MemoryStore 结构化接口定义（Protocol）及所有子组件依赖抽象。"""
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from app.memory.schemas import (
         FeedbackData,
         InteractionResult,
         MemoryEvent,
         SearchResult,
     )
+    from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
 
 class MemoryStore(Protocol):
     """通用记忆存储接口。"""
 
     store_name: str
+
+    @classmethod
+    def create_default_config(
+        cls,
+        data_dir: Path,
+        embedding_model: EmbeddingModel | None,
+        chat_model: ChatModel | None,
+    ) -> Any:  # noqa: ANN401
+        """构造默认配置对象。"""
+        ...
 
     async def write(self, event: MemoryEvent) -> str:
         """写入一条记忆事件。"""
