@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from app.memory.components import FeedbackManager
 from app.memory.enricher import OverallContextEnricher
 from app.memory.interfaces import InteractiveMemoryStore, VectorIndex
-from app.memory.stores.memory_bank import MemoryBankStore
+from app.memory.stores.memory_bank import MemoryBankStore, MemoryBankStoreConfig
 from app.memory.stores.memory_bank.faiss_index import FaissIndex
 from app.memory.stores.memory_bank.forget import ForgettingCurve
 from app.memory.stores.memory_bank.llm import LlmClient
@@ -123,7 +123,7 @@ class MemoryModule:
 
         enricher = OverallContextEnricher()
 
-        return store_cls(
+        config = MemoryBankStoreConfig(
             index=index,
             retrieval=retrieval,
             embedding_model=embedding,
@@ -132,6 +132,7 @@ class MemoryModule:
             feedback=feedback,
             background=background,
         )
+        return store_cls(config)
 
     async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
         """写入记忆事件."""

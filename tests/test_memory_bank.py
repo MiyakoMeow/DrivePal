@@ -10,7 +10,7 @@ from app.memory.enricher import OverallContextEnricher
 from app.memory.stores.memory_bank.faiss_index import FaissIndex
 from app.memory.stores.memory_bank.forget import ForgettingCurve
 from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
-from app.memory.stores.memory_bank.store import MemoryBankStore
+from app.memory.stores.memory_bank.store import MemoryBankStore, MemoryBankStoreConfig
 
 
 @pytest.fixture
@@ -24,11 +24,13 @@ def store():
         forgetting = ForgettingCurve()
         enricher = OverallContextEnricher()
         s = MemoryBankStore(
-            index=index,
-            retrieval=retrieval,
-            embedding_model=emb,
-            enricher=enricher,
-            forgetting=forgetting,
+            MemoryBankStoreConfig(
+                index=index,
+                retrieval=retrieval,
+                embedding_model=emb,
+                enricher=enricher,
+                forgetting=forgetting,
+            )
         )
         yield s
 

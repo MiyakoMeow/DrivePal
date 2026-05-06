@@ -7,7 +7,7 @@ import pytest
 from app.memory.enricher import OverallContextEnricher
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
-from app.memory.stores.memory_bank import MemoryBankStore
+from app.memory.stores.memory_bank import MemoryBankStore, MemoryBankStoreConfig
 from app.memory.stores.memory_bank.faiss_index import FaissIndex
 from app.memory.stores.memory_bank.forget import ForgettingCurve
 from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
@@ -65,11 +65,13 @@ class TestEmbeddingForMemoryBankRetrieval:
         forgetting = ForgettingCurve()
         enricher = OverallContextEnricher()
         return MemoryBankStore(
-            index=index,
-            retrieval=retrieval,
-            embedding_model=embedding,
-            enricher=enricher,
-            forgetting=forgetting,
+            MemoryBankStoreConfig(
+                index=index,
+                retrieval=retrieval,
+                embedding_model=embedding,
+                enricher=enricher,
+                forgetting=forgetting,
+            )
         )
 
     async def test_forgetting_weighted_ranking(

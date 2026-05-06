@@ -19,16 +19,7 @@ ignore = [
 ]
 exclude = [".agents/**"]
 
-[lint.pylint]
-max-args = 8
-
 [lint.per-file-ignores]
-"app/memory/interfaces.py" = ["D102"]  # Protocol stub 无需 docstring
-"app/memory/components.py" = ["F401"]  # TYPE_CHECKING Protocol import（结构子类型标记）
-"app/memory/stores/memory_bank/faiss_index.py" = ["F401"]
-"app/memory/stores/memory_bank/forget.py" = ["F401"]
-"app/memory/stores/memory_bank/retrieval.py" = ["F401"]
-"app/memory/stores/memory_bank/summarizer.py" = ["F401"]
 "adapters/runner.py" = ["E402"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
 "tests/**" = [

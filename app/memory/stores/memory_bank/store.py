@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class MemoryBankStoreConfig:
+    """MemoryBankStore 依赖注入参数对象。"""
+
+    index: VectorIndex
+    retrieval: RetrievalStrategy
+    embedding_model: EmbeddingModel
+    enricher: SearchEnricher | None = None
+    forgetting: ForgettingStrategy | None = None
+    feedback: FeedbackHandler | None = None
+    background: BackgroundWorker | None = None
+
+
 class MemoryBankStore:
     """基于 FAISS 的记忆存储，MemoryStore Protocol 实现。"""
 
@@ -35,24 +49,15 @@ class MemoryBankStore:
     requires_embedding = True
     requires_chat = True
 
-    def __init__(
-        self,
-        index: VectorIndex,
-        retrieval: RetrievalStrategy,
-        embedding_model: EmbeddingModel,
-        enricher: SearchEnricher | None = None,
-        forgetting: ForgettingStrategy | None = None,
-        feedback: FeedbackHandler | None = None,
-        background: BackgroundWorker | None = None,
-    ) -> None:
-        """初始化记忆库存储，依赖注入子组件。"""
-        self._index = index
-        self._retrieval = retrieval
-        self._embedding_model = embedding_model
-        self._enricher = enricher
-        self._forgetting = forgetting
-        self._feedback = feedback
-        self._background = background
+    def __init__(self, config: MemoryBankStoreConfig) -> None:
+        """初始化记忆库存储，接收参数对象。"""
+        self._index = config.index
+        self._retrieval = config.retrieval
+        self._embedding_model = config.embedding_model
+        self._enricher = config.enricher
+        self._forgetting = config.forgetting
+        self._feedback = config.feedback
+        self._background = config.background
         self._forgetting_enabled = os.getenv(
             "MEMORYBANK_ENABLE_FORGETTING", "0"
         ).lower() in (

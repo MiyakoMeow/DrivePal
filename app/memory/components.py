@@ -3,10 +3,7 @@
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from app.memory.interfaces import FeedbackHandler
+from typing import Literal
 
 from app.memory.schemas import (
     FeedbackData,

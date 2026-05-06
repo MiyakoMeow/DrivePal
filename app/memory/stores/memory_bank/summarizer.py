@@ -4,8 +4,6 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.memory.interfaces import SummarizationService
-
     from .faiss_index import FaissIndex
     from .llm import LlmClient
 
