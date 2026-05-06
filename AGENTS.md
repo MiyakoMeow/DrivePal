@@ -36,6 +36,13 @@
 - 必须使用英文。
 - 必须遵循 Conventional Commits 规范。
 
+### 内联抑制
+
+- **禁止** 使用 `# noqa`、`# type:` 等内联抑制注释。CI 工作流 `.github/workflows/no-suppressions.yml` 扫描并报错。
+- 遇到 lint/type 错误时：
+  1. 优先通过修改代码直接修复。
+  2. 无法修复时，在 `ruff.toml` 或 `ty.toml` 中按文件或全局忽略，并注明原因。
+
 ## 文档索引
 
 - `README.md` — 项目概述、功能介绍、快速开始指南
