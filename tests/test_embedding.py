@@ -4,13 +4,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from app.memory.enricher import OverallContextEnricher
 from app.memory.memory import MemoryModule
 from app.memory.schemas import MemoryEvent
-from app.memory.stores.memory_bank import MemoryBankStore, MemoryBankStoreConfig
-from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.forget import ForgettingCurve
-from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
+from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
@@ -53,43 +49,26 @@ class TestEmbeddingForMemorySearch:
 class TestEmbeddingForMemoryBankRetrieval:
     """带遗忘的基于嵌入的记忆库检索测试."""
 
-    @pytest.fixture
-    def bank_store(
+    async def test_forgetting_weighted_ranking(
         self,
         embedding: EmbeddingModel,
         tmp_path: Path,
-    ) -> MemoryBankStore:
-        """提供真实 embedding 的 MemoryBankStore 实例。"""
-        index = FaissIndex(tmp_path)
-        retrieval = RetrievalPipeline(index, embedding)
-        forgetting = ForgettingCurve()
-        enricher = OverallContextEnricher()
-        return MemoryBankStore(
-            MemoryBankStoreConfig(
-                index=index,
-                retrieval=retrieval,
-                embedding_model=embedding,
-                enricher=enricher,
-                forgetting=forgetting,
-            )
-        )
-
-    async def test_forgetting_weighted_ranking(
-        self,
-        bank_store: MemoryBankStore,
     ) -> None:
         """验证搜索结果按加权记忆强度排名."""
-        await bank_store.write(MemoryEvent(content="重要项目进度讨论"))
-        results = await bank_store.search("项目进度")
+        backend = MemoryBankStore(tmp_path, embedding_model=embedding)
+        await backend.write(MemoryEvent(content="重要项目进度讨论"))
+        results = await backend.search("项目进度")
         assert len(results) > 0
         assert results[0].score > 0
 
     async def test_low_similarity_below_keyword_threshold(
         self,
-        bank_store: MemoryBankStore,
+        embedding: EmbeddingModel,
+        tmp_path: Path,
     ) -> None:
         """验证低相似度结果的分数低于关键词阈值."""
-        await bank_store.write(MemoryEvent(content="明天下午三点项目评审会议"))
-        results = await bank_store.search("今晚吃什么好呢")
+        backend = MemoryBankStore(tmp_path, embedding_model=embedding)
+        await backend.write(MemoryEvent(content="明天下午三点项目评审会议"))
+        results = await backend.search("今晚吃什么好呢")
         if results:
             assert results[0].score < SIMILARITY_THRESHOLD
