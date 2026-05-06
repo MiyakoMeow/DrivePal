@@ -20,6 +20,7 @@ ignore = [
 exclude = [".agents/**"]
 
 [lint.per-file-ignores]
+"app/memory/interfaces.py" = ["D102"]  # Protocol stub 无需 docstring
 "adapters/runner.py" = ["E402"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
 "tests/**" = [

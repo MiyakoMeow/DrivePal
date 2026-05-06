@@ -87,11 +87,11 @@ class MemoryModule:
             raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
         kwargs: dict[str, Any] = {"data_dir": self._data_dir}
-        if getattr(store_cls, "requires_embedding", False):
+        if getattr(store_cls, "requires_embedding", False):  # type: ignore[attr-defined]
             if self._embedding_model is None:
                 self._embedding_model = get_cached_embedding_model()
             kwargs["embedding_model"] = self._embedding_model
-        if getattr(store_cls, "requires_chat", False):
+        if getattr(store_cls, "requires_chat", False):  # type: ignore[attr-defined]
             if self._chat_model is None:
                 self._chat_model = get_chat_model()
             kwargs["chat_model"] = self._chat_model
@@ -112,10 +112,10 @@ class MemoryModule:
     ) -> InteractionResult:
         """写入交互记录."""
         store = await self._get_store(self._resolve_mode(mode))
-        if not getattr(store, "supports_interaction", False):
+        if not getattr(store, "supports_interaction", False):  # type: ignore[attr-defined]
             msg = f"Store '{store.store_name}' does not support write_interaction"
             raise NotImplementedError(msg)
-        return await store.write_interaction(query, response, event_type)
+        return await store.write_interaction(query, response, event_type)  # type: ignore
 
     async def search(
         self,
