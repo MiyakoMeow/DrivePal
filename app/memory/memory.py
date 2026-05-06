@@ -1,8 +1,10 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from app.memory.components import FeedbackManager
 from app.memory.enricher import OverallContextEnricher
@@ -16,7 +18,7 @@ from app.memory.stores.memory_bank.summarizer import Summarizer
 from app.memory.types import MemoryMode
 from app.memory.worker import BackgroundWorker
 from app.models.chat import ChatModel, get_chat_model
-from app.models.embedding import get_cached_embedding_model
+from app.models.embedding import EmbeddingModel, get_cached_embedding_model
 
 
 class UnknownModeError(ValueError):
@@ -39,7 +41,6 @@ if TYPE_CHECKING:
         MemoryEvent,
         SearchResult,
     )
-    from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,27 @@ class MemoryModule:
         """解析 mode 参数，默认 MEMORY_BANK."""
         return mode or MemoryMode.MEMORY_BANK
 
+    def _resolve_embedding(self, store_cls: type[MemoryStore]) -> EmbeddingModel:
+        """返回嵌入模型，按 store 需求初始化。"""
+        if self._embedding_model is None and getattr(
+            store_cls, "requires_embedding", False
+        ):
+            self._embedding_model = get_cached_embedding_model()
+        if getattr(store_cls, "requires_embedding", False):
+            if self._embedding_model is None:
+                msg = f"Store {store_cls.store_name} requires embedding_model"
+                raise RuntimeError(msg)
+            return self._embedding_model
+        return cast("EmbeddingModel", self._embedding_model)
+
+    def _resolve_chat(self, store_cls: type[MemoryStore]) -> ChatModel | None:
+        """返回聊天模型，按 store 需求初始化。"""
+        if self._chat_model is None and getattr(store_cls, "requires_chat", False):
+            self._chat_model = get_chat_model()
+        if getattr(store_cls, "requires_chat", False):
+            return self._chat_model
+        return None
+
     def _create_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in _STORES_REGISTRY:
             raise UnknownModeError(mode)
@@ -98,17 +120,8 @@ class MemoryModule:
         data_dir = self._data_dir
 
         index: VectorIndex = FaissIndex(data_dir)
-
-        embedding = self._embedding_model
-        if embedding is None and getattr(store_cls, "requires_embedding", False):
-            embedding = get_cached_embedding_model()
-        if getattr(store_cls, "requires_embedding", False) and embedding is None:
-            msg = f"Store {store_cls.store_name} requires embedding_model"
-            raise RuntimeError(msg)
-
-        chat = self._chat_model
-        if chat is None and getattr(store_cls, "requires_chat", False):
-            chat = get_chat_model()
+        embedding = self._resolve_embedding(store_cls)
+        chat = self._resolve_chat(store_cls)
 
         retrieval = RetrievalPipeline(index, embedding)
         forgetting = ForgettingCurve()
