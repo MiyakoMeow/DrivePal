@@ -17,6 +17,7 @@ from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from app.memory.interfaces import RetrievalStrategy  # noqa: F401
     from app.memory.stores.memory_bank.faiss_index import FaissIndex
     from app.models.embedding import EmbeddingModel
 

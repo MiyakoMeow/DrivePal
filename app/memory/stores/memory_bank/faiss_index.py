@@ -15,6 +15,8 @@ import numpy as np
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from app.memory.interfaces import VectorIndex  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_DIM = 1536

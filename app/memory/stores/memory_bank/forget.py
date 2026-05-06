@@ -10,6 +10,10 @@ import os
 import random
 import time
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.memory.interfaces import ForgettingStrategy  # noqa: F401
 
 SOFT_FORGET_THRESHOLD = 0.15
 FORGET_INTERVAL_SECONDS = 300
