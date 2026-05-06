@@ -102,7 +102,9 @@ class MemoryModule:
         embedding = self._embedding_model
         if embedding is None and getattr(store_cls, "requires_embedding", False):
             embedding = get_cached_embedding_model()
-        assert embedding is not None  # noqa: S101
+        if getattr(store_cls, "requires_embedding", False) and embedding is None:
+            msg = f"Store {store_cls.store_name} requires embedding_model"
+            raise RuntimeError(msg)
 
         chat = self._chat_model
         if chat is None and getattr(store_cls, "requires_chat", False):

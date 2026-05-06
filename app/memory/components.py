@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from app.memory.interfaces import FeedbackHandler  # noqa: F401
+    from app.memory.interfaces import FeedbackHandler
 
 from app.memory.schemas import (
     FeedbackData,

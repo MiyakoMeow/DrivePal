@@ -35,7 +35,7 @@ class MemoryBankStore:
     requires_embedding = True
     requires_chat = True
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         index: VectorIndex,
         retrieval: RetrievalStrategy,

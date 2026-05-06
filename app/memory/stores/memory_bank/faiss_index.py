@@ -15,7 +15,7 @@ import numpy as np
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from app.memory.interfaces import VectorIndex  # noqa: F401
+    from app.memory.interfaces import VectorIndex
 
 logger = logging.getLogger(__name__)
 
