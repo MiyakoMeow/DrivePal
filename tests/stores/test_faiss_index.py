@@ -58,7 +58,7 @@ async def test_corrupted_metadata_rebuilds():
         await idx.load()
         await idx.add_vector("x", [0.3] * 1536, "2024-06-15T00:00:00", {})
         await idx.save()
-        Path(tmp, "metadata.json").write_text("invalid json")
+        Path(tmp, "metadata.json").write_text("invalid json")  # noqa: ASYNC240
         idx2 = FaissIndex(Path(tmp))
         await idx2.load()
         assert idx2.total == 0
@@ -72,4 +72,4 @@ async def test_update_metadata():
         await idx.load()
         fid = await idx.add_vector("test", [0.1] * 1536, "2024-06-15T00:00:00", {})
         await idx.update_metadata(fid, {"memory_strength": 5})
-        assert idx.get_metadata()[0]["memory_strength"] == 5
+        assert idx.get_metadata()[0]["memory_strength"] == 5  # noqa: PLR2004

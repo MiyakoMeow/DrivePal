@@ -22,25 +22,6 @@ DEFAULT_EMBEDDING_DIM = 1536
 _TIMESTAMP_LENGTH = 10
 
 
-def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
-    """校验 metadata 为 list[dict]，每个 dict 含 faiss_id。"""
-    if not isinstance(meta, list):
-        msg = "metadata root is not list"
-        raise TypeError(msg)
-    for i, m in enumerate(meta):
-        if not isinstance(m, dict) or "faiss_id" not in m:
-            msg = f"entry {i}: invalid"
-            raise ValueError(msg)
-    return cast("list[dict[str, Any]]", meta)
-
-
-def _validate_index_count(idx: faiss.Index, meta_len: int) -> None:
-    """校验索引条目数与 metadata 数一致。"""
-    if idx.ntotal != meta_len:
-        msg = f"count mismatch {idx.ntotal} vs {meta_len}"
-        raise ValueError(msg)
-
-
 class FaissIndex:
     """FAISS 索引包装器，基于 IndexIDMap(IndexFlatIP) 实现向量检索与元数据管理。"""
 
@@ -74,9 +55,17 @@ class FaissIndex:
         if ip.exists() and mp.exists():
             try:
                 idx = faiss.read_index(str(ip))
-                raw_meta = json.loads(mp.read_text())
-                meta = _validate_metadata_structure(raw_meta)
-                _validate_index_count(idx, len(meta))
+                meta = cast("list[dict[str, Any]]", json.loads(mp.read_text()))
+                if not isinstance(meta, list):
+                    msg = "metadata root is not list"
+                    raise TypeError(msg)  # noqa: TRY301
+                for i, m in enumerate(meta):
+                    if not isinstance(m, dict) or "faiss_id" not in m:
+                        msg = f"entry {i}: invalid"
+                        raise ValueError(msg)  # noqa: TRY301
+                if idx.ntotal != len(meta):
+                    msg = f"count mismatch {idx.ntotal} vs {len(meta)}"
+                    raise ValueError(msg)  # noqa: TRY301
                 self._index = idx
                 self._dim = idx.d
                 self._metadata = meta
@@ -231,8 +220,7 @@ class FaissIndex:
         """返回额外元数据（总体摘要/人格）。"""
         return self._extra
 
-    def set_extra(self, extra: dict) -> None:
-        """设置额外元数据。"""
+    def set_extra(self, extra: dict) -> None:  # noqa: D102
         self._extra = extra
 
     @property

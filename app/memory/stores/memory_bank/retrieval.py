@@ -65,7 +65,7 @@ def _get_effective_chunk_size(metadata: list[dict]) -> int:
     return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, p90 * 3))
 
 
-def _safe_memory_strength(value: Any) -> float:
+def _safe_memory_strength(value: Any) -> float:  # noqa: ANN401
     try:
         f = float(value)
     except TypeError, ValueError:
@@ -95,8 +95,21 @@ def _strip_source_prefix(text: str, date_part: str) -> str:
     return text
 
 
-def _build_overlap_groups(merging: list[dict]) -> dict[int, list[int]]:
-    """用并查集将重叠结果分组为连通分量。"""
+def _merge_overlapping_results(results: list[dict]) -> list[dict]:  # noqa: C901, PLR0912
+    non_merging = [
+        r
+        for r in results
+        if not isinstance(r.get("_merged_indices"), list)
+        or len(r["_merged_indices"]) <= 1
+    ]
+    merging = [
+        r
+        for r in results
+        if isinstance(r.get("_merged_indices"), list) and len(r["_merged_indices"]) > 1
+    ]
+    if len(merging) <= 1:
+        return results
+
     idx_owners: dict[int, list[int]] = defaultdict(list)
     for ri, r in enumerate(merging):
         for idx in r["_merged_indices"]:
@@ -119,96 +132,74 @@ def _build_overlap_groups(merging: list[dict]) -> dict[int, list[int]]:
         for i in range(1, len(owners)):
             _union(owners[0], owners[i])
 
-    groups: dict[int, list[int]] = defaultdict(list)
+    groups = defaultdict(list)
     for i in range(len(merging)):
         groups[_find(i)].append(i)
-    return groups
-
-
-def _merge_result_group(merging: list[dict], members: list[int]) -> dict | None:
-    """合并单个分组（一组重叠结果 → 一条结果）。"""
-    if len(members) == 1:
-        return merging[members[0]]
-
-    all_indices: set[int] = set()
-    best_idx = max(members, key=lambda mi: merging[mi].get("score", 0.0))
-    for mi in members:
-        all_indices.update(merging[mi]["_merged_indices"])
-    r = dict(merging[best_idx])
-    r["_merged_indices"] = sorted(all_indices)
-    r["_all_meta_indices"] = sorted(
-        {
-            merging[mi].get("_meta_idx")
-            for mi in members
-            if merging[mi].get("_meta_idx") is not None
-        }
-    )
-    r["memory_strength"] = max(
-        _safe_memory_strength(
-            merging[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
-        )
-        for mi in members
-    )
-    r["speakers"] = sorted(
-        {s for mi in members for s in (merging[mi].get("speakers") or [])}
-    )
-
-    index_to_part: dict[int, str] = {}
-    for mi in members:
-        parts = merging[mi].get("text", "").split(_MERGED_TEXT_DELIMITER)
-        indices = merging[mi].get("_merged_indices", [])
-        if len(indices) != len(parts):
-            logger.warning(
-                "text/indices 长度不匹配 (%d vs %d) for result %d，跳过",
-                len(indices),
-                len(parts),
-                mi,
-            )
-            continue
-        for idx, part in zip(indices, parts, strict=True):
-            index_to_part.setdefault(idx, part)
-
-    deduped_parts = [
-        index_to_part[idx] for idx in r["_merged_indices"] if idx in index_to_part
-    ]
-    if deduped_parts:
-        r["text"] = _MERGED_TEXT_DELIMITER.join(deduped_parts)
-    else:
-        if not r.get("text", ""):
-            r["text"] = next(iter(index_to_part.values()), "")
-        if not r.get("text", ""):
-            logger.warning(
-                "合并结果为空文本 (best_idx=%s, %d members, %d parts)。"
-                "元数据损坏 — 跳过。",
-                best_idx,
-                len(members),
-                len(index_to_part),
-            )
-            return None
-    return r
-
-
-def _merge_overlapping_results(results: list[dict]) -> list[dict]:
-    non_merging = [
-        r
-        for r in results
-        if not isinstance(r.get("_merged_indices"), list)
-        or len(r["_merged_indices"]) <= 1
-    ]
-    merging = [
-        r
-        for r in results
-        if isinstance(r.get("_merged_indices"), list) and len(r["_merged_indices"]) > 1
-    ]
-    if len(merging) <= 1:
-        return results
-
-    groups = _build_overlap_groups(merging)
 
     merged: list[dict] = []
     for members in groups.values():
-        r = _merge_result_group(merging, members)
-        if r is not None:
+        if len(members) == 1:
+            merged.append(merging[members[0]])
+        else:
+            all_indices: set[int] = set()
+            best_idx = max(members, key=lambda mi: merging[mi].get("score", 0.0))
+            for mi in members:
+                all_indices.update(merging[mi]["_merged_indices"])
+            r = dict(merging[best_idx])
+            r["_merged_indices"] = sorted(all_indices)
+            r["_all_meta_indices"] = sorted(
+                {
+                    merging[mi].get("_meta_idx")
+                    for mi in members
+                    if merging[mi].get("_meta_idx") is not None
+                }
+            )
+            r["memory_strength"] = max(
+                _safe_memory_strength(
+                    merging[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
+                )
+                for mi in members
+            )
+            r["speakers"] = sorted(
+                {s for mi in members for s in (merging[mi].get("speakers") or [])}
+            )
+            index_to_part: dict[int, str] = {}
+            for mi in members:
+                parts = merging[mi].get("text", "").split(_MERGED_TEXT_DELIMITER)
+                indices = merging[mi].get("_merged_indices", [])
+                if len(indices) != len(parts):
+                    logger.warning(
+                        "_merge_overlapping_results text/indices "
+                        "长度不匹配 (%d vs %d) for result %d，跳过",
+                        len(indices),
+                        len(parts),
+                        mi,
+                    )
+                    continue
+                for idx, part in zip(indices, parts, strict=True):
+                    index_to_part.setdefault(idx, part)
+            deduped_parts = [
+                index_to_part[idx]
+                for idx in r["_merged_indices"]
+                if idx in index_to_part
+            ]
+            if deduped_parts:
+                r["text"] = _MERGED_TEXT_DELIMITER.join(deduped_parts)
+            else:
+                if not r.get("text", ""):
+                    r["text"] = next(iter(index_to_part.values()), "")
+                if not r.get("text", ""):
+                    logger.warning(
+                        "_merge_overlapping_results 合并结果为空文本 "
+                        "(best_idx=%s, _meta_idx=%s, "
+                        "%d members, %d parts recovered)。"
+                        "元数据损坏 — 跳过此结果。",
+                        best_idx,
+                        merging[best_idx].get("_meta_idx"),
+                        len(members),
+                        len(index_to_part),
+                    )
+                    continue
             merged.append(r)
 
     if non_merging:
@@ -216,103 +207,6 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
     merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
 
     return merged
-
-
-def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
-    """更新命中条目的记忆强度，返回是否有修改。"""
-    updated = False
-    for r in results:
-        all_mi: list[int] = []
-        ai = r.get("_all_meta_indices")
-        if isinstance(ai, list):
-            all_mi.extend(ai)
-        else:
-            mi = r.get("_meta_idx")
-            if mi is not None:
-                all_mi.append(mi)
-        for mi in all_mi:
-            if 0 <= mi < len(metadata):
-                old = _safe_memory_strength(
-                    metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
-                )
-                capped = min(old + 1.0, 10.0)
-                if capped != old:
-                    metadata[mi]["memory_strength"] = capped
-                    updated = True
-    return updated
-
-
-def _gather_neighbor_indices(
-    metadata: list[dict], meta_idx: int, source: str
-) -> list[int]:
-    """收集同 source 的邻居索引（包含原始命中点）。"""
-    neighbor_indices: list[int] = [meta_idx]
-    pos = meta_idx + 1
-    while pos < len(metadata) and metadata[pos].get("source") == source:
-        if not metadata[pos].get("forgotten"):
-            neighbor_indices.append(pos)
-        pos += 1
-    pos = meta_idx - 1
-    while pos >= 0 and metadata[pos].get("source") == source:
-        if not metadata[pos].get("forgotten"):
-            neighbor_indices.append(pos)
-        pos -= 1
-    neighbor_indices.sort()
-    if meta_idx not in neighbor_indices:
-        neighbor_indices.insert(0, meta_idx)
-    return neighbor_indices
-
-
-def _trim_to_chunk_size(
-    neighbor_indices: list[int],
-    metadata: list[dict],
-    meta_idx: int,
-    max_chars: int,
-) -> list[int]:
-    """从两端裁剪邻居列表，使总文本不超过 max_chars。"""
-    queue = deque(neighbor_indices)
-    total = sum(len(metadata[i].get("text", "")) for i in queue)
-    while len(queue) > 1 and total > max_chars:
-        left_dist = meta_idx - queue[0]
-        right_dist = queue[-1] - meta_idx
-        removed = queue.popleft() if left_dist >= right_dist else queue.pop()
-        total -= len(metadata[removed].get("text", ""))
-    return list(queue)
-
-
-def _build_neighbor_result(
-    neighbor_indices: list[int],
-    metadata: list[dict],
-    meta_idx: int,
-    score: float,
-) -> dict:
-    """构建合并后的邻居结果字典。"""
-    parts: list[str] = []
-    for idx in neighbor_indices:
-        t = metadata[idx].get("text", "")
-        src = metadata[idx].get("source", "")
-        date_part = src.removeprefix("summary_")
-        t = _strip_source_prefix(t, date_part)
-        parts.append(t.strip())
-
-    combined_text = _MERGED_TEXT_DELIMITER.join(parts)
-    base_meta = dict(metadata[neighbor_indices[0]])
-    base_meta["text"] = combined_text
-    base_meta["_meta_idx"] = meta_idx
-    base_meta["score"] = score
-
-    if len(neighbor_indices) > 1:
-        base_meta["_merged_indices"] = sorted(neighbor_indices)
-        base_meta["speakers"] = sorted(
-            {s for i in neighbor_indices for s in (metadata[i].get("speakers") or [])}
-        )
-        base_meta["memory_strength"] = max(
-            _safe_memory_strength(
-                metadata[i].get("memory_strength", INITIAL_MEMORY_STRENGTH)
-            )
-            for i in neighbor_indices
-        )
-    return base_meta
 
 
 def _clean_search_result(result: dict) -> None:
@@ -338,18 +232,11 @@ class RetrievalPipeline:
     阶段 4: 说话人感知降权
     """
 
-    def __init__(self, index: FaissIndex, embedding_model: EmbeddingModel) -> None:
-        """初始化检索管道。
-
-        Args:
-            index: FAISS 索引实例。
-            embedding_model: 嵌入模型实例。
-
-        """
+    def __init__(self, index: FaissIndex, embedding_model: EmbeddingModel) -> None:  # noqa: D107
         self._index = index
         self._embedding_model = embedding_model
 
-    async def search(self, query: str, top_k: int = 5) -> list[dict]:
+    async def search(self, query: str, top_k: int = 5) -> list[dict]:  # noqa: C901, PLR0912
         """执行四阶段检索管道。"""
         if top_k <= 0:
             return []
@@ -375,18 +262,41 @@ class RetrievalPipeline:
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
-        updated = _update_memory_strengths(merged, metadata)
+        updated = False
+        for r in merged:
+            all_mi: list[int] = []
+            ai = r.get("_all_meta_indices")
+            if isinstance(ai, list):
+                all_mi.extend(ai)
+            else:
+                mi = r.get("_meta_idx")
+                if mi is not None:
+                    all_mi.append(mi)
+            for mi in all_mi:
+                if 0 <= mi < len(metadata):
+                    old = _safe_memory_strength(
+                        metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
+                    )
+                    capped = min(old + 1.0, 10.0)
+                    if capped != old:
+                        metadata[mi]["memory_strength"] = capped
+                        updated = True
+
         for r in merged:
             _clean_search_result(r)
         if updated:
             await self._index.save()
         return merged
 
-    def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:
-        if not results or not metadata:
+    def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:  # noqa: C901, PLR0912, PLR0915
+        if not results:
+            return results
+
+        if not metadata:
             return results
 
         effective_chunk = _get_effective_chunk_size(metadata)
+
         indexed = [
             (r, r["_meta_idx"]) for r in results if r.get("_meta_idx") is not None
         ]
@@ -395,17 +305,75 @@ class RetrievalPipeline:
         non_indexed = [r for r in results if r.get("_meta_idx") is None]
 
         merged_results: list[dict] = []
+
         for r, meta_idx in indexed:
             score = float(r.get("score", 0.0))
             source = r.get("source", "")
 
-            neighbors = _gather_neighbor_indices(metadata, meta_idx, source)
-            neighbors = _trim_to_chunk_size(
-                neighbors, metadata, meta_idx, effective_chunk
-            )
-            merged_results.append(
-                _build_neighbor_result(neighbors, metadata, meta_idx, score)
-            )
+            neighbor_indices: list[int] = [meta_idx]
+
+            pos = meta_idx + 1
+            while pos < len(metadata) and metadata[pos].get("source") == source:
+                if not metadata[pos].get("forgotten"):
+                    neighbor_indices.append(pos)
+                pos += 1
+
+            pos = meta_idx - 1
+            while pos >= 0 and metadata[pos].get("source") == source:
+                if not metadata[pos].get("forgotten"):
+                    neighbor_indices.append(pos)
+                pos -= 1
+
+            neighbor_indices.sort()
+            # 确保原始命中点始终在候选列表中（可能已被跳过）
+            if meta_idx not in neighbor_indices:
+                neighbor_indices.insert(0, meta_idx)
+
+            trim_queue = deque(neighbor_indices)
+            total = sum(len(metadata[i].get("text", "")) for i in trim_queue)
+            while len(trim_queue) > 1:
+                if total <= effective_chunk:
+                    break
+                left_dist = meta_idx - trim_queue[0]
+                right_dist = trim_queue[-1] - meta_idx
+                if left_dist >= right_dist:
+                    removed = trim_queue.popleft()
+                else:
+                    removed = trim_queue.pop()
+                total -= len(metadata[removed].get("text", ""))
+            neighbor_indices = list(trim_queue)
+
+            parts: list[str] = []
+            for idx in neighbor_indices:
+                t = metadata[idx].get("text", "")
+                src = metadata[idx].get("source", "")
+                date_part = src.removeprefix("summary_")
+                t = _strip_source_prefix(t, date_part)
+                parts.append(t.strip())
+
+            combined_text = _MERGED_TEXT_DELIMITER.join(parts)
+            base_meta = dict(metadata[neighbor_indices[0]])
+            base_meta["text"] = combined_text
+            base_meta["_meta_idx"] = meta_idx
+
+            base_meta["score"] = float(score)
+
+            if len(neighbor_indices) > 1:
+                base_meta["_merged_indices"] = sorted(neighbor_indices)
+                base_meta["speakers"] = sorted(
+                    {
+                        s
+                        for i in neighbor_indices
+                        for s in (metadata[i].get("speakers") or [])
+                    }
+                )
+                base_meta["memory_strength"] = max(
+                    _safe_memory_strength(
+                        metadata[i].get("memory_strength", INITIAL_MEMORY_STRENGTH)
+                    )
+                    for i in neighbor_indices
+                )
+            merged_results.append(base_meta)
 
         if len(merged_results) > 1:
             merged_results = _merge_overlapping_results(merged_results)

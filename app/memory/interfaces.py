@@ -26,7 +26,7 @@ class MemoryStore(Protocol):
         data_dir: Path,
         embedding_model: EmbeddingModel | None,
         chat_model: ChatModel | None,
-    ) -> Any:
+    ) -> Any:  # noqa: ANN401
         """构造默认配置对象。"""
         ...
 
