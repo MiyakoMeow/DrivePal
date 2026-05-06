@@ -8,7 +8,7 @@
 
 ### Nix 环境提示
 
-如果当前系统为 NixOS，请使用 `nix develop --command` 运行命令。
+如果当前系统为 NixOS，若项目测试或运行出现问题，可尝试使用 `nix develop --command` 运行命令。
 
 ## 检查配置：
 
