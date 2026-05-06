@@ -121,7 +121,7 @@ class MemoryModule:
 
         enricher = OverallContextEnricher()
 
-        return MemoryBankStore(
+        return store_cls(
             index=index,
             retrieval=retrieval,
             embedding_model=embedding,
