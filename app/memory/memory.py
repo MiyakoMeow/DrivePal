@@ -1,16 +1,13 @@
 """统一记忆管理接口，Facade 模式 + 工厂注册表."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from app.memory.interfaces import InteractiveMemoryStore
 from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.types import MemoryMode
-from app.models.chat import ChatModel, get_chat_model
-from app.models.embedding import EmbeddingModel, get_cached_embedding_model
+from app.models.chat import get_chat_model
+from app.models.embedding import get_cached_embedding_model
 
 
 class UnknownModeError(ValueError):
@@ -33,6 +30,8 @@ if TYPE_CHECKING:
         MemoryEvent,
         SearchResult,
     )
+    from app.models.chat import ChatModel
+    from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -83,35 +82,20 @@ class MemoryModule:
         """解析 mode 参数，默认 MEMORY_BANK."""
         return mode or MemoryMode.MEMORY_BANK
 
-    def _resolve_embedding(self, store_cls: type[MemoryStore]) -> EmbeddingModel | None:
-        """返回嵌入模型，按 store 需求初始化。"""
-        requires_embedding = getattr(store_cls, "requires_embedding", False)
-        if self._embedding_model is None and requires_embedding:
-            self._embedding_model = get_cached_embedding_model()
-        if requires_embedding:
-            if self._embedding_model is None:
-                msg = f"Store {store_cls.store_name} requires embedding_model"
-                raise RuntimeError(msg)
-            return self._embedding_model
-        return self._embedding_model
-
-    def _resolve_chat(self, store_cls: type[MemoryStore]) -> ChatModel | None:
-        """返回聊天模型，按 store 需求初始化。"""
-        requires_chat = getattr(store_cls, "requires_chat", False)
-        if self._chat_model is None and requires_chat:
-            self._chat_model = get_chat_model()
-        if requires_chat:
-            return self._chat_model
-        return None
-
     def _create_store(self, mode: MemoryMode) -> MemoryStore:
         if mode not in _STORES_REGISTRY:
             raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
-        embedding = self._resolve_embedding(store_cls)
-        chat = self._resolve_chat(store_cls)
-        config = store_cls.create_default_config(self._data_dir, embedding, chat)
-        return store_cls(config)
+        kwargs: dict[str, Any] = {"data_dir": self._data_dir}
+        if getattr(store_cls, "requires_embedding", False):
+            if self._embedding_model is None:
+                self._embedding_model = get_cached_embedding_model()
+            kwargs["embedding_model"] = self._embedding_model
+        if getattr(store_cls, "requires_chat", False):
+            if self._chat_model is None:
+                self._chat_model = get_chat_model()
+            kwargs["chat_model"] = self._chat_model
+        return store_cls(**kwargs)
 
     async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
         """写入记忆事件."""
@@ -128,7 +112,7 @@ class MemoryModule:
     ) -> InteractionResult:
         """写入交互记录."""
         store = await self._get_store(self._resolve_mode(mode))
-        if not isinstance(store, InteractiveMemoryStore):
+        if not getattr(store, "supports_interaction", False):
             msg = f"Store '{store.store_name}' does not support write_interaction"
             raise NotImplementedError(msg)
         return await store.write_interaction(query, response, event_type)
