@@ -187,8 +187,10 @@ class MemoryBankStore:
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """更新反馈."""
-        if self._feedback:
-            await self._feedback.update_feedback(event_id, feedback)
+        if not self._feedback:
+            msg = f"FeedbackHandler 未配置，无法更新 event_id={event_id} 的反馈"
+            raise RuntimeError(msg)
+        await self._feedback.update_feedback(event_id, feedback)
 
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""

@@ -36,12 +36,17 @@ class BackgroundWorker:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
+    async def drain(self) -> None:
+        """等待所有后台任务完成。"""
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+
     async def _run_summarize(self, date_key: str) -> None:
-        if not self._summarizer or not self._encoder:
+        if not self._summarizer:
             return
         try:
             text = await self._summarizer.get_daily_summary(date_key)
-            if text:
+            if text and self._encoder:
                 emb = await self._encoder.encode(text)
                 await self._index.add_vector(
                     text,

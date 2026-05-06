@@ -36,14 +36,12 @@ class OverallContextEnricher:
                 prepend.append(f"{label}: {val}")
         if not prepend:
             return results
-        out: list[SearchResult] = []
-        out.append(
+        out: list[SearchResult] = [
             SearchResult(
                 event={"content": "\n".join(prepend), "type": "overall_context"},
                 score=float("inf"),
                 source="overall",
             )
-        )
-        top_k = len(results)
-        out.extend(results[: max(0, top_k - 1)])
+        ]
+        out.extend(results)
         return out

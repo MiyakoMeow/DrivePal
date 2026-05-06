@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from app.memory.components import FeedbackManager
 from app.memory.enricher import OverallContextEnricher
@@ -91,24 +91,24 @@ class MemoryModule:
         """解析 mode 参数，默认 MEMORY_BANK."""
         return mode or MemoryMode.MEMORY_BANK
 
-    def _resolve_embedding(self, store_cls: type[MemoryStore]) -> EmbeddingModel:
+    def _resolve_embedding(self, store_cls: type[MemoryStore]) -> EmbeddingModel | None:
         """返回嵌入模型，按 store 需求初始化。"""
-        if self._embedding_model is None and getattr(
-            store_cls, "requires_embedding", False
-        ):
+        requires_embedding = getattr(store_cls, "requires_embedding", False)
+        if self._embedding_model is None and requires_embedding:
             self._embedding_model = get_cached_embedding_model()
-        if getattr(store_cls, "requires_embedding", False):
+        if requires_embedding:
             if self._embedding_model is None:
                 msg = f"Store {store_cls.store_name} requires embedding_model"
                 raise RuntimeError(msg)
             return self._embedding_model
-        return cast("EmbeddingModel", self._embedding_model)
+        return self._embedding_model
 
     def _resolve_chat(self, store_cls: type[MemoryStore]) -> ChatModel | None:
         """返回聊天模型，按 store 需求初始化。"""
-        if self._chat_model is None and getattr(store_cls, "requires_chat", False):
+        requires_chat = getattr(store_cls, "requires_chat", False)
+        if self._chat_model is None and requires_chat:
             self._chat_model = get_chat_model()
-        if getattr(store_cls, "requires_chat", False):
+        if requires_chat:
             return self._chat_model
         return None
 
@@ -123,13 +123,17 @@ class MemoryModule:
         embedding = self._resolve_embedding(store_cls)
         chat = self._resolve_chat(store_cls)
 
+        if embedding is None:
+            msg = f"Store {store_cls.store_name} requires embedding_model"
+            raise RuntimeError(msg)
+
         retrieval = RetrievalPipeline(index, embedding)
         forgetting = ForgettingCurve()
         feedback = FeedbackManager(data_dir)
 
         summarizer_svc = None
         background = None
-        if chat:
+        if chat is not None:
             llm = LlmClient(chat)
             summarizer_svc = Summarizer(llm, index)
             background = BackgroundWorker(index, summarizer_svc, embedding)

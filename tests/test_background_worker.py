@@ -1,4 +1,4 @@
-"""Test BackgroundWorker."""
+"""测试 BackgroundWorker。"""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
@@ -9,11 +9,11 @@ from app.memory.worker import BackgroundWorker
 
 
 class TestBackgroundWorker:
-    """Given a worker with mocked dependencies."""
+    """给定 mock 依赖的 worker。"""
 
     @pytest.fixture
     def mock_index(self):
-        """Fixture: mock VectorIndex."""
+        """fixture: mock VectorIndex。"""
         idx = MagicMock()
         idx.save = AsyncMock()
         idx.add_vector = AsyncMock(return_value=42)
@@ -21,7 +21,7 @@ class TestBackgroundWorker:
 
     @pytest.fixture
     def mock_summarizer(self):
-        """Fixture: mock SummarizationService."""
+        """fixture: mock SummarizationService。"""
         s = MagicMock()
         s.get_daily_summary = AsyncMock(return_value="Daily text")
         s.get_overall_summary = AsyncMock(return_value="Overall")
@@ -31,14 +31,14 @@ class TestBackgroundWorker:
 
     @pytest.fixture
     def mock_encoder(self):
-        """Fixture: mock EmbeddingModel."""
+        """fixture: mock EmbeddingModel。"""
         e = MagicMock()
         e.encode = AsyncMock(return_value=[0.1, 0.2, 0.3])
         return e
 
     @pytest.fixture
     def worker(self, mock_index, mock_summarizer, mock_encoder):
-        """Fixture: worker with all deps."""
+        """fixture: 全依赖 worker。"""
         return BackgroundWorker(mock_index, mock_summarizer, mock_encoder)
 
     async def test_schedule_triggers_summary_pipeline(

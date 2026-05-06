@@ -1,17 +1,18 @@
-"""Test OverallContextEnricher."""
+"""测试 OverallContextEnricher。"""
 
 import pytest
 
 from app.memory.enricher import OverallContextEnricher
 from app.memory.schemas import SearchResult
+from app.memory.stores.memory_bank.summarizer import GENERATION_EMPTY
 
 
 class TestOverallContextEnricher:
-    """Given an enricher with default keys."""
+    """给定默认 key 的 enricher。"""
 
     @pytest.fixture
     def enricher(self):
-        """Fixture: default enricher."""
+        """fixture: 默认 enricher。"""
         return OverallContextEnricher()
 
     async def test_empty_extra_returns_results_unchanged(self, enricher):
@@ -21,7 +22,7 @@ class TestOverallContextEnricher:
         assert out == results
 
     async def test_prepends_summary_when_present(self, enricher):
-        """有 overall_summary 时前置到结果列表。"""
+        """有 overall_summary 时前置到结果列表，不丢弃原有结果。"""
         results = [
             SearchResult(event={"content": "a"}, score=1.0),
             SearchResult(event={"content": "b"}, score=0.5),
@@ -29,15 +30,16 @@ class TestOverallContextEnricher:
         ]
         extra = {"overall_summary": "User likes sport mode"}
         out = await enricher.enrich(results, extra)
-        assert len(out) == len(results)
+        assert len(out) == len(results) + 1
         assert "User likes sport mode" in out[0].event["content"]
         assert out[1].event["content"] == "a"
         assert out[2].event["content"] == "b"
+        assert out[3].event["content"] == "c"
 
     async def test_skips_generation_empty(self, enricher):
         """GENERATION_EMPTY 占位符被跳过。"""
         results = [SearchResult(event={"content": "a"}, score=1.0)]
-        extra = {"overall_summary": "GENERATION_EMPTY"}
+        extra = {"overall_summary": GENERATION_EMPTY}
         out = await enricher.enrich(results, extra)
         assert len(out) == 1
         assert out[0] == results[0]
@@ -61,6 +63,6 @@ class TestOverallContextEnricher:
         ]
         extra = {"k1": "v1", "k2": "v2"}
         out = await enricher.enrich(results, extra)
-        assert len(out) == len(results)
+        assert len(out) == len(results) + 1
         assert "L1: v1" in out[0].event["content"]
         assert "L2: v2" in out[0].event["content"]
