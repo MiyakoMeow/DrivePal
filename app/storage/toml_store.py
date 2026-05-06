@@ -1,16 +1,16 @@
 """TOML文件存储后端，支持列表和字典类型的读写操作."""
 
+from __future__ import annotations
+
 import asyncio
 import tomllib
 from typing import TYPE_CHECKING, Any, TypeVar, cast
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 import aiofiles
 import tomli_w
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 T = TypeVar("T")
@@ -80,13 +80,18 @@ class TOMLStore:
         return obj
 
     async def _async_write(self, data: T) -> None:
-        self.filepath.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(self.filepath.parent.mkdir, parents=True, exist_ok=True)
         cleaned = self._clean_for_toml(data)
+        if isinstance(cleaned, list):
+            raw = await asyncio.to_thread(tomli_w.dumps, {_LIST_WRAPPER_KEY: cleaned})
+            payload = raw.encode()
+        else:
+            raw = await asyncio.to_thread(
+                tomli_w.dumps, cast("dict[str, Any]", cleaned)
+            )
+            payload = raw.encode()
         async with aiofiles.open(self.filepath, "wb") as f:
-            if isinstance(cleaned, list):
-                await f.write(tomli_w.dumps({_LIST_WRAPPER_KEY: cleaned}).encode())
-            else:
-                await f.write(tomli_w.dumps(cast("dict[str, Any]", cleaned)).encode())
+            await f.write(payload)
 
     async def _read_unsafe(self) -> T:
         """读操作，不获取锁（调用方必须持有锁）."""
@@ -94,7 +99,7 @@ class TOMLStore:
             await asyncio.to_thread(self._ensure_file)
         async with aiofiles.open(self.filepath, "rb") as f:
             content = await f.read()
-        raw = tomllib.loads(content.decode("utf-8"))
+        raw = await asyncio.to_thread(tomllib.loads, content.decode("utf-8"))
         if _LIST_WRAPPER_KEY in raw and len(raw) == 1:
             return raw[_LIST_WRAPPER_KEY]
         return cast("T", raw)

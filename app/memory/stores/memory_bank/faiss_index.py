@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any, cast
@@ -80,22 +81,29 @@ class FaissIndex:
                 ValueError,
                 RuntimeError,
             ) as exc:
-                logger.warning("FaissIndex corrupted, removing bad files: %s", exc)
-                ip.unlink(missing_ok=True)
-                mp.unlink(missing_ok=True)
-                ep.unlink(missing_ok=True)
+                logger.warning("FaissIndex corrupted, renaming bad files: %s", exc)
+                ip.replace(ip.with_name(ip.name + ".corrupted"))
+                mp.replace(mp.with_name(mp.name + ".corrupted"))
+                if ep.exists():
+                    ep.replace(ep.with_name(ep.name + ".corrupted"))
 
     async def save(self) -> None:
         """将索引与元数据持久化到磁盘。"""
         if self._index is None:
             return
-        faiss.write_index(self._index, str(self._data_dir / "index.faiss"))
-        (self._data_dir / "metadata.json").write_text(
-            json.dumps(self._metadata, ensure_ascii=False, indent=2),
+        await asyncio.to_thread(
+            faiss.write_index, self._index, str(self._data_dir / "index.faiss")
+        )
+        await asyncio.to_thread(
+            lambda: (self._data_dir / "metadata.json").write_text(
+                json.dumps(self._metadata, ensure_ascii=False, indent=2),
+            ),
         )
         if self._extra:
-            (self._data_dir / "extra_metadata.json").write_text(
-                json.dumps(self._extra, ensure_ascii=False, indent=2),
+            await asyncio.to_thread(
+                lambda: (self._data_dir / "extra_metadata.json").write_text(
+                    json.dumps(self._extra, ensure_ascii=False, indent=2),
+                ),
             )
 
     async def add_vector(
@@ -130,7 +138,7 @@ class FaissIndex:
             "faiss_id": fid,
             "text": text,
             "timestamp": timestamp,
-            "memory_strength": 1,
+            "memory_strength": 1.0,
             "last_recall_date": timestamp[:_TIMESTAMP_LENGTH]
             if len(timestamp) >= _TIMESTAMP_LENGTH
             else timestamp,
