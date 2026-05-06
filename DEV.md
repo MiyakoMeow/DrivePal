@@ -109,18 +109,17 @@ SAFETY_RULES.append(Rule(
 
 ```
 data/
-├── events.toml               # 事件历史（含 interaction_ids）
-├── interactions.toml         # 原始交互记录
-├── memorybank_summaries.toml # MemoryBank 层级摘要
-│   ├── daily_summaries: {}   # {date → {content, memory_strength, event_count}}
-│   └── overall_summary: ""   # 总摘要
-├── memorybank_personality.toml # MemoryBank 个性分析（运行时自动初始化）
-├── contexts.toml            # 上下文缓存
-├── preferences.toml         # 用户偏好
-├── feedback.toml            # 用户反馈记录
-├── strategies.toml          # 个性化策略
+├── events.toml               # 事件历史
+├── contexts.toml             # 上下文缓存
+├── preferences.toml          # 用户偏好
+├── feedback.toml             # 用户反馈记录
+├── strategies.toml           # 个性化策略
 ├── experiment_results.toml   # 实验结果
-└── scenario_presets.toml    # 模拟场景预设
+├── scenario_presets.toml     # 模拟场景预设
+└── memorybank/               # MemoryBank FAISS 索引文件
+    ├── index.faiss           #   FAISS 向量索引
+    ├── metadata.json         #   事件元数据
+    └── extra_metadata.json   #   额外元数据（summary/personality）
 ```
 
 ### 存储接口 (`app/storage/toml_store.py`)
@@ -136,8 +135,7 @@ store.update(key, val) # 更新键值（仅dict类型）
 
 **运行时自动初始化的文件**：
 
-以下文件不在 `init_data.py` 预创建，由 `TOMLStore` 在首次读取时自动生成：
-- `memorybank_personality.toml`：首次读取时自动创建 `{"daily_personality": {}, "overall_personality": ""}`
+FAISS 索引文件（`index.faiss` / `metadata.json` / `extra_metadata.json`）由 MemoryBank 在首次检索时自动初始化。
 
 ---
 
@@ -222,13 +220,13 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 | 维度 | 原始仓库 | 本项目 |
 |------|---------|--------|
-| **触发点** | 会话启动时一次性批量处理（`MemoryForgetterLoader.initial_load_forget_and_save`） | 每次搜索末尾调用 `forget_expired()`（`MemoryBankEngine`） |
-| **遗忘方式** | 概率性随机（`random.random() > retention_probability` 即删除） | 确定性阈值（`retention < SOFT_FORGET_THRESHOLD` 即标记） |
+| **触发点** | 会话启动时一次性批量处理（`MemoryForgetterLoader.initial_load_forget_and_save`） | 每次搜索末尾调用 `forget_expired()`（`forget.py`） |
+| **遗忘方式** | 概率性随机（`random.random() > retention_probability` 即删除） | 确定性阈值（默认）/ 概率性随机（`MEMORYBANK_FORGET_MODE=probabilistic` 可选） |
 | **遗忘结果** | 硬删除——从数组中 `.pop()`，甚至级联删除 summary | 软标记——`memory_strength = 0` + `forgotten = True` |
 
 **原始仓库**（[forget_memory.py:115-131](https://github.com/zhongwanjun/MemoryBank-SiliconFriend/blob/main/memory_bank/memory_retrieval/forget_memory.py#L115)）：对每条记忆独立掷骰子（`random.random() > retention_probability`），未通过的记忆从数组中 `.pop()` 硬删除；若该日所有对话均被遗忘，则级联删除对应 summary。
 
-**本项目**（`app/memory/stores/memory_bank/engine.py`）：搜索时遍历所有事件，命中检索的强化（`strength += 1`），搜索末尾调用 `forget_expired()` 对未命中的计算 retention，低于 `SOFT_FORGET_THRESHOLD=0.15` 时设置 `memory_strength = 0` + `forgotten = True`，仅标记不删除。
+**本项目**（`app/memory/stores/memory_bank/forget.py`）：搜索时遍历所有事件，命中检索的强化（`strength += 1`），搜索末尾调用 `forget_expired()` 对未命中的计算 retention，低于 `SOFT_FORGET_THRESHOLD=0.15` 时设置 `memory_strength = 0` + `forgotten = True`，仅标记不删除。可选概率性模式（`MEMORYBANK_FORGET_MODE=probabilistic`）：对每条记忆独立掷骰子（`random.random() > retention`），更贴近论文语义。
 
 **差异分析**：
 
@@ -236,7 +234,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 - 原始在启动时遗忘、运行期间不遗忘；本项目在每次搜索末尾遗忘——渐进式遗忘 vs 批量遗忘。
 - 原始的硬删除 + 连带删除 summary 是级联的；本项目没有级联逻辑。
 
-**评估**：确定性软遗忘在工程上更安全（可恢复），但损失了论文核心卖点"模拟人类随机遗忘"。如需精确复现论文语义，可引入概率性遗忘选项。
+**评估**：确定性软遗忘在工程上更安全（可恢复），但损失了论文核心卖点"模拟人类随机遗忘"。概率性模式已作为可选参数实现（`MEMORYBANK_FORGET_MODE=probabilistic`）。
 
 **遗忘节流机制**：本项目为避免每次搜索都遍历所有事件进行遗忘判断，实现了 `FORGET_INTERVAL_SECONDS = 300` 的节流机制——两次遗忘判断间隔至少 5 分钟。
 
@@ -256,23 +254,23 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 | 维度 | 原始仓库 | 本项目 |
 |------|---------|--------|
-| **索引类型** | FAISS（ANN）或 LlamaIndex | 无索引，全量遍历 + 余弦相似度 |
-| **搜索算法** | FAISS 近似最近邻，O(log n) | 暴力搜索，O(n) |
-| **文档分块** | ChineseTextSplitter + 按 source 聚合相邻块 | 无分块，每事件独立检索单元 |
+| **索引类型** | FAISS（ANN）或 LlamaIndex | FAISS IndexFlatIP + L2 归一化 |
+| **搜索算法** | FAISS 近似最近邻，O(log n) | FAISS 精确内积搜索，每日重建索引 |
+| **文档分块** | ChineseTextSplitter + 按 source 聚合相邻块 | 自适应分块（P90 动态校准） |
 | **top_k** | 默认 6 | 默认 3（搜索接口默认 10） |
-| **最低相似度阈值** | 依赖 FAISS | `EMBEDDING_MIN_SIMILARITY = 0.2`（`engine.py`） |
+| **最低相似度阈值** | 依赖 FAISS | `EMBEDDING_MIN_SIMILARITY = 0.2`（`faiss_index.py`） |
 
 **原始仓库的关键特性——相邻块聚合**（`forget_memory.py:187-230`）：
 
 原始仓库重写了 FAISS 的 `similarity_search_with_score_by_vector`，在返回 top-k 结果后向两侧扩展相同 `source`（日期）的相邻块，直到总长度超过 `CHUNK_SIZE`（200 字符），保证同一日期的片段被拼接返回。本项目以单条事件为单位存储，天然不需要分块与拼接。
 
-**评估**：对当前规模（单用户、车载场景）全量遍历足够。未来扩展到大规模记忆时再引入 FAISS。
+**评估**：已从全量遍历迁移到 FAISS IndexFlatIP + 每日重建索引，平衡检索速度与数据新鲜度。自适应分块基于事件长度 P90 动态校准，避免固定分块大小导致的过粗/过细问题。
 
 #### 2.2 搜索评分公式（改进）
 
 **原始仓库**：搜索分数仅来自 FAISS 向量距离，遗忘曲线不参与搜索评分——仅在加载时决定是否保留到索引中（二值效应）。
 
-**本项目**（`engine.py`）：搜索分数 = `similarity * retention`，遗忘曲线成为连续权重——被强化过的记忆排名更高，长期未被回忆的记忆排名更低。这是有意的设计改进，更符合"记忆逐渐模糊"的直觉。
+**本项目**（`faiss_index.py`）：搜索分数 = `similarity * retention`，遗忘曲线成为连续权重——被强化过的记忆排名更高，长期未被回忆的记忆排名更低。这是有意的设计改进，更符合"记忆逐渐模糊"的直觉。
 
 **搜索评分增强**：
 
@@ -285,7 +283,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **原始仓库**：无回退机制，FAISS 不可用则直接失败。
 
-**本项目**（`engine.py`）：embedding 搜索无结果时自动回退到关键词搜索。纯工程改进。
+**本项目**（`faiss_index.py`）：embedding 搜索无结果时自动回退到关键词搜索。纯工程改进。
 
 ---
 
@@ -305,9 +303,9 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **原始仓库**（`summarize_memory.py:67-77`）：使用**原始对话文本**（完整的 query + response 对）。
 
-**本项目**（`summarization.py:170-185`）：优先使用 `interactions` 中的原始 query/response 对作为摘要输入，无交互记录时 fallback 到事件的 `content` 字段。
+**本项目**（`summarizer.py`）：优先使用 `interactions` 中的原始 query/response 对作为摘要输入，无交互记录时 fallback 到事件的 `content` 字段。
 
-**评估**：本项目的做法已对齐原始仓库的摘要输入来源，使用原始对话文本而非已摘要的 `content`，避免了"对摘要做摘要"的精度损失。
+**评估**：本项目的做法已对齐原始仓库的摘要输入来源，使用原始对话文本而非已摘要的 `content`，避免了"对摘要做摘要"的精度损失。同时本项目的 `summarizer.py` 合并了原 `personality.py` 和 `summarization.py` 的功能，统一管理分层摘要与人格生成。
 
 ---
 
@@ -322,7 +320,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **原始仓库**：`personality` 字段是纯文本，没有 `memory_strength`，不参与遗忘曲线。
 
-**本项目**（`personality.py:56-61`）：personality 条目拥有 `memory_strength` 和 `last_recall_date`，搜索时受遗忘曲线影响（`score = retention * SUMMARY_WEIGHT * 0.8`），且被检索命中时会强化。
+**本项目**（`summarizer.py`）：personality 条目拥有 `memory_strength` 和 `last_recall_date`，搜索时受遗忘曲线影响（`score = retention * SUMMARY_WEIGHT * 0.8`），且被检索命中时会强化。
 
 **评估**：本项目的做法更合理。原始仓库中 personality 不受遗忘影响是设计遗漏——人格特质应随时间淡化（人会改变）。额外的 `SUMMARY_WEIGHT * 0.8` 降权使人格搜索结果排名低于事件，语义合理。
 
@@ -330,7 +328,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **原始仓库**：每次运行 `summarize_memory()` 时无条件重新生成 `overall_personality`。
 
-**本项目**（`personality.py:136-220`）：仅在 `daily_personality` 数量 ≥ `OVERALL_PERSONALITY_THRESHOLD=3` 且有新增条目时触发，带并发保护（snapshot count 校验，防止生成期间数据变更导致覆盖丢失）。
+**本项目**（`summarizer.py`）：仅在 `daily_personality` 数量 ≥ `OVERALL_PERSONALITY_THRESHOLD=3` 且有新增条目时触发，带并发保护（snapshot count 校验，防止生成期间数据变更导致覆盖丢失）。
 
 #### 4.3 关键阈值
 
@@ -347,8 +345,8 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 **本项目**：引入 Event + Interaction 两级模型——多个语义相近的交互可聚合为同一事件：
 
-- `_should_append_to_event`（`engine.py:383-417`）：扫描全部当日事件取最高相似度，基于余弦相似度 ≥ 0.8 或字符重叠 ≥ 45% 判定
-- `_update_event_summary`（`engine.py:419-442`）：聚合后用 LLM 重新摘要事件 content
+- `_should_append_to_event`（`retrieval.py`）：扫描全部当日事件取最高相似度，基于余弦相似度 ≥ 0.8 或字符重叠 ≥ 45% 判定
+- `_update_event_summary`（`retrieval.py`）：聚合后用 LLM 重新摘要事件 content
 - 检索命中事件时，自动附加其关联的所有原始交互记录（`_expand_event_interactions`）
 
 **聚合阈值**：字符重叠阈值 `OVERLAP_RATIO_THRESHOLD = 0.45`（原始仓库为 0.5），相似度阈值 `AGGREGATION_SIMILARITY_THRESHOLD = 0.8`。
@@ -361,8 +359,8 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 | 原始仓库特性 | 实现价值 | 说明 |
 |-------------|---------|------|
-| **概率性随机遗忘** | 中 | 论文语义还原的关键特性，建议作为可选参数实现（`ForgetStrategy.PROBABILISTIC`） |
-| **FAISS 向量索引** | 低（当前） | 单用户车载场景全量遍历足够，未来大规模记忆时再引入 |
+| **概率性随机遗忘** | ✅ 已实现 | 可选模式（`MEMORYBANK_FORGET_MODE=probabilistic`） |
+| **FAISS 向量索引** | ✅ 已实现 | IndexFlatIP + 每日重建索引 |
 | **LlamaIndex 路径** | 无 | 与 FAISS 功能重复，无需额外依赖 |
 | **多用户隔离** | 视需求 | 车载单驾驶员场景不需要，家庭用车/多驾驶员时再添加 |
 | **Summary 连带遗忘** | 低 | 保留 summary 更安全，级联删除的收益有限 |
@@ -375,7 +373,7 @@ uv run pytest tests/ -v --test-llm --test-embedding
 
 | 优先级 | 改进项 | 理由 |
 |--------|--------|------|
-| 中 | 概率性遗忘选项 | 论文语义还原，benchmark 可复现性 |
-| ~~中~~ | ~~摘要输入使用原始对话~~ | ✅ 已实现（`summarization.py:170-185`） |
-| 低 | FAISS 向量索引 | 当前规模不需要 |
+| ✅ 已实现 | 概率性遗忘选项 | 可选模式（`MEMORYBANK_FORGET_MODE=probabilistic`） |
+| ✅ 已实现 | 摘要输入使用原始对话 | `summarizer.py` |
+| ✅ 已实现 | FAISS 向量索引 | IndexFlatIP + 每日重建索引 |
 | 低 | 多用户隔离 | 视产品需求 |

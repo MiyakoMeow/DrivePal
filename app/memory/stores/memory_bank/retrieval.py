@@ -27,6 +27,7 @@ _MERGED_TEXT_DELIMITER = "\x00"
 DEFAULT_CHUNK_SIZE = 1500
 CHUNK_SIZE_MIN = 200
 CHUNK_SIZE_MAX = 8192
+_ADAPTIVE_CHUNK_MIN_ENTRIES = 10
 INITIAL_MEMORY_STRENGTH = 1
 _INTERNAL_KEYS: frozenset[str] = frozenset(
     {
@@ -46,6 +47,22 @@ def _resolve_chunk_size() -> int:
         except ValueError:
             pass
     return DEFAULT_CHUNK_SIZE
+
+
+def _get_effective_chunk_size(metadata: list[dict]) -> int:
+    """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
+
+    环境变量 MEMORYBANK_CHUNK_SIZE 显式设置时跳过自适应，直接使用该值。
+    metadata 不足 10 条时回退 DEFAULT_CHUNK_SIZE。
+    """
+    if os.getenv("MEMORYBANK_CHUNK_SIZE"):
+        return _resolve_chunk_size()
+    lengths = sorted(len(m.get("text", "")) for m in metadata)
+    if len(lengths) < _ADAPTIVE_CHUNK_MIN_ENTRIES:
+        return DEFAULT_CHUNK_SIZE
+    p90_idx = math.ceil(len(lengths) * 0.9) - 1
+    p90 = lengths[p90_idx]
+    return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, p90 * 3))
 
 
 def _safe_memory_strength(value: Any) -> float:  # noqa: ANN401
@@ -218,7 +235,6 @@ class RetrievalPipeline:
     def __init__(self, index: FaissIndex, embedding_model: EmbeddingModel) -> None:  # noqa: D107
         self._index = index
         self._embedding_model = embedding_model
-        self._chunk_size = _resolve_chunk_size()
 
     async def search(self, query: str, top_k: int = 5) -> list[dict]:  # noqa: C901, PLR0912
         """执行四阶段检索管道。"""
@@ -279,6 +295,8 @@ class RetrievalPipeline:
         if not metadata:
             return results
 
+        effective_chunk = _get_effective_chunk_size(metadata)
+
         indexed = [
             (r, r["_meta_idx"]) for r in results if r.get("_meta_idx") is not None
         ]
@@ -314,7 +332,7 @@ class RetrievalPipeline:
             trim_queue = deque(neighbor_indices)
             total = sum(len(metadata[i].get("text", "")) for i in trim_queue)
             while len(trim_queue) > 1:
-                if total <= self._chunk_size:
+                if total <= effective_chunk:
                     break
                 left_dist = meta_idx - trim_queue[0]
                 right_dist = trim_queue[-1] - meta_idx

@@ -67,10 +67,12 @@ thesis-cockpit-memo/
 │   │   ├── utils.py              # 记忆模块共享工具函数
 │   │   └── stores/               # 各记忆后端实现
 │   │       └── memory_bank/      # MemoryBank后端
-│   │           ├── store.py      #   薄Facade
-│   │           ├── engine.py     #   核心引擎（遗忘曲线+聚合+摘要）
-│   │           ├── personality.py #  个性分析管理器
-│   │           └── summarization.py # 分层摘要管理器
+│   │           ├── store.py      #   MemoryStore Protocol 实现（Facade）
+│   │           ├── faiss_index.py #   FAISS 索引管理（IndexFlatIP）
+│   │           ├── retrieval.py   #   四阶段检索管道
+│   │           ├── forget.py      #   遗忘曲线（Ebbinghaus + 概率模式）
+│   │           ├── summarizer.py  #   分层摘要与人格生成
+│   │           └── llm.py        #   LLM 封装（上下文截断重试）
 │   ├── schemas/                  # 通用数据模型
 │   │   └── context.py            # 驾驶上下文数据模型（DrivingContext等）
 │   ├── config.py                 # 应用配置（DATA_DIR等）
@@ -157,9 +159,9 @@ result, event_id, stages = await workflow.run_with_stages(
 
 ### 3. 记忆检索系统
 
-#### MemoryBank（遗忘曲线 + 分层摘要）
+#### MemoryBank（FAISS 向量索引 + 遗忘曲线）
 
-基于 MemoryBank 论文实现的三层记忆架构，核心引擎委托 `PersonalityManager` 和 `SummaryManager`：
+基于 MemoryBank 论文实现的三层记忆架构，使用 **FAISS IndexFlatIP** + **L2 归一化**（等价余弦相似度）的向量检索：
 
 ```mermaid
 flowchart TD
@@ -175,11 +177,13 @@ flowchart TD
     classDef summary fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
-- **遗忘曲线**：`retention = e^(-days / (5 × strength))`，模拟人类记忆衰减
-- **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存（事件和关联的交互记录都会被强化）
+- **向量索引**：FAISS IndexFlatIP + L2 归一化（精确内积搜索），每日检索时重建索引确保最新数据
+- **自适应分块**：基于事件长度 P90 百分位动态校准分块大小，平衡检索粒度与性能
+- **四阶段检索管道**：粗排（FAISS top-k）→ 邻居合并（相邻分块拼接）→ 重叠去重（按事件 ID 合并）→ 说话人过滤（可选）
+- **遗忘曲线**：`retention = e^(-days / (5 × strength))`，确定性阈值模式（默认 `retention < SOFT_FORGET_THRESHOLD=0.15` 标记遗忘），可选概率性模式（`MEMORYBANK_FORGET_MODE=probabilistic`）
+- **回忆强化**：检索命中时 `memory_strength += 1`，增加记忆留存
 - **自动聚合**：写入交互时扫描全部当日事件取最高相似度（余弦相似度 ≥ 0.8 或字符重叠 ≥ 45%），满足则聚合
-- **层级摘要**：`SummaryManager` 管理事件数达到日阈值后生成 daily_summary，达到总阈值后生成 overall_summary
-  - **个性分析**：`PersonalityManager` 管理每日个性摘要和总体个性画像
+- **分层摘要**：事件数达到日阈值后生成 daily_summary，达到总阈值后生成 overall_summary，附带人格画像
 - **结果展开**：检索命中事件时，自动附加其关联的原始交互记录
 
 #### 与原始 MemoryBank 论文的实现对比
@@ -192,11 +196,8 @@ flowchart TD
 
 | 组件 | 职责 |
 |------|------|
-| `EventStorage` | 事件 TOML 文件 CRUD + ID 生成 |
-| `KeywordSearch` | 关键词大小写不敏感搜索 |
+| `KeywordSearch` | 关键词搜索回退（embedding 无结果时使用） |
 | `FeedbackManager` | 反馈记录 + 策略权重更新 |
-| `SimpleInteractionWriter` | 交互记录写入 |
-| `forgetting_curve()` | Ebbinghaus遗忘曲线计算（供MemoryBank使用） |
 
 #### 反馈学习机制
 

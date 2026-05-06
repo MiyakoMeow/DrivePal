@@ -4,7 +4,10 @@
 通过指数衰减函数计算记忆留存率。
 """
 
+import enum
 import math
+import os
+import random
 import time
 from datetime import UTC, date, datetime
 
@@ -31,31 +34,60 @@ def forgetting_retention(days_elapsed: float, strength: float) -> float:
     return math.exp(-days_elapsed / (FORGETTING_TIME_SCALE * strength))
 
 
+class ForgetMode(enum.Enum):
+    """遗忘策略模式。"""
+
+    DETERMINISTIC = "deterministic"
+    PROBABILISTIC = "probabilistic"
+
+
+def _resolve_forget_mode() -> ForgetMode:
+    """从环境变量 MEMORYBANK_FORGET_MODE 解析遗忘模式。"""
+    mode = os.getenv("MEMORYBANK_FORGET_MODE", "deterministic").lower()
+    if mode == "probabilistic":
+        return ForgetMode.PROBABILISTIC
+    return ForgetMode.DETERMINISTIC
+
+
 class ForgettingCurve:
     """管理遗忘曲线判定逻辑，控制执行频率。"""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        mode: ForgetMode | None = None,
+        seed: int | None = None,
+    ) -> None:
         """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。"""
+        self._mode = mode if mode is not None else _resolve_forget_mode()
+        self._rng: random.Random | None = (
+            random.Random(seed)  # noqa: S311
+            if self._mode == ForgetMode.PROBABILISTIC
+            else None
+        )
         self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
 
     def maybe_forget(
         self, metadata: list[dict], reference_date: str | None = None
-    ) -> list[dict]:
-        """对 metadata 中达到遗忘阈值的条目标记 forgotten=True。
+    ) -> list[int] | None:
+        """对达到遗忘阈值的条目标记 forgotten=True。
+
+        概率模式下同时返回应硬删除的 FAISS ID 列表。
 
         Args:
-            metadata: 记忆条目列表（会被原地修改）。
+            metadata: 记忆条目列表（会被原地修改 forgotten 标记）。
             reference_date: 参考日期，默认当天 UTC。
 
         Returns:
-            原地修改后的 metadata。
+            None 当节流（未执行）；FAISS ID 列表（概率模式返回新遗忘的 ID，
+            确定性模式返回空列表）。
 
         """
         now = time.monotonic()
         if now - self._last_forget_time < FORGET_INTERVAL_SECONDS:
-            return metadata
+            return None
         self._last_forget_time = now
         today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
+        forgotten_ids: list[int] = []
         for entry in metadata:
             if entry.get("type") == "daily_summary":
                 continue
@@ -71,6 +103,16 @@ class ForgettingCurve:
             except ValueError, TypeError:
                 continue
             retention = forgetting_retention(days, strength_float)
-            if retention < SOFT_FORGET_THRESHOLD:
+
+            if self._rng is not None:
+                should_forget = self._rng.random() > retention
+            else:
+                should_forget = retention < SOFT_FORGET_THRESHOLD
+
+            if should_forget:
                 entry["forgotten"] = True
-        return metadata
+                if self._rng is not None:
+                    fid = entry.get("faiss_id")
+                    if fid is not None:
+                        forgotten_ids.append(fid)
+        return forgotten_ids
