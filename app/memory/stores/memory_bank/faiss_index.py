@@ -22,14 +22,24 @@ _TIMESTAMP_LENGTH = 10
 
 
 def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
-    """校验 metadata 为 list[dict]，每个 dict 含 faiss_id。"""
+    """校验 metadata 为 list[dict]，每个 dict 含 faiss_id（int，无重复）。"""
     if not isinstance(meta, list):
         msg = "metadata root is not list"
         raise TypeError(msg)
+    seen: set[int] = set()
     for i, m in enumerate(meta):
         if not isinstance(m, dict) or "faiss_id" not in m:
             msg = f"entry {i}: invalid"
             raise ValueError(msg)
+        entry = cast("dict[str, Any]", m)
+        fid: object = entry["faiss_id"]
+        if not isinstance(fid, int):
+            msg = f"entry {i}: faiss_id={fid!r} 不是整数"
+            raise TypeError(msg)
+        if fid in seen:
+            msg = f"entry {i}: 重复 faiss_id={fid}"
+            raise ValueError(msg)
+        seen.add(fid)
     return cast("list[dict[str, Any]]", meta)
 
 

@@ -14,7 +14,7 @@ import math
 import os
 import re
 from collections import defaultdict, deque
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from app.memory.stores.memory_bank.faiss_index import FaissIndex
@@ -65,9 +65,9 @@ def _get_effective_chunk_size(metadata: list[dict]) -> int:
     return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, p90 * 3))
 
 
-def _safe_memory_strength(value: Any) -> float:
+def _safe_memory_strength(value: object) -> float:
     try:
-        f = float(value)
+        f = float(cast("Any", value))
     except TypeError, ValueError:
         logger.warning(
             "memory_strength=%r 无效（非数字），回退至 %d",

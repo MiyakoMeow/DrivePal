@@ -18,7 +18,6 @@ jobs:
       - run: |
           matches=$(grep -rn --include='*.py' \
             --exclude-dir=.agents \
-            --exclude-dir=.github \
             --exclude-dir=.venv \
             --exclude-dir=__pycache__ \
             --exclude-dir='*.egg-info' \
@@ -41,7 +40,6 @@ jobs:
       - run: |
           matches=$(grep -rn --include='*.py' \
             --exclude-dir=.agents \
-            --exclude-dir=.github \
             --exclude-dir=.venv \
             --exclude-dir=__pycache__ \
             --exclude-dir='*.egg-info' \

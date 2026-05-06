@@ -23,7 +23,6 @@ exclude = [".agents/**"]
 "adapters/runner.py" = ["E402"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
 "app/memory/interfaces.py" = ["ANN401"]  # Protocol 接口故意返回 Any（调用方自行处理类型）
-"app/memory/stores/memory_bank/retrieval.py" = ["ANN401"]  # _safe_memory_strength 接受任意类型 float() 转换
 "app/memory/stores/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法
