@@ -5,12 +5,9 @@ from enum import Enum
 import strawberry
 from strawberry.scalars import JSON
 
+from app.memory.types import MemoryMode
 
-@strawberry.enum
-class MemoryModeEnum(Enum):
-    """记忆模式枚举."""
-
-    MEMORY_BANK = "memory_bank"
+MemoryModeGQL = strawberry.enum(MemoryMode)
 
 
 @strawberry.enum
@@ -107,7 +104,7 @@ class ProcessQueryInput:
     """处理查询输入."""
 
     query: str
-    memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
+    memory_mode: MemoryModeGQL = MemoryModeGQL.MEMORY_BANK  # type: ignore[assignment]
     context: DrivingContextInput | None = None
 
 
@@ -117,7 +114,7 @@ class FeedbackInput:
 
     event_id: str
     action: str
-    memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
+    memory_mode: MemoryModeGQL = MemoryModeGQL.MEMORY_BANK  # type: ignore[assignment]
     modified_content: str | None = None
 
 

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 from typing import TYPE_CHECKING, Any, cast
@@ -217,8 +218,8 @@ class FaissIndex:
         self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(self._metadata)}
 
     def get_metadata(self) -> list[dict]:
-        """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）。"""
-        return self._metadata
+        """返回所有元数据副本。"""
+        return copy.deepcopy(self._metadata)
 
     def get_metadata_by_id(self, faiss_id: int) -> dict | None:
         """O(1) 按 faiss_id 查找元数据条目。"""

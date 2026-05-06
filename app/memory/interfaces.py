@@ -11,6 +11,7 @@ if TYPE_CHECKING:
         MemoryEvent,
         SearchResult,
     )
+    from app.memory.types import MemoryMode
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
@@ -34,11 +35,22 @@ class MemoryStore(Protocol):
         """写入一条记忆事件。"""
         ...
 
-    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+    async def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        mode: MemoryMode | None = None,
+    ) -> list[SearchResult]:
         """搜索相关记忆。"""
         ...
 
-    async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+    async def get_history(
+        self,
+        limit: int = 10,
+        *,
+        mode: MemoryMode | None = None,
+    ) -> list[MemoryEvent]:
         """获取历史记忆事件。"""
         ...
 
@@ -60,6 +72,8 @@ class InteractiveMemoryStore(MemoryStore, Protocol):
         query: str,
         response: str,
         event_type: str = "reminder",
+        *,
+        mode: MemoryMode | None = None,
     ) -> InteractionResult:
         """写入一次用户交互记录。"""
         ...
@@ -95,7 +109,7 @@ class VectorIndex(Protocol):
         ...
 
     def get_metadata(self) -> list[dict]:
-        """返回所有元数据（可变引用）。"""
+        """返回所有元数据副本。"""
         ...
 
     def get_metadata_by_id(self, faiss_id: int) -> dict | None:
@@ -166,7 +180,7 @@ class SearchEnricher(Protocol):
     """搜索结果上下文注入策略抽象。"""
 
     async def enrich(
-        self, results: list[SearchResult], extra: dict
+        self, results: list[SearchResult], extra: dict | None = None
     ) -> list[SearchResult]:
         """向搜索结果注入额外上下文。"""
         ...

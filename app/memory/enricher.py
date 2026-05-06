@@ -1,23 +1,30 @@
 """搜索结果上下文注入策略实现。"""
 
+from typing import TYPE_CHECKING
+
 from app.memory.schemas import SearchResult
 from app.memory.stores.memory_bank.summarizer import GENERATION_EMPTY
 
+if TYPE_CHECKING:
+    from app.memory.interfaces import VectorIndex
+
 
 class OverallContextEnricher:
-    """注入 overall_summary + overall_personality 到搜索结果前置。
+    """搜索结果上下文注入器。内部从 VectorIndex 获取 extra。"""
 
-    通过可配置的 (extra_key, label) 对列表支持扩展。
-    """
-
-    def __init__(self, keys: list[tuple[str, str]] | None = None) -> None:
+    def __init__(
+        self,
+        index: VectorIndex | None = None,
+        keys: list[tuple[str, str]] | None = None,
+    ) -> None:
         """初始化 enricher。
 
         Args:
+            index: VectorIndex 实例，用于获取 extra 元数据。
             keys: (extra_key, label) 对列表。
-                  默认注入 overall_summary 和 overall_personality。
 
         """
+        self._index = index
         self._keys = keys or [
             ("overall_summary", "Overall summary of past memories"),
             ("overall_personality", "User vehicle preferences and habits"),
@@ -26,9 +33,16 @@ class OverallContextEnricher:
     async def enrich(
         self,
         results: list[SearchResult],
-        extra: dict,
+        extra: dict | None = None,
     ) -> list[SearchResult]:
-        """在 results 前置全局上下文摘要/人格信息。"""
+        """在 results 前置全局上下文摘要/人格信息。
+
+        兼容旧调用方：可传 extra dict，也可由内部从 index 获取。
+        """
+        if extra is None:
+            if self._index is None:
+                return results
+            extra = self._index.get_extra()
         prepend = []
         for key, label in self._keys:
             val = extra.get(key, "")

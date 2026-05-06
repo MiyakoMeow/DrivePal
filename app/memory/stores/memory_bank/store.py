@@ -81,7 +81,7 @@ class MemoryBankStore:
             llm = LlmClient(chat_model)
             summarizer_svc = Summarizer(llm, index)
             background = BackgroundWorker(index, summarizer_svc, embedding_model)
-        enricher = OverallContextEnricher()
+        enricher = OverallContextEnricher(index=index)
         forgetting_enabled = os.getenv("MEMORYBANK_ENABLE_FORGETTING", "0").lower() in (
             "1",
             "true",
@@ -176,7 +176,7 @@ class MemoryBankStore:
             for r in results
         ]
         if self._enricher:
-            out = await self._enricher.enrich(out, self._index.get_extra())
+            out = await self._enricher.enrich(out)
         return out
 
     async def write(self, event: MemoryEvent) -> str:

@@ -1,12 +1,15 @@
 """Agent工作流编排模块."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
-import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from app.agents.llm_utils import LLMJsonClient
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints
 from app.agents.state import AgentState, WorkflowStages
@@ -14,6 +17,9 @@ from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
+
+if TYPE_CHECKING:
+    from app.memory.interfaces import InteractiveMemoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +39,8 @@ class AgentWorkflow:
         self,
         data_dir: Path = Path("data"),
         memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
-        memory_module: MemoryModule | None = None,
+        memory_module: InteractiveMemoryStore | None = None,
+        llm_client: LLMJsonClient | None = None,
     ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
@@ -53,20 +60,16 @@ class AgentWorkflow:
         ]
         self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
 
+        if llm_client is not None:
+            self._llm_client = llm_client
+        else:
+            chat_model = getattr(self.memory_module, "chat_model", None)
+            if chat_model is None:
+                chat_model = get_chat_model()
+            self._llm_client = LLMJsonClient(chat_model)
+
     async def _call_llm_json(self, user_prompt: str) -> dict:
-        if not self.memory_module.chat_model:
-            raise ChatModelUnavailableError
-        result = await self.memory_module.chat_model.generate(user_prompt)
-        cleaned = re.sub(r"^```(?:json)?\s*", "", result.strip())
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        try:
-            parsed = json.loads(cleaned)
-            if not isinstance(parsed, dict):
-                parsed = {"raw": result}
-        except json.JSONDecodeError:
-            parsed = {"raw": result}
-        parsed["raw"] = result
-        return parsed
+        return await self._llm_client.call(user_prompt)
 
     async def _context_node(self, state: AgentState) -> dict:
         user_input = state.get("original_query", "")

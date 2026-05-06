@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 _MODULES_WITH_DATA_DIR = [
     "app.config",
     "app.api.main",
-    "app.api.resolvers.mutation",
     "app.memory.singleton",
 ]
 

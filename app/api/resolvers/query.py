@@ -5,12 +5,15 @@ import strawberry
 from app.api.graphql_schema import (
     ExperimentReport,
     MemoryEventGQL,
-    MemoryModeEnum,
+    MemoryModeGQL,
     ScenarioPresetGQL,
 )
-from app.api.resolvers.mutation import _preset_store, _to_gql_preset
+from app.api.resolvers._converters import preset_dict_to_gql
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
+from app.services import create_preset_service
+
+_preset_svc = create_preset_service()
 
 
 @strawberry.type
@@ -21,7 +24,7 @@ class Query:
     async def history(
         self,
         limit: int = 10,
-        memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK,
+        memory_mode: MemoryModeGQL = MemoryModeGQL.MEMORY_BANK,  # type: ignore[assignment]
     ) -> list[MemoryEventGQL]:
         """查询历史记忆事件."""
         mm = get_memory_module()
@@ -46,6 +49,5 @@ class Query:
     @strawberry.field
     async def scenario_presets(self) -> list[ScenarioPresetGQL]:
         """查询所有场景预设."""
-        store = _preset_store()
-        presets = await store.read()
-        return [_to_gql_preset(p) for p in presets]
+        presets = await _preset_svc.list_all()
+        return [preset_dict_to_gql(p) for p in presets]
