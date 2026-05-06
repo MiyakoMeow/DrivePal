@@ -79,7 +79,7 @@ class TestForgettingCurve:
         assert entries[0].get("forgotten") is None
 
     def test_throttle_skips_second_call(self):
-        """验证节流机制跳过短时间内重复遗忘。"""
+        """验证节流机制跳过短时间内重复遗忘（返回 None）。"""
         fc = ForgettingCurve()
         entries = [
             {
@@ -89,11 +89,13 @@ class TestForgettingCurve:
                 "last_recall_date": "2026-01-01",
             }
         ]
-        fc.maybe_forget(entries, reference_date="2026-05-05")
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert result is not None  # 首次调用应执行
         assert entries[0].get("forgotten") is True
         entries[0]["forgotten"] = False
-        fc.maybe_forget(entries, reference_date="2026-05-05")
-        assert entries[0].get("forgotten") is False  # 节流，未执行遗忘
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert result is None  # 节流，未执行
+        assert entries[0].get("forgotten") is False
 
 
 class TestProbabilisticForgetting:
@@ -117,6 +119,7 @@ class TestProbabilisticForgetting:
             },
         ]
         ids = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert ids is not None
         # 第一条 strength=1, 125天 → retention≈0, 必遗忘
         assert 0 in ids
         assert entries[0].get("forgotten") is True

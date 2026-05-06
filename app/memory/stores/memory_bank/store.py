@@ -138,9 +138,10 @@ class MemoryBankStore:
             return []
         if self._forgetting_enabled:
             forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
-            if forgotten_ids:
-                await self._index.remove_vectors(forgotten_ids)
-            await self._index.save()
+            if forgotten_ids is not None:
+                if forgotten_ids:
+                    await self._index.remove_vectors(forgotten_ids)
+                await self._index.save()
         results = await self._retrieval.search(query, top_k)
         extra = self._index.get_extra()
         prepend = []

@@ -68,7 +68,7 @@ class ForgettingCurve:
 
     def maybe_forget(
         self, metadata: list[dict], reference_date: str | None = None
-    ) -> list[int]:
+    ) -> list[int] | None:
         """对达到遗忘阈值的条目标记 forgotten=True。
 
         概率模式下同时返回应硬删除的 FAISS ID 列表。
@@ -78,12 +78,13 @@ class ForgettingCurve:
             reference_date: 参考日期，默认当天 UTC。
 
         Returns:
-            FAISS ID 列表（概率模式返回新遗忘的 ID，确定性模式返回空列表）。
+            None 当节流（未执行）；FAISS ID 列表（概率模式返回新遗忘的 ID，
+            确定性模式返回空列表）。
 
         """
         now = time.monotonic()
         if now - self._last_forget_time < FORGET_INTERVAL_SECONDS:
-            return []
+            return None
         self._last_forget_time = now
         today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
         forgotten_ids: list[int] = []
