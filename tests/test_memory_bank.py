@@ -6,6 +6,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.enricher import OverallContextEnricher
+from app.memory.stores.memory_bank.faiss_index import FaissIndex
+from app.memory.stores.memory_bank.forget import ForgettingCurve
+from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
 from app.memory.stores.memory_bank.store import MemoryBankStore
 
 
@@ -15,7 +19,17 @@ def store():
     with tempfile.TemporaryDirectory() as tmp:
         emb = AsyncMock(spec=["encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        s = MemoryBankStore(Path(tmp), embedding_model=emb)
+        index = FaissIndex(Path(tmp))
+        retrieval = RetrievalPipeline(index, emb)
+        forgetting = ForgettingCurve()
+        enricher = OverallContextEnricher()
+        s = MemoryBankStore(
+            index=index,
+            retrieval=retrieval,
+            embedding_model=emb,
+            enricher=enricher,
+            forgetting=forgetting,
+        )
         yield s
 
 
