@@ -99,7 +99,7 @@ def test_merge_overlapping_non_overlapping_passthrough():
         },
     ]
     merged = _merge_overlapping_results(results)
-    assert len(merged) == 2  # noqa: PLR2004
+    assert len(merged) == 2
 
 
 def test_merge_overlapping_no_merge_items_untouched():
@@ -109,7 +109,7 @@ def test_merge_overlapping_no_merge_items_untouched():
         {"_merged_indices": [0], "score": 0.8, "text": "world", "speakers": []},
     ]
     merged = _merge_overlapping_results(results)
-    assert len(merged) == 2  # noqa: PLR2004
+    assert len(merged) == 2
 
 
 def test_strip_source_prefix_removes_english_prefix():
@@ -173,7 +173,7 @@ def test_adaptive_chunk_many_entries_uses_p90():
     try:
         meta = [{"text": "x" * n} for n in range(1, 101)]
         sz = _get_effective_chunk_size(meta)
-        assert sz == 270  # noqa: PLR2004
+        assert sz == 270
     finally:
         if popped is not None:
             os.environ["MEMORYBANK_CHUNK_SIZE"] = popped

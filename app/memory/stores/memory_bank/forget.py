@@ -60,9 +60,7 @@ class ForgettingCurve:
         """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。"""
         self._mode = mode if mode is not None else _resolve_forget_mode()
         self._rng: random.Random | None = (
-            random.Random(seed)  # noqa: S311
-            if self._mode == ForgetMode.PROBABILISTIC
-            else None
+            random.Random(seed) if self._mode == ForgetMode.PROBABILISTIC else None
         )
         self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
 
