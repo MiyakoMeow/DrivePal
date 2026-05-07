@@ -217,7 +217,7 @@ class MemoryBankStore:
             self._index.get_metadata()
         ):
             await self._index.save()
-        results = await self._retrieval.search(query, top_k)
+        results = await self._retrieval.search(query, top_k, reference_date=self._reference_date)
         extra = self._index.get_extra()
         prepend = []
         for key, label in [
