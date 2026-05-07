@@ -187,6 +187,28 @@ def test_update_memory_strength_refreshes_recall_date():
     assert meta[0]["last_recall_date"] == today
 
 
+def test_memory_strength_no_cap():
+    """验证记忆强度可以超过 10（原版行为）。"""
+    meta = [
+        {
+            "faiss_id": 0, "memory_strength": 9.5,
+            "last_recall_date": "2024-01-01",
+            "text": "test", "timestamp": "2024-01-01T00:00:00",
+        },
+    ]
+    results = [
+        {"_meta_idx": 0, "score": 1.0, "_merged_indices": [0]},
+    ]
+    _update_memory_strengths(results, meta)
+    assert meta[0]["memory_strength"] == 10.5, (
+        f"expected 10.5, got {meta[0]['memory_strength']}"
+    )
+    _update_memory_strengths(results, meta)
+    assert meta[0]["memory_strength"] == 11.5, (
+        f"expected 11.5, got {meta[0]['memory_strength']}"
+    )
+
+
 @pytest.mark.asyncio
 async def test_retention_weight_affects_ranking():
     """验证相同 FAISS 相似度时 strength 不同导致排名不同。"""

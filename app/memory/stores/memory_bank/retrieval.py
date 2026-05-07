@@ -238,7 +238,7 @@ def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
                 old = _safe_memory_strength(
                     metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
                 )
-                capped = min(old + 1.0, 10.0)
+                capped = old + 1.0
                 changed = False
                 if capped != old:
                     metadata[mi]["memory_strength"] = capped
