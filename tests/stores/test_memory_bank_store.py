@@ -95,12 +95,9 @@ async def test_write_parses_multi_speaker_content():
         eid = await s.write(event)
         assert eid
         meta = s._index.get_metadata()
-        assert len(meta) >= 2
-        all_speakers: set[str] = set()
-        for m in meta:
-            all_speakers.update(m.get("speakers", []))
-        assert "Gary" in all_speakers
-        assert "Patricia" in all_speakers
+        assert len(meta) >= 1
+        # 配对模式下 2 行 → 1 条向量，且 speakers 包含双方
+        assert meta[0]["speakers"] == ["Gary", "Patricia"]
 
 
 @pytest.mark.asyncio
