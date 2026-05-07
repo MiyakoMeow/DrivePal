@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from app.memory.memory import MemoryModule
+from app.memory.memory_bank import MemoryBankStore
 from app.memory.schemas import MemoryEvent
-from app.memory.stores.memory_bank import MemoryBankStore
 from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:

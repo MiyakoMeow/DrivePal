@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.memory_bank.store import MemoryBankStore
 from app.memory.schemas import MemoryEvent
-from app.memory.stores.memory_bank.store import MemoryBankStore
 
 
 @pytest.fixture

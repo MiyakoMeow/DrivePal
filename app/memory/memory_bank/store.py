@@ -15,15 +15,16 @@ from app.memory.schemas import (
     MemoryEvent,
     SearchResult,
 )
-from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.forget import (
+
+from .faiss_index import FaissIndex
+from .forget import (
     ForgetMode,
     ForgettingCurve,
     compute_ingestion_forget_ids,
 )
-from app.memory.stores.memory_bank.llm import LlmClient
-from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
-from app.memory.stores.memory_bank.summarizer import GENERATION_EMPTY, Summarizer
+from .llm import LlmClient
+from .retrieval import RetrievalPipeline
+from .summarizer import GENERATION_EMPTY, Summarizer
 
 if TYPE_CHECKING:
     from pathlib import Path

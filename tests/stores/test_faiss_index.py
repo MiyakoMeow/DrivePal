@@ -7,7 +7,7 @@ import faiss
 import numpy as np
 import pytest
 
-from app.memory.stores.memory_bank.faiss_index import (
+from app.memory.memory_bank.faiss_index import (
     FaissIndex,
     _validate_index_count,
     _validate_metadata_structure,

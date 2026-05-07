@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.memory.stores.memory_bank import MemoryBankStore
+from app.memory.memory_bank import MemoryBankStore
 from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.models.embedding import get_cached_embedding_model

@@ -18,8 +18,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from app.memory.stores.memory_bank.faiss_index import FaissIndex
     from app.models.embedding import EmbeddingModel
+
+    from .faiss_index import FaissIndex
 
 logger = logging.getLogger(__name__)
 
