@@ -1,6 +1,7 @@
 """ChatModel 薄封装：重试时自动截断 prompt 上下文。"""
 
 import logging
+import random
 from typing import TYPE_CHECKING
 
 from app.models.chat import AllProviderFailedError
@@ -19,9 +20,16 @@ LLM_TRIM_MIN = 500
 class LlmClient:
     """ChatModel 的薄封装，提供上下文截断重试。"""
 
-    def __init__(self, chat_model: ChatModel) -> None:
-        """初始化 LlmClient。"""
+    def __init__(self, chat_model: ChatModel, *, rng: random.Random | None = None) -> None:
+        """初始化 LlmClient。
+
+        Args:
+            chat_model: 聊天模型实例。
+            rng: 可选 RNG 实例（用于重试退避 jitter）。
+
+        """
         self._chat_model = chat_model
+        self._rng = rng
 
     async def call(
         self, prompt: str, *, system_prompt: str | None = None

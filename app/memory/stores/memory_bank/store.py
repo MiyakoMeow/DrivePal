@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import random
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -52,19 +53,38 @@ class MemoryBankStore:
         data_dir: Path,
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
+        seed: int | None = None,
         **_kwargs: object,
     ) -> None:
-        """初始化记忆库存储."""
+        """初始化记忆库存储.
+
+        Args:
+            data_dir: 持久化目录。
+            embedding_model: 嵌入模型。
+            chat_model: 聊天模型。
+            seed: 随机种子。优先使用显式传入值；
+                  未传入时从环境变量 MEMORYBANK_SEED 读取。
+
+        """
         self._data_dir = data_dir
+        # 从环境变量读取 seed（若未显式传入）
+        if seed is None:
+            raw = os.getenv("MEMORYBANK_SEED")
+            if raw is not None:
+                try:
+                    seed = int(raw)
+                except ValueError:
+                    pass
+        self._rng = random.Random(seed)
         self._index = FaissIndex(data_dir)
-        self._forget = ForgettingCurve()
+        self._forget = ForgettingCurve(rng=self._rng)
         self._feedback = FeedbackManager(data_dir)
         self._embedding_model = embedding_model
         self._chat_model = chat_model
         self._retrieval = (
             RetrievalPipeline(self._index, embedding_model) if embedding_model else None
         )
-        self._llm = LlmClient(chat_model) if chat_model else None
+        self._llm = LlmClient(chat_model, rng=self._rng) if chat_model else None
         self._summarizer = Summarizer(self._llm, self._index) if self._llm else None
         self._forgetting_enabled = os.getenv(
             "MEMORYBANK_ENABLE_FORGETTING", "0"

@@ -177,3 +177,31 @@ class TestProbabilisticForgetting:
         ids1 = fc1.maybe_forget(entries1, reference_date="2026-05-05")
         ids2 = fc2.maybe_forget(entries2, reference_date="2026-05-05")
         assert ids1 == ids2
+
+    def test_external_rng_consistent_with_internal_seed(self):
+        """外部传入 RNG 与同 seed 内部构造 RNG 行为一致。"""
+        import random
+        rng = random.Random(42)
+        fc_ext = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, rng=rng)
+        fc_int = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        entries_ext = [
+            {
+                "faiss_id": i,
+                "memory_strength": 2,
+                "timestamp": "2026-03-01T00:00:00",
+                "last_recall_date": "2026-03-01",
+            }
+            for i in range(20)
+        ]
+        entries_int = [
+            {
+                "faiss_id": i,
+                "memory_strength": 2,
+                "timestamp": "2026-03-01T00:00:00",
+                "last_recall_date": "2026-03-01",
+            }
+            for i in range(20)
+        ]
+        ids_ext = fc_ext.maybe_forget(entries_ext, reference_date="2026-05-05")
+        ids_int = fc_int.maybe_forget(entries_int, reference_date="2026-05-05")
+        assert ids_ext == ids_int

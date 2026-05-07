@@ -56,12 +56,23 @@ class ForgettingCurve:
         self,
         mode: ForgetMode | None = None,
         seed: int | None = None,
+        rng: random.Random | None = None,
     ) -> None:
-        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。"""
+        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。
+
+        Args:
+            mode: 遗忘策略模式。
+            seed: 随机种子（与 rng 互斥；仅 mode=PROBABILISTIC 时使用）。
+            rng: 外部 RNG 实例（与 seed 互斥；优先级高于 seed）。
+
+        """
         self._mode = mode if mode is not None else _resolve_forget_mode()
-        self._rng: random.Random | None = (
-            random.Random(seed) if self._mode == ForgetMode.PROBABILISTIC else None
-        )
+        if rng is not None:
+            self._rng = rng
+        else:
+            self._rng = (
+                random.Random(seed) if self._mode == ForgetMode.PROBABILISTIC else None
+            )
         self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
 
     def maybe_forget(
