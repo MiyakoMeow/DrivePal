@@ -241,10 +241,11 @@ def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
                 capped = min(old + 1.0, 10.0)
                 if capped != old:
                     metadata[mi]["memory_strength"] = capped
-                    metadata[mi]["last_recall_date"] = datetime.now(UTC).strftime(
-                        "%Y-%m-%d"
-                    )
-                    updated = True
+                # 即使 strength 已达上限（10），仍需刷新 recency 日期
+                metadata[mi]["last_recall_date"] = datetime.now(UTC).strftime(
+                    "%Y-%m-%d"
+                )
+                updated = True
     return updated
 
 
@@ -431,7 +432,12 @@ class RetrievalPipeline:
                 days = (today - date.fromisoformat(ts)).days
             except ValueError, TypeError:
                 days = 0
-            retention = forgetting_retention(max(days, 0), r.get("memory_strength", 1))
+            retention = forgetting_retention(
+                max(days, 0),
+                _safe_memory_strength(
+                    r.get("memory_strength", INITIAL_MEMORY_STRENGTH)
+                ),
+            )
             r["score"] = r["score"] * retention
         return results
 

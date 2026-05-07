@@ -92,6 +92,7 @@ class FaissIndex:
                 self._metadata = meta
                 self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
                 self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
+                self._rebuild_speakers_cache()
                 if ep.exists():
                     e: dict = json.loads(ep.read_text())
                     self._extra = e if isinstance(e, dict) else {}
@@ -133,8 +134,17 @@ class FaissIndex:
             return line[:colon_pos].strip(), line[colon_pos + 2 :].strip()
         return None, line.strip()
 
+    def _rebuild_speakers_cache(self) -> None:
+        """从 metadata 重建说话人缓存（在 load/add_vector 后调用）。"""
+        self._all_speakers.clear()
+        for m in self._metadata:
+            for spk in m.get("speakers", []):
+                self._all_speakers.add(spk)
+
     def get_all_speakers(self) -> list[str]:
-        """返回所有已知说话人列表。"""
+        """返回所有已知说话人列表（若缓存为空则从 metadata 重建）。"""
+        if not self._all_speakers and self._metadata:
+            self._rebuild_speakers_cache()
         return sorted(self._all_speakers)
 
     async def add_vector(

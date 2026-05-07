@@ -91,8 +91,11 @@ async def test_write_parses_multi_speaker_content():
         assert eid
         meta = s._index.get_metadata()
         assert len(meta) >= 1
-        speakers = meta[-1].get("speakers", [])
-        assert "Gary" in speakers or "Patricia" in speakers
+        all_speakers: set[str] = set()
+        for m in meta:
+            all_speakers.update(m.get("speakers", []))
+        assert "Gary" in all_speakers
+        assert "Patricia" in all_speakers
 
 
 @pytest.mark.asyncio
