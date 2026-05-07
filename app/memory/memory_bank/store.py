@@ -83,10 +83,8 @@ class MemoryBankStore:
         self._forget = ForgettingCurve(rng=self._rng)
         self._feedback = FeedbackManager(data_dir)
         self._chat_model = chat_model
-        self._embedding_client = (
-            embedding_client or EmbeddingClient(embedding_model)
-            if embedding_model
-            else None
+        self._embedding_client = embedding_client or (
+            EmbeddingClient(embedding_model) if embedding_model else None
         )
         self._reference_date = reference_date
         self._retrieval = (

@@ -33,6 +33,10 @@ class _FakeEmbeddingModel(_Base):
         return [0.1, 0.2, 0.3]
 
 
+async def _noop_sleep(_: float) -> None:
+    return None
+
+
 async def test_encode_success_first_try() -> None:
     """Encode 首次成功无重试."""
     model = _FakeEmbeddingModel()
@@ -42,8 +46,9 @@ async def test_encode_success_first_try() -> None:
     assert model.call_count == 1
 
 
-async def test_encode_retry_on_transient_error() -> None:
+async def test_encode_retry_on_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """瞬态错误后重试直至成功."""
+    monkeypatch.setattr("app.memory.embedding_client._SLEEP", _noop_sleep)
     model = _FakeEmbeddingModel()
     model.fail_count = 2
     model.fail_pattern = "timeout"
@@ -53,8 +58,9 @@ async def test_encode_retry_on_transient_error() -> None:
     assert model.call_count == 3
 
 
-async def test_encode_retry_exhausted() -> None:
+async def test_encode_retry_exhausted(monkeypatch: pytest.MonkeyPatch) -> None:
     """重试耗尽后抛出."""
+    monkeypatch.setattr("app.memory.embedding_client._SLEEP", _noop_sleep)
     model = _FakeEmbeddingModel()
     model.fail_count = 10
     model.fail_pattern = "connection"

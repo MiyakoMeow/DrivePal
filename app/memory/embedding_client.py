@@ -66,7 +66,7 @@ class EmbeddingClient:
                     await _SLEEP(delay)
                     continue
                 raise
-        return await self._model.encode(text)
+        raise AssertionError
 
     async def encode_batch(self, texts: list[str]) -> list[list[float]]:
         """分批编码，每条走 encode() 以使用统一重试策略。"""
