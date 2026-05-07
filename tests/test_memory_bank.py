@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank.store import MemoryBankStore
 
 
@@ -51,22 +52,24 @@ async def test_search_empty_store(store):
 @pytest.mark.asyncio
 async def test_write_paired_vectorization(store):
     """验证多行内容按 2 行配对入库，而非每行独立。"""
-    from app.memory.schemas import MemoryEvent
-    content = "\n".join([
+    lines = [
         "Gary: set seat to 30%",
         "AI: seat set to 30%",
         "Gary: set temperature to 22",
         "AI: temperature set to 22",
         "Gary: lone message",
-    ])
+    ]
+    content = "\n".join(lines)
     await store.write(MemoryEvent(content=content))
     meta = store._index.get_metadata()
     # 5 行 → 2 个配对 + 1 个单行 = 3 条向量
     assert len(meta) == 3, f"expected 3 metadata entries, got {len(meta)}"
     # 验证配对格式
     paired_text = meta[0].get("text", "")
-    assert "[|Gary|]" in paired_text and "[|AI|]" in paired_text
-    assert "set seat to 30%" in paired_text and "seat set to 30%" in paired_text
+    assert "[|Gary|]" in paired_text
+    assert "[|AI|]" in paired_text
+    assert "set seat to 30%" in paired_text
+    assert "seat set to 30%" in paired_text
     # 验证单行独立
     lone_text = meta[-1].get("text", "")
     assert "lone message" in lone_text

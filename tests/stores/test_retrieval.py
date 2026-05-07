@@ -191,9 +191,11 @@ def test_memory_strength_no_cap():
     """验证记忆强度可以超过 10（原版行为）。"""
     meta = [
         {
-            "faiss_id": 0, "memory_strength": 9.5,
+            "faiss_id": 0,
+            "memory_strength": 9.5,
             "last_recall_date": "2024-01-01",
-            "text": "test", "timestamp": "2024-01-01T00:00:00",
+            "text": "test",
+            "timestamp": "2024-01-01T00:00:00",
         },
     ]
     results = [

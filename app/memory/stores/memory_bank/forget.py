@@ -5,11 +5,14 @@
 """
 
 import enum
+import logging
 import math
 import os
 import random
 import time
 from datetime import UTC, date, datetime
+
+logger = logging.getLogger(__name__)
 
 SOFT_FORGET_THRESHOLD = 0.15
 FORGET_INTERVAL_SECONDS = 300
@@ -67,9 +70,9 @@ def compute_ingestion_forget_ids(
 
     """
     try:
-        ref_dt = datetime.strptime(reference_date[:10], "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        logger.error(
+        ref_dt = date.fromisoformat(reference_date[:10])
+    except ValueError, TypeError:
+        logger.exception(
             "compute_ingestion_forget_ids: invalid reference_date=%r", reference_date
         )
         return []
@@ -80,10 +83,10 @@ def compute_ingestion_forget_ids(
             continue
         ts = entry.get("last_recall_date") or entry.get("timestamp", "")[:10]
         try:
-            mem_dt = datetime.strptime(ts[:10], "%Y-%m-%d").date()
+            mem_dt = date.fromisoformat(ts[:10])
             days = (ref_dt - mem_dt).days
             strength = float(entry.get("memory_strength", 1))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             continue
         retention = forgetting_retention(days, strength)
         if mode == ForgetMode.PROBABILISTIC:

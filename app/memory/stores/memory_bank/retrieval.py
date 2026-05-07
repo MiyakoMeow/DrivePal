@@ -14,7 +14,7 @@ import math
 import os
 import re
 from collections import defaultdict, deque
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:

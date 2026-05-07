@@ -3,6 +3,8 @@
 import tempfile
 from pathlib import Path
 
+import faiss
+import numpy as np
 import pytest
 
 from app.memory.stores.memory_bank.faiss_index import (
@@ -174,21 +176,17 @@ class TestMetadataValidation:
 
     def test_count_mismatch(self):
         """索引条目数与 metadata 数不一致应抛出 ValueError。"""
-        import faiss
-        import numpy as np
         idx = faiss.IndexIDMap(faiss.IndexFlatIP(4))
         vec = np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32)
         faiss.normalize_L2(vec)
         idx.add_with_ids(vec, np.array([0], dtype=np.int64))
         with pytest.raises(ValueError, match="count mismatch"):
-            _validate_index_count(idx, 2)  # ntotal=1 but meta_len=2
+            _validate_index_count(idx, 2)
 
     def test_count_match(self):
         """索引条目与 metadata 数一致应通过。"""
-        import faiss
-        import numpy as np
         idx = faiss.IndexIDMap(faiss.IndexFlatIP(4))
         vec = np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32)
         faiss.normalize_L2(vec)
         idx.add_with_ids(vec, np.array([0], dtype=np.int64))
-        _validate_index_count(idx, 1)  # should not raise
+        _validate_index_count(idx, 1)

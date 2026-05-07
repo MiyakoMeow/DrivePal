@@ -16,7 +16,11 @@ from app.memory.schemas import (
     SearchResult,
 )
 from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.forget import ForgettingCurve, ForgetMode, compute_ingestion_forget_ids
+from app.memory.stores.memory_bank.forget import (
+    ForgetMode,
+    ForgettingCurve,
+    compute_ingestion_forget_ids,
+)
 from app.memory.stores.memory_bank.llm import LlmClient
 from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
 from app.memory.stores.memory_bank.summarizer import GENERATION_EMPTY, Summarizer
@@ -71,10 +75,8 @@ class MemoryBankStore:
         if seed is None:
             raw = os.getenv("MEMORYBANK_SEED")
             if raw is not None:
-                try:
+                with contextlib.suppress(ValueError):
                     seed = int(raw)
-                except ValueError:
-                    pass
         self._rng = random.Random(seed)
         self._index = FaissIndex(data_dir)
         self._forget = ForgettingCurve(rng=self._rng)
@@ -162,8 +164,12 @@ class MemoryBankStore:
         if self._forgetting_enabled:
             today = datetime.now(UTC).strftime("%Y-%m-%d")
             ids = compute_ingestion_forget_ids(
-                self._index.get_metadata(), today, rng=self._rng,
-                mode=ForgetMode.PROBABILISTIC if self._rng else ForgetMode.DETERMINISTIC,
+                self._index.get_metadata(),
+                today,
+                rng=self._rng,
+                mode=ForgetMode.PROBABILISTIC
+                if self._rng
+                else ForgetMode.DETERMINISTIC,
             )
             if ids:
                 await self._index.remove_vectors(ids)
@@ -304,8 +310,12 @@ class MemoryBankStore:
         if self._forgetting_enabled:
             today = datetime.now(UTC).strftime("%Y-%m-%d")
             ids = compute_ingestion_forget_ids(
-                self._index.get_metadata(), today, rng=self._rng,
-                mode=ForgetMode.PROBABILISTIC if self._rng else ForgetMode.DETERMINISTIC,
+                self._index.get_metadata(),
+                today,
+                rng=self._rng,
+                mode=ForgetMode.PROBABILISTIC
+                if self._rng
+                else ForgetMode.DETERMINISTIC,
             )
             if ids:
                 await self._index.remove_vectors(ids)
