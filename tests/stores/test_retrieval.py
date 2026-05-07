@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.retrieval import (
+from app.memory.memory_bank.faiss_index import FaissIndex
+from app.memory.memory_bank.retrieval import (
     DEFAULT_CHUNK_SIZE,
     RetrievalPipeline,
     _clean_search_result,

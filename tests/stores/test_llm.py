@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.memory.stores.memory_bank.llm import LlmClient
+from app.memory.memory_bank.llm import LlmClient
 from app.models.chat import AllProviderFailedError
 
 
@@ -54,7 +54,7 @@ async def _noop_sleep(*_: object) -> None:
 @pytest.mark.asyncio
 async def test_llm_retry_on_transient(monkeypatch: pytest.MonkeyPatch):
     """瞬态错误（rate limit）会重试直到耗尽。"""
-    monkeypatch.setattr("app.memory.stores.memory_bank.llm._sleep", _noop_sleep)
+    monkeypatch.setattr("app.memory.memory_bank.llm._sleep", _noop_sleep)
     model = _ConstErrorModel("rate limit exceeded")
     client = LlmClient(model)
     result = await client.call("test")
@@ -65,7 +65,7 @@ async def test_llm_retry_on_transient(monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.asyncio
 async def test_llm_transient_then_success(monkeypatch: pytest.MonkeyPatch):
     """瞬态错误后重试成功。"""
-    monkeypatch.setattr("app.memory.stores.memory_bank.llm._sleep", _noop_sleep)
+    monkeypatch.setattr("app.memory.memory_bank.llm._sleep", _noop_sleep)
     model = _AlternatingModel(fail_count=2)
     client = LlmClient(model)
     result = await client.call("test")

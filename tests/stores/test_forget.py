@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.memory.stores.memory_bank.forget import (
+from app.memory.memory_bank.forget import (
     ForgetMode,
     ForgettingCurve,
     compute_ingestion_forget_ids,

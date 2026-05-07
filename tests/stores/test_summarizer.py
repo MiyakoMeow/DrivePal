@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.summarizer import Summarizer
+from app.memory.memory_bank.faiss_index import FaissIndex
+from app.memory.memory_bank.summarizer import Summarizer
 
 TEST_EMBEDDING = [0.1] * 1536
 
