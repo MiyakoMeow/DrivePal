@@ -78,6 +78,7 @@ def compute_ingestion_forget_ids(
         return []
 
     ids_to_remove: list[int] = []
+    rng_once = rng if rng is not None else random.Random()
     for entry in metadata:
         if entry.get("type") == "daily_summary":
             continue
@@ -90,8 +91,7 @@ def compute_ingestion_forget_ids(
             continue
         retention = forgetting_retention(days, strength)
         if mode == ForgetMode.PROBABILISTIC:
-            local_rng = rng if rng is not None else random.Random()
-            should_forget = local_rng.random() > retention
+            should_forget = rng_once.random() > retention
         else:
             should_forget = retention < SOFT_FORGET_THRESHOLD
         if should_forget:
@@ -165,7 +165,7 @@ class ForgettingCurve:
                 continue
             retention = forgetting_retention(days, strength_float)
 
-            if self._rng is not None:
+            if self._mode == ForgetMode.PROBABILISTIC and self._rng is not None:
                 should_forget = self._rng.random() > retention
             else:
                 should_forget = retention < SOFT_FORGET_THRESHOLD

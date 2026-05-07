@@ -78,6 +78,7 @@ class MemoryBankStore:
                 with contextlib.suppress(ValueError):
                     seed = int(raw)
         self._rng = random.Random(seed)
+        self._seed_provided = seed is not None
         self._index = FaissIndex(data_dir)
         self._forget = ForgettingCurve(rng=self._rng)
         self._feedback = FeedbackManager(data_dir)
@@ -168,7 +169,7 @@ class MemoryBankStore:
                 today,
                 rng=self._rng,
                 mode=ForgetMode.PROBABILISTIC
-                if self._rng
+                if self._seed_provided
                 else ForgetMode.DETERMINISTIC,
             )
             if ids:
@@ -278,7 +279,7 @@ class MemoryBankStore:
                     ts,
                     {
                         "source": date_key,
-                        "speakers": sorted(set(speakers)),
+                        "speakers": sorted({s for s in speakers if s is not None}),
                         "raw_content": conv_text,
                         "event_type": event.type,
                     },
@@ -314,7 +315,7 @@ class MemoryBankStore:
                 today,
                 rng=self._rng,
                 mode=ForgetMode.PROBABILISTIC
-                if self._rng
+                if self._seed_provided
                 else ForgetMode.DETERMINISTIC,
             )
             if ids:

@@ -14,9 +14,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 LLM_MAX_RETRIES = 3
+LLM_NONTRANSIENT_MAX_RETRIES = 1
 LLM_TRIM_START = 1800
 LLM_TRIM_STEP = 200
 LLM_TRIM_MIN = 500
+
+_sleep = asyncio.sleep
 
 _TRANSIENT_PATTERNS = (
     "connection",
@@ -82,12 +85,12 @@ class LlmClient:
                     and attempt < LLM_MAX_RETRIES - 1
                 ):
                     delay = min(2**attempt, 10)
-                    if self._rng:
+                    if self._rng is not None:
                         delay += self._rng.random() * 0.5
-                    await asyncio.sleep(delay)
+                    await _sleep(delay)
                     continue
                 # 其他错误（鉴权/模型不存在等）：快速失败，仅重试一次
-                if attempt < 1:
+                if attempt < LLM_NONTRANSIENT_MAX_RETRIES:
                     continue
                 logger.warning(
                     "LlmClient retries exhausted after %d attempts: %s",
