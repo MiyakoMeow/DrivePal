@@ -240,10 +240,21 @@ class MemoryBankStore:
 
         fid: int | None = None
         if has_speakers:
-            # 多说话人格式：每个发言作为独立向量
-            for speaker, text in parsed_pairs:
-                spk = speaker or event.speaker or "System"
-                conv_text = f"Conversation content on {date_key}:[|{spk}|]: {text}"
+            # 配对模式：每 2 行结对为 1 条向量（对齐 VehicleMemBench 原版）
+            for i in range(0, len(parsed_pairs), 2):
+                speaker_a, text_a = parsed_pairs[i]
+                if i + 1 < len(parsed_pairs):
+                    speaker_b, text_b = parsed_pairs[i + 1]
+                    speakers = [speaker_a, speaker_b]
+                    conv_text = (
+                        f"Conversation content on {date_key}:"
+                        f"[|{speaker_a}|]: {text_a}; [|{speaker_b}|]: {text_b}"
+                    )
+                else:
+                    speakers = [speaker_a]
+                    conv_text = (
+                        f"Conversation content on {date_key}:[|{speaker_a}|]: {text_a}"
+                    )
                 emb = await self._embedding_model.encode(conv_text)
                 fid = await self._index.add_vector(
                     conv_text,
@@ -251,8 +262,8 @@ class MemoryBankStore:
                     ts,
                     {
                         "source": date_key,
-                        "speakers": [spk],
-                        "raw_content": text,
+                        "speakers": sorted(set(speakers)),
+                        "raw_content": conv_text,
                         "event_type": event.type,
                     },
                 )
