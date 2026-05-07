@@ -239,13 +239,17 @@ def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
                     metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
                 )
                 capped = min(old + 1.0, 10.0)
+                changed = False
                 if capped != old:
                     metadata[mi]["memory_strength"] = capped
+                    changed = True
                 # 即使 strength 已达上限（10），仍需刷新 recency 日期
                 today = datetime.now(UTC).strftime("%Y-%m-%d")
                 if metadata[mi].get("last_recall_date") != today:
                     metadata[mi]["last_recall_date"] = today
-                updated = True
+                    changed = True
+                if changed:
+                    updated = True
     return updated
 
 
