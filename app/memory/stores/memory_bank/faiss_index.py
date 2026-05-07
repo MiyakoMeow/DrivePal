@@ -261,6 +261,7 @@ class FaissIndex:
         id_set = set(faiss_ids)
         self._metadata = [m for m in self._metadata if m["faiss_id"] not in id_set]
         self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(self._metadata)}
+        self._rebuild_speakers_cache()
 
     def get_metadata(self) -> list[dict]:
         """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）。"""
