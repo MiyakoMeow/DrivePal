@@ -59,3 +59,20 @@ async def test_get_event_type_none_for_missing(store):
     """验证不存在的 event_id 返回 None。"""
     t = await store.get_event_type("nonexistent")
     assert t is None
+
+
+@pytest.mark.asyncio
+async def test_purge_forgotten_removes_from_index():
+    """验证 _purge_forgotten 从 FAISS 索引移除已遗忘条目。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        emb = AsyncMock(spec=["encode"])
+        emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        s = MemoryBankStore(Path(tmp), embedding_model=emb)
+        await s.write_interaction("hello", "world")
+        await s.write_interaction("test2", "data2")
+        assert s._index.total == 2
+        # 标记第一条为 forgotten
+        s._index.get_metadata()[0]["forgotten"] = True
+        # 调用 _purge_forgotten
+        await s._purge_forgotten(s._index.get_metadata())
+        assert s._index.total == 1

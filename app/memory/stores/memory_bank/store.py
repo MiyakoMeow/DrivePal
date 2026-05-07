@@ -74,6 +74,18 @@ class MemoryBankStore:
             "yes",
         )
 
+    async def _purge_forgotten(self, metadata: list[dict]) -> None:
+        """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。"""
+        forgotten_ids = self._forget.maybe_forget(metadata)
+        if forgotten_ids is None:
+            return  # 节流跳过
+        if not forgotten_ids:
+            forgotten_ids = [
+                m["faiss_id"] for m in metadata if m.get("forgotten")
+            ]
+        if forgotten_ids:
+            await self._index.remove_vectors(forgotten_ids)
+
     async def write_interaction(
         self, query: str, response: str, event_type: str = "reminder"
     ) -> InteractionResult:
