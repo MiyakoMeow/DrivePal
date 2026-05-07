@@ -157,7 +157,6 @@ class Summarizer:
         return None
 
     @staticmethod
-    @staticmethod
     def _summarize_prompt(text: str) -> str:
         return (
             "Please summarize the following in-car dialogue concisely, "

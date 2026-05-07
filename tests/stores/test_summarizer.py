@@ -83,7 +83,10 @@ async def test_summarize_prompt_includes_user_focus():
         mock_llm.call = AsyncMock(return_value="summary text")
         summ = Summarizer(mock_llm, idx)
         await summ.get_daily_summary("2024-06-15")
-        call_text = mock_llm.call.call_args[0][0]
+        call_args = mock_llm.call.call_args
+        call_text = (
+            call_args.args[0] if call_args.args else call_args.kwargs.get("prompt", "")
+        )
         assert (
             "Which person (by name) expressed or changed each preference" in call_text
         )

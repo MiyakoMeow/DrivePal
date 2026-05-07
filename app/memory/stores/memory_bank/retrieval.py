@@ -438,7 +438,7 @@ class RetrievalPipeline:
                     r.get("memory_strength", INITIAL_MEMORY_STRENGTH)
                 ),
             )
-            r["score"] = r["score"] * retention
+            r["score"] = float(r.get("score") or 0) * retention
         return results
 
     def _apply_speaker_filter(self, results: list[dict], query: str) -> list[dict]:

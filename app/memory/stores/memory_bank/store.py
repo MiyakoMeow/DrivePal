@@ -74,15 +74,21 @@ class MemoryBankStore:
             "yes",
         )
 
-    async def _purge_forgotten(self, metadata: list[dict]) -> None:
-        """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。"""
+    async def _purge_forgotten(self, metadata: list[dict]) -> bool:
+        """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
+
+        Returns:
+            True 表示实际执行了删除（包括节流跳过返回 False）。
+
+        """
         forgotten_ids = self._forget.maybe_forget(metadata)
         if forgotten_ids is None:
-            return  # 节流跳过
+            return False  # 节流跳过
         if not forgotten_ids:
             forgotten_ids = [m["faiss_id"] for m in metadata if m.get("forgotten")]
         if forgotten_ids:
             await self._index.remove_vectors(forgotten_ids)
+        return True
 
     async def write_interaction(
         self,
@@ -159,12 +165,10 @@ class MemoryBankStore:
         await self._index.load()
         if self._index.total == 0 or not self._retrieval:
             return []
-        if self._forgetting_enabled:
-            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
-            if forgotten_ids is not None:
-                if forgotten_ids:
-                    await self._index.remove_vectors(forgotten_ids)
-                await self._index.save()
+        if self._forgetting_enabled and await self._purge_forgotten(
+            self._index.get_metadata()
+        ):
+            await self._index.save()
         results = await self._retrieval.search(query, top_k)
         extra = self._index.get_extra()
         prepend = []

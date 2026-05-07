@@ -182,6 +182,7 @@ class FaissIndex:
             self._dim = emb_dim
             self._metadata.clear()
             self._id_to_meta.clear()
+            self._all_speakers.clear()
             self._next_id = 0
             fid = self._next_id
             self._next_id += 1

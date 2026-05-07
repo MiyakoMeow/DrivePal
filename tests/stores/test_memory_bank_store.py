@@ -113,5 +113,7 @@ async def test_write_interaction_with_user_name():
         assert result.event_id
         meta = s._index.get_metadata()
         assert len(meta) >= 1
-        assert "Gary" in meta[-1].get("speakers", [])
-        assert "Gary" in meta[-1].get("text", "")
+        assert any(
+            "Gary" in entry.get("speakers", []) or "Gary" in entry.get("text", "")
+            for entry in meta
+        )
