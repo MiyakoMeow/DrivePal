@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.embedding import EmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +36,7 @@ class EmbeddingClient:
 
     def __init__(
         self,
-        embedding_model: Any,
+        embedding_model: EmbeddingModel,
         *,
         rng: random.Random | None = None,
     ) -> None:

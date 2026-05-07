@@ -1,27 +1,36 @@
 """EmbeddingClient 单元测试."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
 from app.memory.embedding_client import EmbeddingClient
 
+if TYPE_CHECKING:
+    from app.models.embedding import EmbeddingModel
 
-class _FakeEmbeddingModel:
+
+if TYPE_CHECKING:
+    _Base = EmbeddingModel
+else:
+    _Base = object
+
+
+class _FakeEmbeddingModel(_Base):
     def __init__(self) -> None:
         self.call_count = 0
         self.fail_count = 0
         self.fail_pattern: str | None = None
 
-    async def encode(self, _text: str) -> list[float]:
+    async def encode(self, text: str) -> list[float]:
         self.call_count += 1
         if self.fail_count > 0:
             self.fail_count -= 1
             msg = f"{self.fail_pattern or 'connection'} error"
             raise RuntimeError(msg)
         return [0.1, 0.2, 0.3]
-
-    async def batch_encode(self, texts: list[str]) -> list[list[float]]:
-        return [await self.encode(t) for t in texts]
-
 
 async def test_encode_success_first_try() -> None:
     """Encode 首次成功无重试."""
@@ -72,3 +81,13 @@ async def test_encode_batch() -> None:
     results = await client.encode_batch(["a", "b"])
     assert len(results) == 2
     assert results[0] == [0.1, 0.2, 0.3]
+
+
+async def test_encode_batch_multiple_batches() -> None:
+    """150 条文本跨 2 批（100+50）."""
+    model = _FakeEmbeddingModel()
+    client = EmbeddingClient(model)
+    texts = [str(i) for i in range(150)]
+    results = await client.encode_batch(texts)
+    assert len(results) == 150
+    assert all(r == [0.1, 0.2, 0.3] for r in results)
