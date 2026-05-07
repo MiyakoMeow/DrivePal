@@ -85,17 +85,29 @@ class MemoryBankStore:
             await self._index.remove_vectors(forgotten_ids)
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder"
+        self, query: str, response: str, event_type: str = "reminder",
+        **kwargs: object,
     ) -> InteractionResult:
-        """记录一次交互到记忆库."""
+        """记录一次交互到记忆库。
+
+        Args:
+            query: 用户输入。
+            response: AI 回复。
+            event_type: 事件类型。
+            **kwargs: 可选参数，支持 user_name（发言者姓名）和 ai_name。
+
+        """
         if not self._embedding_model:
             msg = "embedding_model required"
             raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
+        user_name = kwargs.get("user_name") or "User"
+        ai_name = kwargs.get("ai_name") or "AI"
         text = (
-            f"Conversation content on {date_key}:[|User|]: {query}; [|AI|]: {response}"
+            f"Conversation content on {date_key}:"
+            f"[|{user_name}|]: {query}; [|{ai_name}|]: {response}"
         )
         emb = await self._embedding_model.encode(text)
         fid = await self._index.add_vector(
@@ -104,15 +116,13 @@ class MemoryBankStore:
             ts,
             {
                 "source": date_key,
-                "speakers": ["User", "AI"],
+                "speakers": [user_name, ai_name],
                 "raw_content": query,
                 "event_type": event_type,
             },
         )
         if self._forgetting_enabled:
-            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
-            if forgotten_ids:
-                await self._index.remove_vectors(forgotten_ids)
+            await self._purge_forgotten(self._index.get_metadata())
         await self._index.save()
         if self._summarizer:
             task = asyncio.create_task(self._background_summarize(date_key))

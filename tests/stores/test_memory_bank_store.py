@@ -76,3 +76,21 @@ async def test_purge_forgotten_removes_from_index():
         # 调用 _purge_forgotten
         await s._purge_forgotten(s._index.get_metadata())
         assert s._index.total == 1
+
+
+@pytest.mark.asyncio
+async def test_write_interaction_with_user_name():
+    """验证 write_interaction 支持指定发言者姓名。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        emb = AsyncMock(spec=["encode"])
+        emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        s = MemoryBankStore(Path(tmp), embedding_model=emb)
+        result = await s.write_interaction(
+            "set seat to 45", "seat set to 45",
+            user_name="Gary",
+        )
+        assert result.event_id
+        meta = s._index.get_metadata()
+        assert len(meta) >= 1
+        assert "Gary" in meta[-1].get("speakers", [])
+        assert "Gary" in meta[-1].get("text", "")
