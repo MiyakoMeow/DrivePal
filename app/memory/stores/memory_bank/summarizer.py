@@ -138,7 +138,7 @@ class Summarizer:
             "and habits across multiple driving sessions:\n",
         ]
         parts.extend(
-            f"\nAt {date}, the analysis shows {text.strip()}"
+            f"\nAt {date}, the analysis shows {str(text).strip()}"
             for date, text in sorted(dailies.items())
         )
         parts.append(

@@ -126,7 +126,9 @@ async def test_add_vector_updates_speakers_cache():
         idx = FaissIndex(Path(tmp))
         await idx.load()
         await idx.add_vector(
-            "test", [0.1] * 1536, "2024-06-15T00:00:00",
+            "test",
+            [0.1] * 1536,
+            "2024-06-15T00:00:00",
             {"speakers": ["Gary", "AI"]},
         )
         assert "Gary" in idx.get_all_speakers()

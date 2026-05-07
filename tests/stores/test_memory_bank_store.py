@@ -103,7 +103,8 @@ async def test_write_interaction_with_user_name():
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         result = await s.write_interaction(
-            "set seat to 45", "seat set to 45",
+            "set seat to 45",
+            "seat set to 45",
             user_name="Gary",
         )
         assert result.event_id

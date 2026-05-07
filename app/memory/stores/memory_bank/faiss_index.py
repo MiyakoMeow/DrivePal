@@ -126,10 +126,11 @@ class FaissIndex:
 
         Returns:
             (speaker_name, content) — speaker_name 为 None 表示不可解析。
+
         """
         colon_pos = line.find(": ")
         if colon_pos > 0:
-            return line[:colon_pos].strip(), line[colon_pos + 2:].strip()
+            return line[:colon_pos].strip(), line[colon_pos + 2 :].strip()
         return None, line.strip()
 
     def get_all_speakers(self) -> list[str]:

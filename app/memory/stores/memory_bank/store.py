@@ -85,7 +85,10 @@ class MemoryBankStore:
             await self._index.remove_vectors(forgotten_ids)
 
     async def write_interaction(
-        self, query: str, response: str, event_type: str = "reminder",
+        self,
+        query: str,
+        response: str,
+        event_type: str = "reminder",
         **kwargs: object,
     ) -> InteractionResult:
         """记录一次交互到记忆库。
@@ -204,7 +207,7 @@ class MemoryBankStore:
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
 
-        lines = [l.strip() for l in event.content.split("\n") if l.strip()]
+        lines = [line.strip() for line in event.content.split("\n") if line.strip()]
         parsed_pairs: list[tuple[str | None, str]] = [
             FaissIndex.parse_speaker_line(ln) for ln in lines
         ]
@@ -215,13 +218,13 @@ class MemoryBankStore:
             # 多说话人格式：每个发言作为独立向量
             for speaker, text in parsed_pairs:
                 spk = speaker or event.speaker or "System"
-                conv_text = (
-                    f"Conversation content on {date_key}:"
-                    f"[|{spk}|]: {text}"
-                )
+                conv_text = f"Conversation content on {date_key}:[|{spk}|]: {text}"
                 emb = await self._embedding_model.encode(conv_text)
                 fid = await self._index.add_vector(
-                    conv_text, emb, ts, {
+                    conv_text,
+                    emb,
+                    ts,
+                    {
                         "source": date_key,
                         "speakers": [spk],
                         "raw_content": text,
@@ -231,13 +234,13 @@ class MemoryBankStore:
         else:
             # 单用户回退
             spk = event.speaker or "System"
-            conv_text = (
-                f"Conversation content on {date_key}:"
-                f"[|{spk}|]: {event.content}"
-            )
+            conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
             emb = await self._embedding_model.encode(conv_text)
             fid = await self._index.add_vector(
-                conv_text, emb, ts, {
+                conv_text,
+                emb,
+                ts,
+                {
                     "source": date_key,
                     "speakers": [spk],
                     "raw_content": event.content,
