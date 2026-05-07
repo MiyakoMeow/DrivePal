@@ -70,6 +70,7 @@ class FaissIndex:
         self._extra: dict = {}
         self._next_id: int = 0
         self._id_to_meta: dict[int, int] = {}
+        self._all_speakers: set[str] = set()
 
     async def load(self) -> None:
         """从磁盘加载索引与元数据；损坏时不重建，等首次 add_vector 再创建。"""
@@ -118,6 +119,22 @@ class FaissIndex:
             (self._data_dir / "extra_metadata.json").write_text(
                 json.dumps(self._extra, ensure_ascii=False, indent=2),
             )
+
+    @staticmethod
+    def parse_speaker_line(line: str) -> tuple[str | None, str]:
+        """从 "Speaker: content" 格式解析说话人和内容。
+
+        Returns:
+            (speaker_name, content) — speaker_name 为 None 表示不可解析。
+        """
+        colon_pos = line.find(": ")
+        if colon_pos > 0:
+            return line[:colon_pos].strip(), line[colon_pos + 2:].strip()
+        return None, line.strip()
+
+    def get_all_speakers(self) -> list[str]:
+        """返回所有已知说话人列表。"""
+        return sorted(self._all_speakers)
 
     async def add_vector(
         self,
@@ -171,6 +188,8 @@ class FaissIndex:
         }
         if extra_meta:
             entry.update(extra_meta)
+            for spk in extra_meta.get("speakers", []):
+                self._all_speakers.add(spk)
         self._metadata.append(entry)
         self._id_to_meta[fid] = len(self._metadata) - 1
         return fid
