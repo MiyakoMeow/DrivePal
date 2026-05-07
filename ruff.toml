@@ -27,6 +27,10 @@ exclude = [".agents/**"]
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
     "RET503",  # 循环内所有路径均已返回，末尾 return None 为防御性保留
 ]
+"app/memory/embedding_client.py" = [
+    "ANN401",  # EmbeddingClient 接受任意有 encode 方法的对象（duck typing）
+    "S311",  # 退避 jitter 使用伪随机种子，非安全场景
+]
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
 "app/memory/memory_bank/store.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
 "tests/**" = [
