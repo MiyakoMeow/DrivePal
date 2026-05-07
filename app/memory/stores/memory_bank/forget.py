@@ -49,6 +49,55 @@ def _resolve_forget_mode() -> ForgetMode:
     return ForgetMode.DETERMINISTIC
 
 
+def compute_ingestion_forget_ids(
+    metadata: list[dict],
+    reference_date: str,
+    rng: random.Random | None = None,
+    mode: ForgetMode = ForgetMode.DETERMINISTIC,
+) -> list[int]:
+    """对 metadata 中的条目执行摄入时遗忘，返回应硬删除的 FAISS ID 列表。
+
+    对齐 VehicleMemBench _forget_at_ingestion 行为：
+    - 跳过 daily_summary 类型条目
+    - 按遗忘曲线 + 记忆强度决定保留/丢弃
+    - **不修改**传入的 metadata，仅返回 ID 列表
+
+    Returns:
+        应硬删除的 FAISS ID 列表。空列表表示无条目需删除。
+
+    """
+    try:
+        ref_dt = datetime.strptime(reference_date[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        logger.error(
+            "compute_ingestion_forget_ids: invalid reference_date=%r", reference_date
+        )
+        return []
+
+    ids_to_remove: list[int] = []
+    for entry in metadata:
+        if entry.get("type") == "daily_summary":
+            continue
+        ts = entry.get("last_recall_date") or entry.get("timestamp", "")[:10]
+        try:
+            mem_dt = datetime.strptime(ts[:10], "%Y-%m-%d").date()
+            days = (ref_dt - mem_dt).days
+            strength = float(entry.get("memory_strength", 1))
+        except (ValueError, TypeError):
+            continue
+        retention = forgetting_retention(days, strength)
+        if mode == ForgetMode.PROBABILISTIC:
+            local_rng = rng if rng is not None else random.Random()
+            should_forget = local_rng.random() > retention
+        else:
+            should_forget = retention < SOFT_FORGET_THRESHOLD
+        if should_forget:
+            fid = entry.get("faiss_id")
+            if fid is not None:
+                ids_to_remove.append(fid)
+    return ids_to_remove
+
+
 class ForgettingCurve:
     """管理遗忘曲线判定逻辑，控制执行频率。"""
 

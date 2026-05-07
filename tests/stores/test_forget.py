@@ -5,6 +5,7 @@ import pytest
 from app.memory.stores.memory_bank.forget import (
     ForgetMode,
     ForgettingCurve,
+    compute_ingestion_forget_ids,
     forgetting_retention,
 )
 
@@ -205,3 +206,54 @@ class TestProbabilisticForgetting:
         ids_ext = fc_ext.maybe_forget(entries_ext, reference_date="2026-05-05")
         ids_int = fc_int.maybe_forget(entries_int, reference_date="2026-05-05")
         assert ids_ext == ids_int
+
+
+class TestIngestionForget:
+    """摄入时遗忘测试。"""
+
+    def test_skip_daily_summary(self):
+        """daily_summary 类型条目不受遗忘影响。"""
+        metadata = [
+            {"faiss_id": 0, "last_recall_date": "2024-01-01",
+             "timestamp": "2024-01-01T00:00:00", "memory_strength": 1},
+            {"faiss_id": 1, "last_recall_date": "2024-01-01",
+             "timestamp": "2024-01-01T00:00:00", "memory_strength": 1,
+             "type": "daily_summary"},
+            {"faiss_id": 2, "last_recall_date": "2024-06-10",
+             "timestamp": "2024-06-10T00:00:00", "memory_strength": 5},
+        ]
+        ids = compute_ingestion_forget_ids(
+            metadata, "2024-06-15", mode=ForgetMode.DETERMINISTIC,
+        )
+        assert 1 not in ids
+
+    def test_recent_entry_retained(self):
+        """近期条目不应被遗忘。"""
+        from datetime import UTC, datetime
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        metadata = [
+            {"faiss_id": 0, "last_recall_date": today,
+             "timestamp": f"{today}T00:00:00", "memory_strength": 1},
+        ]
+        ids = compute_ingestion_forget_ids(
+            list(metadata), today, mode=ForgetMode.DETERMINISTIC,
+        )
+        assert 0 not in ids
+
+    def test_seeded_reproducible(self):
+        """相同 seed/RNG 产生相同结果。"""
+        import random
+        metadata = [
+            {"faiss_id": i, "last_recall_date": "2024-01-01",
+             "timestamp": "2024-01-01T00:00:00", "memory_strength": 1}
+            for i in range(50)
+        ]
+        rng_a = random.Random(42)
+        rng_b = random.Random(42)
+        ids_a = compute_ingestion_forget_ids(
+            metadata, "2024-06-15", rng=rng_a, mode=ForgetMode.PROBABILISTIC,
+        )
+        ids_b = compute_ingestion_forget_ids(
+            metadata, "2024-06-15", rng=rng_b, mode=ForgetMode.PROBABILISTIC,
+        )
+        assert ids_a == ids_b

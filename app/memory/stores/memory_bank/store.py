@@ -16,7 +16,7 @@ from app.memory.schemas import (
     SearchResult,
 )
 from app.memory.stores.memory_bank.faiss_index import FaissIndex
-from app.memory.stores.memory_bank.forget import ForgettingCurve
+from app.memory.stores.memory_bank.forget import ForgettingCurve, ForgetMode, compute_ingestion_forget_ids
 from app.memory.stores.memory_bank.llm import LlmClient
 from app.memory.stores.memory_bank.retrieval import RetrievalPipeline
 from app.memory.stores.memory_bank.summarizer import GENERATION_EMPTY, Summarizer
@@ -158,6 +158,16 @@ class MemoryBankStore:
             task = asyncio.create_task(self._background_summarize(date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
+        # 摄入时遗忘：在新数据写入后，对已有旧条目执行遗忘（对齐 VehicleMemBench）
+        if self._forgetting_enabled:
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
+            ids = compute_ingestion_forget_ids(
+                self._index.get_metadata(), today, rng=self._rng,
+                mode=ForgetMode.PROBABILISTIC if self._rng else ForgetMode.DETERMINISTIC,
+            )
+            if ids:
+                await self._index.remove_vectors(ids)
+                await self._index.save()
         return InteractionResult(event_id=str(fid))
 
     async def _background_summarize(self, date_key: str) -> None:
@@ -290,6 +300,16 @@ class MemoryBankStore:
             task = asyncio.create_task(self._background_summarize(date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
+        # 摄入时遗忘：在新数据写入后，对已有旧条目执行遗忘（对齐 VehicleMemBench）
+        if self._forgetting_enabled:
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
+            ids = compute_ingestion_forget_ids(
+                self._index.get_metadata(), today, rng=self._rng,
+                mode=ForgetMode.PROBABILISTIC if self._rng else ForgetMode.DETERMINISTIC,
+            )
+            if ids:
+                await self._index.remove_vectors(ids)
+                await self._index.save()
         return str(fid)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:

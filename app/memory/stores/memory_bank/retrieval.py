@@ -17,8 +17,6 @@ from collections import defaultdict, deque
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, cast
 
-from .forget import forgetting_retention
-
 if TYPE_CHECKING:
     from app.memory.stores.memory_bank.faiss_index import FaissIndex
     from app.models.embedding import EmbeddingModel
@@ -382,7 +380,6 @@ class RetrievalPipeline:
         # 注意：_merge_neighbors 内部已调用 _merge_overlapping_results，
         # 此处不再重复调用。
 
-        merged = self._apply_retention_weight(merged)
         merged = self._apply_speaker_filter(merged, query)
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
@@ -425,25 +422,6 @@ class RetrievalPipeline:
         merged_results.extend(non_indexed)
         merged_results.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         return merged_results
-
-    @staticmethod
-    def _apply_retention_weight(results: list[dict]) -> list[dict]:
-        """将遗忘曲线保留率作为连续权重乘入分数。"""
-        today = datetime.now(UTC).date()
-        for r in results:
-            ts = (r.get("last_recall_date") or r.get("timestamp") or "")[:10]
-            try:
-                days = (today - date.fromisoformat(ts)).days
-            except ValueError, TypeError:
-                days = 0
-            retention = forgetting_retention(
-                max(days, 0),
-                _safe_memory_strength(
-                    r.get("memory_strength", INITIAL_MEMORY_STRENGTH)
-                ),
-            )
-            r["score"] = float(r.get("score") or 0) * retention
-        return results
 
     def _apply_speaker_filter(self, results: list[dict], query: str) -> list[dict]:
         ql = query.lower()
