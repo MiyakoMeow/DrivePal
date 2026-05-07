@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.memory.components import FeedbackManager
+from app.memory.embedding_client import EmbeddingClient
 from app.memory.schemas import (
     FeedbackData,
     InteractionResult,
@@ -59,20 +60,12 @@ class MemoryBankStore:
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
         seed: int | None = None,
+        embedding_client: EmbeddingClient | None = None,
+        reference_date: str | None = None,
         **_kwargs: object,
     ) -> None:
-        """初始化记忆库存储.
-
-        Args:
-            data_dir: 持久化目录。
-            embedding_model: 嵌入模型。
-            chat_model: 聊天模型。
-            seed: 随机种子。优先使用显式传入值；
-                  未传入时从环境变量 MEMORYBANK_SEED 读取。
-
-        """
+        """初始化记忆库存储."""
         self._data_dir = data_dir
-        # 从环境变量读取 seed（若未显式传入）
         if seed is None:
             raw = os.getenv("MEMORYBANK_SEED")
             if raw is not None:
@@ -89,10 +82,15 @@ class MemoryBankStore:
         self._index = FaissIndex(data_dir)
         self._forget = ForgettingCurve(rng=self._rng)
         self._feedback = FeedbackManager(data_dir)
-        self._embedding_model = embedding_model
         self._chat_model = chat_model
+        self._embedding_client = embedding_client or (
+            EmbeddingClient(embedding_model) if embedding_model else None
+        )
+        self._reference_date = reference_date
         self._retrieval = (
-            RetrievalPipeline(self._index, embedding_model) if embedding_model else None
+            RetrievalPipeline(self._index, self._embedding_client)
+            if self._embedding_client
+            else None
         )
         self._llm = LlmClient(chat_model, rng=self._rng) if chat_model else None
         self._summarizer = Summarizer(self._llm, self._index) if self._llm else None
@@ -111,7 +109,9 @@ class MemoryBankStore:
             True 表示实际执行了删除；节流跳过时返回 False。
 
         """
-        forgotten_ids = self._forget.maybe_forget(metadata)
+        forgotten_ids = self._forget.maybe_forget(
+            metadata, reference_date=self._reference_date
+        )
         if forgotten_ids is None:
             return False  # 节流跳过
         if not forgotten_ids:
@@ -123,7 +123,7 @@ class MemoryBankStore:
 
     async def _forget_at_ingestion(self) -> None:
         """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）。"""
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        today = self._reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
         ids = compute_ingestion_forget_ids(
             self._index.get_metadata(),
             today,
@@ -151,8 +151,8 @@ class MemoryBankStore:
             **kwargs: 可选参数，支持 user_name（发言者姓名）和 ai_name。
 
         """
-        if not self._embedding_model:
-            msg = "embedding_model required"
+        if not self._embedding_client:
+            msg = "embedding_client required"
             raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -163,7 +163,7 @@ class MemoryBankStore:
             f"Conversation content on {date_key}:"
             f"[|{user_name}|]: {query}; [|{ai_name}|]: {response}"
         )
-        emb = await self._embedding_model.encode(text)
+        emb = await self._embedding_client.encode(text)
         fid = await self._index.add_vector(
             text,
             emb,
@@ -186,12 +186,12 @@ class MemoryBankStore:
         return InteractionResult(event_id=str(fid))
 
     async def _background_summarize(self, date_key: str) -> None:
-        if not self._summarizer or not self._embedding_model:
+        if not self._summarizer or not self._embedding_client:
             return
         try:
             text = await self._summarizer.get_daily_summary(date_key)
             if text:
-                emb = await self._embedding_model.encode(text)
+                emb = await self._embedding_client.encode(text)
                 await self._index.add_vector(
                     text,
                     emb,
@@ -215,7 +215,9 @@ class MemoryBankStore:
             self._index.get_metadata()
         ):
             await self._index.save()
-        results = await self._retrieval.search(query, top_k)
+        results = await self._retrieval.search(
+            query, top_k, reference_date=self._reference_date
+        )
         extra = self._index.get_extra()
         prepend = []
         for key, label in [
@@ -250,8 +252,8 @@ class MemoryBankStore:
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。"""
-        if not self._embedding_model:
-            msg = "embedding_model required"
+        if not self._embedding_client:
+            msg = "embedding_client required"
             raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -283,7 +285,7 @@ class MemoryBankStore:
                     conv_text = (
                         f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
                     )
-                emb = await self._embedding_model.encode(conv_text)
+                emb = await self._embedding_client.encode(conv_text)
                 fid = await self._index.add_vector(
                     conv_text,
                     emb,
@@ -299,7 +301,7 @@ class MemoryBankStore:
             # 单用户回退
             spk = event.speaker or "System"
             conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
-            emb = await self._embedding_model.encode(conv_text)
+            emb = await self._embedding_client.encode(conv_text)
             fid = await self._index.add_vector(
                 conv_text,
                 emb,

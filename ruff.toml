@@ -27,8 +27,14 @@ exclude = [".agents/**"]
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
     "RET503",  # 循环内所有路径均已返回，末尾 return None 为防御性保留
 ]
+"app/memory/embedding_client.py" = [
+    "S311",  # 退避 jitter 使用伪随机种子，非安全场景
+]
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
-"app/memory/memory_bank/store.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
+"app/memory/memory_bank/store.py" = [
+    "PLR0913",  # __init__ 参数≥6合理（含多个可选依赖注入）
+    "S311",  # 概率遗忘使用伪随机种子，非安全场景
+]
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法
     "S311",  # 测试中使用伪随机种子是标准做法
@@ -38,6 +44,7 @@ exclude = [".agents/**"]
     "FURB171",  # 测试中成员测试是常见做法
     "RUF043",  # pytest.raises match参数中正则模式常见
     "ANN",  # 测试方法无需类型注解
+    "ARG002",  # 测试 fake 中未用参数（为满足基类签名而保留）
     "ASYNC240",  # 测试中同步写临时文件比 to_thread 更简洁
     "PLR2004",  # 测试中魔法数字（期望值）是标准做法
 ]

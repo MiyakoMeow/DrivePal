@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from app.models.embedding import EmbeddingModel
+    from app.memory.embedding_client import EmbeddingClient
 
     from .faiss_index import FaissIndex
 
@@ -220,7 +220,9 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
+def _update_memory_strengths(
+    results: list[dict], metadata: list[dict], reference_date: str | None = None
+) -> bool:
     """更新命中条目的记忆强度，返回是否有修改。
 
     注意：记忆强度不再设上限（原 cap=10），每次检索命中 +1。
@@ -245,7 +247,7 @@ def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
                     + 1.0
                 )
                 metadata[mi]["memory_strength"] = new_strength
-                today = datetime.now(UTC).strftime("%Y-%m-%d")
+                today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
                 if metadata[mi].get("last_recall_date") != today:
                     metadata[mi]["last_recall_date"] = today
                 updated = True
@@ -348,22 +350,18 @@ class RetrievalPipeline:
     阶段 4: 说话人感知降权
     """
 
-    def __init__(self, index: FaissIndex, embedding_model: EmbeddingModel) -> None:
-        """初始化检索管道。
-
-        Args:
-            index: FAISS 索引实例。
-            embedding_model: 嵌入模型实例。
-
-        """
+    def __init__(self, index: FaissIndex, embedding_client: EmbeddingClient) -> None:
+        """初始化检索管道。"""
         self._index = index
-        self._embedding_model = embedding_model
+        self._embedding_client = embedding_client
 
-    async def search(self, query: str, top_k: int = 5) -> list[dict]:
+    async def search(
+        self, query: str, top_k: int = 5, reference_date: str | None = None
+    ) -> list[dict]:
         """执行四阶段检索管道。"""
         if top_k <= 0:
             return []
-        query_emb = await self._embedding_model.encode(query)
+        query_emb = await self._embedding_client.encode(query)
         index_total = self._index.total
         if index_total == 0:
             return []
@@ -385,7 +383,9 @@ class RetrievalPipeline:
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
-        updated = _update_memory_strengths(merged, metadata)
+        updated = _update_memory_strengths(
+            merged, metadata, reference_date=reference_date
+        )
         for r in merged:
             _clean_search_result(r)
         if updated:

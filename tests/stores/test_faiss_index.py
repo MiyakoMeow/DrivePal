@@ -71,26 +71,15 @@ async def test_corrupted_metadata_rebuilds():
 
 
 @pytest.mark.asyncio
-async def test_dimension_mismatch_rebuilds_index():
-    """验证 add_vector 检测到维度变化时自动重建索引。"""
+async def test_dimension_mismatch_raises():
+    """维度不匹配时抛出 ValueError 而非静默重建。"""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
-        await idx.add_vector(
-            "first",
-            [0.1] * 1536,
-            "2024-06-15T00:00:00",
-            {},
-        )
+        await idx.add_vector("first", [0.1] * 1536, "2024-06-15T00:00:00", {})
         assert idx.total == 1
-        await idx.add_vector(
-            "second",
-            [0.1] * 3072,
-            "2024-06-16T00:00:00",
-            {},
-        )
-        assert idx.total == 1  # 重建后旧条目被清除
-        assert idx._dim == 3072
+        with pytest.raises(ValueError, match="dimension mismatch"):
+            await idx.add_vector("second", [0.1] * 3072, "2024-06-16T00:00:00", {})
 
 
 @pytest.mark.asyncio
@@ -190,3 +179,53 @@ class TestMetadataValidation:
         faiss.normalize_L2(vec)
         idx.add_with_ids(vec, np.array([0], dtype=np.int64))
         _validate_index_count(idx, 1)
+
+
+async def test_remove_vectors_syncs_next_id(tmp_path: Path) -> None:
+    """remove_vectors 后 _next_id 正确同步。"""
+    idx = FaissIndex(tmp_path)
+    fid1 = await idx.add_vector("a", [0.1, 0.2, 0.3], "2024-01-01T00:00:00")
+    fid2 = await idx.add_vector("b", [0.4, 0.5, 0.6], "2024-01-01T00:00:00")
+    assert idx.next_id == fid2 + 1
+    await idx.remove_vectors([fid1])
+    assert idx.next_id == fid2 + 1
+
+
+async def test_add_vector_dim_mismatch_raises(tmp_path: Path) -> None:
+    """维度不匹配时抛出 ValueError 而非静默重建。"""
+    idx = FaissIndex(tmp_path)
+    await idx.add_vector("a", [0.1, 0.2, 0.3], "2024-01-01T00:00:00")
+    with pytest.raises(ValueError, match="dimension mismatch"):
+        await idx.add_vector("b", [0.4, 0.5], "2024-01-01T00:00:00")
+
+
+async def test_get_extra_null_defense(tmp_path: Path) -> None:
+    """get_extra 返回空 dict 而非 None。"""
+    idx = FaissIndex(tmp_path)
+    idx._extra = {"key": "val"}
+    assert idx.get_extra() == {"key": "val"}
+    idx._extra = None
+    assert idx.get_extra() == {}
+
+
+async def test_load_extra_null_defense(tmp_path: Path) -> None:
+    """加载 JSON null 值的 extra_metadata.json 时回退空 dict。"""
+    idx = FaissIndex(tmp_path)
+    await idx.add_vector("a", [0.1, 0.2, 0.3], "2024-01-01T00:00:00")
+    await idx.save()
+    (tmp_path / "extra_metadata.json").write_text("null")
+    idx2 = FaissIndex(tmp_path)
+    await idx2.load()
+    assert idx2.get_extra() == {}
+
+
+async def test_load_extra_malformed_json(tmp_path: Path) -> None:
+    """加载语法错误的 extra_metadata.json 时回退空 dict，主索引不受影响。"""
+    idx = FaissIndex(tmp_path)
+    await idx.add_vector("a", [0.1, 0.2, 0.3], "2024-01-01T00:00:00")
+    await idx.save()
+    (tmp_path / "extra_metadata.json").write_text("{")
+    idx2 = FaissIndex(tmp_path)
+    await idx2.load()
+    assert idx2.get_extra() == {}
+    assert idx2.total == 1
