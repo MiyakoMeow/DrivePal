@@ -90,7 +90,7 @@ async def test_write_parses_multi_speaker_content():
         eid = await s.write(event)
         assert eid
         meta = s._index.get_metadata()
-        assert len(meta) >= 1
+        assert len(meta) >= 2
         all_speakers: set[str] = set()
         for m in meta:
             all_speakers.update(m.get("speakers", []))
