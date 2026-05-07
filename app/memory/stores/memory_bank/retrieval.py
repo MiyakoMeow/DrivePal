@@ -14,10 +14,8 @@ import math
 import os
 import re
 from collections import defaultdict, deque
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
-
-from .forget import forgetting_retention
 
 if TYPE_CHECKING:
     from app.memory.stores.memory_bank.faiss_index import FaissIndex
@@ -222,7 +220,11 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
 
 
 def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
-    """更新命中条目的记忆强度，返回是否有修改。"""
+    """更新命中条目的记忆强度，返回是否有修改。
+
+    注意：记忆强度不再设上限（原 cap=10），每次检索命中 +1。
+    同一天重复检索同一条目，memory_strength 会持续增长，使之更难被遗忘。
+    """
     updated = False
     for r in results:
         all_mi: list[int] = []
@@ -235,21 +237,17 @@ def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
                 all_mi.append(mi)
         for mi in all_mi:
             if 0 <= mi < len(metadata):
-                old = _safe_memory_strength(
-                    metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
+                new_strength = (
+                    _safe_memory_strength(
+                        metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
+                    )
+                    + 1.0
                 )
-                capped = min(old + 1.0, 10.0)
-                changed = False
-                if capped != old:
-                    metadata[mi]["memory_strength"] = capped
-                    changed = True
-                # 即使 strength 已达上限（10），仍需刷新 recency 日期
+                metadata[mi]["memory_strength"] = new_strength
                 today = datetime.now(UTC).strftime("%Y-%m-%d")
                 if metadata[mi].get("last_recall_date") != today:
                     metadata[mi]["last_recall_date"] = today
-                    changed = True
-                if changed:
-                    updated = True
+                updated = True
     return updated
 
 
@@ -382,7 +380,6 @@ class RetrievalPipeline:
         # 注意：_merge_neighbors 内部已调用 _merge_overlapping_results，
         # 此处不再重复调用。
 
-        merged = self._apply_retention_weight(merged)
         merged = self._apply_speaker_filter(merged, query)
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
@@ -425,25 +422,6 @@ class RetrievalPipeline:
         merged_results.extend(non_indexed)
         merged_results.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         return merged_results
-
-    @staticmethod
-    def _apply_retention_weight(results: list[dict]) -> list[dict]:
-        """将遗忘曲线保留率作为连续权重乘入分数。"""
-        today = datetime.now(UTC).date()
-        for r in results:
-            ts = (r.get("last_recall_date") or r.get("timestamp") or "")[:10]
-            try:
-                days = (today - date.fromisoformat(ts)).days
-            except ValueError, TypeError:
-                days = 0
-            retention = forgetting_retention(
-                max(days, 0),
-                _safe_memory_strength(
-                    r.get("memory_strength", INITIAL_MEMORY_STRENGTH)
-                ),
-            )
-            r["score"] = float(r.get("score") or 0) * retention
-        return results
 
     def _apply_speaker_filter(self, results: list[dict], query: str) -> list[dict]:
         ql = query.lower()

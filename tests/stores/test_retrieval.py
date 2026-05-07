@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -187,43 +187,64 @@ def test_update_memory_strength_refreshes_recall_date():
     assert meta[0]["last_recall_date"] == today
 
 
+def test_memory_strength_no_cap():
+    """验证记忆强度可以超过 10（原版行为）。"""
+    meta = [
+        {
+            "faiss_id": 0,
+            "memory_strength": 9.5,
+            "last_recall_date": "2024-01-01",
+            "text": "test",
+            "timestamp": "2024-01-01T00:00:00",
+        },
+    ]
+    results = [
+        {"_meta_idx": 0, "score": 1.0, "_merged_indices": [0]},
+    ]
+    _update_memory_strengths(results, meta)
+    assert meta[0]["memory_strength"] == 10.5, (
+        f"expected 10.5, got {meta[0]['memory_strength']}"
+    )
+    _update_memory_strengths(results, meta)
+    assert meta[0]["memory_strength"] == 11.5, (
+        f"expected 11.5, got {meta[0]['memory_strength']}"
+    )
+
+
 @pytest.mark.asyncio
-async def test_retention_weight_affects_ranking():
-    """验证相同 FAISS 相似度时 strength 不同导致排名不同。"""
+async def test_pipeline_returns_results_without_retention_weight():
+    """验证移除 retention weight 后检索管道仍正常返回结果。"""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
-        d_far = (datetime.now(UTC) - timedelta(days=100)).strftime("%Y-%m-%d")
-        d_recent = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
         await idx.add_vector(
             "entry 0: test preference",
             [0.1] * 1536,
-            f"{d_far}T00:00:00",
+            "2024-01-01T00:00:00",
             {
-                "source": d_far,
+                "source": "2024-01-01",
                 "speakers": ["User"],
                 "memory_strength": 1,
-                "last_recall_date": d_far,
+                "last_recall_date": "2024-01-01",
             },
         )
         await idx.add_vector(
-            "entry 1: test preference",
-            [0.1] * 1536,
-            f"{d_recent}T00:00:00",
+            "entry 1: other topic",
+            [0.2] * 1536,  # 不同向量使相似度不同
+            "2024-06-14T00:00:00",
             {
-                "source": d_recent,
+                "source": "2024-06-14",
                 "speakers": ["User"],
-                "memory_strength": 10,
-                "last_recall_date": d_recent,
+                "memory_strength": 5,
+                "last_recall_date": "2024-06-14",
             },
         )
         mock_emb = AsyncMock(spec=["encode"])
+        # query 与 entry 0 相似
         mock_emb.encode = AsyncMock(return_value=[0.1] * 1536)
         pipe = RetrievalPipeline(idx, mock_emb)
         results = await pipe.search("test preference", top_k=2)
-        assert len(results) == 2
-        # strength=10 且 1 天前的条目 retention 更高，排名应在前面
-        assert "entry 1" in results[0].get("text", "")
+        assert len(results) >= 1
 
 
 def test_adaptive_chunk_many_entries_uses_p90():

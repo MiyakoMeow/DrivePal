@@ -3,9 +3,15 @@
 import tempfile
 from pathlib import Path
 
+import faiss
+import numpy as np
 import pytest
 
-from app.memory.stores.memory_bank.faiss_index import FaissIndex
+from app.memory.stores.memory_bank.faiss_index import (
+    FaissIndex,
+    _validate_index_count,
+    _validate_metadata_structure,
+)
 
 
 @pytest.mark.asyncio
@@ -132,3 +138,55 @@ async def test_add_vector_updates_speakers_cache():
             {"speakers": ["Gary", "AI"]},
         )
         assert "Gary" in idx.get_all_speakers()
+
+
+class TestMetadataValidation:
+    """元数据校验函数测试。"""
+
+    def test_valid_metadata(self):
+        """有效的 metadata list 应通过校验。"""
+        meta = [{"faiss_id": 0}, {"faiss_id": 1}, {"faiss_id": 2}]
+        result = _validate_metadata_structure(meta)
+        assert result == meta
+
+    def test_invalid_root_not_list(self):
+        """根元素不是 list 时应抛出 TypeError。"""
+        with pytest.raises(TypeError, match="root is not list"):
+            _validate_metadata_structure({"key": "value"})
+
+    def test_invalid_entry_not_dict(self):
+        """条目不是 dict 时应抛出 ValueError。"""
+        with pytest.raises(ValueError, match="entry 1: invalid"):
+            _validate_metadata_structure([{"faiss_id": 0}, "not a dict"])
+
+    def test_invalid_missing_faiss_id(self):
+        """缺少 faiss_id 的条目应抛出 ValueError。"""
+        with pytest.raises(ValueError, match="entry 0: invalid"):
+            _validate_metadata_structure([{"text": "no id"}])
+
+    def test_invalid_faiss_id_not_int(self):
+        """faiss_id 不是 int 时应抛出 TypeError。"""
+        with pytest.raises(TypeError, match="faiss_id=None.*不是整数"):
+            _validate_metadata_structure([{"faiss_id": None}])
+
+    def test_duplicate_faiss_id(self):
+        """重复 faiss_id 时应抛出 ValueError。"""
+        with pytest.raises(ValueError, match="重复 faiss_id=1"):
+            _validate_metadata_structure([{"faiss_id": 1}, {"faiss_id": 1}])
+
+    def test_count_mismatch(self):
+        """索引条目数与 metadata 数不一致应抛出 ValueError。"""
+        idx = faiss.IndexIDMap(faiss.IndexFlatIP(4))
+        vec = np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32)
+        faiss.normalize_L2(vec)
+        idx.add_with_ids(vec, np.array([0], dtype=np.int64))
+        with pytest.raises(ValueError, match="count mismatch"):
+            _validate_index_count(idx, 2)
+
+    def test_count_match(self):
+        """索引条目与 metadata 数一致应通过。"""
+        idx = faiss.IndexIDMap(faiss.IndexFlatIP(4))
+        vec = np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32)
+        faiss.normalize_L2(vec)
+        idx.add_with_ids(vec, np.array([0], dtype=np.int64))
+        _validate_index_count(idx, 1)

@@ -1,27 +1,58 @@
 """ChatModel 薄封装：重试时自动截断 prompt 上下文。"""
 
+from __future__ import annotations
+
+import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.models.chat import AllProviderFailedError
 
 if TYPE_CHECKING:
-    from app.models.chat import ChatModel
+    import random
 
 logger = logging.getLogger(__name__)
 
 LLM_MAX_RETRIES = 3
+LLM_NONTRANSIENT_MAX_RETRIES = 1
 LLM_TRIM_START = 1800
 LLM_TRIM_STEP = 200
 LLM_TRIM_MIN = 500
+
+_sleep = asyncio.sleep
+
+_TRANSIENT_PATTERNS = (
+    "connection",
+    "timeout",
+    "rate limit",
+    "eof",
+    "reset",
+    "service unavailable",
+    "bad gateway",
+    "internal server error",
+)
+_CONTEXT_EXCEEDED_PATTERNS = (
+    "maximum context",
+    "context length",
+    "too long",
+    "reduce the length",
+    "input length",
+)
 
 
 class LlmClient:
     """ChatModel 的薄封装，提供上下文截断重试。"""
 
-    def __init__(self, chat_model: ChatModel) -> None:
-        """初始化 LlmClient。"""
+    def __init__(self, chat_model: Any, *, rng: random.Random | None = None) -> None:
+        """初始化 LlmClient。
+
+        Args:
+            chat_model: 聊天模型实例（须有 generate 方法）。
+            rng: 可选 RNG 实例（用于重试退避 jitter）。
+
+        """
         self._chat_model = chat_model
+        self._rng = rng
 
     async def call(
         self, prompt: str, *, system_prompt: str | None = None
@@ -39,23 +70,34 @@ class LlmClient:
                 return resp.strip() if resp else ""
             except AllProviderFailedError as exc:
                 err = str(exc).lower()
-                is_ctx = any(
-                    p in err
-                    for p in (
-                        "maximum context",
-                        "context length",
-                        "too long",
-                        "reduce the length",
-                        "input length",
-                    )
-                )
-                if is_ctx and attempt < LLM_MAX_RETRIES - 1:
+                # 错误判定优先级：context exceeded > transient > nontransient
+                # 模式匹配集不互斥，但真实场景中关键词重叠可能性极低。
+                # 上下文超长 → 截断后重试
+                if (
+                    any(p in err for p in _CONTEXT_EXCEEDED_PATTERNS)
+                    and attempt < LLM_MAX_RETRIES - 1
+                ):
                     prompt = prompt[
                         -max(LLM_TRIM_START - LLM_TRIM_STEP * attempt, LLM_TRIM_MIN) :
                     ]
                     continue
-                if attempt < LLM_MAX_RETRIES - 1:
+                # 瞬态错误 → 指数退避后重试
+                if (
+                    any(p in err for p in _TRANSIENT_PATTERNS)
+                    and attempt < LLM_MAX_RETRIES - 1
+                ):
+                    delay = min(2**attempt, 10)
+                    if self._rng is not None:
+                        delay += self._rng.random() * 0.5
+                    await _sleep(delay)
                     continue
-                logger.warning("LlmClient 重试 %d 次后仍失败", LLM_MAX_RETRIES)
+                # 其他错误（鉴权/模型不存在等）：快速失败，仅重试一次
+                if attempt < LLM_NONTRANSIENT_MAX_RETRIES:
+                    continue
+                logger.warning(
+                    "LlmClient retries exhausted after %d attempts: %s",
+                    attempt + 1,
+                    exc,
+                )
                 return None
-        return None
+        return None  # 防御性 fallback（LLM_MAX_RETRIES <= 1 时可达）

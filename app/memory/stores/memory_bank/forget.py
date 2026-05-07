@@ -5,11 +5,14 @@
 """
 
 import enum
+import logging
 import math
 import os
 import random
 import time
 from datetime import UTC, date, datetime
+
+logger = logging.getLogger(__name__)
 
 SOFT_FORGET_THRESHOLD = 0.15
 FORGET_INTERVAL_SECONDS = 300
@@ -49,6 +52,55 @@ def _resolve_forget_mode() -> ForgetMode:
     return ForgetMode.DETERMINISTIC
 
 
+def compute_ingestion_forget_ids(
+    metadata: list[dict],
+    reference_date: str,
+    rng: random.Random | None = None,
+    mode: ForgetMode = ForgetMode.DETERMINISTIC,
+) -> list[int]:
+    """对 metadata 中的条目执行摄入时遗忘，返回应硬删除的 FAISS ID 列表。
+
+    对齐 VehicleMemBench _forget_at_ingestion 行为：
+    - 跳过 daily_summary 类型条目
+    - 按遗忘曲线 + 记忆强度决定保留/丢弃
+    - **不修改**传入的 metadata，仅返回 ID 列表
+
+    Returns:
+        应硬删除的 FAISS ID 列表。空列表表示无条目需删除。
+
+    """
+    try:
+        ref_dt = date.fromisoformat(reference_date[:10])
+    except ValueError, TypeError:
+        logger.exception(
+            "compute_ingestion_forget_ids: invalid reference_date=%r", reference_date
+        )
+        return []
+
+    ids_to_remove: list[int] = []
+    rng_once = rng if rng is not None else random.Random()
+    for entry in metadata:
+        if entry.get("type") == "daily_summary":
+            continue
+        ts = entry.get("last_recall_date") or entry.get("timestamp", "")[:10]
+        try:
+            mem_dt = date.fromisoformat(ts[:10])
+            days = (ref_dt - mem_dt).days
+            strength = float(entry.get("memory_strength", 1))
+        except ValueError, TypeError:
+            continue
+        retention = forgetting_retention(days, strength)
+        if mode == ForgetMode.PROBABILISTIC:
+            should_forget = rng_once.random() > retention
+        else:
+            should_forget = retention < SOFT_FORGET_THRESHOLD
+        if should_forget:
+            fid = entry.get("faiss_id")
+            if fid is not None:
+                ids_to_remove.append(fid)
+    return ids_to_remove
+
+
 class ForgettingCurve:
     """管理遗忘曲线判定逻辑，控制执行频率。"""
 
@@ -56,12 +108,26 @@ class ForgettingCurve:
         self,
         mode: ForgetMode | None = None,
         seed: int | None = None,
+        rng: random.Random | None = None,
     ) -> None:
-        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。"""
+        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。
+
+        Args:
+            mode: 遗忘策略模式。
+            seed: 随机种子（与 rng 互斥；仅 mode=PROBABILISTIC 时使用）。
+            rng: 外部 RNG 实例（与 seed 互斥；优先级高于 seed）。
+
+        """
         self._mode = mode if mode is not None else _resolve_forget_mode()
-        self._rng: random.Random | None = (
-            random.Random(seed) if self._mode == ForgetMode.PROBABILISTIC else None
-        )
+        if seed is not None and rng is not None:
+            msg = "seed and rng are mutually exclusive"
+            raise ValueError(msg)
+        if rng is not None:
+            self._rng = rng
+        else:
+            self._rng = (
+                random.Random(seed) if self._mode == ForgetMode.PROBABILISTIC else None
+            )
         self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
 
     def maybe_forget(
@@ -102,7 +168,7 @@ class ForgettingCurve:
                 continue
             retention = forgetting_retention(days, strength_float)
 
-            if self._rng is not None:
+            if self._mode == ForgetMode.PROBABILISTIC and self._rng is not None:
                 should_forget = self._rng.random() > retention
             else:
                 should_forget = retention < SOFT_FORGET_THRESHOLD

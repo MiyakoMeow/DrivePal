@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.schemas import MemoryEvent
 from app.memory.stores.memory_bank.store import MemoryBankStore
 
 
@@ -46,3 +47,31 @@ async def test_search_empty_store(store):
     """验证空存储搜索返回空列表。"""
     results = await store.search("anything", top_k=5)
     assert results == []
+
+
+@pytest.mark.asyncio
+async def test_write_paired_vectorization(store):
+    """验证多行内容按 2 行配对入库，而非每行独立。"""
+    lines = [
+        "Gary: set seat to 30%",
+        "AI: seat set to 30%",
+        "Gary: set temperature to 22",
+        "AI: temperature set to 22",
+        "Gary: lone message",
+    ]
+    content = "\n".join(lines)
+    await store.write(MemoryEvent(content=content))
+    meta = store._index.get_metadata()
+    # 验证配对格式（含双方说话人标记）
+    paired_texts = [
+        m.get("text", "")
+        for m in meta
+        if "[|Gary|]" in m.get("text", "") and "[|AI|]" in m.get("text", "")
+    ]
+    assert len(paired_texts) >= 1, "expected >=1 paired entry"
+    pt = paired_texts[0]
+    assert "set seat to 30%" in pt
+    assert "seat set to 30%" in pt
+    # 验证单行独立
+    lone_count = sum(1 for m in meta if "lone message" in m.get("text", ""))
+    assert lone_count >= 1, f"expected >=1 lone entry, got {lone_count}"
