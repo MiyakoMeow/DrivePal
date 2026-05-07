@@ -78,7 +78,7 @@ class MemoryBankStore:
         """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
 
         Returns:
-            True 表示实际执行了删除（包括节流跳过返回 False）。
+            True 表示实际执行了删除；节流跳过时返回 False。
 
         """
         forgotten_ids = self._forget.maybe_forget(metadata)
@@ -88,7 +88,8 @@ class MemoryBankStore:
             forgotten_ids = [m["faiss_id"] for m in metadata if m.get("forgotten")]
         if forgotten_ids:
             await self._index.remove_vectors(forgotten_ids)
-        return True
+            return True
+        return False
 
     async def write_interaction(
         self,
