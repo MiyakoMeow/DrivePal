@@ -166,8 +166,6 @@ class FaissIndex:
             分配的 faiss_id。
 
         """
-        fid = self._next_id
-        self._next_id += 1
         emb_dim = len(embedding)
         if self._index is None:
             self._dim = emb_dim
@@ -184,8 +182,8 @@ class FaissIndex:
             self._id_to_meta.clear()
             self._all_speakers.clear()
             self._next_id = 0
-            fid = self._next_id
-            self._next_id += 1
+        fid = self._next_id
+        self._next_id += 1
         vec = np.array([embedding], dtype=np.float32)
         faiss.normalize_L2(vec)
         self._index.add_with_ids(vec, np.array([fid], dtype=np.int64))
