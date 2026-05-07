@@ -133,9 +133,20 @@ class Summarizer:
         dailies = extra.get("daily_personalities", {})
         if not isinstance(dailies, dict) or not dailies:
             return None
-        parts = ["The following are analyses..."]
-        parts.extend(f"\nAt {date}, {text}" for date, text in sorted(dailies.items()))
-        parts.append("\nPlease provide a concise summary: ")
+        parts = [
+            "The following are analyses of users' vehicle-related preferences "
+            "and habits across multiple driving sessions:\n",
+        ]
+        parts.extend(
+            f"\nAt {date}, the analysis shows {str(text).strip()}"
+            for date, text in sorted(dailies.items())
+        )
+        parts.append(
+            "\nPlease provide a highly concise summary of the users' vehicle "
+            "preferences and driving habits, organized by user, and the most "
+            "appropriate in-car response strategy for the AI assistant, "
+            "summarized as:"
+        )
         result = await self._llm.call(
             "".join(parts), system_prompt=_SUMMARY_SYSTEM_PROMPT
         )
@@ -148,19 +159,32 @@ class Summarizer:
     @staticmethod
     def _summarize_prompt(text: str) -> str:
         return (
-            f"Please summarize the following in-car dialogue concisely, "
-            f"focusing on vehicle settings, user preferences, conflicts, "
-            f"and conditional constraints. Ignore unrelated topics.\n"
-            f"Dialogue content:\n{text}\nSummarization："
+            "Please summarize the following in-car dialogue concisely, "
+            "focusing specifically on:\n"
+            "1. Vehicle settings or preferences mentioned (seat position, "
+            "climate temperature/ventilation, ambient light color, navigation "
+            "mode, music/radio settings, HUD brightness, etc.)\n"
+            "2. Which person (by name) expressed or changed each preference\n"
+            "3. Any conflicts or differences between users' vehicle preferences\n"
+            "4. Conditional constraints (e.g. preference depends on time of day, "
+            "weather, or passenger presence)\n"
+            "Ignore general conversation topics unrelated to the vehicle.\n"
+            f"Dialogue content:\n{text}\n"
+            "Summarization："
         )
 
     @staticmethod
     def _personality_prompt(text: str) -> str:
         return (
-            f"Based on the following in-car dialogue, analyze the users' "
-            f"vehicle-related preferences and habits:\n"
-            f"1. What vehicle settings does each user prefer?\n"
-            f"2. How do preferences vary by context?\n"
-            f"3. What driving or comfort habits are exhibited?\n"
-            f"Dialogue content:\n{text}\nAnalysis:"
+            "Based on the following in-car dialogue, analyze the users' "
+            "vehicle-related preferences and habits:\n"
+            "1. What vehicle settings does each user prefer (seat, climate, "
+            "lighting, media, navigation, etc.)?\n"
+            "2. How do their preferences vary by context (time of day, "
+            "weather, passengers)?\n"
+            "3. What driving or comfort habits are exhibited?\n"
+            "4. What response strategy should the AI use to anticipate "
+            "each user's needs?\n"
+            f"Dialogue content:\n{text}\n"
+            "Analysis:"
         )

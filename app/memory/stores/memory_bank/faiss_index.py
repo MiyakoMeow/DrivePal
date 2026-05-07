@@ -70,6 +70,7 @@ class FaissIndex:
         self._extra: dict = {}
         self._next_id: int = 0
         self._id_to_meta: dict[int, int] = {}
+        self._all_speakers: set[str] = set()
 
     async def load(self) -> None:
         """从磁盘加载索引与元数据；损坏时不重建，等首次 add_vector 再创建。"""
@@ -91,6 +92,7 @@ class FaissIndex:
                 self._metadata = meta
                 self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
                 self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
+                self._rebuild_speakers_cache()
                 if ep.exists():
                     e: dict = json.loads(ep.read_text())
                     self._extra = e if isinstance(e, dict) else {}
@@ -119,6 +121,32 @@ class FaissIndex:
                 json.dumps(self._extra, ensure_ascii=False, indent=2),
             )
 
+    @staticmethod
+    def parse_speaker_line(line: str) -> tuple[str | None, str]:
+        """从 "Speaker: content" 格式解析说话人和内容。
+
+        Returns:
+            (speaker_name, content) — speaker_name 为 None 表示不可解析。
+
+        """
+        colon_pos = line.find(": ")
+        if colon_pos > 0:
+            return line[:colon_pos].strip(), line[colon_pos + 2 :].strip()
+        return None, line.strip()
+
+    def _rebuild_speakers_cache(self) -> None:
+        """从 metadata 重建说话人缓存（在 load/add_vector 后调用）。"""
+        self._all_speakers.clear()
+        for m in self._metadata:
+            for spk in m.get("speakers", []):
+                self._all_speakers.add(spk)
+
+    def get_all_speakers(self) -> list[str]:
+        """返回所有已知说话人列表（若缓存为空则从 metadata 重建）。"""
+        if not self._all_speakers and self._metadata:
+            self._rebuild_speakers_cache()
+        return sorted(self._all_speakers)
+
     async def add_vector(
         self,
         text: str,
@@ -138,12 +166,24 @@ class FaissIndex:
             分配的 faiss_id。
 
         """
-        fid = self._next_id
-        self._next_id += 1
         emb_dim = len(embedding)
         if self._index is None:
             self._dim = emb_dim
             self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
+        elif self._index.d != emb_dim:
+            logger.warning(
+                "FaissIndex 嵌入维度 %d→%d，重建索引（旧条目将被清除）",
+                self._index.d,
+                emb_dim,
+            )
+            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
+            self._dim = emb_dim
+            self._metadata.clear()
+            self._id_to_meta.clear()
+            self._all_speakers.clear()
+            self._next_id = 0
+        fid = self._next_id
+        self._next_id += 1
         vec = np.array([embedding], dtype=np.float32)
         faiss.normalize_L2(vec)
         self._index.add_with_ids(vec, np.array([fid], dtype=np.int64))
@@ -158,6 +198,8 @@ class FaissIndex:
         }
         if extra_meta:
             entry.update(extra_meta)
+            for spk in extra_meta.get("speakers", []):
+                self._all_speakers.add(spk)
         self._metadata.append(entry)
         self._id_to_meta[fid] = len(self._metadata) - 1
         return fid
@@ -217,6 +259,7 @@ class FaissIndex:
         id_set = set(faiss_ids)
         self._metadata = [m for m in self._metadata if m["faiss_id"] not in id_set]
         self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(self._metadata)}
+        self._rebuild_speakers_cache()
 
     def get_metadata(self) -> list[dict]:
         """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）。"""

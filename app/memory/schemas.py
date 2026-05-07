@@ -28,6 +28,7 @@ class MemoryEvent(BaseModel):
     date_group: str = ""
     interaction_ids: list[str] = Field(default_factory=list)
     updated_at: str = ""
+    speaker: str = ""
     model_config = ConfigDict(extra="allow")
 
 

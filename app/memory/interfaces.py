@@ -44,6 +44,7 @@ class MemoryStore(Protocol):
         query: str,
         response: str,
         event_type: str = "reminder",
+        **kwargs: object,
     ) -> InteractionResult:
         """写入交互记录."""
         ...

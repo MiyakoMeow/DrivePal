@@ -39,6 +39,7 @@ class TestMemoryEvent:
             "date_group": "",
             "interaction_ids": [],
             "updated_at": "",
+            "speaker": "",
         }
 
     def test_from_dict(self) -> None:

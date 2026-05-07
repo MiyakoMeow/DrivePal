@@ -59,3 +59,63 @@ async def test_get_event_type_none_for_missing(store):
     """验证不存在的 event_id 返回 None。"""
     t = await store.get_event_type("nonexistent")
     assert t is None
+
+
+@pytest.mark.asyncio
+async def test_purge_forgotten_removes_from_index():
+    """验证 _purge_forgotten 从 FAISS 索引移除已遗忘条目。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        emb = AsyncMock(spec=["encode"])
+        emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        s = MemoryBankStore(Path(tmp), embedding_model=emb)
+        await s.write_interaction("hello", "world")
+        await s.write_interaction("test2", "data2")
+        assert s._index.total == 2
+        # 标记第一条为 forgotten
+        s._index.get_metadata()[0]["forgotten"] = True
+        # 第一次调用：应成功移除
+        result = await s._purge_forgotten(s._index.get_metadata())
+        assert result is True
+        assert s._index.total == 1
+        # 第二次调用：节流跳过，无操作
+        result = await s._purge_forgotten(s._index.get_metadata())
+        assert result is False
+        assert s._index.total == 1
+
+
+@pytest.mark.asyncio
+async def test_write_parses_multi_speaker_content():
+    """验证 write 解析多行发言格式。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        emb = AsyncMock(spec=["encode"])
+        emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        s = MemoryBankStore(Path(tmp), embedding_model=emb)
+        content = "Gary: set seat to 45\nPatricia: set AC to 22"
+        event = MemoryEvent(content=content, type="reminder")
+        eid = await s.write(event)
+        assert eid
+        meta = s._index.get_metadata()
+        assert len(meta) >= 2
+        all_speakers: set[str] = set()
+        for m in meta:
+            all_speakers.update(m.get("speakers", []))
+        assert "Gary" in all_speakers
+        assert "Patricia" in all_speakers
+
+
+@pytest.mark.asyncio
+async def test_write_interaction_with_user_name():
+    """验证 write_interaction 支持指定发言者姓名。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        emb = AsyncMock(spec=["encode"])
+        emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        s = MemoryBankStore(Path(tmp), embedding_model=emb)
+        result = await s.write_interaction(
+            "set seat to 45",
+            "seat set to 45",
+            user_name="Gary",
+        )
+        assert result.event_id
+        meta = s._index.get_metadata()
+        assert len(meta) >= 1
+        assert any("Gary" in entry.get("speakers", []) for entry in meta)
