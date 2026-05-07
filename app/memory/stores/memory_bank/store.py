@@ -75,8 +75,14 @@ class MemoryBankStore:
         if seed is None:
             raw = os.getenv("MEMORYBANK_SEED")
             if raw is not None:
-                with contextlib.suppress(ValueError):
+                try:
                     seed = int(raw)
+                except ValueError:
+                    logger.warning(
+                        "MEMORYBANK_SEED=%r 无法解析为整数，seed 将保持 None，"
+                        "_seed_provided=False",
+                        raw,
+                    )
         self._rng = random.Random(seed)
         self._seed_provided = seed is not None
         self._index = FaissIndex(data_dir)

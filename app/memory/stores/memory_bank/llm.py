@@ -96,8 +96,8 @@ class LlmClient:
                     continue
                 logger.warning(
                     "LlmClient retries exhausted after %d attempts: %s",
-                    LLM_MAX_RETRIES,
+                    attempt + 1,
                     exc,
                 )
                 return None
-        return None
+        return None  # 防御性 fallback（LLM_MAX_RETRIES <= 1 时可达）
