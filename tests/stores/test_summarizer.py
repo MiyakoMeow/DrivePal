@@ -65,3 +65,23 @@ async def test_get_daily_summary_none_on_empty_llm():
         summ = Summarizer(mock_llm, idx)
         result = await summ.get_daily_summary("2024-06-15")
         assert result is None
+
+
+@pytest.mark.asyncio
+async def test_summarize_prompt_includes_user_focus():
+    """验证摘要 prompt 包含按姓名追踪偏好引导。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        await idx.add_vector(
+            "Gary: seat 45",
+            TEST_EMBEDDING,
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15"},
+        )
+        mock_llm = AsyncMock()
+        mock_llm.call = AsyncMock(return_value="summary text")
+        summ = Summarizer(mock_llm, idx)
+        await summ.get_daily_summary("2024-06-15")
+        call_text = mock_llm.call.call_args[0][0]
+        assert "Which person" in call_text or "each user" in call_text
