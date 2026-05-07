@@ -383,7 +383,9 @@ class RetrievalPipeline:
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
-        updated = _update_memory_strengths(merged, metadata, reference_date=reference_date)
+        updated = _update_memory_strengths(
+            merged, metadata, reference_date=reference_date
+        )
         for r in merged:
             _clean_search_result(r)
         if updated:

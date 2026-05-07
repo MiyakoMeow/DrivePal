@@ -67,7 +67,7 @@ class FaissIndex:
         self._dim = embedding_dim
         self._index: faiss.IndexIDMap | None = None
         self._metadata: list[dict] = []
-        self._extra: dict = {}
+        self._extra: dict | None = {}
         self._next_id: int = 0
         self._id_to_meta: dict[int, int] = {}
         self._all_speakers: set[str] = set()
@@ -94,7 +94,7 @@ class FaissIndex:
                 self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
                 self._rebuild_speakers_cache()
                 if ep.exists():
-                    e: dict = json.loads(ep.read_text())
+                    e: object = json.loads(ep.read_text())
                     self._extra = e if isinstance(e, dict) else {}
             except (
                 json.JSONDecodeError,
@@ -172,16 +172,18 @@ class FaissIndex:
             self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
         elif self._index.d != emb_dim:
             logger.warning(
-                "FaissIndex 嵌入维度 %d→%d，重建索引（旧条目将被清除）",
+                "FaissIndex dimension mismatch: index=%d, vector=%d. "
+                "Check embedding model consistency.",
                 self._index.d,
                 emb_dim,
             )
-            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
-            self._dim = emb_dim
-            self._metadata.clear()
-            self._id_to_meta.clear()
-            self._all_speakers.clear()
-            self._next_id = 0
+            msg = (
+                f"Embedding dimension mismatch: "
+                f"index expects {self._index.d}-dim, "
+                f"but got {emb_dim}-dim vector. "
+                f"Check embedding model settings or rebuild index."
+            )
+            raise ValueError(msg)
         fid = self._next_id
         self._next_id += 1
         vec = np.array([embedding], dtype=np.float32)
@@ -259,6 +261,7 @@ class FaissIndex:
         id_set = set(faiss_ids)
         self._metadata = [m for m in self._metadata if m["faiss_id"] not in id_set]
         self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(self._metadata)}
+        self._next_id = max((m["faiss_id"] for m in self._metadata), default=-1) + 1
         self._rebuild_speakers_cache()
 
     def get_metadata(self) -> list[dict]:
@@ -274,7 +277,7 @@ class FaissIndex:
 
     def get_extra(self) -> dict:
         """返回额外元数据（总体摘要/人格）。"""
-        return self._extra
+        return self._extra if isinstance(self._extra, dict) else {}
 
     def set_extra(self, extra: dict) -> None:
         """设置额外元数据。"""
@@ -284,3 +287,8 @@ class FaissIndex:
     def total(self) -> int:
         """索引中向量总数。"""
         return self._index.ntotal if self._index else 0
+
+    @property
+    def next_id(self) -> int:
+        """下一个可用 faiss_id。"""
+        return self._next_id
