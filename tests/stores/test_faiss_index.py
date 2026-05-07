@@ -65,19 +65,23 @@ async def test_corrupted_metadata_rebuilds():
 
 
 @pytest.mark.asyncio
-@pytest.mark.asyncio
 async def test_dimension_mismatch_rebuilds_index():
     """验证 add_vector 检测到维度变化时自动重建索引。"""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
-        fid1 = await idx.add_vector(
-            "first", [0.1] * 1536, "2024-06-15T00:00:00", {},
+        await idx.add_vector(
+            "first",
+            [0.1] * 1536,
+            "2024-06-15T00:00:00",
+            {},
         )
         assert idx.total == 1
-        # 换用 3072 维向量——应触发重建
-        fid2 = await idx.add_vector(
-            "second", [0.1] * 3072, "2024-06-16T00:00:00", {},
+        await idx.add_vector(
+            "second",
+            [0.1] * 3072,
+            "2024-06-16T00:00:00",
+            {},
         )
         assert idx.total == 1  # 重建后旧条目被清除
         assert idx._dim == 3072

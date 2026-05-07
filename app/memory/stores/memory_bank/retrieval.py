@@ -239,7 +239,9 @@ def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
                 capped = min(old + 1.0, 10.0)
                 if capped != old:
                     metadata[mi]["memory_strength"] = capped
-                    metadata[mi]["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
+                    metadata[mi]["last_recall_date"] = datetime.now(UTC).strftime(
+                        "%Y-%m-%d"
+                    )
                     updated = True
     return updated
 

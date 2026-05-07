@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -170,8 +171,6 @@ def test_adaptive_chunk_few_entries_returns_default():
 
 def test_update_memory_strength_refreshes_recall_date():
     """验证检索命中后 last_recall_date 被刷新。"""
-    from datetime import UTC, datetime
-
     meta = [
         {
             "faiss_id": 0,

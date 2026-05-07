@@ -80,9 +80,7 @@ class MemoryBankStore:
         if forgotten_ids is None:
             return  # 节流跳过
         if not forgotten_ids:
-            forgotten_ids = [
-                m["faiss_id"] for m in metadata if m.get("forgotten")
-            ]
+            forgotten_ids = [m["faiss_id"] for m in metadata if m.get("forgotten")]
         if forgotten_ids:
             await self._index.remove_vectors(forgotten_ids)
 
