@@ -260,17 +260,20 @@ class MemoryBankStore:
             # 配对模式：每 2 行结对为 1 条向量（对齐 VehicleMemBench 原版）
             for i in range(0, len(parsed_pairs), 2):
                 speaker_a, text_a = parsed_pairs[i]
+                # None 说话人回退 Unknown 避免文本中出现字面量 "[|None|]"
+                label_a = speaker_a if speaker_a is not None else "Unknown"
                 if i + 1 < len(parsed_pairs):
                     speaker_b, text_b = parsed_pairs[i + 1]
+                    label_b = speaker_b if speaker_b is not None else "Unknown"
                     speakers = [speaker_a, speaker_b]
                     conv_text = (
                         f"Conversation content on {date_key}:"
-                        f"[|{speaker_a}|]: {text_a}; [|{speaker_b}|]: {text_b}"
+                        f"[|{label_a}|]: {text_a}; [|{label_b}|]: {text_b}"
                     )
                 else:
                     speakers = [speaker_a]
                     conv_text = (
-                        f"Conversation content on {date_key}:[|{speaker_a}|]: {text_a}"
+                        f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
                     )
                 emb = await self._embedding_model.encode(conv_text)
                 fid = await self._index.add_vector(
