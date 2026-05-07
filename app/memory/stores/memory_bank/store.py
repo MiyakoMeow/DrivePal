@@ -196,30 +196,56 @@ class MemoryBankStore:
         return out
 
     async def write(self, event: MemoryEvent) -> str:
-        """写入事件."""
+        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。"""
         if not self._embedding_model:
             msg = "embedding_model required"
             raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
-        text = f"Conversation content on {date_key}:[|System|]: {event.content}"
-        emb = await self._embedding_model.encode(text)
-        fid = await self._index.add_vector(
-            text,
-            emb,
-            ts,
-            {
-                "source": date_key,
-                "speakers": ["System"],
-                "raw_content": event.content,
-                "event_type": event.type,
-            },
-        )
+
+        lines = [l.strip() for l in event.content.split("\n") if l.strip()]
+        parsed_pairs: list[tuple[str | None, str]] = [
+            FaissIndex.parse_speaker_line(ln) for ln in lines
+        ]
+        has_speakers = any(spk is not None for spk, _ in parsed_pairs)
+
+        fid: int | None = None
+        if has_speakers:
+            # 多说话人格式：每个发言作为独立向量
+            for speaker, text in parsed_pairs:
+                spk = speaker or event.speaker or "System"
+                conv_text = (
+                    f"Conversation content on {date_key}:"
+                    f"[|{spk}|]: {text}"
+                )
+                emb = await self._embedding_model.encode(conv_text)
+                fid = await self._index.add_vector(
+                    conv_text, emb, ts, {
+                        "source": date_key,
+                        "speakers": [spk],
+                        "raw_content": text,
+                        "event_type": event.type,
+                    },
+                )
+        else:
+            # 单用户回退
+            spk = event.speaker or "System"
+            conv_text = (
+                f"Conversation content on {date_key}:"
+                f"[|{spk}|]: {event.content}"
+            )
+            emb = await self._embedding_model.encode(conv_text)
+            fid = await self._index.add_vector(
+                conv_text, emb, ts, {
+                    "source": date_key,
+                    "speakers": [spk],
+                    "raw_content": event.content,
+                    "event_type": event.type,
+                },
+            )
         if self._forgetting_enabled:
-            forgotten_ids = self._forget.maybe_forget(self._index.get_metadata())
-            if forgotten_ids:
-                await self._index.remove_vectors(forgotten_ids)
+            await self._purge_forgotten(self._index.get_metadata())
         await self._index.save()
         if self._summarizer:
             task = asyncio.create_task(self._background_summarize(date_key))

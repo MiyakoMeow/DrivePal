@@ -79,6 +79,23 @@ async def test_purge_forgotten_removes_from_index():
 
 
 @pytest.mark.asyncio
+async def test_write_parses_multi_speaker_content():
+    """验证 write 解析多行发言格式。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        emb = AsyncMock(spec=["encode"])
+        emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        s = MemoryBankStore(Path(tmp), embedding_model=emb)
+        content = "Gary: set seat to 45\nPatricia: set AC to 22"
+        event = MemoryEvent(content=content, type="reminder")
+        eid = await s.write(event)
+        assert eid
+        meta = s._index.get_metadata()
+        assert len(meta) >= 1
+        speakers = meta[-1].get("speakers", [])
+        assert "Gary" in speakers or "Patricia" in speakers
+
+
+@pytest.mark.asyncio
 async def test_write_interaction_with_user_name():
     """验证 write_interaction 支持指定发言者姓名。"""
     with tempfile.TemporaryDirectory() as tmp:
