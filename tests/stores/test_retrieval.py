@@ -15,6 +15,7 @@ from app.memory.stores.memory_bank.retrieval import (
     _get_effective_chunk_size,
     _merge_overlapping_results,
     _strip_source_prefix,
+    _update_memory_strengths,
     _word_in_text,
 )
 
@@ -165,6 +166,26 @@ def test_adaptive_chunk_few_entries_returns_default():
     finally:
         if popped is not None:
             os.environ["MEMORYBANK_CHUNK_SIZE"] = popped
+
+
+def test_update_memory_strength_refreshes_recall_date():
+    """验证检索命中后 last_recall_date 被刷新。"""
+    from datetime import UTC, datetime
+
+    meta = [
+        {
+            "faiss_id": 0,
+            "memory_strength": 1,
+            "last_recall_date": "2024-01-01",
+        },
+    ]
+    results = [
+        {"_meta_idx": 0, "_all_meta_indices": [0], "score": 0.9},
+    ]
+    updated = _update_memory_strengths(results, meta)
+    assert updated
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    assert meta[0]["last_recall_date"] == today
 
 
 def test_adaptive_chunk_many_entries_uses_p90():

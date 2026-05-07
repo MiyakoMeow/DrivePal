@@ -14,6 +14,7 @@ import math
 import os
 import re
 from collections import defaultdict, deque
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -238,6 +239,7 @@ def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
                 capped = min(old + 1.0, 10.0)
                 if capped != old:
                     metadata[mi]["memory_strength"] = capped
+                    metadata[mi]["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
                     updated = True
     return updated
 
