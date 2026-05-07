@@ -109,13 +109,23 @@ class MemoryModule:
         event_type: str = "reminder",
         *,
         mode: MemoryMode | None = None,
+        **kwargs: object,
     ) -> InteractionResult:
-        """写入交互记录."""
+        """写入交互记录。
+
+        Args:
+            query: 用户输入。
+            response: AI 回复。
+            event_type: 事件类型。
+            mode: 记忆模式。
+            **kwargs: 传递给存储实现的额外参数（如 user_name、ai_name）。
+
+        """
         store = await self._get_store(self._resolve_mode(mode))
         if not getattr(store, "supports_interaction", False):
             msg = f"Store '{store.store_name}' does not support write_interaction"
             raise NotImplementedError(msg)
-        return await store.write_interaction(query, response, event_type)
+        return await store.write_interaction(query, response, event_type, **kwargs)
 
     async def search(
         self,
