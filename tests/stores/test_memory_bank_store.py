@@ -73,8 +73,13 @@ async def test_purge_forgotten_removes_from_index():
         assert s._index.total == 2
         # 标记第一条为 forgotten
         s._index.get_metadata()[0]["forgotten"] = True
-        # 调用 _purge_forgotten
-        await s._purge_forgotten(s._index.get_metadata())
+        # 第一次调用：应成功移除
+        result = await s._purge_forgotten(s._index.get_metadata())
+        assert result is True
+        assert s._index.total == 1
+        # 第二次调用：节流跳过，无操作
+        result = await s._purge_forgotten(s._index.get_metadata())
+        assert result is False
         assert s._index.total == 1
 
 
@@ -113,7 +118,4 @@ async def test_write_interaction_with_user_name():
         assert result.event_id
         meta = s._index.get_metadata()
         assert len(meta) >= 1
-        assert any(
-            "Gary" in entry.get("speakers", []) or "Gary" in entry.get("text", "")
-            for entry in meta
-        )
+        assert any("Gary" in entry.get("speakers", []) for entry in meta)
