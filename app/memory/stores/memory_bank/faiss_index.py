@@ -144,6 +144,19 @@ class FaissIndex:
         if self._index is None:
             self._dim = emb_dim
             self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
+        elif self._index.d != emb_dim:
+            logger.warning(
+                "FaissIndex 嵌入维度 %d→%d，重建索引（旧条目将被清除）",
+                self._index.d,
+                emb_dim,
+            )
+            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
+            self._dim = emb_dim
+            self._metadata.clear()
+            self._id_to_meta.clear()
+            self._next_id = 0
+            fid = self._next_id
+            self._next_id += 1
         vec = np.array([embedding], dtype=np.float32)
         faiss.normalize_L2(vec)
         self._index.add_with_ids(vec, np.array([fid], dtype=np.int64))
