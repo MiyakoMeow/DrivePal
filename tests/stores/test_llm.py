@@ -54,7 +54,7 @@ async def test_llm_retry_on_transient():
     client = LlmClient(model)
     result = await client.call("test")
     assert result is None
-    assert model.call_count == 3
+    assert model.call_count == 3  # 瞬态错误重试 3 次
 
 
 @pytest.mark.asyncio
@@ -80,9 +80,10 @@ async def test_llm_context_trim_on_long_prompt():
 
 @pytest.mark.asyncio
 async def test_llm_nontransient_exhausts_retries():
-    """非瞬态错误（鉴权失败）也会重试。"""
+    """非瞬态错误（鉴权失败）快速失败，仅重试一次。"""
     model = _ConstErrorModel("Incorrect API key")
     client = LlmClient(model)
     result = await client.call("test")
     assert result is None
-    assert model.call_count == 3
+    # 首次尝试 + 1 次重试后快速失败
+    assert model.call_count == 2

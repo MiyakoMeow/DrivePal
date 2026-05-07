@@ -86,8 +86,8 @@ class LlmClient:
                         delay += self._rng.random() * 0.5
                     await asyncio.sleep(delay)
                     continue
-                # 其他错误（鉴权/模型不存在等）：立即重试一次
-                if attempt < LLM_MAX_RETRIES - 1:
+                # 其他错误（鉴权/模型不存在等）：快速失败，仅重试一次
+                if attempt < 1:
                     continue
                 logger.warning(
                     "LlmClient retries exhausted after %d attempts: %s",
