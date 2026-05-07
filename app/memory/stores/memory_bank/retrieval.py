@@ -220,7 +220,11 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
 
 
 def _update_memory_strengths(results: list[dict], metadata: list[dict]) -> bool:
-    """更新命中条目的记忆强度，返回是否有修改。"""
+    """更新命中条目的记忆强度，返回是否有修改。
+
+    注意：记忆强度不再设上限（原 cap=10），每次检索命中 +1。
+    同一天重复检索同一条目，memory_strength 会持续增长，使之更难被遗忘。
+    """
     updated = False
     for r in results:
         all_mi: list[int] = []

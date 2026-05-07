@@ -70,6 +70,8 @@ class LlmClient:
                 return resp.strip() if resp else ""
             except AllProviderFailedError as exc:
                 err = str(exc).lower()
+                # 错误判定优先级：context exceeded > transient > nontransient
+                # 模式匹配集不互斥，但真实场景中关键词重叠可能性极低。
                 # 上下文超长 → 截断后重试
                 if (
                     any(p in err for p in _CONTEXT_EXCEEDED_PATTERNS)

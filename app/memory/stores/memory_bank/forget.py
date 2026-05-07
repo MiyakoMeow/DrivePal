@@ -119,6 +119,9 @@ class ForgettingCurve:
 
         """
         self._mode = mode if mode is not None else _resolve_forget_mode()
+        if seed is not None and rng is not None:
+            msg = "seed and rng are mutually exclusive"
+            raise ValueError(msg)
         if rng is not None:
             self._rng = rng
         else:

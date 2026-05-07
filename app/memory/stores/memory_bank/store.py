@@ -114,6 +114,20 @@ class MemoryBankStore:
             return True
         return False
 
+    async def _forget_at_ingestion(self) -> None:
+        """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）。"""
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        ids = compute_ingestion_forget_ids(
+            self._index.get_metadata(),
+            today,
+            rng=self._rng,
+            mode=ForgetMode.PROBABILISTIC
+            if self._seed_provided
+            else ForgetMode.DETERMINISTIC,
+        )
+        if ids:
+            await self._index.remove_vectors(ids)
+
     async def write_interaction(
         self,
         query: str,
@@ -156,25 +170,12 @@ class MemoryBankStore:
         )
         if self._forgetting_enabled:
             await self._purge_forgotten(self._index.get_metadata())
+            await self._forget_at_ingestion()
         await self._index.save()
         if self._summarizer:
             task = asyncio.create_task(self._background_summarize(date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
-        # 摄入时遗忘：在新数据写入后，对已有旧条目执行遗忘（对齐 VehicleMemBench）
-        if self._forgetting_enabled:
-            today = datetime.now(UTC).strftime("%Y-%m-%d")
-            ids = compute_ingestion_forget_ids(
-                self._index.get_metadata(),
-                today,
-                rng=self._rng,
-                mode=ForgetMode.PROBABILISTIC
-                if self._seed_provided
-                else ForgetMode.DETERMINISTIC,
-            )
-            if ids:
-                await self._index.remove_vectors(ids)
-                await self._index.save()
         return InteractionResult(event_id=str(fid))
 
     async def _background_summarize(self, date_key: str) -> None:
@@ -305,25 +306,12 @@ class MemoryBankStore:
             )
         if self._forgetting_enabled:
             await self._purge_forgotten(self._index.get_metadata())
+            await self._forget_at_ingestion()
         await self._index.save()
         if self._summarizer:
             task = asyncio.create_task(self._background_summarize(date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
-        # 摄入时遗忘：在新数据写入后，对已有旧条目执行遗忘（对齐 VehicleMemBench）
-        if self._forgetting_enabled:
-            today = datetime.now(UTC).strftime("%Y-%m-%d")
-            ids = compute_ingestion_forget_ids(
-                self._index.get_metadata(),
-                today,
-                rng=self._rng,
-                mode=ForgetMode.PROBABILISTIC
-                if self._seed_provided
-                else ForgetMode.DETERMINISTIC,
-            )
-            if ids:
-                await self._index.remove_vectors(ids)
-                await self._index.save()
         return str(fid)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
