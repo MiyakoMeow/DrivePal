@@ -209,7 +209,7 @@ async def test_get_extra_null_defense(tmp_path: Path) -> None:
 
 
 async def test_load_extra_null_defense(tmp_path: Path) -> None:
-    """加载损坏的 extra_metadata.json 时回退空 dict。"""
+    """加载 JSON null 值的 extra_metadata.json 时回退空 dict。"""
     idx = FaissIndex(tmp_path)
     await idx.add_vector("a", [0.1, 0.2, 0.3], "2024-01-01T00:00:00")
     await idx.save()
@@ -217,3 +217,15 @@ async def test_load_extra_null_defense(tmp_path: Path) -> None:
     idx2 = FaissIndex(tmp_path)
     await idx2.load()
     assert idx2.get_extra() == {}
+
+
+async def test_load_extra_malformed_json(tmp_path: Path) -> None:
+    """加载语法错误的 extra_metadata.json 时回退空 dict，主索引不受影响。"""
+    idx = FaissIndex(tmp_path)
+    await idx.add_vector("a", [0.1, 0.2, 0.3], "2024-01-01T00:00:00")
+    await idx.save()
+    (tmp_path / "extra_metadata.json").write_text("{")
+    idx2 = FaissIndex(tmp_path)
+    await idx2.load()
+    assert idx2.get_extra() == {}
+    assert idx2.total == 1

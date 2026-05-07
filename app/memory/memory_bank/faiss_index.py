@@ -87,15 +87,6 @@ class FaissIndex:
                 raw_meta = json.loads(mp.read_text())
                 meta = _validate_metadata_structure(raw_meta)
                 _validate_index_count(idx, len(meta))
-                self._index = idx
-                self._dim = idx.d
-                self._metadata = meta
-                self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
-                self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
-                self._rebuild_speakers_cache()
-                if ep.exists():
-                    e: object = json.loads(ep.read_text())
-                    self._extra = e if isinstance(e, dict) else {}
             except (
                 json.JSONDecodeError,
                 OSError,
@@ -107,6 +98,22 @@ class FaissIndex:
                 ip.unlink(missing_ok=True)
                 mp.unlink(missing_ok=True)
                 ep.unlink(missing_ok=True)
+                return
+            self._index = idx
+            self._dim = idx.d
+            self._metadata = meta
+            self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
+            self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
+            self._rebuild_speakers_cache()
+            if ep.exists():
+                try:
+                    e: object = json.loads(ep.read_text())
+                    self._extra = e if isinstance(e, dict) else {}
+                except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+                    logger.warning(
+                        "FaissIndex extra_metadata corrupted, unlinking: %s", exc
+                    )
+                    ep.unlink(missing_ok=True)
 
     async def save(self) -> None:
         """将索引与元数据持久化到磁盘。"""
