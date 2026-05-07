@@ -32,6 +32,7 @@ class _FakeEmbeddingModel(_Base):
             raise RuntimeError(msg)
         return [0.1, 0.2, 0.3]
 
+
 async def test_encode_success_first_try() -> None:
     """Encode 首次成功无重试."""
     model = _FakeEmbeddingModel()

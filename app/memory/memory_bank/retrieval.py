@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from app.models.embedding import EmbeddingModel
+    from app.memory.embedding_client import EmbeddingClient
 
     from .faiss_index import FaissIndex
 
@@ -348,22 +348,16 @@ class RetrievalPipeline:
     阶段 4: 说话人感知降权
     """
 
-    def __init__(self, index: FaissIndex, embedding_model: EmbeddingModel) -> None:
-        """初始化检索管道。
-
-        Args:
-            index: FAISS 索引实例。
-            embedding_model: 嵌入模型实例。
-
-        """
+    def __init__(self, index: FaissIndex, embedding_client: EmbeddingClient) -> None:
+        """初始化检索管道。"""
         self._index = index
-        self._embedding_model = embedding_model
+        self._embedding_client = embedding_client
 
     async def search(self, query: str, top_k: int = 5) -> list[dict]:
         """执行四阶段检索管道。"""
         if top_k <= 0:
             return []
-        query_emb = await self._embedding_model.encode(query)
+        query_emb = await self._embedding_client.encode(query)
         index_total = self._index.total
         if index_total == 0:
             return []

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.embedding_client import EmbeddingClient
 from app.memory.memory_bank.faiss_index import FaissIndex
 from app.memory.memory_bank.retrieval import (
     DEFAULT_CHUNK_SIZE,
@@ -35,7 +36,7 @@ async def test_search_empty_index_returns_empty_list(mock_embedding):
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
-        pipe = RetrievalPipeline(idx, mock_embedding)
+        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding))
         results = await pipe.search("anything")
         assert results == []
 
@@ -54,7 +55,7 @@ async def test_search_returns_results(mock_embedding):
                 "2024-06-15T10:00:00",
                 {"source": "2024-06-15", "speakers": [text.split()[0]]},
             )
-        pipe = RetrievalPipeline(idx, mock_embedding)
+        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding))
         results = await pipe.search("Gary seat")
         assert len(results) >= 1
 
@@ -242,7 +243,7 @@ async def test_pipeline_returns_results_without_retention_weight():
         mock_emb = AsyncMock(spec=["encode"])
         # query 与 entry 0 相似
         mock_emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        pipe = RetrievalPipeline(idx, mock_emb)
+        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_emb))
         results = await pipe.search("test preference", top_k=2)
         assert len(results) >= 1
 

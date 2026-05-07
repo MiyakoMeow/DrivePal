@@ -31,7 +31,10 @@ exclude = [".agents/**"]
     "S311",  # 退避 jitter 使用伪随机种子，非安全场景
 ]
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
-"app/memory/memory_bank/store.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
+"app/memory/memory_bank/store.py" = [
+    "PLR0913",  # __init__ 参数≥6合理（含多个可选依赖注入）
+    "S311",  # 概率遗忘使用伪随机种子，非安全场景
+]
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法
     "S311",  # 测试中使用伪随机种子是标准做法
