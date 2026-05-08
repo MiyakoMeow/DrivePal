@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from .llm import LlmClient
 
 logger = logging.getLogger(__name__)
-GENERATION_EMPTY = "GENERATION_EMPTY"
 _SUMMARY_SYSTEM_PROMPT = (
     "You are an in-car AI assistant with expertise in remembering "
     "vehicle preferences, driving habits, and in-car conversation context."
@@ -64,7 +63,6 @@ class Summarizer:
         if result:
             extra["overall_summary"] = result
             return result
-        extra["overall_summary"] = GENERATION_EMPTY
         return None
 
     async def get_daily_personality(self, user_id: str, date_key: str) -> str | None:
@@ -120,7 +118,6 @@ class Summarizer:
         if result:
             extra["overall_personality"] = result
             return result
-        extra["overall_personality"] = GENERATION_EMPTY
         return None
 
     @staticmethod
@@ -137,7 +134,7 @@ class Summarizer:
             "weather, or passenger presence)\n"
             "Ignore general conversation topics unrelated to the vehicle.\n"
             f"Dialogue content:\n{text}\n"
-            "Summarization："
+            "Summarization:"
         )
 
     @staticmethod

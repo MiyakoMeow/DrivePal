@@ -25,7 +25,7 @@ from .forget import (
 )
 from .llm import LlmClient
 from .retrieval import RetrievalPipeline
-from .summarizer import GENERATION_EMPTY, Summarizer
+from .summarizer import Summarizer
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -92,6 +92,7 @@ def _build_pair_entries(
                     "source": date_key,
                     "speakers": sorted({s for s in speakers if s is not None}),
                     "raw_content": raw,
+                    "type": event.type,
                     "event_type": event.type,
                 }
             )
@@ -104,6 +105,7 @@ def _build_pair_entries(
                 "source": date_key,
                 "speakers": [spk],
                 "raw_content": event.content,
+                "type": event.type,
                 "event_type": event.type,
             }
         )
@@ -205,6 +207,13 @@ class MemoryBankStore:
             await self._index_manager.remove_vectors(user_id, ids)
 
     async def _user_lock(self, user_id: str) -> asyncio.Lock:
+        """获取 per-user 锁。双检锁模式，asyncio 单线程下安全。
+
+        Note:
+            _user_locks 只增不减。大量短暂 user_id 场景可能内存泄漏。
+            当前单驾驶员场景无影响。
+
+        """
         if user_id not in self._user_locks:
             async with self._user_locks_lock:
                 if user_id not in self._user_locks:
@@ -216,6 +225,7 @@ class MemoryBankStore:
     async def _background_summarize(self, user_id: str, date_key: str) -> None:
         async with await self._user_lock(user_id):
             try:
+                has_new = False
                 text = await self._summarizer.get_daily_summary(user_id, date_key)
                 if text:
                     emb = await self._embedding_client.encode(text)
@@ -226,10 +236,15 @@ class MemoryBankStore:
                         f"{date_key}T00:00:00",
                         {"type": "daily_summary", "source": f"summary_{date_key}"},
                     )
-                await self._summarizer.get_overall_summary(user_id)
-                await self._summarizer.get_daily_personality(user_id, date_key)
-                await self._summarizer.get_overall_personality(user_id)
-                await self._index_manager.save(user_id)
+                    has_new = True
+                if await self._summarizer.get_overall_summary(user_id):
+                    has_new = True
+                if await self._summarizer.get_daily_personality(user_id, date_key):
+                    has_new = True
+                if await self._summarizer.get_overall_personality(user_id):
+                    has_new = True
+                if has_new:
+                    await self._index_manager.save(user_id)
             except Exception:
                 logger.exception("background summarization failed for user=%s", user_id)
 
@@ -241,7 +256,13 @@ class MemoryBankStore:
         Note:
             多说话人时返回最后一个向量的 faiss_id，前序 ID 不保留。
 
+        Raises:
+            ValueError: event.content 为空或纯空白时。
+
         """
+        if not event.content or not event.content.strip():
+            msg = "event content cannot be empty"
+            raise ValueError(msg)
         await self._index_manager.load(user_id)
         async with await self._user_lock(user_id):
             date_key = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -258,6 +279,9 @@ class MemoryBankStore:
                     user_id, conv_text, emb, ts, meta
                 )
 
+            if fid is None:
+                msg = f"write: 未生成向量 content={event.content!r}"
+                raise RuntimeError(msg)
             await self._forget_at_ingestion(user_id)
             await self._index_manager.save(user_id)
             task = asyncio.create_task(self._background_summarize(user_id, date_key))
@@ -294,6 +318,7 @@ class MemoryBankStore:
                     "source": date_key,
                     "speakers": [user_name, ai_name],
                     "raw_content": query,
+                    "type": event_type,
                     "event_type": event_type,
                 },
             )
@@ -333,7 +358,7 @@ class MemoryBankStore:
             ("overall_personality", "User vehicle preferences and habits"),
         ]:
             val = extra.get(key, "")
-            if val and val != GENERATION_EMPTY:
+            if val:
                 prepend.append(f"{label}: {val}")
 
         out: list[SearchResult] = []

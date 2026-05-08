@@ -332,6 +332,12 @@ def _clean_search_result(result: dict) -> None:
 
 
 def _word_in_text(word: str, text: str) -> bool:
+    r"""说话人名称匹配：基于单词边界 \b，仅支持英文。
+
+    Note:
+        \b 在中文等非拉丁文字中边界匹配不完全。当前设计约束为仅英文说话人名称。
+
+    """
     if not word or not word.strip():
         return False
     return bool(re.search(r"\b" + re.escape(word.strip()) + r"\b", text))
