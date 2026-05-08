@@ -13,7 +13,6 @@ from app.models.settings import EmbeddingProviderConfig, LLMSettings
 logger = logging.getLogger(__name__)
 
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
-_background_tasks: set[asyncio.Task[None]] = set()
 
 _BATCH_SIZE = 32
 _RETRY_ATTEMPTS = 3
@@ -27,15 +26,6 @@ _RETRYABLE_EXCEPTIONS = (
     openai.RateLimitError,
     openai.InternalServerError,
 )
-
-
-def _finalize_background_task(task: asyncio.Task[None]) -> None:
-    """回收后台任务并消费异常，避免未检索异常告警."""
-    _background_tasks.discard(task)
-    with contextlib.suppress(asyncio.CancelledError):
-        exc = task.exception()
-        if exc is not None:
-            logger.warning("Background cleanup task failed: %s", exc)
 
 
 def get_cached_embedding_model() -> EmbeddingModel:
@@ -58,25 +48,19 @@ def get_cached_embedding_model() -> EmbeddingModel:
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
-async def _aclose_models(models: list[EmbeddingModel]) -> None:
-    """关闭指定模型的客户端."""
-    for model in models:
-        await model.aclose()
-
-
 def clear_embedding_model_cache() -> None:
-    """关闭所有缓存的客户端并清除缓存."""
-    if _EMBEDDING_MODEL_CACHE:
-        models = list(_EMBEDDING_MODEL_CACHE.values())
-        _EMBEDDING_MODEL_CACHE.clear()
+    """关闭所有缓存的客户端并清除缓存。同步关闭，不创建后台 task。"""
+    if not _EMBEDDING_MODEL_CACHE:
+        return
+    models = list(_EMBEDDING_MODEL_CACHE.values())
+    _EMBEDDING_MODEL_CACHE.clear()
+    for model in models:
         try:
-            loop = asyncio.get_running_loop()
-            task = loop.create_task(_aclose_models(models))
-            _background_tasks.add(task)
-            task.add_done_callback(_finalize_background_task)
+            asyncio.run(model.aclose())
         except RuntimeError:
+            # 循环已在运行中，用 create_task 关闭
             with contextlib.suppress(RuntimeError):
-                asyncio.run(_aclose_models(models))
+                asyncio.get_running_loop().create_task(model.aclose())
 
 
 class EmbeddingModel:
