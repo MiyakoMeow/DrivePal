@@ -3,7 +3,6 @@
 import strawberry
 
 from app.api.graphql_schema import (
-    ExperimentReport,
     MemoryEventGQL,
     MemoryModeEnum,
     ScenarioPresetGQL,
@@ -37,11 +36,6 @@ class Query:
             )
             for e in events
         ]
-
-    @strawberry.field
-    def experiment_report(self) -> ExperimentReport:
-        """获取实验报告."""
-        return ExperimentReport(report="Experiment runner migrated to CLI pipeline")
 
     @strawberry.field
     async def scenario_presets(self) -> list[ScenarioPresetGQL]:

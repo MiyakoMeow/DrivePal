@@ -215,13 +215,6 @@ class MemoryEventGQL:
 
 
 @strawberry.type
-class ExperimentReport:
-    """实验报告."""
-
-    report: str
-
-
-@strawberry.type
 class ScenarioPresetGQL:
     """场景预设."""
 

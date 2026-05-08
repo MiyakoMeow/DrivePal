@@ -3,6 +3,7 @@
 import os
 import tomllib
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,7 @@ class LLMSettings:
     model_providers: dict[str, dict] = field(default_factory=dict)
 
     @classmethod
+    @cache
     def load(cls) -> LLMSettings:
         """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
         config_data: dict = {}
@@ -217,20 +219,6 @@ def _build_provider_config_from_dict(
     for key, default in extra_fields.items():
         result[key] = d.get(key, default)
     return provider, result
-
-
-def _build_env_provider(prefix: str) -> LLMProviderConfig | None:
-    """从环境变量构建 provider 配置."""
-    model = os.getenv(f"{prefix}_MODEL")
-    if not model:
-        return None
-    return LLMProviderConfig(
-        provider=ProviderConfig(
-            model=model,
-            base_url=os.getenv(f"{prefix}_BASE_URL"),
-            api_key=os.getenv(f"{prefix}_API_KEY"),
-        ),
-    )
 
 
 def _build_provider_config_from_ref(

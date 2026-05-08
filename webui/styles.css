@@ -198,6 +198,16 @@ details.stage summary:hover { background: #eee; }
 }
 .preset-row select { flex: 1; }
 .btn-group { display: flex; gap: 8px; }
+.type-tag {
+    display: inline-block;
+    background: #e7f3ff;
+    color: #007bff;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 4px;
+    vertical-align: middle;
+}
 .empty-hint {
     color: #aaa;
     font-size: 13px;

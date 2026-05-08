@@ -181,19 +181,15 @@ class ChatModel:
         prompts: list[str],
         system_prompt: str | None = None,
     ) -> list[str]:
-        """批量生成回复."""
-        return [await self.generate(p, system_prompt) for p in prompts]
-
-
-@cache
-def _get_settings_once() -> LLMSettings:
-    """获取缓存的 LLMSettings 实例（仅首次调用时加载）."""
-    return LLMSettings.load()
+        """并行批量生成回复."""
+        return list(
+            await asyncio.gather(*[self.generate(p, system_prompt) for p in prompts])
+        )
 
 
 def get_chat_model(temperature: float | None = None) -> ChatModel:
     """从配置创建 ChatModel 实例（使用缓存避免重复加载）."""
-    settings = _get_settings_once()
+    settings = LLMSettings.load()
     if "default" not in settings.model_groups:
         raise NoDefaultModelGroupError
     providers = settings.get_model_group_providers("default")
@@ -202,7 +198,7 @@ def get_chat_model(temperature: float | None = None) -> ChatModel:
 
 def get_judge_model() -> ChatModel:
     """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
-    settings = _get_settings_once()
+    settings = LLMSettings.load()
     if settings.judge_provider is None:
         raise NoJudgeModelConfiguredError
     provider = LLMProviderConfig(

@@ -7,6 +7,8 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints
 from app.agents.state import AgentState, WorkflowStages
@@ -24,6 +26,29 @@ class ChatModelUnavailableError(RuntimeError):
     def __init__(self) -> None:
         """初始化 ChatModel 不可用错误."""
         super().__init__("ChatModel not available")
+
+
+class LLMJsonResponse(BaseModel):
+    """LLM JSON 输出包装，含校验与兜底."""
+
+    model_config = ConfigDict(extra="allow")
+
+    raw: str
+
+    @classmethod
+    def from_llm(cls, text: str) -> LLMJsonResponse:
+        """Parse LLM output, warning on fail but always return valid."""
+        cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip())
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+        parsed: dict = {}
+        try:
+            data = json.loads(cleaned)
+            if isinstance(data, dict):
+                parsed = data
+        except json.JSONDecodeError as e:
+            logger.warning("LLM JSON parse failed: %s", e)
+        parsed.pop("raw", None)  # prevent collision with explicit raw=text
+        return cls(raw=text, **parsed)
 
 
 class AgentWorkflow:
@@ -53,20 +78,11 @@ class AgentWorkflow:
         ]
         self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
 
-    async def _call_llm_json(self, user_prompt: str) -> dict:
+    async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
             raise ChatModelUnavailableError
         result = await self.memory_module.chat_model.generate(user_prompt)
-        cleaned = re.sub(r"^```(?:json)?\s*", "", result.strip())
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        try:
-            parsed = json.loads(cleaned)
-            if not isinstance(parsed, dict):
-                parsed = {"raw": result}
-        except json.JSONDecodeError:
-            parsed = {"raw": result}
-        parsed["raw"] = result
-        return parsed
+        return LLMJsonResponse.from_llm(result)
 
     async def _context_node(self, state: AgentState) -> dict:
         user_input = state.get("original_query", "")
@@ -105,7 +121,6 @@ class AgentWorkflow:
             context = dict(driving_context)
             context["current_datetime"] = current_datetime
             context["related_events"] = relevant_memories
-            context["relevant_memories"] = relevant_memories
         else:
             system_prompt = SYSTEM_PROMPTS["context"].format(
                 current_datetime=current_datetime,
@@ -118,9 +133,12 @@ class AgentWorkflow:
 
 请输出JSON格式的上下文对象. """
 
-            context = await self._call_llm_json(prompt)
-            context["related_events"] = relevant_memories
-            context["relevant_memories"] = relevant_memories
+            parsed = await self._call_llm_json(prompt)
+            context = {
+                **parsed.model_dump(),
+                "current_datetime": current_datetime,
+                "related_events": relevant_memories,
+            }
 
         if stages is not None:
             stages.context = context
@@ -141,7 +159,7 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象. """
 
-        task = await self._call_llm_json(prompt)
+        task = (await self._call_llm_json(prompt)).model_dump()
         if stages is not None:
             stages.task = task
         return {
@@ -171,13 +189,23 @@ class AgentWorkflow:
 
 请输出JSON格式的决策结果. """
 
-        decision = await self._call_llm_json(prompt)
+        decision = (await self._call_llm_json(prompt)).model_dump()
         decision["postpone"] = postpone
         if stages is not None:
             stages.decision = decision
         return {
             "decision": decision,
         }
+
+    @staticmethod
+    def _extract_content(decision: dict) -> str:
+        """从决策 dict 中提取提醒内容."""
+        remind = decision.get("reminder_content") or decision.get("remind_content")
+        if isinstance(remind, str):
+            return remind
+        if isinstance(remind, dict):
+            return remind.get("text") or remind.get("content") or "无提醒内容"
+        return decision.get("content") or "无提醒内容"
 
     async def _execution_node(self, state: AgentState) -> dict:
         decision = state.get("decision") or {}
@@ -196,18 +224,7 @@ class AgentWorkflow:
                 "event_id": None,
             }
 
-        remind_content = decision.get("reminder_content") or decision.get(
-            "remind_content",
-        )
-        if isinstance(remind_content, dict):
-            content = remind_content.get("text") or remind_content.get(
-                "content",
-                "无提醒内容",
-            )
-        elif isinstance(remind_content, str):
-            content = remind_content
-        else:
-            content = decision.get("content") or "无提醒内容"
+        content = self._extract_content(decision)
         original_query = state.get("original_query", "")
         interaction_result = await self.memory_module.write_interaction(
             original_query,

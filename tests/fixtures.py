@@ -5,13 +5,14 @@ from contextlib import suppress
 import app.memory.singleton
 import app.models.chat
 from app.models.embedding import reset_embedding_singleton
+from app.models.settings import LLMSettings
 
 
 def reset_all_singletons() -> None:
     """重置所有全局单例状态以隔离测试."""
     reset_embedding_singleton()
     with suppress(AttributeError):
-        app.models.chat._get_settings_once.cache_clear()
+        LLMSettings.load.cache_clear()
     with suppress(AttributeError):
         app.models.chat._get_lock.cache_clear()
     with suppress(AttributeError):

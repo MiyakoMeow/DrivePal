@@ -137,6 +137,8 @@ async function loadPresets() {
         });
     } catch (e) {
         console.error('Failed to load presets:', e);
+        const sel = document.getElementById('presetSelect');
+        sel.innerHTML = '<option value="">⚠ 预设加载失败</option>';
     }
 }
 
@@ -231,7 +233,7 @@ async function loadHistory() {
         const mode = document.getElementById('memoryMode').value;
         const data = await graphql(
             `query GetHistory($limit: Int!, $memoryMode: MemoryModeEnum!) {
-                history(limit: $limit, memoryMode: $memoryMode) { id content createdAt }
+                history(limit: $limit, memoryMode: $memoryMode) { id content type description createdAt }
             }`,
             { limit: 10, memoryMode: mode }
         );
@@ -245,11 +247,18 @@ async function loadHistory() {
         items.forEach(item => {
             const div = document.createElement('div');
             div.className = 'history-item';
-            div.innerHTML = escapeHtml(item.content || JSON.stringify(item)) + '<div class="meta">' + escapeHtml(item.createdAt || '') + '</div>';
+            let html = '';
+            if (item.type) html += '<span class="type-tag">' + escapeHtml(item.type) + '</span> ';
+            html += escapeHtml(item.content || JSON.stringify(item));
+            if (item.description) html += '<div class="meta">' + escapeHtml(item.description) + '</div>';
+            html += '<div class="meta">' + escapeHtml(item.createdAt || '') + '</div>';
+            div.innerHTML = html;
             container.appendChild(div);
         });
     } catch (e) {
         console.error('Failed to load history:', e);
+        const container = document.getElementById('historyList');
+        container.innerHTML = '<span class="error">加载历史失败</span>';
     }
 }
 

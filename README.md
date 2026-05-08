@@ -228,7 +228,6 @@ flowchart TD
 ```graphql
 type Query {
   history(limit: Int = 10, memoryMode: MemoryMode! = MEMORY_BANK): [MemoryEvent!]!
-  experimentReport: ExperimentReport!
   scenarioPresets: [ScenarioPreset!]!
 }
 ```
