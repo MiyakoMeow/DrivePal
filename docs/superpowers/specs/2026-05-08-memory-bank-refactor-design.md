@@ -95,19 +95,20 @@ data_dir/
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `load` | `(user_id: str) -> None` | 延迟加载；已加载则跳过 |
-| `save` | `(user_id: str) -> None` | 持久化索引 + metadata + extra |
-| `add_vector` | `(user_id, text, emb, ts, extra_meta?) -> int` | 添加向量，返回 faiss_id |
-| `search` | `(user_id, query_emb, top_k) -> list[dict]` | 检索，结果含 `_meta_idx` |
-| `remove_vectors` | `(user_id, faiss_ids: list[int]) -> None` | 删除向量并同步 next_id/id_to_meta/speakers |
+| `load` | `async (user_id: str) -> None` | 延迟加载；已加载则跳过（文件 I/O） |
+| `save` | `async (user_id: str) -> None` | 持久化索引 + metadata + extra（文件 I/O） |
+| `add_vector` | `async (user_id, text, emb, ts, extra_meta?) -> int` | 添加向量，返回 faiss_id（自动 load） |
+| `search` | `async (user_id, query_emb, top_k) -> list[dict]` | 检索，结果每项含 `_meta_idx`/`text`/`score`/`timestamp`/`memory_strength`/`speakers` |
+| `remove_vectors` | `async (user_id, faiss_ids: list[int]) -> None` | 删除向量并同步 next_id/id_to_meta/speakers（next_id 保持单调递增，不复用已删除 ID） |
 | `get_metadata` | `(user_id) -> list[dict]` | 返回 **deep copy** |
-| `update_metadata` | `(user_id, faiss_id, updates: dict) -> None` | 显式更新单条 |
-| `batch_update_metadata` | `(user_id, updates: dict[int, dict]) -> None` | 批量更新 {meta_idx: updates} |
-| `get_metadata_by_id` | `(user_id, faiss_id) -> dict | None` | O(1) 查找 |
-| `get_extra` | `(user_id) -> dict` | 获取 extra_metadata |
-| `total` | `(user_id) -> int` | 索引向量数 |
+| `update_metadata` | `async (user_id, faiss_id, updates: dict) -> None` | 显式更新单条 |
+| `batch_update_metadata` | `async (user_id, updates: dict[int, dict]) -> None` | 批量更新 {meta_idx: updates} |
+| `get_metadata_by_id` | `(user_id, faiss_id) -> dict \| None` | O(1) 查找 |
+| `get_extra` | `(user_id) -> dict` | 获取 extra_metadata 的**可变引用**（与 get_metadata deep copy 不同；调用方可原地修改，由 store/save 持久化） |
+| `total` | `async (user_id) -> int` | 索引向量数 |
 | `is_loaded` | `(user_id) -> bool` | 是否已加载 |
 | `get_all_speakers` | `(user_id) -> list[str]` | 已知说话人列表 |
+| `parse_speaker_line` | `(line: str) -> tuple[str \| None, str]`（@staticmethod） | 按首个 `": "` 分割说话人与内容 |
 
 #### 校验
 
@@ -122,6 +123,8 @@ data_dir/
 - 所有 metadata 变更通过 `update_metadata` / `batch_update_metadata`
 - `add_vector` 增量更新 speakers 缓存
 - `remove_vectors` 重建 speakers 缓存 + 同步 next_id
+
+> **关于 Protocol 的角色：** 此处 Protocol 仅用于**类型检查**（静态 Duck Typing），确保 MemoryBankStore 满足接口契约。非运行时多态——当前无第二种实现，"不做的事"中已声明不保留 Facade/工厂层。Protocol 的存在只为 IDE 提示和 type checker 验证，不引入运行时抽象开销。
 
 ### 2. MemoryStore Protocol
 
@@ -178,6 +181,8 @@ def __init__(
 
 embedding 和 chat 是硬依赖，不再接受 None。
 
+**类型映射：** 构造器参数 `EmbeddingModel`/`ChatModel` 为纯数据类型（来自 `app/models/types.py`），内部通过 `EmbeddingClient(embedding_model)` / `LlmClient(chat_model, rng=rng)` 封装。转换在构造函数内联完成，不依赖工厂。
+
 #### 内部组件
 
 | 组件 | 类型 | 说明 |
@@ -212,15 +217,17 @@ def _get_reference_date(self, user_id: str) -> str | None:
 
 #### write(user_id, event)
 
+> `parse_speaker_line` 为 `FaissIndexManager` 的 `@staticmethod`（见 §1），签名：`(line: str) -> tuple[str | None, str]`，按首个 `": "` 分割说话人与内容。
+
 1. `await _index_manager.load(user_id)`
-2. 解析 `event.content` 为行 → `parse_speaker_line` 解析说话人
-3. 有说话人行时：每 2 行结对，收集所有 `pair_texts` 和 `pair_metas`
-4. 无说话人行时：用 `event.speaker` 或 "System" 作为单条
+2. 解析 `event.content` 按 `\n` 分行 → 逐行 `parse_speaker_line` 判断是否为说 话人行
+3. 有说话人行时：按行顺序交替配对（偶数行为说话人，奇数行为内容），奇数行不足时丢弃末尾说话人行
+4. 无说话人行时：用 `event.speaker` 或 "System" 作为单条，整段 content 为其内容
 5. **批量嵌入**：`await self._embedding_client.encode_batch(all_texts)`
 6. 逐条 `await _index_manager.add_vector(user_id, ...)`
 7. 遗忘：`await _forget_at_ingestion(user_id)`
 8. `await _index_manager.save(user_id)`
-9. 后台摘要：`asyncio.create_task(_background_summarize(user_id, date_key))`
+9. 后台摘要：`date_key = event.timestamp[:10]`（取 YYYY-MM-DD）；`asyncio.create_task(_background_summarize(user_id, date_key))`
 
 #### write_interaction(user_id, query, response, ...)
 
@@ -236,8 +243,8 @@ def _get_reference_date(self, user_id: str) -> str | None:
 2. 检查 total == 0 则返回 []
 3. `await _retrieval.search(user_id, query, top_k, reference_date)`
 4. 从 `_index_manager.get_extra(user_id)` 取 overall_summary / overall_personality
-5. 构造前置 `SearchResult`（score=inf）
-6. 应用 retrieval 结果为 `SearchResult` 列表
+5. 构造前置 `SearchResult`（score=inf）：`SearchResult(content=overall_summary or overall_personality, score=float('inf'), event_type="overall_context", timestamp="", memory_strength=0, speakers=[])`
+6. 遍历 retrieval 结果 `dict` 列表，每项构造 `SearchResult(content=m["text"], score=m["score"], event_type=m.get("event_type", "reminder"), timestamp=m.get("timestamp", ""), memory_strength=m.get("memory_strength", 1), speakers=m.get("speakers", []))`
 7. 返回
 
 #### _forget_at_ingestion(user_id)
@@ -261,14 +268,16 @@ async def _forget_at_ingestion(self, user_id: str) -> None:
 
 #### _background_summarize(user_id, date_key)
 
+> **权衡：** 非原子持久化。日摘要产生后立即 save 以确保尽早持久化，extra 更新完成后再次 save。若中间崩溃可能丢失 extra 变更但不会丢失日摘要。与旧代码中 extra 与向量非原子持久化的问题一致，属已知折中。
+
 ```python
 async def _background_summarize(self, user_id: str, date_key: str) -> None:
     try:
-        # 日摘要：尽早持久化
+        # 日摘要：尽早持久化（优先级高于原子性）
         text = await self._summarizer.get_daily_summary(user_id, date_key)
         if text:
             emb = await self._embedding_client.encode(text)
-            await self._index_manager.add_vector(user_id, text, emb, ...)
+            await self._index_manager.add_vector(user_id, text, emb, timestamp=date_key, extra_meta={"type": "daily_summary", "source": f"summary_{date_key}"})
             await self._index_manager.save(user_id)
 
         # extra 更新：全部完成后再 save

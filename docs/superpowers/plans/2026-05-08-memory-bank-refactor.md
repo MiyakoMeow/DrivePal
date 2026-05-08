@@ -461,17 +461,17 @@ git add -A && git commit -m "refactor: rewrite FaissIndex as multi-user FaissInd
 - 修改：`app/memory/memory_bank/forget.py`
 - 修改：`tests/stores/test_forget.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [ ] **步骤 1：删除 ForgettingCurve 测试**
 
-删除 `ForgettingCurve` 相关测试。保留 `forgetting_retention`、`compute_ingestion_forget_ids`、`ForgetMode` 的测试。
+删除 `ForgettingCurve` 相关测试用例。保留 `forgetting_retention`、`compute_ingestion_forget_ids`、`ForgetMode` 的测试。
 
-- [ ] **步骤 2：运行测试验证失败**
+- [ ] **步骤 2：运行测试验证删除后仍通过**
 
 ```bash
 nortk uv run pytest tests/stores/test_forget.py -v
 ```
 
-预期：PASS（测试未移除 ForgettingCurve 前暂时通过）
+预期：PASS（仅删除测试用例，未改源文件前应仍通过）
 
 - [ ] **步骤 3：修改 forget.py**
 
@@ -585,7 +585,6 @@ git add -A && git commit -m "refactor: multi-user Summarizer"
 **文件：**
 - 修改：`app/memory/memory_bank/store.py`
 - 修改：`tests/stores/test_memory_bank_store.py`
-- 修改：`tests/test_memory_bank.py`
 
 - [ ] **步骤 1：编写失败的测试**
 
@@ -636,6 +635,7 @@ def __init__(
 - 遗忘 + save + 后台摘要
 
 `write_interaction(user_id, query, response, event_type, *, user_name, ai_name)`：
+- 格式化为 `Conversation content on {date}:[|{user_name}|]: {query}; [|{ai_name}|]: {response}`
 - 单条 encode
 - add_vector
 - 遗忘 + save + 后台摘要
@@ -677,7 +677,7 @@ def __init__(
 - [ ] **步骤 4：运行测试验证通过**
 
 ```bash
-nortk uv run pytest tests/stores/test_memory_bank_store.py tests/test_memory_bank.py -v
+nortk uv run pytest tests/stores/test_memory_bank_store.py -v
 ```
 
 - [ ] **步骤 5：Commit**
