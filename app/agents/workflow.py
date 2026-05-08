@@ -131,7 +131,7 @@ class AgentWorkflow:
                 for e in events:
                     ed = e.event
                     me = MemoryEvent(
-                        content=ed.get("raw_content") or ed.get("text", ""),
+                        content=ed.get("raw_content") or ed.get("content", ""),
                         type=ed.get("event_type", "reminder"),
                         memory_strength=int(ed.get("memory_strength", 1)),
                         created_at=ed.get("created_at", ""),
