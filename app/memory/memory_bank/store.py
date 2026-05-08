@@ -6,6 +6,7 @@ import logging
 import os
 import random
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.memory.embedding_client import EmbeddingClient
@@ -15,6 +16,7 @@ from app.memory.schemas import (
     MemoryEvent,
     SearchResult,
 )
+from app.storage.toml_store import TOMLStore
 
 from .faiss_index import FaissIndex
 from .forget import (
@@ -27,8 +29,6 @@ from .retrieval import RetrievalPipeline
 from .summarizer import GENERATION_EMPTY, Summarizer
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from app.models.chat import ChatModel
     from app.models.embedding import EmbeddingModel
 
@@ -337,7 +337,12 @@ class MemoryBankStore:
         ]
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-        """反馈功能已移除，静默忽略。"""
+        """写入反馈到 feedback.toml。"""
+        store = TOMLStore(self._data_dir, Path("feedback.toml"), list)
+        entry = feedback.model_dump(exclude_none=True)
+        entry["event_id"] = event_id
+        entry["timestamp"] = datetime.now(UTC).isoformat()
+        await store.append(entry)
 
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""
