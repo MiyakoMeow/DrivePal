@@ -6,18 +6,15 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
 from app.models.chat import AllProviderFailedError
 
 if TYPE_CHECKING:
     import random
 
-logger = logging.getLogger(__name__)
+    from .config import MemoryBankConfig
 
-LLM_MAX_RETRIES = 3
-LLM_NONTRANSIENT_MAX_RETRIES = 1
-LLM_TRIM_START = 1800
-LLM_TRIM_STEP = 200
-LLM_TRIM_MIN = 500
+logger = logging.getLogger(__name__)
 
 _sleep = asyncio.sleep
 
@@ -39,65 +36,80 @@ _CONTEXT_EXCEEDED_PATTERNS = (
     "input length",
 )
 
-_ANCHOR_USER = "Hello! Please help me summarize the content of the conversation."
-_ANCHOR_ASSISTANT = "Sure, I will do my best to assist you."
-
 
 class LlmClient:
     """ChatModel 的薄封装，4 消息序列 + 上下文截断重试。"""
 
-    def __init__(self, chat_model: Any, *, rng: random.Random | None = None) -> None:
-        """初始化 LlmClient。
-
-        Args:
-            chat_model: 聊天模型实例（须有 generate 方法）。
-            rng: 可选 RNG 实例（用于重试退避 jitter）。
-
-        """
+    def __init__(
+        self,
+        chat_model: Any,
+        config: MemoryBankConfig,
+        *,
+        rng: random.Random | None = None,
+    ) -> None:
         self._chat_model = chat_model
+        self._config = config
         self._rng = rng
 
-    async def call(self, prompt: str, *, system_prompt: str) -> str | None:
+    async def call(self, prompt: str, *, system_prompt: str, **kwargs: object) -> str:
         """调用 ChatModel.generate()，使用 4 消息序列。
 
         消息序列：system → user（锚定）→ assistant（应承）→ user（实际 prompt）。
-        system_prompt 由调用方从 config 获取后传入。
-        重试时截断 messages[-1]["content"]。
+
+        成功返回非空 str。
+        抛出 LLMCallFailed（API 失败，重试耗尽）。
+        抛出 SummarizationEmpty（LLM 返回空内容——非错误，哨兵异常）。
+
+        Args:
+            prompt: 实际提示词。
+            system_prompt: system 消息内容（调用方从 config 获取）。
+            **kwargs: 透传给 ChatModel.generate() 的额外参数（如 temperature）。
         """
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": _ANCHOR_USER},
-            {"role": "assistant", "content": _ANCHOR_ASSISTANT},
+            {"role": "user", "content": self._config.llm_anchor_user},
+            {"role": "assistant", "content": self._config.llm_anchor_assistant},
             {"role": "user", "content": prompt},
         ]
-        for attempt in range(LLM_MAX_RETRIES):
+        for attempt in range(self._config.llm_max_retries):
             try:
-                resp = await self._chat_model.generate(messages=messages)
-                return resp.strip() if resp else ""
+                resp = await self._chat_model.generate(
+                    messages=messages,
+                    **{k: v for k, v in kwargs.items() if v is not None},
+                )
+                if not resp or not resp.strip():
+                    raise SummarizationEmpty("LLM returned empty content")
+                return resp.strip()
+            except SummarizationEmpty:
+                raise
             except AllProviderFailedError as exc:
                 err = str(exc).lower()
                 if (
                     any(p in err for p in _CONTEXT_EXCEEDED_PATTERNS)
-                    and attempt < LLM_MAX_RETRIES - 1
+                    and attempt < self._config.llm_max_retries - 1
                 ):
-                    cut = max(LLM_TRIM_START - LLM_TRIM_STEP * attempt, LLM_TRIM_MIN)
+                    cut = max(
+                        self._config.llm_trim_start
+                        - self._config.llm_trim_step * attempt,
+                        self._config.llm_trim_min,
+                    )
                     messages[-1]["content"] = messages[-1]["content"][-cut:]
                     continue
                 if (
                     any(p in err for p in _TRANSIENT_PATTERNS)
-                    and attempt < LLM_MAX_RETRIES - 1
+                    and attempt < self._config.llm_max_retries - 1
                 ):
                     delay = min(2**attempt, 10)
                     if self._rng is not None:
                         delay += self._rng.random() * 0.5
                     await _sleep(delay)
                     continue
-                if attempt < LLM_NONTRANSIENT_MAX_RETRIES:
+                # 非瞬态错误：再多一次尝试
+                if attempt < self._config.llm_max_retries - 2:
                     continue
-                logger.warning(
-                    "LlmClient retries exhausted after %d attempts: %s",
-                    attempt + 1,
-                    exc,
-                )
-                return None
-        return None
+                raise LLMCallFailed(
+                    f"LLM call failed after {attempt + 1} attempts: {exc}"
+                ) from exc
+        raise LLMCallFailed(
+            f"LLM call failed after {self._config.llm_max_retries} attempts"
+        )
