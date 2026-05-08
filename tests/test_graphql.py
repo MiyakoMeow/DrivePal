@@ -137,10 +137,10 @@ def test_feedback_invalid_action(isolated_app: TestClient) -> None:
 
 
 @pytest.mark.embedding
-async def test_feedback_success_updates_strategy_weight(
+async def test_feedback_success_writes_to_feedback_toml(
     isolated_app: TestClient,
 ) -> None:
-    """验证 submitFeedback 成功路径按事件类型更新策略权重."""
+    """验证 submitFeedback 成功路径将反馈写入 feedback.toml."""
     mm = get_memory_module()
     interaction_result = await mm.write_interaction(
         "项目周会",
@@ -163,13 +163,15 @@ async def test_feedback_success_updates_strategy_weight(
     assert "errors" not in result
     assert result["data"]["submitFeedback"]["status"] == "success"
 
-    strategies = await TOMLStore(
+    feedback_data = await TOMLStore(
         Path(os.environ["DATA_DIR"]),
-        Path("strategies.toml"),
-        dict,
+        Path("feedback.toml"),
+        list,
     ).read()
-    assert "meeting" in strategies.get("reminder_weights", {})
-    assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
+    assert len(feedback_data) >= 1
+    entry = feedback_data[-1]
+    assert entry["event_id"] == event_id
+    assert entry["action"] == "accept"
 
 
 @pytest.mark.integration
