@@ -143,6 +143,11 @@ class LLMSettings:
             model_providers=model_providers,
         )
 
+    @classmethod
+    def clear_cache(cls) -> None:
+        """清除配置缓存，下次调用 load 时重新加载."""
+        cls.load.cache_clear()
+
     def get_model_group_providers(self, name: str) -> list[LLMProviderConfig]:
         """按组名获取 LLMProviderConfig 列表.
 
