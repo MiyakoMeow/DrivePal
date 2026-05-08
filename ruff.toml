@@ -43,6 +43,7 @@ exclude = [".agents/**"]
     "RUF015",  # 测试中使用列表切片是常见做法
     "FURB171",  # 测试中成员测试是常见做法
     "RUF043",  # pytest.raises match参数中正则模式常见
+    "D",  # 测试类/方法无需 docstring
     "ANN",  # 测试方法无需类型注解
     "ARG002",  # 测试 fake 中未用参数（为满足基类签名而保留）
     "ASYNC240",  # 测试中同步写临时文件比 to_thread 更简洁
