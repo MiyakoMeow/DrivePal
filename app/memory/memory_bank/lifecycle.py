@@ -61,6 +61,9 @@ class MemoryLifecycle:
         if not forgotten_ids:
             forgotten_ids = [m["faiss_id"] for m in metadata if m.get("forgotten")]
         if forgotten_ids:
+            if self._metrics:
+                self._metrics.forget_count += 1
+                self._metrics.forget_removed_count += len(forgotten_ids)
             await self._index.remove_vectors(forgotten_ids)
             return True
         return False
@@ -88,6 +91,9 @@ class MemoryLifecycle:
             rng=self._forget.rng if mode == ForgetMode.PROBABILISTIC else None,
         )
         if ids:
+            if self._metrics:
+                self._metrics.forget_count += 1
+                self._metrics.forget_removed_count += len(ids)
             await self._index.remove_vectors(ids)
 
     async def write(self, event: MemoryEvent) -> str:

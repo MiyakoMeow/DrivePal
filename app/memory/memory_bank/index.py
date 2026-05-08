@@ -142,15 +142,19 @@ class FaissIndex:
                     len(meta),
                 )
                 # 以 index 为权威——为缺失 ID 补骨架。
-                # 前提：IndexIDMap 的 label 即 add_with_ids 传入的 faiss_id，
-                # 且 _next_id 分配策略保证 ID 从 0 连续递增。
-                # 限制：remove_ids 后 ID 空间有空洞但不影响此恢复——我们为
-                # ntotal 个位置从 0 连续分配 ID，若实际 ID 非连续则可能错位。
-                # 生产环境遗忘删除后 crash 恢复属极端罕见场景；此降级策略的
-                # 优先级是「保向量不丢」而非「元数据精确」。
+                # 从 FAISS IndexIDMap.id_map 提取实际标签（而非假设连续 ID）。
                 existing_ids = {m["faiss_id"] for m in meta}
-                for i in range(idx.ntotal):
-                    fid = i
+                try:
+                    id_array = faiss.vector_to_array(idx.id_map)
+                    actual_ids: list[int] = id_array.astype(int).tolist()
+                except (AttributeError, TypeError, ValueError):
+                    # 降级：无法提取实际 ID，从 0 连续分配
+                    actual_ids = list(range(idx.ntotal))
+                    meta_warnings.append(
+                        "Cannot extract FAISS id_map — assuming contiguous IDs "
+                        "(0..{idx.ntotal - 1}). Metadata may be misaligned."
+                    )
+                for fid in actual_ids:
                     if fid not in existing_ids:
                         meta.append(
                             {
@@ -174,16 +178,22 @@ class FaissIndex:
                 "Rebuilding metadata skeleton from FAISS index.",
                 exc,
             )
+            # 提取实际 FAISS 标签（非假设连续 ID）
+            try:
+                id_array = faiss.vector_to_array(idx.id_map)
+                actual_ids: list[int] = id_array.astype(int).tolist()
+            except (AttributeError, TypeError, ValueError):
+                actual_ids = list(range(idx.ntotal))
             meta = [
                 {
-                    "faiss_id": i,
+                    "faiss_id": fid,
                     "text": "",
                     "timestamp": "",
                     "memory_strength": 1,
                     "last_recall_date": "",
                     "corrupted": True,
                 }
-                for i in range(idx.ntotal)
+                for fid in actual_ids
             ]
             meta_warnings.append(
                 f"metadata.json corrupted ({exc}). "

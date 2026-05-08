@@ -111,6 +111,3 @@ class LlmClient:
                 raise LLMCallFailed(
                     f"LLM call failed after {attempt + 1} attempts: {exc}"
                 ) from exc
-        raise LLMCallFailed(
-            f"LLM call failed after {self._config.llm_max_retries} attempts"
-        )

@@ -77,6 +77,11 @@ class MemoryBankStore:
     async def _ensure_loaded(self) -> None:
         """加载索引，消费 LoadResult 告警。"""
         result = await self._index.load()
+        if not result.ok:
+            logger.error(
+                "FaissIndex load failed — index file corrupted and deleted. "
+                "Re-ingest data to recover."
+            )
         if result.warnings:
             self._metrics.index_load_warnings.extend(result.warnings)
             for w in result.warnings:
