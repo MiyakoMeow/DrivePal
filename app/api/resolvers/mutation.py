@@ -93,7 +93,7 @@ async def _safe_memory_call[T](
         logger.exception("%s failed", context_msg)
         raise GraphQLError(msg) from e
     except ValueError as e:
-        msg = "Invalid feedback data"
+        msg = f"Invalid data in {context_msg}"
         logger.exception("%s failed", context_msg)
         raise GraphQLError(msg) from e
     except Exception as e:

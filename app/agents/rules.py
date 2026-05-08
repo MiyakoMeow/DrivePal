@@ -141,7 +141,7 @@ def postprocess_decision(decision: dict, driving_context: dict) -> dict:
 
     # 硬约束 3：only_urgent → 非紧急类型禁止
     if constraints.get("only_urgent", False):
-        event_type = result.get("type", "general")
+        event_type = (result.get("type", "general") or "").lower()
         if event_type not in URGENT_TYPES:
             result["should_remind"] = False
             result["reminder_content"] = ""
