@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .faiss_index import FaissIndex
+    from .index import FaissIndex
     from .llm import LlmClient
 
 logger = logging.getLogger(__name__)

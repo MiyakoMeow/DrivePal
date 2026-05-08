@@ -16,7 +16,7 @@ from app.memory.schemas import (
     SearchResult,
 )
 
-from .faiss_index import FaissIndex
+from .index import FaissIndex
 from .forget import (
     ForgetMode,
     ForgettingCurve,

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
 
-    from .faiss_index import FaissIndex
+    from .index import FaissIndex
 
 logger = logging.getLogger(__name__)
 

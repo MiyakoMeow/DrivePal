@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.memory.embedding_client import EmbeddingClient
-from app.memory.memory_bank.faiss_index import FaissIndex
+from app.memory.memory_bank.index import FaissIndex
 from app.memory.memory_bank.retrieval import (
     DEFAULT_CHUNK_SIZE,
     RetrievalPipeline,
