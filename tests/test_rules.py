@@ -5,13 +5,17 @@ from typing import TYPE_CHECKING
 from app.agents.rules import (
     SAFETY_RULES,
     Rule,
+    _get_fatigue_threshold,
     apply_rules,
     format_constraints,
     postprocess_decision,
+    reset_fatigue_threshold_cache,
 )
 
 if TYPE_CHECKING:
     from typing import Any
+
+    import pytest
 
 # 替换测试中的魔法值
 RULE_PRIORITY = 10  # 测试规则优先级
@@ -177,6 +181,16 @@ def test_format_empty_constraints() -> None:
         },
     )
     assert "audio" in text
+
+
+def test_fatigue_threshold_cache_reset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """验证疲劳阈值缓存可重置，重置后读取新的环境变量值。"""
+    reset_fatigue_threshold_cache()
+    with monkeypatch.context() as m:
+        m.setenv("FATIGUE_THRESHOLD", "0.5")
+        assert _get_fatigue_threshold() == 0.5
+    reset_fatigue_threshold_cache()
+    assert _get_fatigue_threshold() == 0.7
 
 
 def test_empty_driver_dict() -> None:
