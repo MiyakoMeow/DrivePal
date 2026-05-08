@@ -31,12 +31,8 @@ from app.memory.schemas import FeedbackData
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.schemas.context import (
-    DriverState,
     DrivingContext,
-    GeoLocation,
     ScenarioPreset,
-    SpatioTemporalContext,
-    TrafficCondition,
 )
 from app.storage.toml_store import TOMLStore
 
@@ -111,50 +107,44 @@ def _preset_store() -> TOMLStore:
 
 def _input_to_context(input_obj: DrivingContextInput) -> DrivingContext:
     """Convert Strawberry GraphQL input to Pydantic DrivingContext."""
-    driver = None
+    raw: dict[str, Any] = {}
     if input_obj.driver:
-        driver = DriverState(
-            emotion=input_obj.driver.emotion.value,
-            workload=input_obj.driver.workload.value,
-            fatigue_level=input_obj.driver.fatigue_level,
-        )
-    spatial = None
+        raw["driver"] = {
+            "emotion": input_obj.driver.emotion.value,
+            "workload": input_obj.driver.workload.value,
+            "fatigue_level": input_obj.driver.fatigue_level,
+        }
     if input_obj.spatial:
-        cl: GeoLocation | None = None
-        if input_obj.spatial.current_location:
-            cl = GeoLocation(
-                latitude=input_obj.spatial.current_location.latitude,
-                longitude=input_obj.spatial.current_location.longitude,
-                address=input_obj.spatial.current_location.address,
-                speed_kmh=input_obj.spatial.current_location.speed_kmh,
-            )
-        dest: GeoLocation | None = None
-        if input_obj.spatial.destination:
-            dest = GeoLocation(
-                latitude=input_obj.spatial.destination.latitude,
-                longitude=input_obj.spatial.destination.longitude,
-                address=input_obj.spatial.destination.address,
-                speed_kmh=input_obj.spatial.destination.speed_kmh,
-            )
-        spatial = SpatioTemporalContext(
-            current_location=cl or GeoLocation(),
-            destination=dest,
-            eta_minutes=input_obj.spatial.eta_minutes,
-            heading=input_obj.spatial.heading,
-        )
-    traffic = None
+        spatial_raw: dict[str, Any] = {}
+        cl = input_obj.spatial.current_location
+        if cl is not None:
+            spatial_raw["current_location"] = {
+                "latitude": cl.latitude,
+                "longitude": cl.longitude,
+                "address": cl.address,
+                "speed_kmh": cl.speed_kmh,
+            }
+        dest = input_obj.spatial.destination
+        if dest is not None:
+            spatial_raw["destination"] = {
+                "latitude": dest.latitude,
+                "longitude": dest.longitude,
+                "address": dest.address,
+                "speed_kmh": dest.speed_kmh,
+            }
+        if input_obj.spatial.eta_minutes is not None:
+            spatial_raw["eta_minutes"] = input_obj.spatial.eta_minutes
+        if input_obj.spatial.heading is not None:
+            spatial_raw["heading"] = input_obj.spatial.heading
+        raw["spatial"] = spatial_raw
     if input_obj.traffic:
-        traffic = TrafficCondition(
-            congestion_level=input_obj.traffic.congestion_level.value,
-            incidents=input_obj.traffic.incidents,
-            estimated_delay_minutes=input_obj.traffic.estimated_delay_minutes,
-        )
-    return DrivingContext(
-        driver=driver or DriverState(),
-        spatial=spatial or SpatioTemporalContext(),
-        traffic=traffic or TrafficCondition(),
-        scenario=input_obj.scenario.value,
-    )
+        raw["traffic"] = {
+            "congestion_level": input_obj.traffic.congestion_level.value,
+            "incidents": input_obj.traffic.incidents,
+            "estimated_delay_minutes": input_obj.traffic.estimated_delay_minutes,
+        }
+    raw["scenario"] = input_obj.scenario.value
+    return DrivingContext.model_validate(raw)
 
 
 def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
