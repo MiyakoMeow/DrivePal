@@ -140,8 +140,8 @@ class IndexIntegrityError(FatalError):
 
 | 组件 | 当前 | 改为 |
 |------|------|------|
-| `LlmClient.call()` | 返回 `None` 表示失败 | 抛 `LLMCallFailed`（瞬态）或 `SummarizationEmpty`（空结果）。调用方决定重试/降级 |
-| `Summarizer` 四个方法 | 返回 `None`，内部吞异常 | 抛 `LLMCallFailed`（失败）或返回 `None` 仅当 `SummarizationEmpty` |
+| `LlmClient.call()` | 返回 `None` 表示失败 | 抛 `LLMCallFailed`（瞬态失败）或抛 `SummarizationEmpty`（LLM 调用成功但内容为空——非错误，哨兵异常） |
+| `Summarizer` 四个方法 | 返回 `None`，内部吞异常 | 调用 `LlmClient.call()`。捕获 `SummarizationEmpty` → 返回 `None`（正常：无摘要生成）；`LLMCallFailed` → 上抛；其余异常 → 上抛 |
 | `_background_summarize` | `except Exception: logger.warning` 静默吞 | 捕获 `TransientError` → 日志告警；`FatalError` → 上抛被 `on_task_done` 记录 |
 | `forget.py` | `except ValueError, TypeError: continue` 静默跳过 | 损坏条目记录 warning + 跳过；其余异常上抛 |
 | `RetrievalPipeline.search()` | embedding 失败透传异常 | **不变**——embedding 调用由 `EmbeddingClient` 经 `EmbeddingModel` 发出，后者已有重试（3次指数退避），失败时异常自然上浮。`RetrievalPipeline` 不吞不包，由调用方 `MemoryBankStore.search()` 统一捕获 |
@@ -313,10 +313,10 @@ class FaissIndex:
 | `app/memory/memory_bank/bg_tasks.py` | 不变 | （BackgroundTaskRunner 已足够） |
 | `app/memory/memory_bank/retrieval.py` | 不变 | embedding 异常由下层自然上浮，此层不吞不包 |
 | `app/memory/memory_bank/index_reader.py` | 不变 | |
+| `app/memory/memory_bank/bg_tasks.py` | 不变 | `_on_task_done` 已记录异常，无需改 |
 | `app/memory/interfaces.py` | 不变 | |
 | `app/memory/schemas.py` | 不变 | |
 | `app/memory/embedding_client.py` | 不变 | |
-| `app/memory/memory_bank/bg_tasks.py` | 不变 | `_on_task_done` 已记录异常，无需改 |
 
 ## 未解决问题
 
