@@ -7,7 +7,6 @@ import pytest
 
 from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.forget import (
-    ForgetMode,
     ForgettingCurve,
     compute_ingestion_forget_ids,
     forgetting_retention,

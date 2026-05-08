@@ -6,9 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class MemoryBankConfig(BaseSettings):
     """MemoryBank 全部可配置参数，环境变量前缀 MEMORYBANK_。"""
 
-    model_config = SettingsConfigDict(
-        env_prefix="MEMORYBANK_", case_sensitive=False
-    )
+    model_config = SettingsConfigDict(env_prefix="MEMORYBANK_", case_sensitive=False)
 
     # ── 遗忘 ──
     enable_forgetting: bool = False

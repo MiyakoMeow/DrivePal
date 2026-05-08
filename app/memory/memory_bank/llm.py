@@ -57,9 +57,7 @@ class LlmClient:
         self._chat_model = chat_model
         self._rng = rng
 
-    async def call(
-        self, prompt: str, *, system_prompt: str
-    ) -> str | None:
+    async def call(self, prompt: str, *, system_prompt: str) -> str | None:
         """调用 ChatModel.generate()，使用 4 消息序列。
 
         消息序列：system → user（锚定）→ assistant（应承）→ user（实际 prompt）。

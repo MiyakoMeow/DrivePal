@@ -16,7 +16,10 @@ class Summarizer:
     """摘要与人格生成器，不可变保护（一旦生成不覆盖）。"""
 
     def __init__(
-        self, llm: LlmClient, index: IndexReader, config: MemoryBankConfig,
+        self,
+        llm: LlmClient,
+        index: IndexReader,
+        config: MemoryBankConfig,
     ) -> None:
         """初始化 Summarizer。
 

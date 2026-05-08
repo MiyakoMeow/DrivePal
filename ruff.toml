@@ -39,6 +39,18 @@ exclude = [".agents/**"]
 "app/memory/memory_bank/store.py" = [
     "PLR0913",  # __init__ 参数≥6合理（含多个可选依赖注入）
     "S311",  # 概率遗忘使用伪随机种子，非安全场景
+    "D102",  # Facade 委托方法由 Protocol 定义语义，docstring 重复
+]
+"app/memory/memory_bank/index_reader.py" = [
+    "D102",  # Protocol 桩方法由类级 docstring 阐明语义
+]
+"app/memory/memory_bank/lifecycle.py" = [
+    "PLR0913",  # __init__ 参数≥6合理（含多个依赖注入）
+    "SLF001",  # _rng 为包级私有属性，lifecycle 与 forget 同包可访问
+    "D107",  # __init__ 由类级 docstring 阐明语义
+]
+"app/memory/memory_bank/retrieval.py" = [
+    "ANN401",  # config 参数预留给 MemoryBankConfig，避免循环导入
 ]
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法

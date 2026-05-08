@@ -3,15 +3,19 @@
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from app.memory.embedding_client import EmbeddingClient
 from app.memory.schemas import InteractionResult, MemoryEvent
 
-from .bg_tasks import BackgroundTaskRunner
-from .config import MemoryBankConfig
 from .forget import ForgetMode, ForgettingCurve, compute_ingestion_forget_ids
 from .index import FaissIndex
-from .summarizer import Summarizer
+
+if TYPE_CHECKING:
+    from app.memory.embedding_client import EmbeddingClient
+
+    from .bg_tasks import BackgroundTaskRunner
+    from .config import MemoryBankConfig
+    from .summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,8 @@ class MemoryLifecycle:
 
         """
         forgotten_ids = self._forget.maybe_forget(
-            metadata, reference_date=self._config.reference_date,
+            metadata,
+            reference_date=self._config.reference_date,
         )
         if forgotten_ids is None:
             return False  # 节流跳过
@@ -243,7 +248,7 @@ class MemoryLifecycle:
         await self._index.load()
         try:
             fid = int(event_id)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
         m = self._index.get_metadata_by_id(fid)
         if m is not None:

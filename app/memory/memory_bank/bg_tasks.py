@@ -1,11 +1,16 @@
 """后台任务管理器，封装 asyncio.Task 生命周期。"""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import logging
-from typing import Coroutine
+from typing import TYPE_CHECKING
 
-from .config import MemoryBankConfig
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+    from .config import MemoryBankConfig
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +19,12 @@ class BackgroundTaskRunner:
     """管理后台 asyncio.Task 集合，支持优雅关闭。"""
 
     def __init__(self, config: MemoryBankConfig) -> None:
+        """初始化后台任务管理器。
+
+        Args:
+            config: MemoryBank 配置。
+
+        """
         self._config = config
         self._tasks: set[asyncio.Task[None]] = set()
 
@@ -38,11 +49,13 @@ class BackgroundTaskRunner:
         for t in self._tasks:
             t.cancel()
         results = await asyncio.gather(
-            *self._tasks, return_exceptions=True,
+            *self._tasks,
+            return_exceptions=True,
         )
         for r in results:
             if isinstance(r, Exception) and not isinstance(
-                r, asyncio.CancelledError,
+                r,
+                asyncio.CancelledError,
             ):
                 logger.warning("Background task raised during shutdown: %s", r)
         self._tasks.clear()

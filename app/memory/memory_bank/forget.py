@@ -10,8 +10,10 @@ import math
 import random
 import time
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
-from .config import MemoryBankConfig
+if TYPE_CHECKING:
+    from .config import MemoryBankConfig
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +77,7 @@ def compute_ingestion_forget_ids(
     """
     try:
         ref_dt = date.fromisoformat(reference_date[:10])
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         logger.exception(
             "compute_ingestion_forget_ids: invalid reference_date=%r", reference_date
         )
@@ -92,7 +94,7 @@ def compute_ingestion_forget_ids(
             mem_dt = date.fromisoformat(ts[:10])
             days = (ref_dt - mem_dt).days
             strength = float(entry.get("memory_strength", 1))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             continue
         retention = forgetting_retention(days, strength, config.forgetting_time_scale)
         if mode == ForgetMode.PROBABILISTIC:
@@ -165,10 +167,12 @@ class ForgettingCurve:
                     date.fromisoformat(today[:10]) - date.fromisoformat(ts[:10])
                 ).days
                 strength_float = float(strength)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
             retention = forgetting_retention(
-                days, strength_float, self._config.forgetting_time_scale,
+                days,
+                strength_float,
+                self._config.forgetting_time_scale,
             )
 
             if self._mode == ForgetMode.PROBABILISTIC and self._rng is not None:

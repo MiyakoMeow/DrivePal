@@ -37,7 +37,9 @@ async def test_search_empty_index_returns_empty_list(mock_embedding):
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
-        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding), MemoryBankConfig())
+        pipe = RetrievalPipeline(
+            idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
+        )
         results = await pipe.search("anything")
         assert results == []
 
@@ -56,7 +58,9 @@ async def test_search_returns_results(mock_embedding):
                 "2024-06-15T10:00:00",
                 {"source": "2024-06-15", "speakers": [text.split()[0]]},
             )
-        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding), MemoryBankConfig())
+        pipe = RetrievalPipeline(
+            idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
+        )
         results = await pipe.search("Gary seat")
         assert len(results) >= 1
 

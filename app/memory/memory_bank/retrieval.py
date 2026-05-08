@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
 
+    from .index import FaissIndex
     from .index_reader import IndexReader
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,8 @@ _INTERNAL_KEYS: frozenset[str] = frozenset(
 
 
 def _get_effective_chunk_size(
-    metadata: list[dict], config: Any,
+    metadata: list[dict],
+    config: Any,
 ) -> int:
     """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
 
@@ -389,7 +391,7 @@ class RetrievalPipeline:
         for r in merged:
             _clean_search_result(r)
         if updated:
-            await self._index.save()
+            await cast("FaissIndex", self._index).save()
         return merged
 
     def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:

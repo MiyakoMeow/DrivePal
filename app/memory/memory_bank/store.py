@@ -44,16 +44,23 @@ class MemoryBankStore:
         chat_model: ChatModel | None = None,
         **_kwargs: object,
     ) -> None:
+        """初始化 MemoryBankStore，组装所有子组件。
+
+        Args:
+            data_dir: 持久化目录。
+            embedding_model: 嵌入模型（可选）。
+            chat_model: 聊天模型（可选）。
+
+        """
         self._config = MemoryBankConfig()
-        embed_client = (
-            EmbeddingClient(embedding_model) if embedding_model else None
-        )
+        embed_client = EmbeddingClient(embedding_model) if embedding_model else None
         llm = LlmClient(chat_model) if chat_model else None
         self._index = FaissIndex(data_dir, self._config.embedding_dim)
         self._bg = BackgroundTaskRunner(self._config)
-        summarizer = (
-            Summarizer(llm, self._index, self._config) if llm else None
-        )
+        summarizer = Summarizer(llm, self._index, self._config) if llm else None
+        if embed_client is None:
+            msg = "embedding_model required"
+            raise RuntimeError(msg)
         self._lifecycle = MemoryLifecycle(
             self._index,
             embed_client,
@@ -64,7 +71,8 @@ class MemoryBankStore:
         )
         self._retrieval = (
             RetrievalPipeline(self._index, embed_client, self._config)
-            if embed_client else None
+            if embed_client
+            else None
         )
 
     # ── 委托方法 ──
@@ -80,7 +88,10 @@ class MemoryBankStore:
         **kwargs: object,
     ) -> InteractionResult:
         return await self._lifecycle.write_interaction(
-            query, response, event_type, **kwargs,
+            query,
+            response,
+            event_type,
+            **kwargs,
         )
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
@@ -93,7 +104,9 @@ class MemoryBankStore:
         ):
             await self._index.save()
         results = await self._retrieval.search(
-            query, top_k, reference_date=self._config.reference_date,
+            query,
+            top_k,
+            reference_date=self._config.reference_date,
         )
         extra = self._index.get_extra()
         prepend = []
@@ -134,7 +147,9 @@ class MemoryBankStore:
         return await self._lifecycle.get_event_type(event_id)
 
     async def update_feedback(
-        self, event_id: str, feedback: FeedbackData,
+        self,
+        event_id: str,
+        feedback: FeedbackData,
     ) -> None:
         pass  # 保持当前 no-op 行为
 
