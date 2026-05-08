@@ -70,7 +70,12 @@ class LlmClient:
         重试时截断 messages[-1]["content"]。
         """
         messages = [
-            {"role": "system", "content": system_prompt or _DEFAULT_SYSTEM},
+            {
+                "role": "system",
+                "content": system_prompt
+                if system_prompt is not None
+                else _DEFAULT_SYSTEM,
+            },
             {"role": "user", "content": _ANCHOR_USER},
             {"role": "assistant", "content": _ANCHOR_ASSISTANT},
             {"role": "user", "content": prompt},

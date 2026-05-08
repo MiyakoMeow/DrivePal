@@ -33,6 +33,12 @@ class EmbeddingClient:
         if not texts:
             return []
         results = await self._model.batch_encode(texts)
+        if len(results) != len(texts):
+            msg = (
+                f"batch_encode returned {len(results)} embeddings "
+                f"for {len(texts)} inputs"
+            )
+            raise RuntimeError(msg)
         dims = {len(v) for v in results}
         if len(dims) > 1:
             msg = f"Embedding dimension mismatch: {dims}. All vectors must have the same dimension."

@@ -430,7 +430,7 @@ class RetrievalPipeline:
         for r in results:
             for spk in r.get("speakers") or []:
                 spk_lower = spk.lower()
-                first = spk.split(" ", 1)[0].lower() if " " in spk else spk_lower
+                first = spk.split(" ", 1)[0].lower()
                 if _word_in_text(spk_lower, ql) or _word_in_text(first, ql):
                     speakers_in_query.add(spk_lower)
         if not speakers_in_query:

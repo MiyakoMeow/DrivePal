@@ -133,21 +133,23 @@ class _ContextTrimRecorder(_MessagesRecorder):
 
     def __init__(self):
         super().__init__(response="trimmed response")
+        self.original_messages = None
         self.trimmed_messages = None
 
     async def generate(self, **kwargs):
         self.call_count += 1
-        self.last_messages = kwargs.get("messages")
+        messages = kwargs.get("messages")
         if self.call_count == 1:
+            self.original_messages = messages
             exc = AllProviderFailedError("maximum context length exceeded")
             raise exc
-        self.trimmed_messages = kwargs.get("messages")
+        self.trimmed_messages = messages
         return self.response
 
 
 @pytest.mark.asyncio
 async def test_llm_context_trim_shortens_last_message():
-    """上下文超长时应截断 messages[-1]["content"]。"""
+    """上下文超长时应截断 messages[-1]["content"]，前 3 条不变。"""
     model = _ContextTrimRecorder()
     client = LlmClient(model)
     long_prompt = "X" * 2000
@@ -155,4 +157,6 @@ async def test_llm_context_trim_shortens_last_message():
     assert result == "trimmed response"
     assert model.call_count == 2
     assert model.trimmed_messages is not None
+    assert model.original_messages is not None
+    assert model.trimmed_messages[:3] == model.original_messages[:3]
     assert len(model.trimmed_messages[-1]["content"]) < len(long_prompt)
