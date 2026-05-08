@@ -31,12 +31,15 @@ app/
 ├── api/               # GraphQL API层
 │   ├── main.py        # FastAPI入口
 │   ├── graphql_schema.py
-│   └── resolvers/     # query.py + mutation.py
+│   └── resolvers/     # query.py + mutation.py + errors.py + converters.py
 ├── models/            # AI模型封装
 │   ├── chat.py        # LLM调用（多provider自动fallback, 纯异步）
 │   ├── embedding.py   # Embedding模型封装（纯远程, 重试 + 批量）
 │   ├── settings.py    # 模型组/Provider配置加载
-│   └── model_string.py
+│   ├── model_string.py # 模型引用字符串解析（provider/model?key=value）
+│   ├── types.py       # ResolvedModel, ProviderConfig 纯数据类型
+│   ├── exceptions.py  # ProviderNotFoundError, ModelGroupNotFoundError
+│   └── _http.py       # HTTP 超时配置（12h）
 ├── memory/            # 记忆模块
 │   ├── memory.py      # MemoryModule Facade + 工厂注册表
 │   ├── interfaces.py  # MemoryStore Protocol定义
