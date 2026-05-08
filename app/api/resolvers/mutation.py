@@ -29,6 +29,7 @@ from app.api.graphql_schema import (
     WorkflowStagesGQL,
 )
 from app.config import DATA_DIR
+from app.memory.memory_bank.faiss_index import FaissIndexManager
 from app.memory.schemas import FeedbackData
 from app.memory.singleton import get_memory_store
 from app.schemas.context import (
@@ -201,6 +202,7 @@ class Mutation:
         query_input: Annotated[ProcessQueryInput, strawberry.argument(name="input")],
     ) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
+        FaissIndexManager.validate_user_id(query_input.user_id)
         try:
             mm = get_memory_store()
             workflow = AgentWorkflow(
@@ -241,6 +243,8 @@ class Mutation:
         """提交用户反馈."""
         if feedback_input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(feedback_input.action)
+
+        FaissIndexManager.validate_user_id(feedback_input.user_id)
 
         try:
             mm = get_memory_store()

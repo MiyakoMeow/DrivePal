@@ -91,6 +91,14 @@ async def test_multi_user_isolation(store: MemoryBankStore) -> None:
     assert len(history_alice) >= 1
     assert len(history_bob) >= 1
 
+    # 验证真正的隔离：bob 不应搜到 alice 的内容，反之亦然
+    for r in results_bob:
+        content = r.event.get("content", "")
+        assert "alice" not in content.lower(), f"bob 搜到了 alice 的内容: {content}"
+    for r in results_alice:
+        content = r.event.get("content", "")
+        assert "bob" not in content.lower(), f"alice 搜到了 bob 的内容: {content}"
+
 
 @pytest.mark.asyncio
 async def test_write_parses_multi_speaker_content(store: MemoryBankStore) -> None:
@@ -99,6 +107,14 @@ async def test_write_parses_multi_speaker_content(store: MemoryBankStore) -> Non
     event = MemoryEvent(content=content, type="reminder")
     eid = await store.write("user_1", event)
     assert eid
+
+    # 验证 metadata 中包含双方的说话人信息
+    meta = store._index_manager.get_metadata("user_1")
+    assert len(meta) >= 1
+    # 配对模式下 2 行 → 1 条向量，speakers 应包含双方
+    speakers = meta[0].get("speakers", [])
+    assert "Gary" in speakers, f"expected Gary in speakers, got {speakers}"
+    assert "Patricia" in speakers, f"expected Patricia in speakers, got {speakers}"
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_DIM = 1536
 _TIMESTAMP_LENGTH = 10
+_USER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+$")
 
 
 @dataclass
@@ -86,6 +88,7 @@ class FaissIndexManager:
     # ── 用户目录 ──
 
     def _user_dir(self, user_id: str) -> Path:
+        self.validate_user_id(user_id)
         return self._data_dir / f"user_{user_id}"
 
     # ── 加载/保存 ──
@@ -145,7 +148,17 @@ class FaissIndexManager:
     async def save(self, user_id: str) -> None:
         """持久化索引 + metadata + extra。"""
         ui = self._users.get(user_id)
-        if ui is None or (ui.index.ntotal == 0 and not ui.metadata):
+        if ui is None:
+            return
+        if ui.index.ntotal == 0 and not ui.metadata:
+            user_dir = self._user_dir(user_id)
+            ip = user_dir / "index.faiss"
+            mp = user_dir / "metadata.json"
+            ep = user_dir / "extra_metadata.json"
+            if ip.exists() or mp.exists():
+                ip.unlink(missing_ok=True)
+                mp.unlink(missing_ok=True)
+                ep.unlink(missing_ok=True)
             return
         user_dir = self._user_dir(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
@@ -302,6 +315,13 @@ class FaissIndexManager:
         return sorted(ui.speakers) if ui is not None else []
 
     # ── 静态方法 ──
+
+    @staticmethod
+    def validate_user_id(user_id: str) -> None:
+        """校验 user_id 合法性，防路径穿越。只允许字母数字 _ . -，非空、不以 . 或 - 开头。"""
+        if not user_id or not _USER_ID_PATTERN.match(user_id):
+            msg = f"Invalid user_id: {user_id!r}"
+            raise ValueError(msg)
 
     @staticmethod
     def parse_speaker_line(line: str) -> tuple[str | None, str]:
