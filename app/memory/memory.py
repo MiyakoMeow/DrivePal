@@ -97,10 +97,16 @@ class MemoryModule:
             kwargs["chat_model"] = self._chat_model
         return store_cls(**kwargs)
 
-    async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
+    async def write(
+        self,
+        event: MemoryEvent,
+        *,
+        mode: MemoryMode | None = None,
+        user_id: str = "default",
+    ) -> str:
         """写入记忆事件."""
         store = await self._get_store(self._resolve_mode(mode))
-        return await store.write(event)
+        return await store.write(event, user_id=user_id)
 
     async def write_interaction(
         self,
@@ -109,6 +115,7 @@ class MemoryModule:
         event_type: str = "reminder",
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
         **kwargs: object,
     ) -> InteractionResult:
         """写入交互记录。
@@ -118,6 +125,7 @@ class MemoryModule:
             response: AI 回复。
             event_type: 事件类型。
             mode: 记忆模式。
+            user_id: 用户 ID。
             **kwargs: 传递给存储实现的额外参数（如 user_name、ai_name）。
 
         """
@@ -125,7 +133,9 @@ class MemoryModule:
         if not getattr(store, "supports_interaction", False):
             msg = f"Store '{store.store_name}' does not support write_interaction"
             raise NotImplementedError(msg)
-        return await store.write_interaction(query, response, event_type, **kwargs)
+        return await store.write_interaction(
+            query, response, event_type, user_id=user_id, **kwargs
+        )
 
     async def search(
         self,
@@ -133,30 +143,33 @@ class MemoryModule:
         top_k: int = 10,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> list[SearchResult]:
         """搜索记忆内容."""
         store = await self._get_store(self._resolve_mode(mode))
-        return await store.search(query, top_k=top_k)
+        return await store.search(query, top_k=top_k, user_id=user_id)
 
     async def get_history(
         self,
         limit: int = 10,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> list[MemoryEvent]:
         """获取历史记忆事件."""
         store = await self._get_store(self._resolve_mode(mode))
-        return await store.get_history(limit)
+        return await store.get_history(limit, user_id=user_id)
 
     async def get_event_type(
         self,
         event_id: str,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> str | None:
         """按 event_id 查找事件类型."""
         store = await self._get_store(self._resolve_mode(mode))
-        return await store.get_event_type(event_id)
+        return await store.get_event_type(event_id, user_id=user_id)
 
     async def update_feedback(
         self,
@@ -164,7 +177,8 @@ class MemoryModule:
         feedback: FeedbackData,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> None:
         """更新记忆反馈."""
         store = await self._get_store(self._resolve_mode(mode))
-        await store.update_feedback(event_id, feedback)
+        await store.update_feedback(event_id, feedback, user_id=user_id)
