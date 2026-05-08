@@ -37,7 +37,7 @@ if not WEBUI_DIR.exists():
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_storage(DATA_DIR)
     logger.info("Data directory initialized: %s", DATA_DIR)
-    if not Path.exists(WEBUI_DIR):
+    if not WEBUI_DIR.exists():
         logger.warning("WebUI directory not found: %s", WEBUI_DIR)
     yield
 
@@ -46,7 +46,7 @@ app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=True,  # 原型阶段允许；若加鉴权需改用显式 origin 列表
     allow_methods=["*"],
     allow_headers=["*"],
 )
