@@ -28,8 +28,12 @@ from app.memory.schemas import FeedbackData
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.schemas.context import (
+    DriverState,
     DrivingContext,
+    GeoLocation,
     ScenarioPreset,
+    SpatioTemporalContext,
+    TrafficCondition,
 )
 from app.storage.toml_store import TOMLStore
 
@@ -65,95 +69,88 @@ def _preset_store() -> TOMLStore:
     return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
 
 
-def _input_to_context_dict(input_obj: DrivingContextInput) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "scenario": input_obj.scenario.value
-        if hasattr(input_obj.scenario, "value")
-        else input_obj.scenario,
-        "driver": {},
-        "spatial": {},
-        "traffic": {},
-    }
+def _input_to_context(input_obj: DrivingContextInput) -> DrivingContext:
+    """Convert Strawberry GraphQL input to Pydantic DrivingContext."""
+    driver = None
     if input_obj.driver:
-        driver = input_obj.driver
-        result["driver"] = {
-            "emotion": driver.emotion.value
-            if hasattr(driver.emotion, "value")
-            else driver.emotion,
-            "workload": driver.workload.value
-            if hasattr(driver.workload, "value")
-            else driver.workload,
-            "fatigue_level": driver.fatigue_level,
-        }
+        driver = DriverState(
+            emotion=input_obj.driver.emotion.value,
+            workload=input_obj.driver.workload.value,
+            fatigue_level=input_obj.driver.fatigue_level,
+        )
+    spatial = None
     if input_obj.spatial:
-        spatial: dict[str, Any] = {"current_location": {}}
+        cl: GeoLocation | None = None
         if input_obj.spatial.current_location:
-            spatial["current_location"] = {
-                "latitude": input_obj.spatial.current_location.latitude,
-                "longitude": input_obj.spatial.current_location.longitude,
-                "address": input_obj.spatial.current_location.address,
-                "speed_kmh": input_obj.spatial.current_location.speed_kmh,
-            }
+            cl = GeoLocation(
+                latitude=input_obj.spatial.current_location.latitude,
+                longitude=input_obj.spatial.current_location.longitude,
+                address=input_obj.spatial.current_location.address,
+                speed_kmh=input_obj.spatial.current_location.speed_kmh,
+            )
+        dest: GeoLocation | None = None
         if input_obj.spatial.destination:
-            spatial["destination"] = {
-                "latitude": input_obj.spatial.destination.latitude,
-                "longitude": input_obj.spatial.destination.longitude,
-                "address": input_obj.spatial.destination.address,
-                "speed_kmh": input_obj.spatial.destination.speed_kmh,
-            }
-        if input_obj.spatial.eta_minutes is not None:
-            spatial["eta_minutes"] = input_obj.spatial.eta_minutes
-        if input_obj.spatial.heading is not None:
-            spatial["heading"] = input_obj.spatial.heading
-        result["spatial"] = spatial
+            dest = GeoLocation(
+                latitude=input_obj.spatial.destination.latitude,
+                longitude=input_obj.spatial.destination.longitude,
+                address=input_obj.spatial.destination.address,
+                speed_kmh=input_obj.spatial.destination.speed_kmh,
+            )
+        spatial = SpatioTemporalContext(
+            current_location=cl or GeoLocation(),
+            destination=dest,
+            eta_minutes=input_obj.spatial.eta_minutes,
+            heading=input_obj.spatial.heading,
+        )
+    traffic = None
     if input_obj.traffic:
-        traffic = input_obj.traffic
-        result["traffic"] = {
-            "congestion_level": traffic.congestion_level.value
-            if hasattr(traffic.congestion_level, "value")
-            else traffic.congestion_level,
-            "incidents": traffic.incidents,
-            "estimated_delay_minutes": traffic.estimated_delay_minutes,
-        }
-    return result
+        traffic = TrafficCondition(
+            congestion_level=input_obj.traffic.congestion_level.value,
+            incidents=input_obj.traffic.incidents,
+            estimated_delay_minutes=input_obj.traffic.estimated_delay_minutes,
+        )
+    return DrivingContext(
+        driver=driver or DriverState(),
+        spatial=spatial or SpatioTemporalContext(),
+        traffic=traffic or TrafficCondition(),
+        scenario=input_obj.scenario.value,
+    )
 
 
 def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
-    driver_d = d.get("driver", {})
-    spatial_d = d.get("spatial", {})
-    traffic_d = d.get("traffic", {})
-    loc = spatial_d.get("current_location", {})
-    dest = spatial_d.get("destination")
+    """Convert dict to DrivingContextGQL via Pydantic validation."""
+    ctx = DrivingContext.model_validate(d)
+    dest = ctx.spatial.destination
     return DrivingContextGQL(
         driver=DriverStateGQL(
-            emotion=driver_d.get("emotion", "neutral"),
-            workload=driver_d.get("workload", "normal"),
-            fatigue_level=driver_d.get("fatigue_level", 0.0),
+            emotion=ctx.driver.emotion,
+            workload=ctx.driver.workload,
+            fatigue_level=ctx.driver.fatigue_level,
         ),
         spatial=SpatioTemporalContextGQL(
             current_location=GeoLocationGQL(
-                latitude=loc.get("latitude", 0.0),
-                longitude=loc.get("longitude", 0.0),
-                address=loc.get("address", ""),
-                speed_kmh=loc.get("speed_kmh", 0.0),
+                latitude=ctx.spatial.current_location.latitude,
+                longitude=ctx.spatial.current_location.longitude,
+                address=ctx.spatial.current_location.address,
+                speed_kmh=ctx.spatial.current_location.speed_kmh,
             ),
             destination=GeoLocationGQL(
-                latitude=dest.get("latitude", 0.0),
-                longitude=dest.get("longitude", 0.0),
-                address=dest.get("address", ""),
-                speed_kmh=dest.get("speed_kmh", 0.0),
+                latitude=dest.latitude,
+                longitude=dest.longitude,
+                address=dest.address,
+                speed_kmh=dest.speed_kmh,
             )
-            if dest
+            if dest is not None
             else None,
-            eta_minutes=spatial_d.get("eta_minutes"),
-            heading=spatial_d.get("heading"),
+            eta_minutes=ctx.spatial.eta_minutes,
+            heading=ctx.spatial.heading,
         ),
         traffic=TrafficConditionGQL(
-            congestion_level=traffic_d.get("congestion_level", "smooth"),
-            incidents=traffic_d.get("incidents", []),
-            estimated_delay_minutes=traffic_d.get("estimated_delay_minutes", 0),
+            congestion_level=ctx.traffic.congestion_level,
+            incidents=ctx.traffic.incidents,
+            estimated_delay_minutes=ctx.traffic.estimated_delay_minutes,
         ),
-        scenario=d.get("scenario", "parked"),
+        scenario=ctx.scenario,
     )
 
 
@@ -165,7 +162,7 @@ def _to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
         for key in ("destination", "eta_minutes", "heading"):
             if sp.get(key) == "":
                 sp[key] = None
-    ctx = DrivingContext(**safe)
+    ctx = DrivingContext.model_validate(safe)
     return ScenarioPresetGQL(
         id=p.get("id", ""),
         name=p.get("name", ""),
@@ -194,8 +191,7 @@ class Mutation:
 
             driving_context = None
             if query_input.context:
-                ctx_dict = _input_to_context_dict(query_input.context)
-                driving_context = DrivingContext(**ctx_dict).model_dump()
+                driving_context = _input_to_context(query_input.context).model_dump()
 
             result, event_id, stages = await workflow.run_with_stages(
                 query_input.query,
@@ -234,8 +230,17 @@ class Mutation:
                 feedback_input.event_id,
                 mode=mode,
             )
+        except OSError as e:
+            msg = f"Storage error: {e}"
+            raise GraphQLError(msg) from e
+        except RuntimeError as e:
+            msg = f"Runtime error: {e}"
+            raise GraphQLError(msg) from e
+        except ValueError as e:
+            msg = f"Validation error: {e}"
+            raise GraphQLError(msg) from e
         except Exception as e:
-            logger.exception("submitFeedback failed")
+            logger.exception("submitFeedback failed (get_event_type)")
             raise InternalServerError from e
 
         if actual_type is None:
@@ -250,8 +255,17 @@ class Mutation:
             await mm.update_feedback(feedback_input.event_id, feedback, mode=mode)
         except GraphQLError:
             raise
+        except OSError as e:
+            msg = f"Storage error: {e}"
+            raise GraphQLError(msg) from e
+        except RuntimeError as e:
+            msg = f"Runtime error: {e}"
+            raise GraphQLError(msg) from e
+        except ValueError as e:
+            msg = f"Validation error: {e}"
+            raise GraphQLError(msg) from e
         except Exception as e:
-            logger.exception("submitFeedback failed")
+            logger.exception("submitFeedback failed (update_feedback)")
             raise InternalServerError from e
 
         return FeedbackResult(status="success")
@@ -265,9 +279,7 @@ class Mutation:
         store = _preset_store()
         preset = ScenarioPreset(name=preset_input.name)
         if preset_input.context:
-            preset.context = DrivingContext(
-                **_input_to_context_dict(preset_input.context)
-            )
+            preset.context = _input_to_context(preset_input.context)
         await store.append(preset.model_dump())
         return _to_gql_preset(preset.model_dump())
 

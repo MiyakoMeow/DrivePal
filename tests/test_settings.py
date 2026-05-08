@@ -8,7 +8,6 @@ import tomli_w
 
 from app.models.chat import ChatModel
 from app.models.embedding import EmbeddingModel
-from app.models.model_string import _load_config
 from app.models.settings import (
     EmbeddingProviderConfig,
     JudgeProviderConfig,
@@ -140,13 +139,13 @@ class TestLLMSettingsLoad:
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
         settings = LLMSettings.load()
         provider = settings.get_embedding_provider()
         assert provider is not None
         assert provider.provider.model == "text-embedding-3-small"
         assert provider.provider.base_url == "https://api.openai.com/v1"
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
 
     def test_get_embedding_provider_none_when_not_configured(
         self,
@@ -163,10 +162,10 @@ class TestLLMSettingsLoad:
         config_file = tmp_path / "llm.toml"
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
         settings = LLMSettings.load()
         assert settings.get_embedding_provider() is None
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
 
     def test_load_with_model_groups(
         self,
@@ -192,13 +191,13 @@ class TestLLMSettingsLoad:
             ),
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
         settings = LLMSettings.load()
         assert "default" in settings.model_groups
         providers = settings.get_model_group_providers("default")
         assert len(providers) == 1
         assert providers[0].provider.model == "gpt-4"
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
 
     def test_get_model_group_providers_includes_concurrency(
         self,
@@ -222,11 +221,11 @@ class TestLLMSettingsLoad:
         config_file.parent.mkdir(parents=True)
         config_file.write_text(tomli_w.dumps(config))
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
         settings = LLMSettings.load()
         providers = settings.get_model_group_providers("default")
         assert providers[0].concurrency == CONCURRENCY_16
-        _load_config.cache_clear()
+        LLMSettings.load.cache_clear()
 
 
 class TestChatModelFallback:

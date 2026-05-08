@@ -1,6 +1,7 @@
 """TOML文件存储后端，支持列表和字典类型的读写操作."""
 
 import asyncio
+import logging
 import tomllib
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
@@ -19,6 +20,8 @@ _LOCK_REGISTRY: dict[str, asyncio.Lock] = {}
 _LOCK_REGISTRY_LOCK = asyncio.Lock()
 
 _LIST_WRAPPER_KEY = "_list"
+
+logger = logging.getLogger(__name__)
 
 
 class AppendError(TypeError):
@@ -59,23 +62,34 @@ class TOMLStore:
         self.default_factory: Callable[[], T] = default_factory
         self._lock = _get_file_lock(self.filepath)
 
-    def _ensure_file(self) -> None:
+    async def _ensure_file(self) -> None:
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         if not self.filepath.exists():
             default_data = self.default_factory()
-            with self.filepath.open("wb") as f:
+            async with aiofiles.open(self.filepath, "wb") as f:
                 if isinstance(default_data, list):
-                    tomli_w.dump({_LIST_WRAPPER_KEY: default_data}, f)
+                    await f.write(
+                        tomli_w.dumps({_LIST_WRAPPER_KEY: default_data}).encode()
+                    )
                 else:
-                    tomli_w.dump(cast("dict[str, Any]", default_data), f)
+                    await f.write(
+                        tomli_w.dumps(cast("dict[str, Any]", default_data)).encode()
+                    )
 
-    def _clean_for_toml(self, obj: object) -> object:
+    def _clean_for_toml(self, obj: object, _path: str = "") -> object:
         """递归清理对象中的 None 值，转换为空字符串."""
         if isinstance(obj, dict):
-            return {k: self._clean_for_toml(v) for k, v in obj.items()}
+            return {k: self._clean_for_toml(v, f"{_path}.{k}") for k, v in obj.items()}
         if isinstance(obj, list):
-            return [self._clean_for_toml(item) for item in obj]
+            return [
+                self._clean_for_toml(item, f"{_path}[{i}]")
+                for i, item in enumerate(obj)
+            ]
         if obj is None:
+            logger.warning(
+                "None value in TOML output at %s, writing as empty string",
+                _path or "root",
+            )
             return ""
         return obj
 
@@ -91,7 +105,7 @@ class TOMLStore:
     async def _read_unsafe(self) -> T:
         """读操作，不获取锁（调用方必须持有锁）."""
         if not await asyncio.to_thread(self.filepath.exists):
-            await asyncio.to_thread(self._ensure_file)
+            await self._ensure_file()
         async with aiofiles.open(self.filepath, "rb") as f:
             content = await f.read()
         raw = tomllib.loads(content.decode("utf-8"))

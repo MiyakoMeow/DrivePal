@@ -27,6 +27,9 @@ exclude = [".agents/**"]
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
     "RET503",  # 循环内所有路径均已返回，末尾 return None 为防御性保留
 ]
+"app/api/resolvers/mutation.py" = [
+    "C901",  # submit_feedback 含多个异常处理器，各分支简单（McCabe 误报）
+]
 "app/memory/embedding_client.py" = [
     "S311",  # 退避 jitter 使用伪随机种子，非安全场景
 ]

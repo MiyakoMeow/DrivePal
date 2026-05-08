@@ -54,11 +54,10 @@ def _graphql_query(
     return resp.json()
 
 
-def test_experiment_report_query(isolated_app: TestClient) -> None:
-    """验证 experimentReport 查询."""
+def test_experiment_report_removed(isolated_app: TestClient) -> None:
+    """验证 experimentReport 已被移除."""
     result = _graphql_query(isolated_app, "{ experimentReport { report } }")
-    assert "data" in result
-    assert result["data"]["experimentReport"]["report"] is not None
+    assert "errors" in result
 
 
 def test_scenario_presets_query(isolated_app: TestClient) -> None:

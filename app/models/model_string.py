@@ -2,7 +2,6 @@
 
 import os
 import tomllib
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -41,9 +40,8 @@ def _normalize_llm_config(config: dict) -> list[dict]:
     return []
 
 
-@lru_cache(maxsize=1)
 def _load_config() -> dict:
-    """从 TOML 文件加载配置（已缓存）."""
+    """从 TOML 文件加载配置."""
     config_path = _get_config_path()
     if not config_path.is_file():
         return {}
