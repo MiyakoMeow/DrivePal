@@ -7,7 +7,7 @@ from app.api.graphql_schema import (
     MemoryModeEnum,
     ScenarioPresetGQL,
 )
-from app.api.resolvers.mutation import _preset_store, _to_gql_preset
+from app.api.resolvers.converters import preset_store, to_gql_preset
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 
@@ -40,6 +40,6 @@ class Query:
     @strawberry.field
     async def scenario_presets(self) -> list[ScenarioPresetGQL]:
         """查询所有场景预设."""
-        store = _preset_store()
+        store = preset_store()
         presets = await store.read()
-        return [_to_gql_preset(p) for p in presets]
+        return [to_gql_preset(p) for p in presets]
