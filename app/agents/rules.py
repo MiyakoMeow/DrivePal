@@ -27,23 +27,33 @@ SCENARIO_PARKED = "parked"
 WORKLOAD_OVERLOADED = "overloaded"
 
 
+_fatigue_threshold_cache: list[float | None] = [None]
+
+
 # 疲劳阈值，超过此值触发疲劳抑制规则，通过环境变量 FATIGUE_THRESHOLD 配置
-# 设为函数调用而非模块常量，支持测试中 monkeypatch.setenv 切换
+# 首次读取后缓存，后续调用直接返回缓存值
 def _get_fatigue_threshold() -> float:
+    cached = _fatigue_threshold_cache[0]
+    if cached is not None:
+        return cached
     raw = os.environ.get("FATIGUE_THRESHOLD", "0.7")
     try:
         value = float(raw)
     except ValueError:
         logger.warning("Invalid FATIGUE_THRESHOLD=%r, using default 0.7", raw)
+        _fatigue_threshold_cache[0] = 0.7
         return 0.7
     if not math.isfinite(value):
         logger.warning("FATIGUE_THRESHOLD=%r is NaN/Inf, using default 0.7", raw)
+        _fatigue_threshold_cache[0] = 0.7
         return 0.7
     if not 0.0 <= value <= 1.0:
         logger.warning(
             "FATIGUE_THRESHOLD=%r out of range [0,1], using default 0.7", raw
         )
+        _fatigue_threshold_cache[0] = 0.7
         return 0.7
+    _fatigue_threshold_cache[0] = value
     return value
 
 
