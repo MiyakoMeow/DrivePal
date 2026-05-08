@@ -99,6 +99,9 @@ class MemoryBankStore:
             self._loaded = True
 
     def _forget_mode(self) -> ForgetMode:
+        raw = os.getenv("MEMORYBANK_FORGET_MODE", "deterministic").lower()
+        if raw == "probabilistic":
+            return ForgetMode.PROBABILISTIC
         return ForgetMode.DETERMINISTIC
 
     async def _apply_forget(self, user_id: str) -> None:
@@ -182,18 +185,6 @@ class MemoryBankStore:
                     emb,
                     f"{date_key}T00:00:00",
                     {"type": "daily_summary", "source": f"summary_{date_key}"},
-                )
-                await self._index.save(user_id)
-
-            overall = await self._summarizer.generate_overall_summary(user_id)
-            if overall:
-                emb = await self._embedding.encode(overall)
-                await self._index.add_vector(
-                    user_id,
-                    overall,
-                    emb,
-                    f"{date_key}T00:00:00",
-                    {"type": "overall_summary", "source": f"summary_{date_key}"},
                 )
                 await self._index.save(user_id)
 
@@ -406,6 +397,8 @@ class MemoryBankStore:
         self,
         event_id: str,
         feedback: FeedbackData,
+        *,
+        _user_id: str = "default",
     ) -> None:
         await self._feedback.update_feedback(event_id, feedback)
 

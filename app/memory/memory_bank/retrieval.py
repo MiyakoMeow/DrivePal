@@ -365,10 +365,4 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-class RetrievalPipeline:
-    """兼容性桥接，store.py 重写后删除。"""
 
-    def __init__(self, index: object, embedding_client: object) -> None:
-        """占位构造，store.py 重写后删除此类。"""
-        self._index = index
-        self._embedding_client = embedding_client

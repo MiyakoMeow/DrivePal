@@ -132,7 +132,7 @@ class Summarizer:
             "weather, or passenger presence)\n"
             "Ignore general conversation topics unrelated to the vehicle.\n"
             f"Dialogue content:\n{text}\n"
-            "Summarization："
+            "Summarization:"
         )
 
     @staticmethod
