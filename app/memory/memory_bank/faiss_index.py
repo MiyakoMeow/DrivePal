@@ -325,6 +325,12 @@ class FaissIndex:
             return {}
         return ui.extra if isinstance(ui.extra, dict) else {}
 
+    def set_extra(self, user_id: str, extra: dict) -> None:
+        """设置指定用户的额外元数据。"""
+        ui = self._indices.get(user_id)
+        if ui is not None:
+            ui.extra = extra
+
     def get_all_speakers(self, user_id: str) -> list[str]:
         """返回指定用户的说话人列表。"""
         ui = self._indices.get(user_id)

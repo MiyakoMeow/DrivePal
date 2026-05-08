@@ -24,7 +24,14 @@ from .forget import (
     compute_reference_date,
 )
 from .llm import LlmClient
-from .retrieval import RetrievalPipeline
+from .retrieval import (
+    apply_speaker_filter,
+    clean_search_result,
+    deduplicate_overlaps,
+    get_effective_chunk_size,
+    merge_neighbors,
+    update_memory_strengths,
+)
 from .summarizer import GENERATION_EMPTY, Summarizer
 
 if TYPE_CHECKING:
@@ -59,45 +66,21 @@ class MemoryBankStore:
         data_dir: Path,
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
-        seed: int | None = None,
-        embedding_client: EmbeddingClient | None = None,
-        reference_date: str | None = None,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> None:
-        """初始化记忆库存储."""
-        self._data_dir = data_dir
-        if seed is None:
-            raw = os.getenv("MEMORYBANK_SEED")
-            if raw is not None:
-                try:
-                    seed = int(raw)
-                except ValueError:
-                    logger.warning(
-                        "MEMORYBANK_SEED=%r 无法解析为整数，seed 将保持 None，"
-                        "_seed_provided=False",
-                        raw,
-                    )
-        self._rng = random.Random(seed)
-        self._seed_provided = seed is not None
+        seed_raw = os.getenv("MEMORYBANK_SEED")
+        seed = None
+        if seed_raw is not None:
+            try:
+                seed = int(seed_raw)
+            except ValueError:
+                logger.warning("MEMORYBANK_SEED=%r 无法解析为整数", seed_raw)
+
         self._index = FaissIndex(data_dir)
-        self._forget_mode = (
-            ForgetMode.PROBABILISTIC
-            if self._seed_provided
-            else ForgetMode.DETERMINISTIC
-        )
-        self._feedback = FeedbackManager(data_dir)
-        self._chat_model = chat_model
-        self._embedding_client = embedding_client or (
-            EmbeddingClient(embedding_model) if embedding_model else None
-        )
-        self._reference_date = reference_date
-        self._retrieval = (
-            RetrievalPipeline(self._index, self._embedding_client)
-            if self._embedding_client
-            else None
-        )
-        self._llm = LlmClient(chat_model, rng=self._rng) if chat_model else None
+        self._embedding = EmbeddingClient(embedding_model) if embedding_model else None
+        self._llm = LlmClient(chat_model) if chat_model else None
         self._summarizer = Summarizer(self._llm, self._index) if self._llm else None
+        self._feedback = FeedbackManager(data_dir)
         self._forgetting_enabled = os.getenv(
             "MEMORYBANK_ENABLE_FORGETTING", "0"
         ).lower() in (
@@ -105,52 +88,46 @@ class MemoryBankStore:
             "true",
             "yes",
         )
+        self._rng = random.Random(seed)
+        self._reference_date = kwargs.get("reference_date")
+        self._loaded = False
 
-    async def _purge_forgotten(self, metadata: list[dict]) -> bool:
+    async def _ensure_loaded(self) -> None:
+        if not self._loaded:
+            await self._index.load()
+            self._loaded = True
+
+    def _forget_mode(self) -> ForgetMode:
+        return ForgetMode.DETERMINISTIC
+
+    async def _apply_forget(self, user_id: str) -> None:
+        if not self._forgetting_enabled:
+            return
+        metadata = self._index.get_metadata(user_id)
+        if not metadata:
+            return
         ref = self._reference_date or compute_reference_date(metadata)
         ids = compute_forget_ids(
-            metadata,
-            ref,
-            mode=self._forget_mode,
-            rng=self._rng,
+            metadata, ref, mode=self._forget_mode(), rng=self._rng
         )
         if ids:
-            await self._index.remove_vectors(ids)
-            return True
-        return False
-
-    async def _forget_at_ingestion(self) -> None:
-        metadata = self._index.get_metadata()
-        ref = self._reference_date or compute_reference_date(metadata)
-        ids = compute_forget_ids(
-            metadata,
-            ref,
-            rng=self._rng,
-            mode=self._forget_mode,
-        )
-        if ids:
-            await self._index.remove_vectors(ids)
+            await self._index.remove_vectors(user_id, ids)
+            await self._index.save(user_id)
 
     async def write_interaction(
         self,
         query: str,
         response: str,
         event_type: str = "reminder",
+        *,
+        user_id: str = "default",
         **kwargs: object,
     ) -> InteractionResult:
-        """记录一次交互到记忆库。
-
-        Args:
-            query: 用户输入。
-            response: AI 回复。
-            event_type: 事件类型。
-            **kwargs: 可选参数，支持 user_name（发言者姓名）和 ai_name。
-
-        """
-        if not self._embedding_client:
+        if not self._embedding:
             msg = "embedding_client required"
             raise RuntimeError(msg)
-        await self._index.load()
+        await self._ensure_loaded()
+
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
         user_name = kwargs.get("user_name") or "User"
@@ -159,8 +136,10 @@ class MemoryBankStore:
             f"Conversation content on {date_key}:"
             f"[|{user_name}|]: {query}; [|{ai_name}|]: {response}"
         )
-        emb = await self._embedding_client.encode(text)
+
+        emb = await self._embedding.encode(text)
         fid = await self._index.add_vector(
+            user_id,
             text,
             emb,
             ts,
@@ -171,63 +150,135 @@ class MemoryBankStore:
                 "event_type": event_type,
             },
         )
+
         if self._forgetting_enabled:
-            await self._purge_forgotten(self._index.get_metadata())
-            await self._forget_at_ingestion()
-        await self._index.save()
-        if self._summarizer:
-            task = asyncio.create_task(self._background_summarize(date_key))
+            metadata = self._index.get_metadata(user_id)
+            ref = self._reference_date or compute_reference_date(metadata)
+            ids = compute_forget_ids(
+                metadata, ref, mode=self._forget_mode(), rng=self._rng
+            )
+            if ids:
+                await self._index.remove_vectors(user_id, ids)
+                await self._index.save(user_id)
+
+        await self._index.save(user_id)
+
+        if self._summarizer and self._embedding:
+            task = asyncio.create_task(
+                self._background_summarize(user_id, date_key)
+            )
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
+
         return InteractionResult(event_id=str(fid))
 
-    async def _background_summarize(self, date_key: str) -> None:
-        if not self._summarizer or not self._embedding_client:
+    async def _background_summarize(self, user_id: str, date_key: str) -> None:
+        if not self._summarizer or not self._embedding:
             return
         try:
-            text = await self._summarizer.get_daily_summary(date_key)
+            text = await self._summarizer.generate_daily_summary(user_id, date_key)
             if text:
-                emb = await self._embedding_client.encode(text)
+                emb = await self._embedding.encode(text)
                 await self._index.add_vector(
+                    user_id,
                     text,
                     emb,
                     f"{date_key}T00:00:00",
                     {"type": "daily_summary", "source": f"summary_{date_key}"},
                 )
-                await self._index.save()  # 尽早持久化日摘要
-            await self._summarizer.get_overall_summary()
-            await self._summarizer.get_daily_personality(date_key)
-            await self._summarizer.get_overall_personality()
-            await self._index.save()
+                await self._index.save(user_id)
+
+            overall = await self._summarizer.generate_overall_summary(user_id)
+            if overall:
+                emb = await self._embedding.encode(overall)
+                await self._index.add_vector(
+                    user_id,
+                    overall,
+                    emb,
+                    f"{date_key}T00:00:00",
+                    {"type": "overall_summary", "source": f"summary_{date_key}"},
+                )
+                await self._index.save(user_id)
+
+            dp = await self._summarizer.generate_daily_personality(user_id, date_key)
+            if dp:
+                extra = dict(self._index.get_extra(user_id))
+                daily_p = dict(extra.get("daily_personalities", {}))
+                daily_p[date_key] = dp
+                extra["daily_personalities"] = daily_p
+                self._index.set_extra(user_id, extra)
+                await self._index.save(user_id)
+
+            op = await self._summarizer.generate_overall_personality(user_id)
+            if op:
+                extra = dict(self._index.get_extra(user_id))
+                extra["overall_personality"] = op
+                self._index.set_extra(user_id, extra)
+                await self._index.save(user_id)
+
+            overall_text = await self._summarizer.generate_overall_summary(user_id)
+            if overall_text:
+                extra = dict(self._index.get_extra(user_id))
+                extra["overall_summary"] = overall_text
+                self._index.set_extra(user_id, extra)
+                await self._index.save(user_id)
+
         except Exception:
             logger.exception("background summarization failed")
 
-    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
-        """搜索记忆."""
-        await self._index.load()
-        if self._index.total == 0 or not self._retrieval:
+    async def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        user_id: str = "default",
+    ) -> list[SearchResult]:
+        if not self._embedding:
             return []
-        if self._forgetting_enabled and await self._purge_forgotten(
-            self._index.get_metadata()
-        ):
-            await self._index.save()
-        results = await self._retrieval.search(
-            query, top_k, reference_date=self._reference_date
+        await self._ensure_loaded()
+
+        if self._index.total(user_id) == 0:
+            return []
+
+        await self._apply_forget(user_id)
+
+        query_emb = await self._embedding.encode(query)
+        raw = await self._index.search(user_id, query_emb, top_k * 4)
+
+        metadata = self._index.get_metadata(user_id)
+        chunk_size = get_effective_chunk_size(metadata)
+        merged = merge_neighbors(raw, metadata, chunk_size)
+        merged = deduplicate_overlaps(merged)
+        merged = apply_speaker_filter(
+            merged, query, self._index.get_all_speakers(user_id)
         )
-        extra = self._index.get_extra()
-        prepend = []
+        merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
+        merged = merged[:top_k]
+
+        if update_memory_strengths(merged, metadata, self._reference_date):
+            await self._index.save(user_id)
+
+        for r in merged:
+            clean_search_result(r)
+
+        extra = self._index.get_extra(user_id)
+        prepend_parts: list[str] = []
         for key, label in [
             ("overall_summary", "Overall summary of past memories"),
             ("overall_personality", "User vehicle preferences and habits"),
         ]:
             val = extra.get(key, "")
             if val and val != GENERATION_EMPTY:
-                prepend.append(f"{label}: {val}")
+                prepend_parts.append(f"{label}: {val}")
+
         out: list[SearchResult] = []
-        if prepend:
+        if prepend_parts:
             out.append(
                 SearchResult(
-                    event={"content": "\n".join(prepend), "type": "overall_context"},
+                    event={
+                        "content": "\n".join(prepend_parts),
+                        "type": "overall_context",
+                    },
                     score=float("inf"),
                     source="overall",
                 )
@@ -242,16 +293,21 @@ class MemoryBankStore:
                 score=float(r.get("score", 0.0)),
                 source=r.get("source", "event"),
             )
-            for r in results[: max(0, top_k - len(prepend))]
+            for r in merged[: max(0, top_k - len(prepend_parts))]
         )
         return out
 
-    async def write(self, event: MemoryEvent) -> str:
-        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。"""
-        if not self._embedding_client:
+    async def write(
+        self,
+        event: MemoryEvent,
+        *,
+        user_id: str = "default",
+    ) -> str:
+        if not self._embedding:
             msg = "embedding_client required"
             raise RuntimeError(msg)
-        await self._index.load()
+        await self._ensure_loaded()
+
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
 
@@ -263,10 +319,8 @@ class MemoryBankStore:
 
         fid: int | None = None
         if has_speakers:
-            # 配对模式：每 2 行结对为 1 条向量（对齐 VehicleMemBench 原版）
             for i in range(0, len(parsed_pairs), 2):
                 speaker_a, text_a = parsed_pairs[i]
-                # None 说话人回退 Unknown 避免文本中出现字面量 "[|None|]"
                 label_a = speaker_a if speaker_a is not None else "Unknown"
                 if i + 1 < len(parsed_pairs):
                     speaker_b, text_b = parsed_pairs[i + 1]
@@ -279,26 +333,32 @@ class MemoryBankStore:
                 else:
                     speakers = [speaker_a]
                     conv_text = (
-                        f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
+                        f"Conversation content on {date_key}:"
+                        f"[|{label_a}|]: {text_a}"
                     )
-                emb = await self._embedding_client.encode(conv_text)
+                emb = await self._embedding.encode(conv_text)
                 fid = await self._index.add_vector(
+                    user_id,
                     conv_text,
                     emb,
                     ts,
                     {
                         "source": date_key,
-                        "speakers": sorted({s for s in speakers if s is not None}),
+                        "speakers": sorted(
+                            {s for s in speakers if s is not None}
+                        ),
                         "raw_content": conv_text,
                         "event_type": event.type,
                     },
                 )
         else:
-            # 单用户回退
             spk = event.speaker or "System"
-            conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
-            emb = await self._embedding_client.encode(conv_text)
+            conv_text = (
+                f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
+            )
+            emb = await self._embedding.encode(conv_text)
             fid = await self._index.add_vector(
+                user_id,
                 conv_text,
                 emb,
                 ts,
@@ -309,21 +369,39 @@ class MemoryBankStore:
                     "event_type": event.type,
                 },
             )
+
         if self._forgetting_enabled:
-            await self._purge_forgotten(self._index.get_metadata())
-            await self._forget_at_ingestion()
-        await self._index.save()
-        if self._summarizer:
-            task = asyncio.create_task(self._background_summarize(date_key))
+            metadata = self._index.get_metadata(user_id)
+            ref = self._reference_date or compute_reference_date(metadata)
+            ids = compute_forget_ids(
+                metadata, ref, mode=self._forget_mode(), rng=self._rng
+            )
+            if ids:
+                await self._index.remove_vectors(user_id, ids)
+                await self._index.save(user_id)
+
+        await self._index.save(user_id)
+
+        if self._summarizer and self._embedding:
+            task = asyncio.create_task(
+                self._background_summarize(user_id, date_key)
+            )
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
+
         return str(fid)
 
-    async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
-        """获取历史事件."""
-        await self._index.load()
+    async def get_history(
+        self,
+        limit: int = 10,
+        *,
+        user_id: str = "default",
+    ) -> list[MemoryEvent]:
+        await self._ensure_loaded()
         entries = [
-            m for m in self._index.get_metadata() if m.get("type") != "daily_summary"
+            m
+            for m in self._index.get_metadata(user_id)
+            if m.get("type") != "daily_summary"
         ]
         return [
             MemoryEvent(
@@ -334,18 +412,25 @@ class MemoryBankStore:
             for m in entries[-limit:]
         ]
 
-    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-        """更新反馈."""
+    async def update_feedback(
+        self,
+        event_id: str,
+        feedback: FeedbackData,
+    ) -> None:
         await self._feedback.update_feedback(event_id, feedback)
 
-    async def get_event_type(self, event_id: str) -> str | None:
-        """按 event_id 查找事件类型."""
-        await self._index.load()
+    async def get_event_type(
+        self,
+        event_id: str,
+        *,
+        user_id: str = "default",
+    ) -> str | None:
+        await self._ensure_loaded()
         try:
             fid = int(event_id)
         except ValueError, TypeError:
             return None
-        m = self._index.get_metadata_by_id(fid)
+        m = self._index.get_metadata_by_id(user_id, fid)
         if m is not None:
             return m.get("event_type") or "reminder"
         return None
