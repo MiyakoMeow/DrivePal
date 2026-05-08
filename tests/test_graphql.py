@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.main import app
-from app.memory.singleton import get_memory_module
+from app.memory.singleton import get_memory_store
 from app.storage.toml_store import TOMLStore
 from tests.fixtures import reset_all_singletons
 
@@ -140,8 +140,9 @@ async def test_feedback_success_updates_strategy_weight(
     isolated_app: TestClient,
 ) -> None:
     """验证 submitFeedback 成功路径按事件类型更新策略权重."""
-    mm = get_memory_module()
+    mm = get_memory_store()
     interaction_result = await mm.write_interaction(
+        "default",
         "项目周会",
         "好的",
         event_type="meeting",
@@ -178,7 +179,7 @@ def test_process_query_without_context(isolated_app: TestClient) -> None:
         isolated_app,
         """
         mutation($query: String!) {
-            processQuery(input: { query: $query, memoryMode: MEMORY_BANK }) {
+            processQuery(input: { query: $query, userId: "default" }) {
                 result
                 eventId
                 stages { context task decision execution }
@@ -209,7 +210,7 @@ def test_process_query_with_context(isolated_app: TestClient) -> None:
         {
             "input": {
                 "query": "提醒我买牛奶",
-                "memoryMode": "MEMORY_BANK",
+                "userId": "default",
                 "context": {
                     "driver": {
                         "emotion": "CALM",

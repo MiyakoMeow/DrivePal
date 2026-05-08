@@ -16,4 +16,4 @@ def reset_all_singletons() -> None:
     with suppress(AttributeError):
         clear_semaphore_cache()
     with suppress(AttributeError):
-        app.memory.singleton._memory_module_state[0] = None
+        app.memory.singleton._memory_store_state[0] = None

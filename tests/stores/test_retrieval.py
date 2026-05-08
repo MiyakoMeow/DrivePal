@@ -2,8 +2,11 @@
 
 import os
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 import pytest
 
@@ -35,7 +38,9 @@ def mock_embedding():
 
 
 @pytest.mark.asyncio
-async def test_search_empty_index_returns_empty(manager: FaissIndexManager, mock_embedding):
+async def test_search_empty_index_returns_empty(
+    manager: FaissIndexManager, mock_embedding
+):
     """空索引时 search 应返回空元组。"""
     pipe = RetrievalPipeline(manager, EmbeddingClient(mock_embedding))
     results, updates = await pipe.search("user_1", "anything")
@@ -62,18 +67,23 @@ async def test_search_returns_results(manager: FaissIndexManager, mock_embedding
 
 
 @pytest.mark.asyncio
-async def test_search_returns_strength_updates(manager: FaissIndexManager, mock_embedding):
+async def test_search_returns_strength_updates(
+    manager: FaissIndexManager, mock_embedding
+):
     """检索后应返回强度更新。"""
     emb = [0.1] * 1536
-    fid = await manager.add_vector(
-        "user_1", "Gary likes seat 45", emb, "2024-06-15T10:00:00",
+    await manager.add_vector(
+        "user_1",
+        "Gary likes seat 45",
+        emb,
+        "2024-06-15T10:00:00",
         {"source": "2024-06-15", "speakers": ["Gary"]},
     )
     pipe = RetrievalPipeline(manager, EmbeddingClient(mock_embedding))
     _, updates = await pipe.search("user_1", "Gary seat")
     assert len(updates) > 0
     # 验证更新字段
-    for meta_idx, fields in updates.items():
+    for fields in updates.values():
         assert "memory_strength" in fields
         assert "last_recall_date" in fields
 

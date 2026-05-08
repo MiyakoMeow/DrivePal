@@ -30,8 +30,7 @@ from app.api.graphql_schema import (
 )
 from app.config import DATA_DIR
 from app.memory.schemas import FeedbackData
-from app.memory.singleton import get_memory_module
-from app.memory.types import MemoryMode
+from app.memory.singleton import get_memory_store
 from app.schemas.context import (
     DrivingContext,
     ScenarioPreset,
@@ -203,11 +202,11 @@ class Mutation:
     ) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
         try:
-            mm = get_memory_module()
+            mm = get_memory_store()
             workflow = AgentWorkflow(
                 data_dir=DATA_DIR,
-                memory_mode=MemoryMode(query_input.memory_mode.value),
-                memory_module=mm,
+                memory_store=mm,
+                user_id=query_input.user_id,
             )
 
             driving_context = None
@@ -244,16 +243,15 @@ class Mutation:
             raise GraphQLInvalidActionError(feedback_input.action)
 
         try:
-            mm = get_memory_module()
+            mm = get_memory_store()
         except Exception as e:
-            logger.exception("submitFeedback failed (get_memory_module)")
+            logger.exception("submitFeedback failed (get_memory_store)")
             raise InternalServerError from e
         safe_action: Literal["accept", "ignore"]
         safe_action = "accept" if feedback_input.action == "accept" else "ignore"
-        mode = MemoryMode(feedback_input.memory_mode.value)
 
         actual_type = await _safe_memory_call(
-            mm.get_event_type(feedback_input.event_id, mode=mode),
+            mm.get_event_type(feedback_input.user_id, feedback_input.event_id),
             "submitFeedback(get_event_type)",
         )
 
@@ -266,7 +264,9 @@ class Mutation:
             modified_content=feedback_input.modified_content,
         )
         await _safe_memory_call(
-            mm.update_feedback(feedback_input.event_id, feedback, mode=mode),
+            mm.update_feedback(
+                feedback_input.user_id, feedback_input.event_id, feedback
+            ),
             "submitFeedback(update_feedback)",
         )
         return FeedbackResult(status="success")

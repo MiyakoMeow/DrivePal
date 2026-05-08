@@ -1,6 +1,6 @@
-"""记忆模块导出."""
+"""记忆模块导出（多用户版）。"""
 
-from app.memory.memory import MemoryModule, register_store
+from app.memory.memory_bank import MemoryBankStore
 from app.memory.schemas import (
     InteractionRecord,
     InteractionResult,
@@ -11,8 +11,7 @@ from app.memory.schemas import (
 __all__ = [
     "InteractionRecord",
     "InteractionResult",
+    "MemoryBankStore",
     "MemoryEvent",
-    "MemoryModule",
     "SearchResult",
-    "register_store",
 ]

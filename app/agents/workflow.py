@@ -6,26 +6,21 @@ import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
 from app.agents.state import AgentState, WorkflowStages
-from app.memory.memory import MemoryModule
-from app.memory.types import MemoryMode
+from app.memory.singleton import get_memory_store
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
 
+if TYPE_CHECKING:
+    from app.memory.memory_bank import MemoryBankStore
+
 logger = logging.getLogger(__name__)
-
-
-class ChatModelUnavailableError(RuntimeError):
-    """ChatModel 不可用时抛出的异常."""
-
-    def __init__(self) -> None:
-        """初始化 ChatModel 不可用错误."""
-        super().__init__("ChatModel not available")
 
 
 class LLMJsonResponse(BaseModel):
@@ -75,18 +70,19 @@ class AgentWorkflow:
     def __init__(
         self,
         data_dir: Path = Path("data"),
-        memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
-        memory_module: MemoryModule | None = None,
+        memory_store: MemoryBankStore | None = None,
+        user_id: str = "default",
     ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
-        self._memory_mode = memory_mode
+        self._user_id = user_id
 
-        if memory_module is not None:
-            self.memory_module = memory_module
+        if memory_store is not None:
+            self._memory_store = memory_store
         else:
-            chat_model = get_chat_model()
-            self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
+            self._memory_store = get_memory_store()
+
+        self._chat_model = get_chat_model()
 
         self._nodes = [
             self._context_node,
@@ -97,9 +93,7 @@ class AgentWorkflow:
         self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
 
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
-        if not self.memory_module.chat_model:
-            raise ChatModelUnavailableError
-        result = await self.memory_module.chat_model.generate(
+        result = await self._chat_model.generate(
             user_prompt,
             json_mode=True,
         )
@@ -111,18 +105,17 @@ class AgentWorkflow:
     ) -> list[dict]:
         """搜索相关记忆，失败时回退到最近历史记录. 统一返回可序列化 dict 列表."""
         if not user_input:
-            # 空输入：尝试返回最近历史，失败则直接返回空列表
             try:
-                history = await self.memory_module.get_history(mode=self._memory_mode)
+                history = await self._memory_store.get_history(user_id=self._user_id)
                 return [e.model_dump() for e in history]
             except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
                 logger.warning("Memory get_history failed for empty input: %s", e)
                 return []
 
         try:
-            events = await self.memory_module.search(
-                user_input,
-                mode=self._memory_mode,
+            events = await self._memory_store.search(
+                user_id=self._user_id,
+                query=user_input,
             )
             if events:
                 return [e.to_public() for e in events]
@@ -130,7 +123,7 @@ class AgentWorkflow:
             logger.warning("Memory search failed, fallback to history: %s", e)
 
         try:
-            history = await self.memory_module.get_history(mode=self._memory_mode)
+            history = await self._memory_store.get_history(user_id=self._user_id)
             return [e.model_dump() for e in history]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
             logger.warning("Memory get_history also failed: %s", e)
@@ -266,10 +259,10 @@ class AgentWorkflow:
 
         content = self._extract_content(decision)
         original_query = state.get("original_query", "")
-        interaction_result = await self.memory_module.write_interaction(
-            original_query,
-            content,
-            mode=self._memory_mode,
+        interaction_result = await self._memory_store.write_interaction(
+            user_id=self._user_id,
+            query=original_query,
+            response=content,
         )
         event_id = interaction_result.event_id
         if not event_id:

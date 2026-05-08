@@ -1,19 +1,22 @@
 """MemoryBankStore 多用户测试。"""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 import pytest
 
 from app.memory.memory_bank.store import MemoryBankStore
-from app.memory.schemas import MemoryEvent
+from app.memory.schemas import FeedbackData, MemoryEvent
 
 
 @pytest.fixture
 def mock_emb() -> AsyncMock:
     m = AsyncMock(spec=["encode", "batch_encode"])
     m.encode = AsyncMock(return_value=[0.1] * 1536)
-    m.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
+    m.batch_encode = AsyncMock(side_effect=lambda texts: [[0.1] * 1536 for _ in texts])
     return m
 
 
@@ -124,8 +127,5 @@ async def test_get_reference_date_from_metadata(
 @pytest.mark.asyncio
 async def test_update_feedback_silent(store: MemoryBankStore) -> None:
     """update_feedback 静默忽略。"""
-    from app.memory.schemas import FeedbackData
-
     feedback = FeedbackData(action="accept")
-    # 不应抛出异常
     await store.update_feedback("user_1", "0", feedback)

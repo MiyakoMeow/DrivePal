@@ -14,8 +14,10 @@ import copy
 import json
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 import faiss
 import numpy as np
@@ -48,7 +50,7 @@ def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
         if not isinstance(m, dict) or "faiss_id" not in m:
             msg = f"entry {i}: invalid"
             raise ValueError(msg)
-        entry: dict[str, Any] = m
+        entry: dict[str, Any] = cast("dict[str, Any]", m)
         fid: object = entry["faiss_id"]
         if not isinstance(fid, int):
             msg = f"entry {i}: faiss_id={fid!r} 不是整数"
@@ -57,7 +59,7 @@ def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
             msg = f"entry {i}: 重复 faiss_id={fid}"
             raise ValueError(msg)
         seen.add(fid)
-    return meta
+    return cast("list[dict[str, Any]]", meta)
 
 
 def _validate_index_count(idx: faiss.Index, meta_len: int) -> None:
@@ -74,7 +76,9 @@ class FaissIndexManager:
     支持延迟加载、deep copy metadata、per-user extra。
     """
 
-    def __init__(self, data_dir: Path, embedding_dim: int = DEFAULT_EMBEDDING_DIM) -> None:
+    def __init__(
+        self, data_dir: Path, embedding_dim: int = DEFAULT_EMBEDDING_DIM
+    ) -> None:
         self._data_dir = data_dir
         self._dim = embedding_dim
         self._users: dict[str, _UserIndex] = {}
@@ -102,8 +106,16 @@ class FaissIndexManager:
                 raw_meta = json.loads(mp.read_text())
                 meta = _validate_metadata_structure(raw_meta)
                 _validate_index_count(idx, len(meta))
-            except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
-                logger.warning("FaissIndexManager: 损坏 user=%s，重建空索引: %s", user_id, exc)
+            except (
+                json.JSONDecodeError,
+                OSError,
+                TypeError,
+                ValueError,
+                RuntimeError,
+            ) as exc:
+                logger.warning(
+                    "FaissIndexManager: 损坏 user=%s，重建空索引: %s", user_id, exc
+                )
                 ip.unlink(missing_ok=True)
                 mp.unlink(missing_ok=True)
                 ep.unlink(missing_ok=True)
@@ -122,7 +134,7 @@ class FaissIndexManager:
                 try:
                     e = json.loads(ep.read_text())
                     ui.extra = e if isinstance(e, dict) else {}
-                except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                except json.JSONDecodeError, OSError, TypeError, ValueError:
                     ep.unlink(missing_ok=True)
             self._users[user_id] = ui
         else:
@@ -138,7 +150,9 @@ class FaissIndexManager:
         user_dir = self._user_dir(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
         faiss.write_index(ui.index, str(user_dir / "index.faiss"))
-        (user_dir / "metadata.json").write_text(json.dumps(ui.metadata, ensure_ascii=False, indent=2))
+        (user_dir / "metadata.json").write_text(
+            json.dumps(ui.metadata, ensure_ascii=False, indent=2)
+        )
         if ui.extra:
             (user_dir / "extra_metadata.json").write_text(
                 json.dumps(ui.extra, ensure_ascii=False, indent=2)
@@ -294,7 +308,7 @@ class FaissIndexManager:
         """从 "Speaker: content" 格式解析说话人和内容。"""
         colon_pos = line.find(": ")
         if colon_pos > 0:
-            return line[:colon_pos].strip(), line[colon_pos + 2:].strip()
+            return line[:colon_pos].strip(), line[colon_pos + 2 :].strip()
         return None, line.strip()
 
     # ── 内部 ──
@@ -306,7 +320,3 @@ class FaissIndexManager:
         for m in ui.metadata:
             for spk in m.get("speakers", []):
                 ui.speakers.add(spk)
-
-
-# 兼容别名：旧代码导入 FaissIndex 时指向新 Manager（接口不兼容，后续任务统一迁移）
-FaissIndex = FaissIndexManager

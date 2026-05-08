@@ -1,16 +1,9 @@
-"""Strawberry GraphQL Schema 定义."""
+"""Strawberry GraphQL Schema 定义（多用户版）。"""
 
 from enum import Enum
 
 import strawberry
 from strawberry.scalars import JSON
-
-
-@strawberry.enum
-class MemoryModeEnum(Enum):
-    """记忆模式枚举."""
-
-    MEMORY_BANK = "memory_bank"
 
 
 @strawberry.enum
@@ -107,7 +100,7 @@ class ProcessQueryInput:
     """处理查询输入."""
 
     query: str
-    memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
+    user_id: str = "default"
     context: DrivingContextInput | None = None
 
 
@@ -117,7 +110,7 @@ class FeedbackInput:
 
     event_id: str
     action: str
-    memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
+    user_id: str = "default"
     modified_content: str | None = None
 
 

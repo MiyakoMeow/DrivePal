@@ -1,4 +1,4 @@
-"""MemoryStore 结构化接口定义（Protocol）."""
+"""MemoryStore 结构化接口定义（Protocol，多用户版）。"""
 
 from typing import TYPE_CHECKING, Protocol
 
@@ -12,39 +12,33 @@ if TYPE_CHECKING:
 
 
 class MemoryStore(Protocol):
-    """记忆存储接口，通过结构化子类型隐式满足."""
+    """记忆存储接口，多用户版。"""
 
     store_name: str
     requires_embedding: bool
     requires_chat: bool
-    supports_interaction: bool
 
-    async def write(self, event: MemoryEvent) -> str:
-        """写入事件."""
-        ...
-
-    async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
-        """搜索记忆."""
-        ...
-
-    async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
-        """获取历史事件."""
-        ...
-
-    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-        """更新反馈."""
-        ...
-
-    async def get_event_type(self, event_id: str) -> str | None:
-        """按 event_id 查找事件类型."""
-        ...
+    async def write(self, user_id: str, event: MemoryEvent) -> str: ...
 
     async def write_interaction(
         self,
+        user_id: str,
         query: str,
         response: str,
         event_type: str = "reminder",
-        **kwargs: object,
-    ) -> InteractionResult:
-        """写入交互记录."""
-        ...
+        *,
+        user_name: str = "User",
+        ai_name: str = "AI",
+    ) -> InteractionResult: ...
+
+    async def search(
+        self, user_id: str, query: str, top_k: int = 5
+    ) -> list[SearchResult]: ...
+
+    async def get_history(self, user_id: str, limit: int = 10) -> list[MemoryEvent]: ...
+
+    async def get_event_type(self, user_id: str, event_id: str) -> str | None: ...
+
+    async def update_feedback(
+        self, user_id: str, event_id: str, feedback: FeedbackData
+    ) -> None: ...

@@ -22,7 +22,11 @@ exclude = [".agents/**"]
 [lint.per-file-ignores]
 "adapters/runner.py" = ["E402"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
-"app/memory/interfaces.py" = ["ANN401"]  # Protocol 接口故意返回 Any（调用方自行处理类型）
+"app/memory/interfaces.py" = [
+    "ANN401",  # Protocol 接口故意返回 Any（调用方自行处理类型）
+    "D102",  # Protocol 方法签名即文档，无需重复 docstring
+    "PLR0913",  # Protocol 方法多参数合理（含 user_id + 业务参数）
+]
 "app/memory/memory_bank/llm.py" = [
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
     "RET503",  # 循环内所有路径均已返回，末尾 return None 为防御性保留
@@ -35,11 +39,15 @@ exclude = [".agents/**"]
     "S311",  # 退避 jitter 使用伪随机种子，非安全场景
 ]
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
+"app/memory/memory_bank/faiss_index.py" = ["D107"]  # __init__ 逻辑已由类 docstring 说明
 "app/memory/memory_bank/store.py" = [
     "PLR0913",  # __init__ 参数≥6合理（含多个可选依赖注入）
     "S311",  # 概率遗忘使用伪随机种子，非安全场景
 ]
+"app/memory/memory_bank/retrieval.py" = ["D107"]  # __init__ 逻辑已由类 docstring 说明
+"app/memory/memory_bank/summarizer.py" = ["D107"]  # __init__ 逻辑已由类 docstring 说明
 "tests/**" = [
+    "D103",  # test fixture/helper 函数无需 docstring
     "S101",  # 测试中使用 assert 是标准做法
     "S311",  # 测试中使用伪随机种子是标准做法
     "SLF001",  # 测试中访问私有成员是常见做法

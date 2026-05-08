@@ -1,13 +1,14 @@
 """FaissIndexManager 单元测试（多用户版）。"""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 from app.memory.memory_bank.faiss_index import (
     FaissIndexManager,
-    _validate_index_count,
-    _validate_metadata_structure,
 )
 
 
@@ -57,7 +58,9 @@ async def test_multi_user_isolation(manager: FaissIndexManager) -> None:
 
 
 @pytest.mark.asyncio
-async def test_persistence_roundtrip(manager: FaissIndexManager, tmp_path: Path) -> None:
+async def test_persistence_roundtrip(
+    manager: FaissIndexManager, tmp_path: Path
+) -> None:
     """保存后重新加载应保持数据。"""
     uid = "user_1"
     emb = [0.1] * 1536
@@ -101,8 +104,8 @@ async def test_batch_update_metadata(manager: FaissIndexManager) -> None:
     """batch_update_metadata 批量更新。"""
     uid = "user_1"
     emb = [0.1] * 1536
-    fid1 = await manager.add_vector(uid, "a", emb, "2026-01-01T00:00:00")
-    fid2 = await manager.add_vector(uid, "b", emb, "2026-01-02T00:00:00")
+    await manager.add_vector(uid, "a", emb, "2026-01-01T00:00:00")
+    await manager.add_vector(uid, "b", emb, "2026-01-02T00:00:00")
     await manager.batch_update_metadata(
         uid, {0: {"memory_strength": 3}, 1: {"memory_strength": 7}}
     )

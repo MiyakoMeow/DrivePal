@@ -4,12 +4,10 @@ import strawberry
 
 from app.api.graphql_schema import (
     MemoryEventGQL,
-    MemoryModeEnum,
     ScenarioPresetGQL,
 )
 from app.api.resolvers.mutation import _preset_store, _to_gql_preset
-from app.memory.singleton import get_memory_module
-from app.memory.types import MemoryMode
+from app.memory.singleton import get_memory_store
 
 
 @strawberry.type
@@ -20,12 +18,11 @@ class Query:
     async def history(
         self,
         limit: int = 10,
-        memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK,
+        user_id: str = "default",
     ) -> list[MemoryEventGQL]:
         """查询历史记忆事件."""
-        mm = get_memory_module()
-        mode = MemoryMode(memory_mode.value)
-        events = await mm.get_history(limit=limit, mode=mode)
+        mm = get_memory_store()
+        events = await mm.get_history(user_id=user_id, limit=limit)
         return [
             MemoryEventGQL(
                 id=e.id,

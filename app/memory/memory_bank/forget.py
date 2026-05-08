@@ -9,7 +9,6 @@ import logging
 import math
 import random
 from datetime import date
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -89,11 +88,3 @@ def compute_ingestion_forget_ids(
             if fid is not None:
                 ids_to_remove.append(fid)
     return ids_to_remove
-
-
-# 兼容空桩：旧 store.py 尚引用 ForgettingCurve，后续任务 5 清理后删除此桩
-class ForgettingCurve:
-    """已删除。留存仅避免 store.py 导入中断。"""
-    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-    def maybe_forget(self, *args: Any, **kwargs: Any) -> list[int] | None:
-        return []

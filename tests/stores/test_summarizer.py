@@ -1,7 +1,10 @@
 """Summarizer 单元测试（多用户版，mock LLM）。"""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 import pytest
 
@@ -86,6 +89,4 @@ async def test_summarize_prompt_includes_user_focus(manager: FaissIndexManager):
     call_text = (
         call_args.args[0] if call_args.args else call_args.kwargs.get("prompt", "")
     )
-    assert (
-        "Which person (by name) expressed or changed each preference" in call_text
-    )
+    assert "Which person (by name) expressed or changed each preference" in call_text

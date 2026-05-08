@@ -163,11 +163,7 @@ class MemoryBankStore:
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
 
-        lines = [
-            line.strip()
-            for line in event.content.split("\n")
-            if line.strip()
-        ]
+        lines = [line.strip() for line in event.content.split("\n") if line.strip()]
         parsed_pairs: list[tuple[str | None, str]] = [
             FaissIndexManager.parse_speaker_line(ln) for ln in lines
         ]
@@ -195,28 +191,32 @@ class MemoryBankStore:
                         f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
                     )
                 all_pair_texts.append(conv_text)
-                all_pair_metas.append({
-                    "source": date_key,
-                    "speakers": sorted({s for s in speakers if s is not None}),
-                    "raw_content": conv_text,
-                    "event_type": event.type,
-                })
+                all_pair_metas.append(
+                    {
+                        "source": date_key,
+                        "speakers": sorted({s for s in speakers if s is not None}),
+                        "raw_content": conv_text,
+                        "event_type": event.type,
+                    }
+                )
         else:
             spk = event.speaker or "System"
-            conv_text = (
-                f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
-            )
+            conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
             all_pair_texts.append(conv_text)
-            all_pair_metas.append({
-                "source": date_key,
-                "speakers": [spk],
-                "raw_content": event.content,
-                "event_type": event.type,
-            })
+            all_pair_metas.append(
+                {
+                    "source": date_key,
+                    "speakers": [spk],
+                    "raw_content": event.content,
+                    "event_type": event.type,
+                }
+            )
 
         # 批量嵌入
         embeddings = await self._embedding_client.encode_batch(all_pair_texts)
-        for conv_text, emb, meta in zip(all_pair_texts, embeddings, all_pair_metas, strict=True):
+        for conv_text, emb, meta in zip(
+            all_pair_texts, embeddings, all_pair_metas, strict=True
+        ):
             fid = await self._index_manager.add_vector(
                 user_id, conv_text, emb, ts, meta
             )
@@ -224,9 +224,7 @@ class MemoryBankStore:
         await self._forget_at_ingestion(user_id)
         await self._index_manager.save(user_id)
         if self._summarizer:
-            task = asyncio.create_task(
-                self._background_summarize(user_id, date_key)
-            )
+            task = asyncio.create_task(self._background_summarize(user_id, date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
         return str(fid)
@@ -265,9 +263,7 @@ class MemoryBankStore:
         await self._forget_at_ingestion(user_id)
         await self._index_manager.save(user_id)
         if self._summarizer:
-            task = asyncio.create_task(
-                self._background_summarize(user_id, date_key)
-            )
+            task = asyncio.create_task(self._background_summarize(user_id, date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
         return InteractionResult(event_id=str(fid))
@@ -286,9 +282,7 @@ class MemoryBankStore:
             user_id, query, top_k, reference_date=ref_date
         )
         if strength_updates:
-            await self._index_manager.batch_update_metadata(
-                user_id, strength_updates
-            )
+            await self._index_manager.batch_update_metadata(user_id, strength_updates)
             await self._index_manager.save(user_id)
 
         extra = self._index_manager.get_extra(user_id)
@@ -327,9 +321,7 @@ class MemoryBankStore:
         )
         return out
 
-    async def get_history(
-        self, user_id: str, limit: int = 10
-    ) -> list[MemoryEvent]:
+    async def get_history(self, user_id: str, limit: int = 10) -> list[MemoryEvent]:
         """获取历史事件。"""
         await self._index_manager.load(user_id)
         entries = [

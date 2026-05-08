@@ -247,7 +247,10 @@ def _compute_strength_updates(
                     + 1.0
                 )
                 today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
-                updates[mi] = {"memory_strength": new_strength, "last_recall_date": today}
+                updates[mi] = {
+                    "memory_strength": new_strength,
+                    "last_recall_date": today,
+                }
     return updates
 
 
@@ -366,6 +369,7 @@ class RetrievalPipeline:
             (merged_results, strength_updates) 元组。
             strength_updates 为 {meta_idx: {"memory_strength": ..., "last_recall_date": ...}}，
             由调用方应用并持久化。
+
         """
         if top_k <= 0:
             return [], {}
@@ -385,7 +389,9 @@ class RetrievalPipeline:
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
-        strength_updates = _compute_strength_updates(merged, metadata, reference_date=reference_date)
+        strength_updates = _compute_strength_updates(
+            merged, metadata, reference_date=reference_date
+        )
         for r in merged:
             _clean_search_result(r)
         return merged, strength_updates
