@@ -222,7 +222,11 @@ class MemoryBankStore:
         event_id: str,
         feedback: FeedbackData,
     ) -> None:
-        pass
+        logger.debug(
+            "update_feedback not implemented: event_id=%s action=%s",
+            event_id,
+            feedback.action,
+        )
 
     @property
     def metrics(self) -> MemoryBankMetrics:

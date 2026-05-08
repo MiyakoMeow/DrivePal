@@ -83,7 +83,13 @@ def compute_ingestion_forget_ids(
 
     mode = _forget_mode_from_config(config)
     ids_to_remove: list[int] = []
-    rng_once = rng if rng is not None else random.Random()
+    rng_once = (
+        rng
+        if rng is not None
+        else random.Random(config.seed)
+        if config.seed is not None
+        else random.Random()
+    )
     for entry in metadata:
         if entry.get("type") == "daily_summary":
             continue

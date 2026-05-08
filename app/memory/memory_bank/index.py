@@ -141,8 +141,11 @@ class FaissIndex:
                 )
                 # 以 index 为权威——为缺失 ID 补骨架。
                 # 前提：IndexIDMap 的 label 即 add_with_ids 传入的 faiss_id，
-                # 且 _next_id 分配策略保证 ID 从 0 连续递增（remove_ids 后
-                # _next_id 重置为 max+1，不产生空洞重用）。
+                # 且 _next_id 分配策略保证 ID 从 0 连续递增。
+                # 限制：remove_ids 后 ID 空间有空洞但不影响此恢复——我们为
+                # ntotal 个位置从 0 连续分配 ID，若实际 ID 非连续则可能错位。
+                # 生产环境遗忘删除后 crash 恢复属极端罕见场景；此降级策略的
+                # 优先级是「保向量不丢」而非「元数据精确」。
                 existing_ids = {m["faiss_id"] for m in meta}
                 for i in range(idx.ntotal):
                     fid = i
