@@ -2,10 +2,13 @@
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import strawberry
 from graphql.error import GraphQLError
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
 
 from app.agents.workflow import AgentWorkflow
 from app.api.graphql_schema import (
@@ -28,14 +31,12 @@ from app.memory.schemas import FeedbackData
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.schemas.context import (
-    DriverState,
     DrivingContext,
-    GeoLocation,
     ScenarioPreset,
-    SpatioTemporalContext,
-    TrafficCondition,
 )
 from app.storage.toml_store import TOMLStore
+
+logger = logging.getLogger(__name__)
 
 
 class InternalServerError(GraphQLError):
@@ -62,7 +63,42 @@ class GraphQLEventNotFoundError(GraphQLError):
         super().__init__(f"Event not found: {event_id!r}")
 
 
-logger = logging.getLogger(__name__)
+async def _safe_memory_call[T](
+    coro: Awaitable[T],
+    context_msg: str,
+) -> T:
+    """执行记忆系统调用，异常统一转为 GraphQLError.
+
+    Args:
+        coro: 待执行的异步调用。
+        context_msg: 异常日志上下文描述。
+
+    Returns:
+        调用结果。
+
+    Raises:
+        GraphQLError: 所有记忆层异常包装后抛出。
+
+    """
+    try:
+        return await coro
+    except GraphQLError:
+        raise
+    except OSError as e:
+        msg = "Internal storage error"
+        logger.exception("%s failed", context_msg)
+        raise GraphQLError(msg) from e
+    except RuntimeError as e:
+        msg = "Internal runtime error"
+        logger.exception("%s failed", context_msg)
+        raise GraphQLError(msg) from e
+    except ValueError as e:
+        msg = f"Invalid data in {context_msg}"
+        logger.exception("%s failed", context_msg)
+        raise GraphQLError(msg) from e
+    except Exception as e:
+        logger.exception("%s failed", context_msg)
+        raise InternalServerError from e
 
 
 def _preset_store() -> TOMLStore:
@@ -71,50 +107,44 @@ def _preset_store() -> TOMLStore:
 
 def _input_to_context(input_obj: DrivingContextInput) -> DrivingContext:
     """Convert Strawberry GraphQL input to Pydantic DrivingContext."""
-    driver = None
+    raw: dict[str, Any] = {}
     if input_obj.driver:
-        driver = DriverState(
-            emotion=input_obj.driver.emotion.value,
-            workload=input_obj.driver.workload.value,
-            fatigue_level=input_obj.driver.fatigue_level,
-        )
-    spatial = None
+        raw["driver"] = {
+            "emotion": input_obj.driver.emotion.value,
+            "workload": input_obj.driver.workload.value,
+            "fatigue_level": input_obj.driver.fatigue_level,
+        }
     if input_obj.spatial:
-        cl: GeoLocation | None = None
-        if input_obj.spatial.current_location:
-            cl = GeoLocation(
-                latitude=input_obj.spatial.current_location.latitude,
-                longitude=input_obj.spatial.current_location.longitude,
-                address=input_obj.spatial.current_location.address,
-                speed_kmh=input_obj.spatial.current_location.speed_kmh,
-            )
-        dest: GeoLocation | None = None
-        if input_obj.spatial.destination:
-            dest = GeoLocation(
-                latitude=input_obj.spatial.destination.latitude,
-                longitude=input_obj.spatial.destination.longitude,
-                address=input_obj.spatial.destination.address,
-                speed_kmh=input_obj.spatial.destination.speed_kmh,
-            )
-        spatial = SpatioTemporalContext(
-            current_location=cl or GeoLocation(),
-            destination=dest,
-            eta_minutes=input_obj.spatial.eta_minutes,
-            heading=input_obj.spatial.heading,
-        )
-    traffic = None
+        spatial_raw: dict[str, Any] = {}
+        cl = input_obj.spatial.current_location
+        if cl is not None:
+            spatial_raw["current_location"] = {
+                "latitude": cl.latitude,
+                "longitude": cl.longitude,
+                "address": cl.address,
+                "speed_kmh": cl.speed_kmh,
+            }
+        dest = input_obj.spatial.destination
+        if dest is not None:
+            spatial_raw["destination"] = {
+                "latitude": dest.latitude,
+                "longitude": dest.longitude,
+                "address": dest.address,
+                "speed_kmh": dest.speed_kmh,
+            }
+        if input_obj.spatial.eta_minutes is not None:
+            spatial_raw["eta_minutes"] = input_obj.spatial.eta_minutes
+        if input_obj.spatial.heading is not None:
+            spatial_raw["heading"] = input_obj.spatial.heading
+        raw["spatial"] = spatial_raw
     if input_obj.traffic:
-        traffic = TrafficCondition(
-            congestion_level=input_obj.traffic.congestion_level.value,
-            incidents=input_obj.traffic.incidents,
-            estimated_delay_minutes=input_obj.traffic.estimated_delay_minutes,
-        )
-    return DrivingContext(
-        driver=driver or DriverState(),
-        spatial=spatial or SpatioTemporalContext(),
-        traffic=traffic or TrafficCondition(),
-        scenario=input_obj.scenario.value,
-    )
+        raw["traffic"] = {
+            "congestion_level": input_obj.traffic.congestion_level.value,
+            "incidents": input_obj.traffic.incidents,
+            "estimated_delay_minutes": input_obj.traffic.estimated_delay_minutes,
+        }
+    raw["scenario"] = input_obj.scenario.value
+    return DrivingContext.model_validate(raw)
 
 
 def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
@@ -221,59 +251,33 @@ class Mutation:
         """提交用户反馈."""
         if feedback_input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(feedback_input.action)
+
         try:
             mm = get_memory_module()
-            safe_action: Literal["accept", "ignore"]
-            safe_action = "accept" if feedback_input.action == "accept" else "ignore"
-            mode = MemoryMode(feedback_input.memory_mode.value)
-            actual_type = await mm.get_event_type(
-                feedback_input.event_id,
-                mode=mode,
-            )
-        except OSError as e:
-            logger.exception("Storage error in submitFeedback(get_event_type)")
-            msg = "Internal storage error"
-            raise GraphQLError(msg) from e
-        except RuntimeError as e:
-            logger.exception("Runtime error in submitFeedback(get_event_type)")
-            msg = "Internal runtime error"
-            raise GraphQLError(msg) from e
-        except ValueError as e:
-            logger.exception("Validation error in submitFeedback(get_event_type)")
-            msg = "Invalid feedback data"
-            raise GraphQLError(msg) from e
         except Exception as e:
-            logger.exception("submitFeedback failed (get_event_type)")
+            logger.exception("submitFeedback failed (get_memory_module)")
             raise InternalServerError from e
+        safe_action: Literal["accept", "ignore"]
+        safe_action = "accept" if feedback_input.action == "accept" else "ignore"
+        mode = MemoryMode(feedback_input.memory_mode.value)
+
+        actual_type = await _safe_memory_call(
+            mm.get_event_type(feedback_input.event_id, mode=mode),
+            "submitFeedback(get_event_type)",
+        )
 
         if actual_type is None:
             raise GraphQLEventNotFoundError(feedback_input.event_id)
 
-        try:
-            feedback = FeedbackData(
-                action=safe_action,
-                type=actual_type,
-                modified_content=feedback_input.modified_content,
-            )
-            await mm.update_feedback(feedback_input.event_id, feedback, mode=mode)
-        except GraphQLError:
-            raise
-        except OSError as e:
-            logger.exception("Storage error in submitFeedback(update_feedback)")
-            msg = "Internal storage error"
-            raise GraphQLError(msg) from e
-        except RuntimeError as e:
-            logger.exception("Runtime error in submitFeedback(update_feedback)")
-            msg = "Internal runtime error"
-            raise GraphQLError(msg) from e
-        except ValueError as e:
-            logger.exception("Validation error in submitFeedback(update_feedback)")
-            msg = "Invalid feedback data"
-            raise GraphQLError(msg) from e
-        except Exception as e:
-            logger.exception("submitFeedback failed (update_feedback)")
-            raise InternalServerError from e
-
+        feedback = FeedbackData(
+            action=safe_action,
+            type=actual_type,
+            modified_content=feedback_input.modified_content,
+        )
+        await _safe_memory_call(
+            mm.update_feedback(feedback_input.event_id, feedback, mode=mode),
+            "submitFeedback(update_feedback)",
+        )
         return FeedbackResult(status="success")
 
     @strawberry.mutation

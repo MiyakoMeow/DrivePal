@@ -2,7 +2,13 @@
 
 from typing import TYPE_CHECKING
 
-from app.agents.rules import SAFETY_RULES, Rule, apply_rules, format_constraints
+from app.agents.rules import (
+    SAFETY_RULES,
+    Rule,
+    apply_rules,
+    format_constraints,
+    postprocess_decision,
+)
 
 if TYPE_CHECKING:
     from typing import Any
@@ -180,3 +186,64 @@ def test_empty_driver_dict() -> None:
     assert result["allowed_channels"] == ["audio"]
     assert result["only_urgent"] is False
     assert result["postpone"] is False
+
+
+class TestPostprocessDecision:
+    """规则后处理测试."""
+
+    def test_postpone_overrides_decision(self) -> None:
+        """postpone=True → should_remind=false, reminder_content 置空."""
+        ctx: dict[str, Any] = {
+            "driver": {"workload": "overloaded"},
+            "scenario": "city_driving",
+        }
+        decision: dict[str, Any] = {
+            "should_remind": True,
+            "reminder_content": "提醒事项",
+            "allowed_channels": ["visual", "audio"],
+        }
+        result = postprocess_decision(decision, ctx)
+        assert result["should_remind"] is False
+        assert result["reminder_content"] == ""
+
+    def test_allowed_channels_filtered(self) -> None:
+        """allowed_channels 被安全规则过滤."""
+        ctx: dict[str, Any] = {
+            "driver": {"fatigue_level": 0.0, "workload": "low"},
+            "scenario": "highway",
+        }
+        decision: dict[str, Any] = {
+            "should_remind": True,
+            "reminder_content": "前方出口",
+            "allowed_channels": ["visual", "audio", "detailed"],
+        }
+        result = postprocess_decision(decision, ctx)
+        assert result["allowed_channels"] == ["audio"]
+
+    def test_only_urgent_blocks_non_urgent(self) -> None:
+        """only_urgent=True 且 type=general → should_remind=false."""
+        ctx: dict[str, Any] = {
+            "driver": {"fatigue_level": 0.8, "workload": "normal"},
+            "scenario": "city_driving",
+        }
+        decision: dict[str, Any] = {
+            "should_remind": True,
+            "reminder_content": "普通提醒",
+            "type": "general",
+        }
+        result = postprocess_decision(decision, ctx)
+        assert result["should_remind"] is False
+
+    def test_only_urgent_allows_urgent_types(self) -> None:
+        """only_urgent=True 但 type=warning → 正常通过."""
+        ctx: dict[str, Any] = {
+            "driver": {"fatigue_level": 0.8, "workload": "normal"},
+            "scenario": "city_driving",
+        }
+        decision: dict[str, Any] = {
+            "should_remind": True,
+            "reminder_content": "油量不足",
+            "type": "warning",
+        }
+        result = postprocess_decision(decision, ctx)
+        assert result["should_remind"] is True

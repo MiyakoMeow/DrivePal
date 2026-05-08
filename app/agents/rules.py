@@ -23,6 +23,9 @@ WORKLOAD_OVERLOADED = "overloaded"
 # 疲劳阈值，超过此值触发疲劳抑制规则
 FATIGUE_THRESHOLD = 0.7
 
+# 紧急提醒类型白名单，不受 only_urgent 过滤
+URGENT_TYPES = frozenset({"warning", "safety", "alert"})
+
 
 SAFETY_RULES: list[Rule] = [
     Rule(
@@ -111,3 +114,36 @@ def format_constraints(constraints: dict[str, Any]) -> str:
     lines.append("")
     lines.append("请在以上约束范围内做出决策。")
     return "\n".join(lines)
+
+
+def postprocess_decision(decision: dict, driving_context: dict) -> dict:
+    """在 LLM 决策后强制应用安全规则，不可绕过。
+
+    输入 LLM 输出的 decision dict + driving_context，
+    输出安全规则强制覆盖后的 decision。
+    规则为硬约束——LLM 无法通过修改 prompt 绕过。
+    """
+    result = dict(decision)
+    constraints = apply_rules(driving_context)
+
+    # 硬约束 1：postpone → 禁止发送
+    if constraints.get("postpone", False):
+        result["should_remind"] = False
+        result["reminder_content"] = ""
+
+    # 硬约束 2：allowed_channels 过滤
+    allowed = constraints.get("allowed_channels")
+    if allowed is not None:
+        channels = result.get("allowed_channels", list(allowed))
+        if isinstance(channels, list):
+            filtered = [c for c in channels if c in allowed]
+            result["allowed_channels"] = filtered or allowed
+
+    # 硬约束 3：only_urgent → 非紧急类型禁止
+    if constraints.get("only_urgent", False):
+        event_type = (result.get("type", "general") or "").lower()
+        if event_type not in URGENT_TYPES:
+            result["should_remind"] = False
+            result["reminder_content"] = ""
+
+    return result

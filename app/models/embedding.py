@@ -29,8 +29,8 @@ _RETRYABLE_EXCEPTIONS = (
 )
 
 
-def _finalize_background_task(task: asyncio.Task[None]) -> None:
-    """回收后台任务并消费异常，避免未检索异常告警."""
+def _finalize_background_task(task: asyncio.Task[object]) -> None:
+    """回收后台关闭 task 并消费异常，避免未检索异常告警。"""
     _background_tasks.discard(task)
     with contextlib.suppress(asyncio.CancelledError):
         exc = task.exception()
@@ -58,25 +58,23 @@ def get_cached_embedding_model() -> EmbeddingModel:
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
-async def _aclose_models(models: list[EmbeddingModel]) -> None:
-    """关闭指定模型的客户端."""
-    for model in models:
-        await model.aclose()
-
-
 def clear_embedding_model_cache() -> None:
-    """关闭所有缓存的客户端并清除缓存."""
-    if _EMBEDDING_MODEL_CACHE:
-        models = list(_EMBEDDING_MODEL_CACHE.values())
-        _EMBEDDING_MODEL_CACHE.clear()
+    """关闭所有缓存的客户端并清除缓存。"""
+    if not _EMBEDDING_MODEL_CACHE:
+        return
+    models = list(_EMBEDDING_MODEL_CACHE.values())
+    _EMBEDDING_MODEL_CACHE.clear()
+    for model in models:
         try:
             loop = asyncio.get_running_loop()
-            task = loop.create_task(_aclose_models(models))
+        except RuntimeError:
+            # 无运行中循环，用 asyncio.run 同步关闭
+            asyncio.run(model.aclose())
+        else:
+            # 有运行中循环，创建 task 后台关闭，task 引用入 set 防 GC
+            task = loop.create_task(model.aclose())
             _background_tasks.add(task)
             task.add_done_callback(_finalize_background_task)
-        except RuntimeError:
-            with contextlib.suppress(RuntimeError):
-                asyncio.run(_aclose_models(models))
 
 
 class EmbeddingModel:

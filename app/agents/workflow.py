@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from app.agents.prompts import SYSTEM_PROMPTS
-from app.agents.rules import apply_rules, format_constraints
+from app.agents.rules import apply_rules, format_constraints, postprocess_decision
 from app.agents.state import AgentState, WorkflowStages
 from app.memory.memory import MemoryModule
 from app.memory.types import MemoryMode
@@ -51,6 +51,24 @@ class LLMJsonResponse(BaseModel):
         return cls(raw=text, **parsed)
 
 
+class ReminderContent(BaseModel):
+    """提醒内容校验模型。"""
+
+    text: str = ""
+    content: str = ""
+
+    @classmethod
+    def from_decision(cls, decision: dict) -> str:
+        """从 decision dict 中提取提醒内容，多处 key 兜底。"""
+        for key in ("reminder_content", "remind_content", "content"):
+            val = decision.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+            if isinstance(val, dict):
+                return val.get("text") or val.get("content") or "无提醒内容"
+        return "无提醒内容"
+
+
 class AgentWorkflow:
     """多Agent协作工作流."""
 
@@ -81,7 +99,10 @@ class AgentWorkflow:
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
             raise ChatModelUnavailableError
-        result = await self.memory_module.chat_model.generate(user_prompt)
+        result = await self.memory_module.chat_model.generate(
+            user_prompt,
+            json_mode=True,
+        )
         return LLMJsonResponse.from_llm(result)
 
     async def _context_node(self, state: AgentState) -> dict:
@@ -199,19 +220,31 @@ class AgentWorkflow:
 
     @staticmethod
     def _extract_content(decision: dict) -> str:
-        """从决策 dict 中提取提醒内容."""
-        remind = decision.get("reminder_content") or decision.get("remind_content")
-        if isinstance(remind, str):
-            return remind
-        if isinstance(remind, dict):
-            return remind.get("text") or remind.get("content") or "无提醒内容"
-        return decision.get("content") or "无提醒内容"
+        """从决策 dict 中提取提醒内容。"""
+        return ReminderContent.from_decision(decision)
 
     async def _execution_node(self, state: AgentState) -> dict:
         decision = state.get("decision") or {}
         stages = state.get("stages")
 
-        if decision.get("postpone"):
+        # 规则硬约束：LLM 决策后强制覆盖，不可绕过
+        driving_ctx = state.get("driving_context")
+        if driving_ctx:
+            decision = postprocess_decision(decision, driving_ctx)
+
+        # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
+        if not decision.get("should_remind", True):
+            result = "提醒已取消：安全规则禁止发送"
+            if stages is not None:
+                stages.execution = {
+                    "content": None,
+                    "event_id": None,
+                    "result": result,
+                }
+            return {"result": result, "event_id": None}
+
+        postpone = decision.get("postpone", False)
+        if postpone:
             result = "提醒已延后：当前驾驶状态不适合发送提醒"
             if stages is not None:
                 stages.execution = {
