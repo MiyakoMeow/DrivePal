@@ -14,6 +14,8 @@ from app.config import DATA_DIR
 from app.schemas.context import DrivingContext
 from app.storage.toml_store import TOMLStore
 
+_PRESETS_FILENAME = "scenario_presets.toml"
+
 
 def strawberry_to_plain(obj: object) -> object:
     """递归将 Strawberry 类型转普通 Python 对象（Enum→.value，dataclass→dict）。
@@ -21,7 +23,7 @@ def strawberry_to_plain(obj: object) -> object:
     跳过 None 值字段，避免 Pydantic 对非 Optional 字段收到 None 引发验证错误。
     结果可直接喂给 Pydantic model_validate。
     """
-    if obj is None or isinstance(obj, (str, bytes, int, float, bool)):
+    if obj is None or isinstance(obj, (str, int, float, bool)):
         return obj
     if isinstance(obj, Enum):
         return obj.value
@@ -52,7 +54,7 @@ def dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
 
 def preset_store() -> TOMLStore:
     """获取场景预设存储实例。"""
-    return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
+    return TOMLStore(DATA_DIR, Path(_PRESETS_FILENAME), list)
 
 
 def to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
@@ -61,7 +63,8 @@ def to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
     safe = {k: v for k, v in ctx_raw.items() if k in DrivingContext.model_fields}
     sp = safe.get("spatial", {})
     if isinstance(sp, dict):
-        # TOML 存储将 None 转空字符串，读取时恢复
+        # TOML 不支持 None，TOMLStore._clean_for_toml 已将 None 序列化为空字符串，
+        # 此处反向还原，恢复 Pydantic Optional 字段的 None 语义。
         for key in ("destination", "eta_minutes", "heading"):
             if sp.get(key) == "":
                 sp[key] = None

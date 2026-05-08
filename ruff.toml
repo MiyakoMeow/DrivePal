@@ -31,7 +31,7 @@ exclude = [".agents/**"]
     "C901",  # submit_feedback 含多个异常处理器，各分支简单（McCabe 误报）
 ]
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
-"app/storage/init_data.py" = ["TC003"]  # Path 同时用于类型注解和运行时的 /, mkdir 操作，ruff 误判
+"app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 data_dir.mkdir()/ 操作，ruff 误判
 "app/memory/embedding_client.py" = [
     "S311",  # 退避 jitter 使用伪随机种子，非安全场景
 ]
