@@ -49,14 +49,20 @@ def get_cached_embedding_model() -> EmbeddingModel:
 
 
 def clear_embedding_model_cache() -> None:
-    """关闭所有缓存的客户端并清除缓存。有运行中循环时不关闭（GC 释放）。"""
+    """关闭所有缓存的客户端并清除缓存。"""
     if not _EMBEDDING_MODEL_CACHE:
         return
     models = list(_EMBEDDING_MODEL_CACHE.values())
     _EMBEDDING_MODEL_CACHE.clear()
     for model in models:
-        with contextlib.suppress(RuntimeError):
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # 无运行中循环，用 asyncio.run 同步关闭
             asyncio.run(model.aclose())
+        else:
+            # 有运行中循环，创建 task 在后台关闭
+            _ = loop.create_task(model.aclose())
 
 
 class EmbeddingModel:

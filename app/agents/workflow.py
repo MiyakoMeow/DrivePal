@@ -65,7 +65,7 @@ class ReminderContent(BaseModel):
             if isinstance(val, str) and val.strip():
                 return val.strip()
             if isinstance(val, dict):
-                return val.get("text") or val.get("content") or ""
+                return val.get("text") or val.get("content") or "无提醒内容"
         return "无提醒内容"
 
 
@@ -231,6 +231,17 @@ class AgentWorkflow:
         driving_ctx = state.get("driving_context")
         if driving_ctx:
             decision = postprocess_decision(decision, driving_ctx)
+
+        # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
+        if not decision.get("should_remind", True):
+            result = "提醒已取消：安全规则禁止发送"
+            if stages is not None:
+                stages.execution = {
+                    "content": None,
+                    "event_id": None,
+                    "result": result,
+                }
+            return {"result": result, "event_id": None}
 
         postpone = decision.get("postpone", False)
         if postpone:

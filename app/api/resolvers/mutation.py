@@ -252,7 +252,11 @@ class Mutation:
         if feedback_input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(feedback_input.action)
 
-        mm = get_memory_module()
+        try:
+            mm = get_memory_module()
+        except Exception as e:
+            logger.exception("submitFeedback failed (get_memory_module)")
+            raise InternalServerError from e
         safe_action: Literal["accept", "ignore"]
         safe_action = "accept" if feedback_input.action == "accept" else "ignore"
         mode = MemoryMode(feedback_input.memory_mode.value)
