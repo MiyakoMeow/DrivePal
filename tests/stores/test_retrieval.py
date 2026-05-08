@@ -258,3 +258,23 @@ def test_adaptive_chunk_many_entries_uses_p90():
     finally:
         if popped is not None:
             os.environ["MEMORYBANK_CHUNK_SIZE"] = popped
+
+
+def test_speaker_filter_negative_score_penalty():
+    """负分时惩罚应加重（绝对值增大），非缩小。"""
+    pipe = RetrievalPipeline.__new__(RetrievalPipeline)
+    results = [
+        {
+            "speakers": ["Alice"],
+            "score": 0.9,
+            "text": "relevant",
+        },
+        {
+            "speakers": ["Bob"],
+            "score": -0.5,
+            "text": "irrelevant",
+        },
+    ]
+    filtered = pipe._apply_speaker_filter(results, "Alice")
+    assert filtered[0]["score"] == 0.9
+    assert filtered[1]["score"] == -0.625

@@ -437,5 +437,6 @@ class RetrievalPipeline:
         for r in results:
             rs = {s.lower() for s in (r.get("speakers") or [])}
             if not rs.intersection(speakers_in_query):
-                r["score"] = r.get("score", 0.0) * 0.75
+                score = r.get("score", 0.0)
+                r["score"] = score * 0.75 if score >= 0 else score * 1.25
         return results
