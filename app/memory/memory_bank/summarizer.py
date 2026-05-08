@@ -32,6 +32,7 @@ class Summarizer:
 
         Raises:
             LLMCallFailed: LLM API 调用失败（调用方决定降级）。
+
         """
         meta = self._index.get_metadata()
         if any(m.get("source") == f"summary_{date_key}" for m in meta):
@@ -59,6 +60,7 @@ class Summarizer:
 
         Raises:
             LLMCallFailed: LLM API 调用失败。
+
         """
         extra = self._index.get_extra()
         if extra.get("overall_summary"):
@@ -92,6 +94,7 @@ class Summarizer:
 
         Raises:
             LLMCallFailed: LLM API 调用失败。
+
         """
         extra = self._index.get_extra()
         existing = extra.setdefault("daily_personalities", {})
@@ -124,6 +127,7 @@ class Summarizer:
 
         Raises:
             LLMCallFailed: LLM API 调用失败。
+
         """
         extra = self._index.get_extra()
         if extra.get("overall_personality"):

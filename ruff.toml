@@ -26,6 +26,11 @@ exclude = [".agents/**"]
 "app/memory/memory_bank/llm.py" = [
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
     "RET503",  # 循环内所有路径均已返回，末尾 return None 为防御性保留
+    "D107",  # __init__ 由类级 docstring 阐明语义
+    "TRY301",  # 抛异常处已在同一 try/except 中，提取无意义
+    "TRY003",  # 异常消息内联清晰
+    "EM101",  # 消息内联清晰
+    "EM102",  # f-string 内联清晰
 ]
 "app/api/resolvers/mutation.py" = [
     "C901",  # submit_feedback 含多个异常处理器，各分支简单（McCabe 误报）
@@ -40,6 +45,8 @@ exclude = [".agents/**"]
     "PLR0913",  # __init__ 参数≥6合理（含多个可选依赖注入）
     "S311",  # 概率遗忘使用伪随机种子，非安全场景
     "D102",  # Facade 委托方法由 Protocol 定义语义，docstring 重复
+    "D107",  # __init__ 由类级 docstring 阐明语义
+    "PLC0415",  # format_search_results 内 defaultdict 导入位置合理（延迟导入避免循环）
 ]
 "app/memory/memory_bank/index_reader.py" = [
     "D102",  # Protocol 桩方法由类级 docstring 阐明语义
@@ -48,6 +55,26 @@ exclude = [".agents/**"]
     "PLR0913",  # __init__ 参数≥6合理（含多个依赖注入）
     "D107",  # __init__ 由类级 docstring 阐明语义
     "BLE001",  # 后台摘要失败不阻塞主流程，宽捕获 Exception 合理
+]
+"app/memory/exceptions.py" = [
+    "N818",  # 异常命名不强制 Error 后缀（如 LLMCallFailed 语义更精确）
+    "D107",  # __init__ 由类级 docstring 阐明语义
+]
+"app/memory/memory.py" = [
+    "D107",  # __init__ 由类级 docstring 阐明语义
+    "D102",  # Facade 委托方法由类级 docstring 阐明语义
+]
+"app/memory/memory_bank/index.py" = [
+    "C901",  # load() 含三级降级分支，复杂度合理
+    "PLR0915",  # 降级恢复逻辑多但平铺直叙
+]
+"app/memory/memory_bank/observability.py" = [
+    "D101",  # 数据类由字段级 docstring 阐明语义
+    "D102",  # snapshot/reset 语义自明
+]
+"app/memory/memory_bank/summarizer.py" = [
+    "D107",  # __init__ 由类级 docstring 阐明语义
+    "TRY300",  # try/except 内 return 合理（哨兵异常处理）
 ]
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法

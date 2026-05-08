@@ -89,6 +89,7 @@ class FaissIndex:
 
         Returns:
             LoadResult 含 ok / warnings / recovery_actions。
+
         """
         if self._index is not None:
             return LoadResult(ok=True)
@@ -239,8 +240,7 @@ class FaissIndex:
             ts = m.get("timestamp", "")
             if len(ts) >= _TIMESTAMP_LENGTH:
                 candidate = ts[:_TIMESTAMP_LENGTH]
-                if candidate > max_ts:
-                    max_ts = candidate
+                max_ts = max(max_ts, candidate)
         if not max_ts:
             return datetime.now(UTC).strftime("%Y-%m-%d")
         try:

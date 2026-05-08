@@ -64,6 +64,7 @@ class LlmClient:
             prompt: 实际提示词。
             system_prompt: system 消息内容（调用方从 config 获取）。
             **kwargs: 透传给 ChatModel.generate() 的额外参数（如 temperature）。
+
         """
         messages = [
             {"role": "system", "content": system_prompt},
