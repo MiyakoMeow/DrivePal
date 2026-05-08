@@ -81,13 +81,17 @@ class MemoryModule:
         self._stores.clear()
 ```
 
-### MemoryStore Protocol 不变
+### MemoryStore Protocol：追加 `close()` 方法
 
 ```python
 class MemoryStore(Protocol):
     async def write(self, event: MemoryEvent) -> str: ...
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]: ...
-    #                                   ↑ 无 user_id 参数
+    async def get_history(self, limit: int = 10) -> list[MemoryEvent]: ...
+    async def get_event_type(self, event_id: str) -> str | None: ...
+    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None: ...
+    async def write_interaction(self, query: str, response: str, event_type: str = "reminder", **kwargs: object) -> InteractionResult: ...
+    async def close(self) -> None: ...   # 新增——优雅关闭（释放连接、取消后台任务、持久化）
 ```
 
 ### 权衡
@@ -140,7 +144,7 @@ class IndexIntegrityError(FatalError):
 
 | 组件 | 当前 | 改为 |
 |------|------|------|
-| `LlmClient.call()` | 返回 `None` 表示失败 | 抛 `LLMCallFailed`（瞬态失败）或抛 `SummarizationEmpty`（LLM 调用成功但内容为空——非错误，哨兵异常） |
+| `LlmClient.call()` | 返回 `str \| None`（`None`=失败，`""`=空结果） | 返回 `str`（非空）。抛 `LLMCallFailed`（API 失败）或 `SummarizationEmpty`（空内容哨兵异常）。调用方统一 try/except 决策 |
 | `Summarizer` 四个方法 | 返回 `None`，内部吞异常 | 调用 `LlmClient.call()`。捕获 `SummarizationEmpty` → 返回 `None`（正常：无摘要生成）；`LLMCallFailed` → 上抛；其余异常 → 上抛 |
 | `_background_summarize` | `except Exception: logger.warning` 静默吞 | 捕获 `TransientError` → 日志告警；`FatalError` → 上抛被 `on_task_done` 记录 |
 | `forget.py` | `except ValueError, TypeError: continue` 静默跳过 | 损坏条目记录 warning + 跳过；其余异常上抛 |
@@ -223,7 +227,13 @@ class MemoryBankConfig(BaseSettings):
 
 ```python
 # llm.py LlmClient
-async def call(self, prompt: str, *, system_prompt: str) -> str | None:
+async def call(self, prompt: str, *, system_prompt: str) -> str:
+    """调用 ChatModel.generate()，成功返回非空 str。
+    
+    Raises:
+        LLMCallFailed: API 调用失败（网络/超时/限速/5xx），重试耗尽
+        SummarizationEmpty: LLM 返回空内容——非错误，哨兵异常
+    """
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": self._config.llm_anchor_user},
@@ -278,11 +288,12 @@ class FaissIndex:
 1. **metadata 损坏、index 正常**：
    - 遍历 `n = index.ntotal`，生成 items：`{"faiss_id": i, "text": "", "corrupted": True, "memory_strength": 1, "timestamp": ""}`
    - FAISS 内积检索仍可工作（score 有效），但 `text` 为空
-   - 调用方通过 `corrupted=True` 识别，跳过无文本条目
+   - `corrupted` 字段仅存在于 `FaissIndex._metadata` 内部 dict，不进入 `MemoryEvent` / `SearchResult` Pydantic 模型——由 `MemoryBankStore.search()` 在构建 `SearchResult` 前过滤
 
 2. **count mismatch**：
    - 以 index 为权威（保向量不丢），为缺失 ID 补骨架 entry
    - 多余的 metadata（有 entry 无向量）保留但标记 `orphaned=True`
+   - `orphaned` 同 corrupted：仅内部标记，不影响外部 schema
 
 3. **index.faiss 不可读**：
    - `shutil.copy(index_path, index_path.with_suffix(".faiss.bak"))`
@@ -310,12 +321,11 @@ class FaissIndex:
 | `app/memory/memory_bank/lifecycle.py` | 改 | 异常抛而非吞 |
 | `app/memory/memory_bank/summarizer.py` | 改 | 异常抛而非返回 None |
 | `app/memory/memory_bank/store.py` | 改 | 构造时收 user_id，消费 LoadResult |
-| `app/memory/memory_bank/bg_tasks.py` | 不变 | （BackgroundTaskRunner 已足够） |
 | `app/memory/memory_bank/retrieval.py` | 不变 | embedding 异常由下层自然上浮，此层不吞不包 |
 | `app/memory/memory_bank/index_reader.py` | 不变 | |
 | `app/memory/memory_bank/bg_tasks.py` | 不变 | `_on_task_done` 已记录异常，无需改 |
-| `app/memory/interfaces.py` | 不变 | |
-| `app/memory/schemas.py` | 不变 | |
+| `app/memory/interfaces.py` | 改 | 追加 `close()` 方法至 Protocol |
+| `app/memory/schemas.py` | 不变 | `corrupted`/`orphaned` 仅 metadata 内部字段，不入 Pydantic |
 | `app/memory/embedding_client.py` | 不变 | |
 
 ## 未解决问题
