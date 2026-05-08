@@ -7,7 +7,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints
@@ -31,6 +31,8 @@ class ChatModelUnavailableError(RuntimeError):
 class LLMJsonResponse(BaseModel):
     """LLM JSON 输出包装，含校验与兜底."""
 
+    model_config = ConfigDict(extra="allow")
+
     raw: str
 
     @classmethod
@@ -45,9 +47,7 @@ class LLMJsonResponse(BaseModel):
                 parsed = data
         except json.JSONDecodeError as e:
             logger.warning("LLM JSON parse failed: %s", e)
-        return cls(
-            raw=text, **{k: v for k, v in parsed.items() if k in cls.model_fields}
-        )
+        return cls(raw=text, **parsed)
 
 
 class AgentWorkflow:
