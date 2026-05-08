@@ -84,9 +84,19 @@ exclude = [".agents/**"]
     "RUF015",  # 测试中使用列表切片是常见做法
     "FURB171",  # 测试中成员测试是常见做法
     "RUF043",  # pytest.raises match参数中正则模式常见
+    "RUF059",  # 测试中未使用解包变量常见
     "ANN",  # 测试方法无需类型注解
+    "ARG001",  # 测试 fixture 参数未直接使用（由 pytest 注入）
     "ARG002",  # 测试 fake 中未用参数（为满足基类签名而保留）
     "ASYNC240",  # 测试中同步写临时文件比 to_thread 更简洁
+    "D101",  # 测试类无需 docstring
+    "D102",  # 测试方法无需 docstring
+    "D103",  # 测试函数无需 docstring
+    "D403",  # 测试 docstring 首词大写非强制
+    "ERA001",  # 测试中公式注释合理
+    "F401",  # 测试 fixtures 中导入为 pytest 发现机制需要
+    "PERF401",  # 测试中 for-loop 构建 fixture 数据可读性优先
+    "PLC0415",  # 测试中局部导入合理
     "PLR2004",  # 测试中魔法数字（期望值）是标准做法
 ]
 
