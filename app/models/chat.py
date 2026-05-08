@@ -184,12 +184,12 @@ class ChatModel:
         prompt: str = "",
         system_prompt: str | None = None,
         messages: list[ChatCompletionMessageParam] | None = None,
-        **kwargs: object,
+        *,
+        json_mode: bool = False,
     ) -> AsyncIterator[str]:
-        """流式生成回复."""
+        """流式生成回复，指定 json_mode=True 以使用 JSON mode。"""
         if messages is None:
             messages = self._build_messages(prompt, system_prompt)
-        json_mode = kwargs.pop("json_mode", False)
 
         errors = []
         for provider in self.providers:

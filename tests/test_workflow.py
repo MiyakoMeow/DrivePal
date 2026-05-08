@@ -1,6 +1,6 @@
 """工作流工具函数测试."""
 
-from app.agents.workflow import _extract_reminder_content
+from app.agents.workflow import _extract_reminder_content, _is_relevant_strategy
 
 
 def test_extract_reminder_content_from_string() -> None:
@@ -39,3 +39,29 @@ def test_extract_reminder_content_remind_key() -> None:
     """remind_content key 也生效."""
     result = _extract_reminder_content({"remind_content": "remind me"})
     assert result == "remind me"
+
+
+def test_is_relevant_strategy_filters_empty_dict() -> None:
+    """空 dict 视为不相关."""
+    assert _is_relevant_strategy({}) is False
+
+
+def test_is_relevant_strategy_filters_empty_list() -> None:
+    """空 list 视为不相关."""
+    assert _is_relevant_strategy([]) is False
+
+
+def test_is_relevant_strategy_keeps_non_empty() -> None:
+    """非空值视为相关."""
+    assert _is_relevant_strategy({"key": "val"}) is True
+    assert _is_relevant_strategy([1, 2, 3]) is True
+    assert _is_relevant_strategy("string") is True
+    assert _is_relevant_strategy(42) is True
+
+
+def test_is_relevant_strategy_keeps_falsy_non_container() -> None:
+    """非容器 falsy 值（None/0/False）视为相关（非空容器过滤仅针对 list/dict）。"""
+    assert _is_relevant_strategy(None) is True
+    assert _is_relevant_strategy(0) is True
+    val = False
+    assert _is_relevant_strategy(val) is True

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from graphql.error import GraphQLError
 
+from app.agents.workflow import ChatModelUnavailableError
 from app.api.graphql_schema import (
     DriverStateGQL,
     DrivingContextGQL,
@@ -48,7 +49,10 @@ class InternalServerError(GraphQLError):
 
     def __init__(self) -> None:
         """初始化内部服务器错误。"""
-        super().__init__("Internal server error")
+        super().__init__(
+            "Internal server error",
+            extensions={"code": "INTERNAL_SERVER_ERROR"},
+        )
 
 
 class GraphQLInvalidActionError(GraphQLError):
@@ -75,8 +79,9 @@ async def _safe_memory_call[T](
         return await coro
     except GraphQLError:
         raise
-    # 注意：RuntimeError 子类 ChatModelUnavailableError 不流经此处 ——
-    # 由 mutation.py process_query 显式捕获并转为 GraphQLError(extensions=...)
+    except ChatModelUnavailableError as e:
+        msg = "AI 模型未就绪"
+        raise GraphQLError(msg, extensions={"code": "CHAT_MODEL_UNAVAILABLE"}) from e
     except OSError as e:
         msg = "Internal storage error"
         logger.exception("%s failed", context_msg)

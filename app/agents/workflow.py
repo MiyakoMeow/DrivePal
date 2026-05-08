@@ -107,9 +107,10 @@ class AgentWorkflow:
         """将搜索结果命中转为可序列化 dict，含防御性类型检查。"""
         if event_hit is None:
             return {}
-        ed = cast("dict[str, Any]", getattr(event_hit, "event", event_hit))
+        ed = getattr(event_hit, "event", event_hit)
         if not isinstance(ed, dict):
             return {}
+        ed = cast("dict[str, Any]", ed)
         me = MemoryEvent(
             content=ed.get("raw_content") or ed.get("content", ""),
             type=ed.get("event_type", "reminder"),
