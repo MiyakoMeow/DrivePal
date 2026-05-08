@@ -1,7 +1,12 @@
 """轻量规则引擎 — 安全约束规则定义与合并."""
 
+import logging
+import math
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,8 +25,27 @@ class Rule:
 SCENARIO_HIGHWAY = "highway"
 SCENARIO_PARKED = "parked"
 WORKLOAD_OVERLOADED = "overloaded"
-# 疲劳阈值，超过此值触发疲劳抑制规则
-FATIGUE_THRESHOLD = 0.7
+
+
+# 疲劳阈值，超过此值触发疲劳抑制规则，通过环境变量 FATIGUE_THRESHOLD 配置
+# 设为函数调用而非模块常量，支持测试中 monkeypatch.setenv 切换
+def _get_fatigue_threshold() -> float:
+    raw = os.environ.get("FATIGUE_THRESHOLD", "0.7")
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("Invalid FATIGUE_THRESHOLD=%r, using default 0.7", raw)
+        return 0.7
+    if not math.isfinite(value):
+        logger.warning("FATIGUE_THRESHOLD=%r is NaN/Inf, using default 0.7", raw)
+        return 0.7
+    if not 0.0 <= value <= 1.0:
+        logger.warning(
+            "FATIGUE_THRESHOLD=%r out of range [0,1], using default 0.7", raw
+        )
+        return 0.7
+    return value
+
 
 # 紧急提醒类型白名单，不受 only_urgent 过滤
 URGENT_TYPES = frozenset({"warning", "safety", "alert"})
@@ -37,7 +61,7 @@ SAFETY_RULES: list[Rule] = [
     Rule(
         name="fatigue_suppress",
         condition=lambda ctx: (
-            ctx.get("driver", {}).get("fatigue_level", 0) > FATIGUE_THRESHOLD
+            ctx.get("driver", {}).get("fatigue_level", 0) > _get_fatigue_threshold()
         ),
         constraint={"only_urgent": True, "allowed_channels": ["audio"]},
         priority=20,

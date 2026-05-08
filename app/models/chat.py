@@ -195,10 +195,16 @@ class ChatModel:
         prompts: list[str],
         system_prompt: str | None = None,
     ) -> list[str]:
-        """并行批量生成回复."""
-        return list(
-            await asyncio.gather(*[self.generate(p, system_prompt) for p in prompts])
-        )
+        """并行批量生成回复，通过 semaphore 限制并发保护 provider。"""
+        if not prompts:
+            return []
+        sem = asyncio.Semaphore(8)
+
+        async def _bounded(p: str) -> str:
+            async with sem:
+                return await self.generate(p, system_prompt)
+
+        return list(await asyncio.gather(*[_bounded(p) for p in prompts]))
 
 
 def get_chat_model(temperature: float | None = None) -> ChatModel:

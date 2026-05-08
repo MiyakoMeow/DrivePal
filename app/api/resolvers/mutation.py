@@ -1,6 +1,8 @@
 """Mutation 解析器."""
 
+import dataclasses
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
@@ -105,46 +107,34 @@ def _preset_store() -> TOMLStore:
     return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
 
 
+def _strawberry_to_plain(obj: object) -> object:
+    """递归将 Strawberry 类型转普通 Python 对象（Enum→.value，dataclass→dict）。
+
+    跳过 None 值字段，避免 Pydantic 对非 Optional 字段收到 None 引发验证错误。
+    结果可直接喂给 Pydantic model_validate。
+    """
+    if obj is None or isinstance(obj, (str, bytes, int, float, bool)):
+        return obj
+    if isinstance(obj, Enum):
+        return obj.value
+    if isinstance(obj, list):
+        return [_strawberry_to_plain(item) for item in obj]
+    if dataclasses.is_dataclass(obj):
+        return {
+            f.name: _strawberry_to_plain(getattr(obj, f.name))
+            for f in dataclasses.fields(obj)
+            if getattr(obj, f.name) is not None
+        }
+    return obj
+
+
 def _input_to_context(input_obj: DrivingContextInput) -> DrivingContext:
-    """Convert Strawberry GraphQL input to Pydantic DrivingContext."""
-    raw: dict[str, Any] = {}
-    if input_obj.driver:
-        raw["driver"] = {
-            "emotion": input_obj.driver.emotion.value,
-            "workload": input_obj.driver.workload.value,
-            "fatigue_level": input_obj.driver.fatigue_level,
-        }
-    if input_obj.spatial:
-        spatial_raw: dict[str, Any] = {}
-        cl = input_obj.spatial.current_location
-        if cl is not None:
-            spatial_raw["current_location"] = {
-                "latitude": cl.latitude,
-                "longitude": cl.longitude,
-                "address": cl.address,
-                "speed_kmh": cl.speed_kmh,
-            }
-        dest = input_obj.spatial.destination
-        if dest is not None:
-            spatial_raw["destination"] = {
-                "latitude": dest.latitude,
-                "longitude": dest.longitude,
-                "address": dest.address,
-                "speed_kmh": dest.speed_kmh,
-            }
-        if input_obj.spatial.eta_minutes is not None:
-            spatial_raw["eta_minutes"] = input_obj.spatial.eta_minutes
-        if input_obj.spatial.heading is not None:
-            spatial_raw["heading"] = input_obj.spatial.heading
-        raw["spatial"] = spatial_raw
-    if input_obj.traffic:
-        raw["traffic"] = {
-            "congestion_level": input_obj.traffic.congestion_level.value,
-            "incidents": input_obj.traffic.incidents,
-            "estimated_delay_minutes": input_obj.traffic.estimated_delay_minutes,
-        }
-    raw["scenario"] = input_obj.scenario.value
-    return DrivingContext.model_validate(raw)
+    """将 Strawberry GraphQL input 转为 Pydantic DrivingContext。"""
+    data = cast("dict[str, Any]", _strawberry_to_plain(input_obj))
+    # None 值不传入，让 Pydantic 使用字段默认值
+    return DrivingContext.model_validate(
+        {k: v for k, v in data.items() if v is not None},
+    )
 
 
 def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
@@ -189,6 +179,7 @@ def _to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
     safe = {k: v for k, v in ctx_raw.items() if k in DrivingContext.model_fields}
     sp = safe.get("spatial", {})
     if isinstance(sp, dict):
+        # TOML 存储将 None 转空字符串，读取时恢复
         for key in ("destination", "eta_minutes", "heading"):
             if sp.get(key) == "":
                 sp[key] = None

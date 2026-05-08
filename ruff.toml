@@ -30,6 +30,7 @@ exclude = [".agents/**"]
 "app/api/resolvers/mutation.py" = [
     "C901",  # submit_feedback 含多个异常处理器，各分支简单（McCabe 误报）
 ]
+"app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
 "app/memory/embedding_client.py" = [
     "S311",  # 退避 jitter 使用伪随机种子，非安全场景
 ]
