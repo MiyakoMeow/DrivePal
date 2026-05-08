@@ -114,6 +114,7 @@ class TestLLMSettingsLoad:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """验证无 LLM 配置时抛出 RuntimeError."""
+        LLMSettings.load.cache_clear()
         monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
         with pytest.raises(RuntimeError, match="No LLM configuration found"):
             LLMSettings.load()
