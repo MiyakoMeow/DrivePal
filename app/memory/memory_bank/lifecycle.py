@@ -79,7 +79,11 @@ class MemoryLifecycle:
             await self._index.remove_vectors(ids)
 
     async def write(self, event: MemoryEvent) -> str:
-        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。"""
+        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
+
+        多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
+
+        """
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
@@ -189,7 +193,7 @@ class MemoryLifecycle:
 
     async def _trigger_background_summarize(self, date_key: str) -> None:
         """带 inflight 防护的后台摘要触发。同日期不重复提交。"""
-        if not self._summarizer or not self._embedding_client:
+        if not self._summarizer:
             return
         async with self._inflight_lock:
             if date_key in self._inflight_summaries:
@@ -199,7 +203,7 @@ class MemoryLifecycle:
 
     async def _background_summarize(self, date_key: str) -> None:
         try:
-            if not self._summarizer or not self._embedding_client:
+            if not self._summarizer:
                 return
             text = await self._summarizer.get_daily_summary(date_key)
             if text:
@@ -216,7 +220,7 @@ class MemoryLifecycle:
             await self._summarizer.get_overall_personality()
             await self._index.save()
         except Exception:
-            logger.exception("background summarization failed")
+            logger.warning("background summarization failed", exc_info=True)
         finally:
             async with self._inflight_lock:
                 self._inflight_summaries.discard(date_key)

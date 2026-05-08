@@ -93,7 +93,7 @@ class MemoryBankStore:
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """搜索记忆."""
         await self._index.load()
-        if self._index.total == 0 or not self._retrieval:
+        if self._index.total == 0:
             return []
         if self._config.enable_forgetting and await self._lifecycle.purge_forgotten(
             self._index.get_metadata()

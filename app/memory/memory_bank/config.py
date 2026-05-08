@@ -1,5 +1,7 @@
 """MemoryBank 集中配置模型。"""
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +12,7 @@ class MemoryBankConfig(BaseSettings):
 
     # ── 遗忘 ──
     enable_forgetting: bool = False
-    forget_mode: str = "deterministic"  # "deterministic" | "probabilistic"
+    forget_mode: Literal["deterministic", "probabilistic"] = "deterministic"
     soft_forget_threshold: float = 0.15
     forget_interval_seconds: int = 300
     forgetting_time_scale: float = 1.0

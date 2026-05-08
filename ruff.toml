@@ -47,6 +47,7 @@ exclude = [".agents/**"]
 "app/memory/memory_bank/lifecycle.py" = [
     "PLR0913",  # __init__ 参数≥6合理（含多个依赖注入）
     "D107",  # __init__ 由类级 docstring 阐明语义
+    "BLE001",  # 后台摘要失败不阻塞主流程，宽捕获 Exception 合理
 ]
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法
