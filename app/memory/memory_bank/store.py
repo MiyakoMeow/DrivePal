@@ -69,6 +69,7 @@ class MemoryBankStore:
             summarizer,
             self._config,
             self._bg,
+            metrics=self._metrics,
         )
         self._retrieval = RetrievalPipeline(self._index, embed_client, self._config)
         self._last_save_time: float = 0.0

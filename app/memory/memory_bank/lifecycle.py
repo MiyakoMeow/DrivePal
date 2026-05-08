@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from .bg_tasks import BackgroundTaskRunner
     from .config import MemoryBankConfig
+    from .observability import MemoryBankMetrics
     from .summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class MemoryLifecycle:
         summarizer: Summarizer | None,
         config: MemoryBankConfig,
         bg: BackgroundTaskRunner,
+        metrics: MemoryBankMetrics | None = None,
     ) -> None:
         self._index = index
         self._embedding_client = embedding_client
@@ -39,6 +41,7 @@ class MemoryLifecycle:
         self._summarizer = summarizer
         self._config = config
         self._bg = bg
+        self._metrics = metrics
         self._inflight_summaries: set[str] = set()
         self._inflight_lock = asyncio.Lock()
 
@@ -229,12 +232,16 @@ class MemoryLifecycle:
         except SummarizationEmpty:
             logger.debug("background summarization empty for date=%s", date_key)
         except LLMCallFailed:
+            if self._metrics:
+                self._metrics.background_task_failures += 1
             logger.warning(
                 "background summarization failed (LLM) for date=%s",
                 date_key,
                 exc_info=True,
             )
         except Exception:
+            if self._metrics:
+                self._metrics.background_task_failures += 1
             logger.warning(
                 "background summarization failed for date=%s",
                 date_key,
