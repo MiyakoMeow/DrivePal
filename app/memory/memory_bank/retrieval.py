@@ -426,16 +426,18 @@ class RetrievalPipeline:
 
     def _apply_speaker_filter(self, results: list[dict], query: str) -> list[dict]:
         ql = query.lower()
-        speakers_in_query = {
-            s.lower()
-            for r in results
-            for s in (r.get("speakers") or [])
-            if _word_in_text(s.lower(), ql)
-        }
+        speakers_in_query: set[str] = set()
+        for r in results:
+            for spk in r.get("speakers") or []:
+                spk_lower = spk.lower()
+                first = spk.split(" ", 1)[0].lower()
+                if _word_in_text(spk_lower, ql) or _word_in_text(first, ql):
+                    speakers_in_query.add(spk_lower)
         if not speakers_in_query:
             return results
         for r in results:
             rs = {s.lower() for s in (r.get("speakers") or [])}
             if not rs.intersection(speakers_in_query):
-                r["score"] = r.get("score", 0.0) * 0.75
+                score = r.get("score", 0.0)
+                r["score"] = score * 0.75 if score >= 0 else score * 1.25
         return results

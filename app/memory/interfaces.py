@@ -23,7 +23,7 @@ class MemoryStore(Protocol):
         """写入事件."""
         ...
 
-    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+    async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """搜索记忆."""
         ...
 

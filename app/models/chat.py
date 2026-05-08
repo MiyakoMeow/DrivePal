@@ -123,12 +123,14 @@ class ChatModel:
 
     async def generate(
         self,
-        prompt: str,
+        prompt: str = "",
         system_prompt: str | None = None,
+        messages: list[ChatCompletionMessageParam] | None = None,
         **_kwargs: object,
     ) -> str:
         """异步生成回复."""
-        messages = self._build_messages(prompt, system_prompt)
+        if messages is None:
+            messages = self._build_messages(prompt, system_prompt)
         errors = []
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
@@ -147,12 +149,14 @@ class ChatModel:
 
     async def generate_stream(
         self,
-        prompt: str,
+        prompt: str = "",
         system_prompt: str | None = None,
+        messages: list[ChatCompletionMessageParam] | None = None,
         **_kwargs: object,
     ) -> AsyncIterator[str]:
         """流式生成回复."""
-        messages = self._build_messages(prompt, system_prompt)
+        if messages is None:
+            messages = self._build_messages(prompt, system_prompt)
 
         errors = []
         for provider in self.providers:

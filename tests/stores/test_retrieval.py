@@ -258,3 +258,47 @@ def test_adaptive_chunk_many_entries_uses_p90():
     finally:
         if popped is not None:
             os.environ["MEMORYBANK_CHUNK_SIZE"] = popped
+
+
+def test_speaker_filter_negative_score_penalty():
+    """负分时惩罚应加重（绝对值增大），非缩小。"""
+    pipe = RetrievalPipeline.__new__(RetrievalPipeline)
+    results = [
+        {
+            "speakers": ["Alice"],
+            "score": 0.9,
+            "text": "relevant",
+        },
+        {
+            "speakers": ["Bob"],
+            "score": -0.5,
+            "text": "irrelevant",
+        },
+    ]
+    filtered = pipe._apply_speaker_filter(results, "Alice")
+    assert filtered[0]["score"] == 0.9
+    assert filtered[1]["score"] == -0.625
+
+
+def test_speaker_filter_first_name_matching():
+    """Query 中 first name 应匹配全名说话人。"""
+    pipe = RetrievalPipeline.__new__(RetrievalPipeline)
+    results = [
+        {
+            "speakers": ["Gary Smith"],
+            "score": 0.9,
+            "text": "Gary's preference",
+        },
+        {
+            "speakers": ["Patricia Johnson"],
+            "score": 0.8,
+            "text": "Patricia's preference",
+        },
+    ]
+    filtered = pipe._apply_speaker_filter(results, "Gary seat preference")
+    gary = next(r for r in filtered if any("Gary" in s for s in r.get("speakers", [])))
+    assert gary["score"] == 0.9
+    patricia = next(
+        r for r in filtered if any("Patricia" in s for s in r.get("speakers", []))
+    )
+    assert patricia["score"] == pytest.approx(0.6)
