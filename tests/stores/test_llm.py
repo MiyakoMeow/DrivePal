@@ -140,7 +140,7 @@ class _ContextTrimRecorder(_MessagesRecorder):
         self.call_count += 1
         messages = kwargs.get("messages")
         if self.call_count == 1:
-            self.original_messages = messages
+            self.original_messages = list(messages)
             exc = AllProviderFailedError("maximum context length exceeded")
             raise exc
         self.trimmed_messages = messages
