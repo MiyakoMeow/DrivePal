@@ -22,6 +22,7 @@ from app.api.graphql_schema import JSONScalar
 from app.api.resolvers.mutation import Mutation as MutationImpl
 from app.api.resolvers.query import Query as QueryImpl
 from app.config import DATA_DIR
+from app.memory.singleton import _memory_module_state
 from app.storage.init_data import init_storage
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if not Path.exists(WEBUI_DIR):
         logger.warning("WebUI directory not found: %s", WEBUI_DIR)
     yield
+    mm = _memory_module_state[0]
+    if mm is not None:
+        await mm.close()
+        logger.info("MemoryModule closed")
 
 
 app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
