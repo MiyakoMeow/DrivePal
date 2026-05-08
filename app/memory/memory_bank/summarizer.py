@@ -1,10 +1,10 @@
-"""摘要与人格生成，不可变保护（一旦生成不覆盖）。"""
+"""摘要与人格生成，不可变保护（多用户版）。"""
 
 import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .faiss_index import FaissIndex
+    from .faiss_index import FaissIndexManager
     from .llm import LlmClient
 
 logger = logging.getLogger(__name__)
@@ -18,28 +18,13 @@ _SUMMARY_SYSTEM_PROMPT = (
 class Summarizer:
     """摘要与人格生成器，不可变保护（一旦生成不覆盖）。"""
 
-    def __init__(self, llm: LlmClient, index: FaissIndex) -> None:
-        """初始化 Summarizer。
-
-        Args:
-            llm: LLM 客户端。
-            index: FAISS 索引。
-
-        """
+    def __init__(self, llm: LlmClient, index_manager: FaissIndexManager) -> None:
         self._llm = llm
-        self._index = index
+        self._index_manager = index_manager
 
-    async def get_daily_summary(self, date_key: str) -> str | None:
-        """生成某天的对话摘要（已存在则不覆盖）。
-
-        Args:
-            date_key: 日期键。
-
-        Returns:
-            摘要文本或 None。
-
-        """
-        meta = self._index.get_metadata()
+    async def get_daily_summary(self, user_id: str, date_key: str) -> str | None:
+        """生成某天的对话摘要（已存在则不覆盖）。"""
+        meta = self._index_manager.get_metadata(user_id)
         if any(m.get("source") == f"summary_{date_key}" for m in meta):
             return None
         texts = [
@@ -57,17 +42,12 @@ class Summarizer:
             return f"The summary of the conversation on {date_key} is: {result}"
         return None
 
-    async def get_overall_summary(self) -> str | None:
-        """基于所有日常摘要生成总体摘要（已存在则不覆盖）。
-
-        Returns:
-            总体摘要文本或 None。
-
-        """
-        extra = self._index.get_extra()
+    async def get_overall_summary(self, user_id: str) -> str | None:
+        """基于所有日常摘要生成总体摘要（已存在则不覆盖）。"""
+        extra = self._index_manager.get_extra(user_id)
         if extra.get("overall_summary"):
             return None
-        meta = self._index.get_metadata()
+        meta = self._index_manager.get_metadata(user_id)
         daily_sums = [m for m in meta if m.get("type") == "daily_summary"]
         if not daily_sums:
             return None
@@ -87,17 +67,9 @@ class Summarizer:
         extra["overall_summary"] = GENERATION_EMPTY
         return None
 
-    async def get_daily_personality(self, date_key: str) -> str | None:
-        """生成某天的人格画像（已存在则不覆盖）。
-
-        Args:
-            date_key: 日期键。
-
-        Returns:
-            人格分析文本或 None。
-
-        """
-        extra = self._index.get_extra()
+    async def get_daily_personality(self, user_id: str, date_key: str) -> str | None:
+        """生成某天的人格画像（已存在则不覆盖）。"""
+        extra = self._index_manager.get_extra(user_id)
         existing = extra.setdefault("daily_personalities", {})
         if not isinstance(existing, dict):
             existing = {}
@@ -106,7 +78,7 @@ class Summarizer:
             return None
         texts = [
             m["text"]
-            for m in self._index.get_metadata()
+            for m in self._index_manager.get_metadata(user_id)
             if m.get("source") == date_key and m.get("type") != "daily_summary"
         ]
         if not texts:
@@ -120,14 +92,9 @@ class Summarizer:
             return result
         return None
 
-    async def get_overall_personality(self) -> str | None:
-        """基于所有日常人格画像生成总体人格（已存在则不覆盖）。
-
-        Returns:
-            总体人格文本或 None。
-
-        """
-        extra = self._index.get_extra()
+    async def get_overall_personality(self, user_id: str) -> str | None:
+        """基于所有日常人格画像生成总体人格（已存在则不覆盖）。"""
+        extra = self._index_manager.get_extra(user_id)
         if extra.get("overall_personality"):
             return None
         dailies = extra.get("daily_personalities", {})
