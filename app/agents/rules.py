@@ -1,6 +1,7 @@
 """轻量规则引擎 — 安全约束规则定义与合并."""
 
 import logging
+import math
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -31,10 +32,19 @@ WORKLOAD_OVERLOADED = "overloaded"
 def _get_fatigue_threshold() -> float:
     raw = os.environ.get("FATIGUE_THRESHOLD", "0.7")
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         logger.warning("Invalid FATIGUE_THRESHOLD=%r, using default 0.7", raw)
         return 0.7
+    if not math.isfinite(value):
+        logger.warning("FATIGUE_THRESHOLD=%r is NaN/Inf, using default 0.7", raw)
+        return 0.7
+    if not 0.0 <= value <= 1.0:
+        logger.warning(
+            "FATIGUE_THRESHOLD=%r out of range [0,1], using default 0.7", raw
+        )
+        return 0.7
+    return value
 
 
 # 紧急提醒类型白名单，不受 only_urgent 过滤

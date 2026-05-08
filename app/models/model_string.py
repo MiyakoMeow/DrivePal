@@ -1,5 +1,6 @@
 """模型引用字符串解析."""
 
+import math
 from typing import Any
 
 from app.models.types import ResolvedModel
@@ -38,7 +39,11 @@ def resolve_model_string(model_str: str) -> ResolvedModel:
                     params[key] = int(value_raw)
                 except ValueError:
                     try:
-                        params[key] = float(value_raw)
+                        f = float(value_raw)
+                        if not math.isfinite(f):
+                            params[key] = value_raw
+                        else:
+                            params[key] = f
                     except ValueError:
                         params[key] = value_raw
         model_str = model_part
