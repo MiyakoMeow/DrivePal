@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_DIM = 1536
 _TIMESTAMP_LENGTH = 10
-_USER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+$")
+_USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 
 
 @dataclass
@@ -152,13 +152,15 @@ class FaissIndexManager:
             return
         if ui.index.ntotal == 0 and not ui.metadata:
             user_dir = self._user_dir(user_id)
-            ip = user_dir / "index.faiss"
-            mp = user_dir / "metadata.json"
-            ep = user_dir / "extra_metadata.json"
-            if ip.exists() or mp.exists():
-                ip.unlink(missing_ok=True)
-                mp.unlink(missing_ok=True)
-                ep.unlink(missing_ok=True)
+            # 先持久化 extra（若有）
+            if ui.extra:
+                user_dir.mkdir(parents=True, exist_ok=True)
+                (user_dir / "extra_metadata.json").write_text(
+                    json.dumps(ui.extra, ensure_ascii=False, indent=2)
+                )
+            # 独立清理每个文件
+            for fname in ("index.faiss", "metadata.json", "extra_metadata.json"):
+                (user_dir / fname).unlink(missing_ok=True)
             return
         user_dir = self._user_dir(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
@@ -318,7 +320,7 @@ class FaissIndexManager:
 
     @staticmethod
     def validate_user_id(user_id: str) -> None:
-        """校验 user_id 合法性，防路径穿越。只允许字母数字 _ . -，非空、不以 . 或 - 开头。"""
+        """校验 user_id 合法性，防路径穿越。只允许字母数字_ . -，非空、首字符不可为 . 或 -。"""
         if not user_id or not _USER_ID_PATTERN.match(user_id):
             msg = f"Invalid user_id: {user_id!r}"
             raise ValueError(msg)

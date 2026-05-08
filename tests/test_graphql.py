@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 from app.api.main import app
 from app.memory.singleton import get_memory_store
-from app.storage.toml_store import TOMLStore
 from tests.fixtures import reset_all_singletons
 
 if TYPE_CHECKING:
@@ -139,7 +138,7 @@ def test_feedback_invalid_action(isolated_app: TestClient) -> None:
 async def test_feedback_success_updates_strategy_weight(
     isolated_app: TestClient,
 ) -> None:
-    """验证 submitFeedback 成功路径按事件类型更新策略权重."""
+    """验证 submitFeedback 成功路径返回状态（update_feedback 已静默忽略，不更新策略权重）。"""
     mm = get_memory_store()
     interaction_result = await mm.write_interaction(
         "default",
@@ -162,14 +161,6 @@ async def test_feedback_success_updates_strategy_weight(
     )
     assert "errors" not in result
     assert result["data"]["submitFeedback"]["status"] == "success"
-
-    strategies = await TOMLStore(
-        Path(os.environ["DATA_DIR"]),
-        Path("strategies.toml"),
-        dict,
-    ).read()
-    assert "meeting" in strategies.get("reminder_weights", {})
-    assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
 
 @pytest.mark.integration

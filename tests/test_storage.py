@@ -15,8 +15,7 @@ from app.storage.init_data import init_storage
 pytestmark = [pytest.mark.embedding]
 
 
-@pytest.fixture
-def mock_store(tmp_path: Path) -> MemoryBankStore:
+def _make_mocks() -> tuple[AsyncMock, AsyncMock]:
     emb = AsyncMock(spec=["encode", "batch_encode"])
     emb.encode = AsyncMock(return_value=[0.1] * 1536)
     emb.batch_encode = AsyncMock(
@@ -24,19 +23,19 @@ def mock_store(tmp_path: Path) -> MemoryBankStore:
     )
     chat = AsyncMock(spec=["generate"])
     chat.generate = AsyncMock(return_value="summary")
+    return emb, chat
+
+
+@pytest.fixture
+def mock_store(tmp_path: Path) -> MemoryBankStore:
+    emb, chat = _make_mocks()
     return MemoryBankStore(tmp_path, emb, chat)
 
 
 async def test_events_persist_across_instances(tmp_path: Path) -> None:
     """验证创建新 MemoryBankStore 实例时事件持久化。"""
     init_storage(tmp_path)
-    emb = AsyncMock(spec=["encode", "batch_encode"])
-    emb.encode = AsyncMock(return_value=[0.1] * 1536)
-    emb.batch_encode = AsyncMock(
-        side_effect=lambda texts: [[0.1] * 1536 for _ in texts]
-    )
-    chat = AsyncMock(spec=["generate"])
-    chat.generate = AsyncMock(return_value="summary")
+    emb, chat = _make_mocks()
 
     s1 = MemoryBankStore(tmp_path, emb, chat)
     await s1.write("user_1", MemoryEvent(content="项目进度会议", type="meeting"))

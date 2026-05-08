@@ -42,12 +42,11 @@ class TestEmbeddingForMemoryBankRetrieval:
         embedding: EmbeddingModel,
         tmp_path: Path,
     ) -> None:
-        """验证语义无关的查询返回低分结果。"""
+        """验证语义无关的查询返回空列表或低分结果。"""
         store = MemoryBankStore(tmp_path, embedding, _mock_chat())
         await store.write("user_1", MemoryEvent(content="明天下午三点项目评审会议"))
         results = await store.search("user_1", "天气预报查询")
-        if results:
-            assert results[0].score < SIMILARITY_THRESHOLD
+        assert not results or results[0].score < SIMILARITY_THRESHOLD
 
     async def test_forgetting_weighted_ranking(
         self,

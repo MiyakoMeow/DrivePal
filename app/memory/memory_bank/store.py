@@ -46,6 +46,61 @@ def _finalize_task(task: asyncio.Task[None]) -> None:
             logger.warning("Background task failed: %s", exc)
 
 
+def _build_pair_entries(
+    event: MemoryEvent, date_key: str
+) -> tuple[list[str], list[dict]]:
+    """解析 event.content 为说话人行配对，返回 (all_pair_texts, all_pair_metas)。"""
+    lines = [line.strip() for line in event.content.split("\n") if line.strip()]
+    parsed_pairs: list[tuple[str | None, str]] = [
+        FaissIndexManager.parse_speaker_line(ln) for ln in lines
+    ]
+    has_speakers = any(spk is not None for spk, _ in parsed_pairs)
+
+    all_pair_texts: list[str] = []
+    all_pair_metas: list[dict] = []
+
+    if has_speakers:
+        for i in range(0, len(parsed_pairs), 2):
+            speaker_a, text_a = parsed_pairs[i]
+            label_a = speaker_a if speaker_a is not None else "Unknown"
+            if i + 1 < len(parsed_pairs):
+                speaker_b, text_b = parsed_pairs[i + 1]
+                label_b = speaker_b if speaker_b is not None else "Unknown"
+                speakers = [speaker_a, speaker_b]
+                conv_text = (
+                    f"Conversation content on {date_key}:"
+                    f"[|{label_a}|]: {text_a}; [|{label_b}|]: {text_b}"
+                )
+            else:
+                speakers = [speaker_a]
+                conv_text = (
+                    f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
+                )
+            all_pair_texts.append(conv_text)
+            all_pair_metas.append(
+                {
+                    "source": date_key,
+                    "speakers": sorted({s for s in speakers if s is not None}),
+                    "raw_content": conv_text,
+                    "event_type": event.type,
+                }
+            )
+    else:
+        spk = event.speaker or "System"
+        conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
+        all_pair_texts.append(conv_text)
+        all_pair_metas.append(
+            {
+                "source": date_key,
+                "speakers": [spk],
+                "raw_content": event.content,
+                "event_type": event.type,
+            }
+        )
+
+    return all_pair_texts, all_pair_metas
+
+
 class MemoryBankStore:
     """基于 FAISS 的多用户记忆存储。
 
@@ -167,57 +222,10 @@ class MemoryBankStore:
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
 
-        lines = [line.strip() for line in event.content.split("\n") if line.strip()]
-        parsed_pairs: list[tuple[str | None, str]] = [
-            FaissIndexManager.parse_speaker_line(ln) for ln in lines
-        ]
-        has_speakers = any(spk is not None for spk, _ in parsed_pairs)
+        all_pair_texts, all_pair_metas = _build_pair_entries(event, date_key)
 
-        all_pair_texts: list[str] = []
-        all_pair_metas: list[dict] = []
-        fid: int | None = None
-
-        if has_speakers:
-            for i in range(0, len(parsed_pairs), 2):
-                speaker_a, text_a = parsed_pairs[i]
-                label_a = speaker_a if speaker_a is not None else "Unknown"
-                if i + 1 < len(parsed_pairs):
-                    speaker_b, text_b = parsed_pairs[i + 1]
-                    label_b = speaker_b if speaker_b is not None else "Unknown"
-                    speakers = [speaker_a, speaker_b]
-                    conv_text = (
-                        f"Conversation content on {date_key}:"
-                        f"[|{label_a}|]: {text_a}; [|{label_b}|]: {text_b}"
-                    )
-                else:
-                    speakers = [speaker_a]
-                    conv_text = (
-                        f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
-                    )
-                all_pair_texts.append(conv_text)
-                all_pair_metas.append(
-                    {
-                        "source": date_key,
-                        "speakers": sorted({s for s in speakers if s is not None}),
-                        "raw_content": conv_text,
-                        "event_type": event.type,
-                    }
-                )
-        else:
-            spk = event.speaker or "System"
-            conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
-            all_pair_texts.append(conv_text)
-            all_pair_metas.append(
-                {
-                    "source": date_key,
-                    "speakers": [spk],
-                    "raw_content": event.content,
-                    "event_type": event.type,
-                }
-            )
-
-        # 批量嵌入
         embeddings = await self._embedding_client.encode_batch(all_pair_texts)
+        fid: int | None = None
         for conv_text, emb, meta in zip(
             all_pair_texts, embeddings, all_pair_metas, strict=True
         ):

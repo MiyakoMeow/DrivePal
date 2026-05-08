@@ -202,8 +202,8 @@ class Mutation:
         query_input: Annotated[ProcessQueryInput, strawberry.argument(name="input")],
     ) -> ProcessQueryResult:
         """处理用户查询并返回工作流结果."""
-        FaissIndexManager.validate_user_id(query_input.user_id)
         try:
+            FaissIndexManager.validate_user_id(query_input.user_id)
             mm = get_memory_store()
             workflow = AgentWorkflow(
                 data_dir=DATA_DIR,
@@ -244,10 +244,11 @@ class Mutation:
         if feedback_input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(feedback_input.action)
 
-        FaissIndexManager.validate_user_id(feedback_input.user_id)
-
         try:
+            FaissIndexManager.validate_user_id(feedback_input.user_id)
             mm = get_memory_store()
+        except GraphQLError:
+            raise
         except Exception as e:
             logger.exception("submitFeedback failed (get_memory_store)")
             raise InternalServerError from e

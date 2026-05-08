@@ -331,5 +331,5 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 
 ## 未解决问题
 
-1. 反馈学习：`update_feedback` 已移除实现（静默忽略），反馈数据不再写入 strategies.toml 的 reminder_weights
+1. 反馈学习：`update_feedback` 已移除实现（静默忽略），反馈结果仅保留 `status: "success"` 返回。不再更新 strategies.toml 的 reminder_weights。相关测试 `tests/test_graphql.py::test_feedback_success_updates_strategy_weight`（`@pytest.mark.embedding` 标记，默认跳过）仅验证 mutation 返回成功，不再断言策略权重。
 2. 遗忘仅在写入时触发：搜索路径不执行遗忘（设计取舍）。读多写少场景数据可能膨胀
