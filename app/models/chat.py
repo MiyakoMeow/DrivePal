@@ -1,6 +1,7 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
 import asyncio
+import logging
 from functools import cache
 from typing import TYPE_CHECKING
 
@@ -15,7 +16,9 @@ from app.models.settings import (
 )
 from app.models.types import ProviderConfig
 
-_semaphore_cache: dict[str, asyncio.Semaphore] = {}
+logger = logging.getLogger(__name__)
+
+_semaphore_cache: dict[str, tuple[asyncio.Semaphore, int]] = {}
 
 
 def clear_semaphore_cache() -> None:
@@ -64,8 +67,20 @@ async def _get_provider_semaphore(
     """获取或创建 provider 级别的 semaphore."""
     async with _get_lock():
         if provider_name not in _semaphore_cache:
-            _semaphore_cache[provider_name] = asyncio.Semaphore(concurrency)
-        return _semaphore_cache[provider_name]
+            _semaphore_cache[provider_name] = (
+                asyncio.Semaphore(concurrency),
+                concurrency,
+            )
+        else:
+            _, existing_conc = _semaphore_cache[provider_name]
+            if existing_conc != concurrency:
+                logger.warning(
+                    "Semaphore %r exists with concurrency=%d, ignoring %d",
+                    provider_name,
+                    existing_conc,
+                    concurrency,
+                )
+        return _semaphore_cache[provider_name][0]
 
 
 if TYPE_CHECKING:
@@ -167,16 +182,22 @@ class ChatModel:
         """流式生成回复."""
         if messages is None:
             messages = self._build_messages(prompt, system_prompt)
+        json_mode = _kwargs.pop("json_mode", False) if _kwargs else False
 
         errors = []
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
             try:
                 async with sem, self._create_client(provider) as client:
+                    create_kwargs: dict = {
+                        "model": provider.provider.model,
+                        "messages": messages,
+                        "temperature": self._get_temperature(provider),
+                    }
+                    if json_mode:
+                        create_kwargs["response_format"] = {"type": "json_object"}
                     stream = await client.chat.completions.create(
-                        model=provider.provider.model,
-                        messages=messages,
-                        temperature=self._get_temperature(provider),
+                        **create_kwargs,
                         stream=True,
                     )
                     async for chunk in stream:
@@ -194,11 +215,12 @@ class ChatModel:
         self,
         prompts: list[str],
         system_prompt: str | None = None,
+        max_concurrency: int = 8,
     ) -> list[str]:
         """并行批量生成回复，通过 semaphore 限制并发保护 provider。"""
         if not prompts:
             return []
-        sem = asyncio.Semaphore(8)
+        sem = asyncio.Semaphore(max_concurrency)
 
         async def _bounded(p: str) -> str:
             async with sem:
