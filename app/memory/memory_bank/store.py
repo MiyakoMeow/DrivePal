@@ -109,7 +109,11 @@ class MemoryBankStore:
         if not timestamps:
             return None
         max_ts = max(timestamps)
-        ref = date.fromisoformat(max_ts) + timedelta(days=1)
+        try:
+            ref = date.fromisoformat(max_ts) + timedelta(days=1)
+        except ValueError, TypeError:
+            logger.warning("无法解析 timestamp %r，跳过参考日期", max_ts)
+            return None
         return ref.strftime("%Y-%m-%d")
 
     # ── 遗忘 ──

@@ -1,7 +1,10 @@
 """集成测试：记忆写入 → 检索 → 回放（多用户版）。"""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 import pytest
 
@@ -13,7 +16,9 @@ from app.memory.schemas import MemoryEvent
 def store(tmp_path: Path) -> MemoryBankStore:
     emb = AsyncMock(spec=["encode", "batch_encode"])
     emb.encode = AsyncMock(return_value=[0.1] * 1536)
-    emb.batch_encode = AsyncMock(side_effect=lambda texts: [[0.1] * 1536 for _ in texts])
+    emb.batch_encode = AsyncMock(
+        side_effect=lambda texts: [[0.1] * 1536 for _ in texts]
+    )
     chat = AsyncMock(spec=["generate"])
     chat.generate = AsyncMock(return_value="summary")
     return MemoryBankStore(tmp_path, emb, chat)
@@ -34,9 +39,13 @@ async def test_write_and_search_roundtrip(store: MemoryBankStore) -> None:
 @pytest.mark.asyncio
 async def test_write_multiple_and_search(store: MemoryBankStore) -> None:
     """验证多条写入后可按主题搜索。"""
-    await store.write_interaction("user_1", "set temperature to 22", "temperature set to 22")
+    await store.write_interaction(
+        "user_1", "set temperature to 22", "temperature set to 22"
+    )
     await store.write_interaction("user_1", "play jazz music", "playing jazz")
-    await store.write_interaction("user_1", "navigate to airport", "navigating to airport")
+    await store.write_interaction(
+        "user_1", "navigate to airport", "navigating to airport"
+    )
     results = await store.search("user_1", "music", top_k=5)
     assert len(results) >= 1
 

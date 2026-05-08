@@ -1,5 +1,6 @@
 """MemoryBankStore 多用户测试。"""
 
+import os
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -129,3 +130,39 @@ async def test_update_feedback_silent(store: MemoryBankStore) -> None:
     """update_feedback 静默忽略。"""
     feedback = FeedbackData(action="accept")
     await store.update_feedback("user_1", "0", feedback)
+
+
+@pytest.mark.asyncio
+async def test_forget_at_ingestion_removes_old_entries(
+    tmp_path: Path, mock_emb: AsyncMock, mock_chat: AsyncMock
+) -> None:
+    """遗忘开启时，写入新数据应删除 retention < threshold 的旧条目。"""
+    os.environ["MEMORYBANK_ENABLE_FORGETTING"] = "true"
+    try:
+        store = MemoryBankStore(
+            tmp_path,
+            mock_emb,
+            mock_chat,
+            reference_date="2026-05-05",
+        )
+        emb = [0.1] * 1536
+        # 写入一条旧条目（strength=1，referenced to 2026-01-01 > 125d ago → retention ≈ 0）
+        await store._index_manager.add_vector(
+            "user_1",
+            "old data",
+            emb,
+            "2026-01-01T00:00:00",
+            {"memory_strength": 1, "last_recall_date": "2026-01-01"},
+        )
+        await store._index_manager.save("user_1")
+        total_before = await store._index_manager.total("user_1")
+        assert total_before == 1
+
+        # 写入新数据触发遗忘
+        await store.write("user_1", MemoryEvent(content="new data"))
+
+        total_after = await store._index_manager.total("user_1")
+        # 旧数据应被遗忘删除，只剩新写入的
+        assert total_after == 1, f"expected 1 entry after forget, got {total_after}"
+    finally:
+        os.environ.pop("MEMORYBANK_ENABLE_FORGETTING", None)
