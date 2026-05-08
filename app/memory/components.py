@@ -9,6 +9,17 @@ from app.memory.schemas import FeedbackData
 from app.storage.toml_store import TOMLStore
 
 
+def _validate_user_id(user_id: str) -> None:
+    """校验 user_id 不包含路径遍历字符。"""
+    if not user_id or user_id in ("", "."):
+        msg = f"user_id {user_id!r} is empty or invalid"
+        raise ValueError(msg)
+    for char in ("/", "\\", ".."):
+        if char in user_id:
+            msg = f"user_id {user_id!r} contains invalid characters"
+            raise ValueError(msg)
+
+
 class ActionRequiredError(ValueError):
     """action 字段为必需的异常."""
 
@@ -39,6 +50,7 @@ class FeedbackManager:
 
     async def _write_feedback(self, user_id: str, feedback: FeedbackData) -> None:
         """写入反馈记录."""
+        _validate_user_id(user_id)
         store = TOMLStore(self.data_dir / user_id, Path("feedback.toml"), list)
         await store.append(feedback.model_dump())
 
@@ -49,6 +61,7 @@ class FeedbackManager:
         action: Literal["accept", "ignore"],
     ) -> None:
         """更新策略权重."""
+        _validate_user_id(user_id)
         store = TOMLStore(self.data_dir / user_id, Path("strategies.toml"), dict)
         strategies = await store.read()
 
@@ -76,6 +89,7 @@ class FeedbackManager:
         user_id: str = "default",
     ) -> None:
         """记录反馈并更新策略权重."""
+        _validate_user_id(user_id)
         feedback = feedback.model_copy(
             update={"event_id": event_id, "timestamp": datetime.now(UTC).isoformat()}
         )
