@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
 from app.memory.schemas import InteractionResult, MemoryEvent
 
 from .forget import ForgetMode, ForgettingCurve, compute_ingestion_forget_ids
@@ -61,9 +62,17 @@ class MemoryLifecycle:
             return True
         return False
 
+    def _resolve_reference_date(self) -> str:
+        """按优先级解析参考日期：config > auto compute > UTC today。"""
+        if self._config.reference_date:
+            return self._config.reference_date
+        if self._config.reference_date_auto:
+            return self._index.compute_reference_date()
+        return datetime.now(UTC).strftime("%Y-%m-%d")
+
     async def _forget_at_ingestion(self) -> None:
         """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）。"""
-        today = self._config.reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
+        today = self._resolve_reference_date()
         mode = (
             ForgetMode.PROBABILISTIC
             if self._config.forget_mode == "probabilistic"
@@ -82,7 +91,7 @@ class MemoryLifecycle:
         """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
 
         多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
-
+        嵌入编码使用批量 API 以降低往返延迟。
         """
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -94,7 +103,10 @@ class MemoryLifecycle:
         ]
         has_speakers = any(spk is not None for spk, _ in parsed_pairs)
 
-        fid: int | None = None
+        # 收集阶段：先构建所有 pair texts，再批量编码
+        pair_texts: list[str] = []
+        pair_metas: list[dict] = []
+
         if has_speakers:
             for i in range(0, len(parsed_pairs), 2):
                 speaker_a, text_a = parsed_pairs[i]
@@ -112,33 +124,36 @@ class MemoryLifecycle:
                     conv_text = (
                         f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
                     )
-                emb = await self._embedding_client.encode(conv_text)
-                fid = await self._index.add_vector(
-                    conv_text,
-                    emb,
-                    ts,
+                pair_texts.append(conv_text)
+                pair_metas.append(
                     {
                         "source": date_key,
-                        "speakers": sorted({s for s in speakers if s is not None}),
+                        "speakers": sorted(
+                            {s for s in speakers if s is not None}
+                        ),
                         "raw_content": conv_text,
                         "event_type": event.type,
-                    },
+                    }
                 )
         else:
             spk = event.speaker or "System"
             conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
-            emb = await self._embedding_client.encode(conv_text)
-            fid = await self._index.add_vector(
-                conv_text,
-                emb,
-                ts,
+            pair_texts.append(conv_text)
+            pair_metas.append(
                 {
                     "source": date_key,
                     "speakers": [spk],
                     "raw_content": event.content,
                     "event_type": event.type,
-                },
+                }
             )
+
+        # 批量编码
+        embeddings = await self._embedding_client.encode_batch(pair_texts)
+        fid: int | None = None
+        for text_item, emb, meta in zip(pair_texts, embeddings, pair_metas, strict=True):
+            fid = await self._index.add_vector(text_item, emb, ts, meta)
+
         await self._post_write_forget_and_summarize(date_key)
         return str(fid)
 
@@ -158,15 +173,7 @@ class MemoryLifecycle:
         event_type: str = "reminder",
         **kwargs: object,
     ) -> InteractionResult:
-        """记录一次交互到记忆库。
-
-        Args:
-            query: 用户输入。
-            response: AI 回复。
-            event_type: 事件类型。
-            **kwargs: 可选参数，支持 user_name（发言者姓名）和 ai_name。
-
-        """
+        """记录一次交互到记忆库。"""
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
@@ -219,8 +226,18 @@ class MemoryLifecycle:
             await self._summarizer.get_daily_personality(date_key)
             await self._summarizer.get_overall_personality()
             await self._index.save()
+        except SummarizationEmpty:
+            logger.debug("background summarization empty for date=%s", date_key)
+        except LLMCallFailed:
+            logger.warning(
+                "background summarization failed (LLM) for date=%s", date_key,
+                exc_info=True,
+            )
         except Exception:
-            logger.warning("background summarization failed", exc_info=True)
+            logger.warning(
+                "background summarization failed for date=%s", date_key,
+                exc_info=True,
+            )
         finally:
             async with self._inflight_lock:
                 self._inflight_summaries.discard(date_key)
