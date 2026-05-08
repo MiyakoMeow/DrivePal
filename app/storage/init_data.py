@@ -4,8 +4,6 @@ from pathlib import Path
 
 import tomli_w
 
-from app.storage.toml_store import _LIST_WRAPPER_KEY
-
 
 def get_data_dir() -> Path:
     """获取数据目录路径."""
@@ -24,13 +22,12 @@ def init_storage(data_dir: Path | None = None) -> None:
         data_dir = get_data_dir()
     data_dir.mkdir(exist_ok=True)
 
-    list_files = {
-        "events.toml": [],
-        "interactions.toml": [],
-        "feedback.toml": [],
-        "experiment_results.toml": [],
-        "scenario_presets.toml": [],
-    }
+    jsonl_files = [
+        "events.jsonl",
+        "interactions.jsonl",
+        "feedback.jsonl",
+        "experiment_results.jsonl",
+    ]
 
     dict_files = {
         "contexts.toml": {},
@@ -43,13 +40,13 @@ def init_storage(data_dir: Path | None = None) -> None:
             "modified_keywords": [],
             "cooldown_periods": {},
         },
-        "memorybank_summaries.toml": {"daily_summaries": {}, "overall_summary": ""},
     }
 
-    for filename, default_data in list_files.items():
+    for filename in jsonl_files:
         filepath = data_dir / filename
         if not filepath.exists():
-            _write_toml_data(filepath, {_LIST_WRAPPER_KEY: default_data})
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text("", encoding="utf-8")
 
     for filename, default_data in dict_files.items():
         filepath = data_dir / filename
