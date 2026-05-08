@@ -344,8 +344,7 @@ def __init__(
 #### 数据访问
 
 - `self._index_manager.get_metadata(user_id)` 获取副本
-- `self._index_manager.get_extra(user_id)` 获取 extra dict（可变引用，直接修改）
-- `self._index_manager.update_extra(user_id, key, value)` 或直接修改 extra dict 后由 store save
+- `self._index_manager.get_extra(user_id)` 获取 extra dict 的**可变引用**，直接修改后由 `_background_summarize` 末尾 `save` 持久化。不提供 `update_extra` 方法——extra 是 dict，原地修改后 save 即可。
 
 #### 不可变保护（不变）
 
@@ -365,9 +364,10 @@ def __init__(
 
 #### 删除
 
-- `ForgettingCurve` 类（节流逻辑在实时场景下无意义）
+- `ForgettingCurve` 类（含 `maybe_forget` 软标记路径，节流逻辑在实时场景下无意义）
 - `FORGET_INTERVAL_SECONDS` 常量
 - `_resolve_forget_mode` 函数（mode 由 store 决定）
+- store 中 `_purge_forgotten` 方法（软标记路径，与 `_forget_at_ingestion` 硬删除重叠）
 
 ### 7. LlmClient + EmbeddingClient（不变）
 
