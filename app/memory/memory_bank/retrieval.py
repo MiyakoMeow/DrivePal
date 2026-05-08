@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
 from collections import defaultdict, deque
 from datetime import UTC, datetime
@@ -20,7 +19,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
 
-    from .index import FaissIndex
+    from .index_reader import IndexReader
 
 logger = logging.getLogger(__name__)
 
@@ -41,24 +40,16 @@ _INTERNAL_KEYS: frozenset[str] = frozenset(
 )
 
 
-def _resolve_chunk_size() -> int:
-    raw = os.getenv("MEMORYBANK_CHUNK_SIZE")
-    if raw is not None:
-        try:
-            return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, int(raw)))
-        except ValueError:
-            pass
-    return DEFAULT_CHUNK_SIZE
-
-
-def _get_effective_chunk_size(metadata: list[dict]) -> int:
+def _get_effective_chunk_size(
+    metadata: list[dict], config: Any,
+) -> int:
     """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
 
-    环境变量 MEMORYBANK_CHUNK_SIZE 显式设置时跳过自适应，直接使用该值。
+    config.chunk_size 显式设置时直接使用该值。
     metadata 不足 10 条时回退 DEFAULT_CHUNK_SIZE。
     """
-    if os.getenv("MEMORYBANK_CHUNK_SIZE"):
-        return _resolve_chunk_size()
+    if config.chunk_size is not None:
+        return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, config.chunk_size))
     lengths = sorted(len(m.get("text", "")) for m in metadata)
     if len(lengths) < _ADAPTIVE_CHUNK_MIN_ENTRIES:
         return DEFAULT_CHUNK_SIZE
@@ -348,12 +339,21 @@ class RetrievalPipeline:
     阶段 2: 邻居合并（同 source 连续条目）
     阶段 3: 重叠去重（并查集）
     阶段 4: 说话人感知降权
+
+    _apply_speaker_filter 通过遍历结果条目中的 speakers 字段工作，
+    不依赖 FaissIndex.get_all_speakers()，迁移 IndexReader 后行为不变。
     """
 
-    def __init__(self, index: FaissIndex, embedding_client: EmbeddingClient) -> None:
+    def __init__(
+        self,
+        index: IndexReader,
+        embedding_client: EmbeddingClient,
+        config: Any,
+    ) -> None:
         """初始化检索管道。"""
         self._index = index
         self._embedding_client = embedding_client
+        self._config = config
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
@@ -396,7 +396,7 @@ class RetrievalPipeline:
         if not results or not metadata:
             return results
 
-        effective_chunk = _get_effective_chunk_size(metadata)
+        effective_chunk = _get_effective_chunk_size(metadata, self._config)
         indexed = [
             (r, r["_meta_idx"]) for r in results if r.get("_meta_idx") is not None
         ]

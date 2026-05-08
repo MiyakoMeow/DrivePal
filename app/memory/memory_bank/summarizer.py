@@ -4,30 +4,31 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .index import FaissIndex
+    from .config import MemoryBankConfig
+    from .index_reader import IndexReader
     from .llm import LlmClient
 
 logger = logging.getLogger(__name__)
 GENERATION_EMPTY = "GENERATION_EMPTY"
-_SUMMARY_SYSTEM_PROMPT = (
-    "You are an in-car AI assistant with expertise in remembering "
-    "vehicle preferences, driving habits, and in-car conversation context."
-)
 
 
 class Summarizer:
     """摘要与人格生成器，不可变保护（一旦生成不覆盖）。"""
 
-    def __init__(self, llm: LlmClient, index: FaissIndex) -> None:
+    def __init__(
+        self, llm: LlmClient, index: IndexReader, config: MemoryBankConfig,
+    ) -> None:
         """初始化 Summarizer。
 
         Args:
             llm: LLM 客户端。
-            index: FAISS 索引。
+            index: FAISS 索引（只读视图）。
+            config: MemoryBank 配置。
 
         """
         self._llm = llm
         self._index = index
+        self._config = config
 
     async def get_daily_summary(self, date_key: str) -> str | None:
         """生成某天的对话摘要（已存在则不覆盖）。
@@ -51,7 +52,7 @@ class Summarizer:
             return None
         result = await self._llm.call(
             self._summarize_prompt("\n".join(texts)),
-            system_prompt=_SUMMARY_SYSTEM_PROMPT,
+            system_prompt=self._config.summary_system_prompt,
         )
         if result:
             return f"The summary of the conversation on {date_key} is: {result}"
@@ -79,7 +80,7 @@ class Summarizer:
         parts.extend(f"\n{m.get('text', '')}" for m in daily_sums)
         parts.append("\nSummarization: ")
         result = await self._llm.call(
-            "".join(parts), system_prompt=_SUMMARY_SYSTEM_PROMPT
+            "".join(parts), system_prompt=self._config.summary_system_prompt
         )
         if result:
             extra["overall_summary"] = result
@@ -113,7 +114,7 @@ class Summarizer:
             return None
         result = await self._llm.call(
             self._personality_prompt("\n".join(texts)),
-            system_prompt=_SUMMARY_SYSTEM_PROMPT,
+            system_prompt=self._config.summary_system_prompt,
         )
         if result:
             existing[date_key] = result
@@ -148,7 +149,7 @@ class Summarizer:
             "summarized as:"
         )
         result = await self._llm.call(
-            "".join(parts), system_prompt=_SUMMARY_SYSTEM_PROMPT
+            "".join(parts), system_prompt=self._config.summary_system_prompt
         )
         if result:
             extra["overall_personality"] = result
