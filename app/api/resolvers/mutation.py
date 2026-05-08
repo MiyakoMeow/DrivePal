@@ -2,10 +2,13 @@
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import strawberry
 from graphql.error import GraphQLError
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
 
 from app.agents.workflow import AgentWorkflow
 from app.api.graphql_schema import (
@@ -37,6 +40,8 @@ from app.schemas.context import (
 )
 from app.storage.toml_store import TOMLStore
 
+logger = logging.getLogger(__name__)
+
 
 class InternalServerError(GraphQLError):
     """内部服务器错误."""
@@ -62,7 +67,42 @@ class GraphQLEventNotFoundError(GraphQLError):
         super().__init__(f"Event not found: {event_id!r}")
 
 
-logger = logging.getLogger(__name__)
+async def _safe_memory_call[T](
+    coro: Awaitable[T],
+    context_msg: str,
+) -> T:
+    """执行记忆系统调用，异常统一转为 GraphQLError.
+
+    Args:
+        coro: 待执行的异步调用。
+        context_msg: 异常日志上下文描述。
+
+    Returns:
+        调用结果。
+
+    Raises:
+        GraphQLError: 所有记忆层异常包装后抛出。
+
+    """
+    try:
+        return await coro
+    except GraphQLError:
+        raise
+    except OSError as e:
+        msg = "Internal storage error"
+        logger.exception("%s failed", context_msg)
+        raise GraphQLError(msg) from e
+    except RuntimeError as e:
+        msg = "Internal runtime error"
+        logger.exception("%s failed", context_msg)
+        raise GraphQLError(msg) from e
+    except ValueError as e:
+        msg = "Invalid feedback data"
+        logger.exception("%s failed", context_msg)
+        raise GraphQLError(msg) from e
+    except Exception as e:
+        logger.exception("%s failed", context_msg)
+        raise InternalServerError from e
 
 
 def _preset_store() -> TOMLStore:
@@ -221,59 +261,29 @@ class Mutation:
         """提交用户反馈."""
         if feedback_input.action not in ("accept", "ignore"):
             raise GraphQLInvalidActionError(feedback_input.action)
-        try:
-            mm = get_memory_module()
-            safe_action: Literal["accept", "ignore"]
-            safe_action = "accept" if feedback_input.action == "accept" else "ignore"
-            mode = MemoryMode(feedback_input.memory_mode.value)
-            actual_type = await mm.get_event_type(
-                feedback_input.event_id,
-                mode=mode,
-            )
-        except OSError as e:
-            logger.exception("Storage error in submitFeedback(get_event_type)")
-            msg = "Internal storage error"
-            raise GraphQLError(msg) from e
-        except RuntimeError as e:
-            logger.exception("Runtime error in submitFeedback(get_event_type)")
-            msg = "Internal runtime error"
-            raise GraphQLError(msg) from e
-        except ValueError as e:
-            logger.exception("Validation error in submitFeedback(get_event_type)")
-            msg = "Invalid feedback data"
-            raise GraphQLError(msg) from e
-        except Exception as e:
-            logger.exception("submitFeedback failed (get_event_type)")
-            raise InternalServerError from e
+
+        mm = get_memory_module()
+        safe_action: Literal["accept", "ignore"]
+        safe_action = "accept" if feedback_input.action == "accept" else "ignore"
+        mode = MemoryMode(feedback_input.memory_mode.value)
+
+        actual_type = await _safe_memory_call(
+            mm.get_event_type(feedback_input.event_id, mode=mode),
+            "submitFeedback(get_event_type)",
+        )
 
         if actual_type is None:
             raise GraphQLEventNotFoundError(feedback_input.event_id)
 
-        try:
-            feedback = FeedbackData(
-                action=safe_action,
-                type=actual_type,
-                modified_content=feedback_input.modified_content,
-            )
-            await mm.update_feedback(feedback_input.event_id, feedback, mode=mode)
-        except GraphQLError:
-            raise
-        except OSError as e:
-            logger.exception("Storage error in submitFeedback(update_feedback)")
-            msg = "Internal storage error"
-            raise GraphQLError(msg) from e
-        except RuntimeError as e:
-            logger.exception("Runtime error in submitFeedback(update_feedback)")
-            msg = "Internal runtime error"
-            raise GraphQLError(msg) from e
-        except ValueError as e:
-            logger.exception("Validation error in submitFeedback(update_feedback)")
-            msg = "Invalid feedback data"
-            raise GraphQLError(msg) from e
-        except Exception as e:
-            logger.exception("submitFeedback failed (update_feedback)")
-            raise InternalServerError from e
-
+        feedback = FeedbackData(
+            action=safe_action,
+            type=actual_type,
+            modified_content=feedback_input.modified_content,
+        )
+        await _safe_memory_call(
+            mm.update_feedback(feedback_input.event_id, feedback, mode=mode),
+            "submitFeedback(update_feedback)",
+        )
         return FeedbackResult(status="success")
 
     @strawberry.mutation
