@@ -7,7 +7,7 @@ from app.api.graphql_schema import (
     MemoryModeEnum,
     ScenarioPresetGQL,
 )
-from app.api.resolvers.mutation import _preset_store, _to_gql_preset
+from app.api.resolvers._helpers import _preset_store, _to_gql_preset
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 
