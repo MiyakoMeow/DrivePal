@@ -80,9 +80,6 @@ class MemoryLifecycle:
 
     async def write(self, event: MemoryEvent) -> str:
         """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。"""
-        if not self._embedding_client:
-            msg = "embedding_client required"
-            raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
@@ -138,13 +135,17 @@ class MemoryLifecycle:
                     "event_type": event.type,
                 },
             )
+        await self._post_write_forget_and_summarize(date_key)
+        return str(fid)
+
+    async def _post_write_forget_and_summarize(self, date_key: str) -> None:
+        """写入后遗忘 + 持久化 + 后台摘要触发（write/write_interaction 公共）。"""
         if self._config.enable_forgetting:
             await self.purge_forgotten(self._index.get_metadata())
             await self._forget_at_ingestion()
         await self._index.save()
         if self._summarizer:
             await self._trigger_background_summarize(date_key)
-        return str(fid)
 
     async def write_interaction(
         self,
@@ -162,9 +163,6 @@ class MemoryLifecycle:
             **kwargs: 可选参数，支持 user_name（发言者姓名）和 ai_name。
 
         """
-        if not self._embedding_client:
-            msg = "embedding_client required"
-            raise RuntimeError(msg)
         await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
@@ -186,12 +184,7 @@ class MemoryLifecycle:
                 "event_type": event_type,
             },
         )
-        if self._config.enable_forgetting:
-            await self.purge_forgotten(self._index.get_metadata())
-            await self._forget_at_ingestion()
-        await self._index.save()
-        if self._summarizer:
-            await self._trigger_background_summarize(date_key)
+        await self._post_write_forget_and_summarize(date_key)
         return InteractionResult(event_id=str(fid))
 
     async def _trigger_background_summarize(self, date_key: str) -> None:

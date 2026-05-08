@@ -24,11 +24,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-COARSE_SEARCH_FACTOR = 4
 _MERGED_TEXT_DELIMITER = "\x00"
-DEFAULT_CHUNK_SIZE = 1500
-CHUNK_SIZE_MIN = 200
-CHUNK_SIZE_MAX = 8192
 _ADAPTIVE_CHUNK_MIN_ENTRIES = 10
 INITIAL_MEMORY_STRENGTH = 1
 _INTERNAL_KEYS: frozenset[str] = frozenset(
@@ -50,13 +46,13 @@ def _get_effective_chunk_size(
     metadata 不足 10 条时回退 DEFAULT_CHUNK_SIZE。
     """
     if config.chunk_size is not None:
-        return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, config.chunk_size))
+        return max(config.chunk_size_min, min(config.chunk_size_max, config.chunk_size))
     lengths = sorted(len(m.get("text", "")) for m in metadata)
     if len(lengths) < _ADAPTIVE_CHUNK_MIN_ENTRIES:
-        return DEFAULT_CHUNK_SIZE
+        return config.default_chunk_size
     p90_idx = math.ceil(len(lengths) * 0.9) - 1
     p90 = lengths[p90_idx]
-    return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, p90 * 3))
+    return max(config.chunk_size_min, min(config.chunk_size_max, p90 * 3))
 
 
 def _safe_memory_strength(value: object) -> float:
@@ -372,7 +368,7 @@ class RetrievalPipeline:
         index_total = self._index.total
         if index_total == 0:
             return [], False
-        coarse_k = min(top_k * COARSE_SEARCH_FACTOR, index_total)
+        coarse_k = min(top_k * self._config.coarse_search_factor, index_total)
         results = await self._index.search(query_emb, coarse_k)
         if not results:
             return [], False

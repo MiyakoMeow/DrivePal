@@ -18,6 +18,7 @@ class MemoryBankConfig(BaseSettings):
 
     # ── 检索 ──
     chunk_size: int | None = None  # None → 自适应 P90×3
+    default_chunk_size: int = 1500  # 自适应回退值
     chunk_size_min: int = 200
     chunk_size_max: int = 8192
     coarse_search_factor: int = 4

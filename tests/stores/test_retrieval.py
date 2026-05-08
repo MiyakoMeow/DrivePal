@@ -12,7 +12,6 @@ from app.memory.embedding_client import EmbeddingClient
 from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.index import FaissIndex
 from app.memory.memory_bank.retrieval import (
-    DEFAULT_CHUNK_SIZE,
     RetrievalPipeline,
     _clean_search_result,
     _get_effective_chunk_size,
@@ -170,7 +169,7 @@ def test_adaptive_chunk_few_entries_returns_default():
     popped = os.environ.pop("MEMORYBANK_CHUNK_SIZE", None)
     try:
         meta = [{"text": "hello"}] * 5
-        assert _get_effective_chunk_size(meta, MemoryBankConfig()) == DEFAULT_CHUNK_SIZE
+        assert _get_effective_chunk_size(meta, MemoryBankConfig()) == MemoryBankConfig().default_chunk_size
     finally:
         if popped is not None:
             os.environ["MEMORYBANK_CHUNK_SIZE"] = popped

@@ -69,11 +69,7 @@ class MemoryBankStore:
             self._config,
             self._bg,
         )
-        self._retrieval = (
-            RetrievalPipeline(self._index, embed_client, self._config)
-            if embed_client
-            else None
-        )
+        self._retrieval = RetrievalPipeline(self._index, embed_client, self._config)
 
     # ── 委托方法 ──
 
