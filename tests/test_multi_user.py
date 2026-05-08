@@ -26,8 +26,12 @@ async def test_two_users_data_isolated():
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
 
-        s_a = MemoryBankStore(base, embedding_model=_make_embedding_mock(), user_id="alice")
-        s_b = MemoryBankStore(base, embedding_model=_make_embedding_mock(), user_id="bob")
+        s_a = MemoryBankStore(
+            base, embedding_model=_make_embedding_mock(), user_id="alice"
+        )
+        s_b = MemoryBankStore(
+            base, embedding_model=_make_embedding_mock(), user_id="bob"
+        )
 
         await s_a.write_interaction("alice's preference: seat 30", "noted")
         await s_b.write_interaction("bob's preference: AC 22", "noted")
@@ -65,7 +69,9 @@ async def test_same_user_id_reuses_store():
     """同 user_id 多次 get_store 返回同一实例行为。"""
     # 验证 MemoryModule 功能——此处直接测 store 层面
     with tempfile.TemporaryDirectory() as tmp:
-        s1 = MemoryBankStore(Path(tmp), embedding_model=_make_embedding_mock(), user_id="same")
+        s1 = MemoryBankStore(
+            Path(tmp), embedding_model=_make_embedding_mock(), user_id="same"
+        )
         await s1.write_interaction("x", "y")
         assert s1._index.total == 1
         await s1.close()

@@ -128,9 +128,7 @@ class MemoryLifecycle:
                 pair_metas.append(
                     {
                         "source": date_key,
-                        "speakers": sorted(
-                            {s for s in speakers if s is not None}
-                        ),
+                        "speakers": sorted({s for s in speakers if s is not None}),
                         "raw_content": conv_text,
                         "event_type": event.type,
                     }
@@ -151,7 +149,9 @@ class MemoryLifecycle:
         # 批量编码
         embeddings = await self._embedding_client.encode_batch(pair_texts)
         fid: int | None = None
-        for text_item, emb, meta in zip(pair_texts, embeddings, pair_metas, strict=True):
+        for text_item, emb, meta in zip(
+            pair_texts, embeddings, pair_metas, strict=True
+        ):
             fid = await self._index.add_vector(text_item, emb, ts, meta)
 
         await self._post_write_forget_and_summarize(date_key)
@@ -230,12 +230,14 @@ class MemoryLifecycle:
             logger.debug("background summarization empty for date=%s", date_key)
         except LLMCallFailed:
             logger.warning(
-                "background summarization failed (LLM) for date=%s", date_key,
+                "background summarization failed (LLM) for date=%s",
+                date_key,
                 exc_info=True,
             )
         except Exception:
             logger.warning(
-                "background summarization failed for date=%s", date_key,
+                "background summarization failed for date=%s",
+                date_key,
                 exc_info=True,
             )
         finally:

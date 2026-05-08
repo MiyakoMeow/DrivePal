@@ -112,11 +112,15 @@ async def test_merge_neighbors_same_source(pipeline, mock_index, mock_embedding)
     )
     results, updated = await pipeline.search("query")
     assert len(results) >= 1
-    assert "; " in results[0].get("text", "")  # \x00 在 _clean_search_result 中转为 "; "
+    assert "; " in results[0].get(
+        "text", ""
+    )  # \x00 在 _clean_search_result 中转为 "; "
 
 
 @pytest.mark.asyncio
-async def test_speaker_filter_downweights_positive(pipeline, mock_index, mock_embedding):
+async def test_speaker_filter_downweights_positive(
+    pipeline, mock_index, mock_embedding
+):
     """query 提及 Alice，结果 speakers=["Bob"] → 其他结果含 Alice 激活过滤器 → Bob 被降权。"""
     meta = [
         {
@@ -171,7 +175,9 @@ async def test_speaker_filter_downweights_positive(pipeline, mock_index, mock_em
 
 
 @pytest.mark.asyncio
-async def test_updated_flag_on_memory_strength_change(pipeline, mock_index, mock_embedding):
+async def test_updated_flag_on_memory_strength_change(
+    pipeline, mock_index, mock_embedding
+):
     """检索命中应触发 memory_strength 更新 → updated=True。"""
     meta = [
         {

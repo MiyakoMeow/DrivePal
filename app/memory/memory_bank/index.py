@@ -189,9 +189,7 @@ class FaissIndex:
         self._index = idx
         self._dim = idx.d
         self._metadata = meta
-        self._next_id = (
-            (max(m["faiss_id"] for m in meta) + 1) if meta else 0
-        )
+        self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
         self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
         self._rebuild_speakers_cache()
 
@@ -202,9 +200,7 @@ class FaissIndex:
                 e: object = json.loads(ep.read_text())
                 self._extra = e if isinstance(e, dict) else {}
             except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
-                logger.warning(
-                    "FaissIndex extra_metadata corrupted, ignoring: %s", exc
-                )
+                logger.warning("FaissIndex extra_metadata corrupted, ignoring: %s", exc)
                 self._extra = {}
                 extra_recovery.append(
                     "extra_metadata.json corrupted — ignoring. "
@@ -247,7 +243,7 @@ class FaissIndex:
             return (date.fromisoformat(max_ts) + timedelta(days=offset_days)).strftime(
                 "%Y-%m-%d"
             )
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return datetime.now(UTC).strftime("%Y-%m-%d")
 
     @staticmethod

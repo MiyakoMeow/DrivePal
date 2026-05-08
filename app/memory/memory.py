@@ -118,7 +118,10 @@ class MemoryModule:
         return m.snapshot()
 
     async def write(
-        self, event: MemoryEvent, *, mode: MemoryMode | None = None,
+        self,
+        event: MemoryEvent,
+        *,
+        mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> str:
         store = await self._get_store(self._resolve_mode(mode), user_id)
@@ -183,8 +186,11 @@ class MemoryModule:
         await store.update_feedback(event_id, feedback)
 
     async def close(self) -> None:
-        for store in self._stores.values():
+        for key, store in list(self._stores.items()):
             closer = getattr(store, "close", None)
             if closer is not None:
-                await closer()
+                try:
+                    await closer()
+                except Exception:
+                    logger.exception("Failed to close store %s", key)
         self._stores.clear()

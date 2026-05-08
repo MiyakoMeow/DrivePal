@@ -112,7 +112,15 @@ class TestThrottle:
             enable_forgetting=True,
         )
         fc = ForgettingCurve(config)
-        meta = [{"faiss_id": 1, "memory_strength": 1, "timestamp": "2020-01-01T00:00:00", "last_recall_date": "2020-01-01", "forgotten": False}]
+        meta = [
+            {
+                "faiss_id": 1,
+                "memory_strength": 1,
+                "timestamp": "2020-01-01T00:00:00",
+                "last_recall_date": "2020-01-01",
+                "forgotten": False,
+            }
+        ]
         r1 = fc.maybe_forget(meta, reference_date="2020-02-01")
         assert r1 is not None
         r2 = fc.maybe_forget(meta, reference_date="2020-02-01")

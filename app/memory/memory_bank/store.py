@@ -58,11 +58,7 @@ class MemoryBankStore:
         self._metrics = MemoryBankMetrics()
         self._bg = BackgroundTaskRunner(self._config)
 
-        llm = (
-            LlmClient(chat_model, self._config)
-            if chat_model
-            else None
-        )
+        llm = LlmClient(chat_model, self._config) if chat_model else None
         summarizer = Summarizer(llm, self._index, self._config) if llm else None
 
         self._lifecycle = MemoryLifecycle(
@@ -234,5 +230,7 @@ class MemoryBankStore:
         return self._metrics
 
     async def close(self) -> None:
-        await self._index.save()
-        await self._bg.shutdown()
+        try:
+            await self._index.save()
+        finally:
+            await self._bg.shutdown()
