@@ -332,4 +332,4 @@ class FaissIndex:
 
 1. 内存中同时持有多个 store 实例（每用户一个），车载场景 ≤6 用户，每实例开销 ~10MB（FAISS 索引），总量可控。若未来需大量用户，需 LRU 淘汰策略
 2. `MemoryStore` Protocol 加 `close()` 方法（无默认实现，协议定义即可）——后续接口统一，避免 `isinstance` 判断。追加至 `interfaces.py`
-3. 损坏恢复的 `corrupted=True` 条目在 search 结果中保留但无 text。调用方（GraphQL resolver）过滤掉 `corrupted=True` 条目，不返回给前端
+3. 损坏恢复的 `corrupted=True` 条目在 `MemoryBankStore.search()` 中过滤——`SearchResult` 构建时跳过，不传入 GraphQL resolver。此决策与降级逻辑要点一致（store 层清理，避免污染上层）
