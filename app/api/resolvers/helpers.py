@@ -18,7 +18,6 @@ __all__ = [
 import dataclasses
 import logging
 from enum import Enum
-from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -99,7 +98,6 @@ async def _safe_memory_call[T](
         raise InternalServerError from e
 
 
-@cache
 def _preset_store() -> TOMLStore:
     return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
 
