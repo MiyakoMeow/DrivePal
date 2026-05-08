@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
 from collections import defaultdict, deque
 from datetime import UTC, datetime
@@ -20,15 +19,12 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
 
-    from .faiss_index import FaissIndex
+    from .config import MemoryBankConfig
+    from .index_reader import IndexReader
 
 logger = logging.getLogger(__name__)
 
-COARSE_SEARCH_FACTOR = 4
 _MERGED_TEXT_DELIMITER = "\x00"
-DEFAULT_CHUNK_SIZE = 1500
-CHUNK_SIZE_MIN = 200
-CHUNK_SIZE_MAX = 8192
 _ADAPTIVE_CHUNK_MIN_ENTRIES = 10
 INITIAL_MEMORY_STRENGTH = 1
 _INTERNAL_KEYS: frozenset[str] = frozenset(
@@ -41,30 +37,23 @@ _INTERNAL_KEYS: frozenset[str] = frozenset(
 )
 
 
-def _resolve_chunk_size() -> int:
-    raw = os.getenv("MEMORYBANK_CHUNK_SIZE")
-    if raw is not None:
-        try:
-            return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, int(raw)))
-        except ValueError:
-            pass
-    return DEFAULT_CHUNK_SIZE
-
-
-def _get_effective_chunk_size(metadata: list[dict]) -> int:
+def _get_effective_chunk_size(
+    metadata: list[dict],
+    config: MemoryBankConfig,
+) -> int:
     """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
 
-    环境变量 MEMORYBANK_CHUNK_SIZE 显式设置时跳过自适应，直接使用该值。
+    config.chunk_size 显式设置时直接使用该值。
     metadata 不足 10 条时回退 DEFAULT_CHUNK_SIZE。
     """
-    if os.getenv("MEMORYBANK_CHUNK_SIZE"):
-        return _resolve_chunk_size()
+    if config.chunk_size is not None:
+        return max(config.chunk_size_min, min(config.chunk_size_max, config.chunk_size))
     lengths = sorted(len(m.get("text", "")) for m in metadata)
     if len(lengths) < _ADAPTIVE_CHUNK_MIN_ENTRIES:
-        return DEFAULT_CHUNK_SIZE
+        return config.default_chunk_size
     p90_idx = math.ceil(len(lengths) * 0.9) - 1
     p90 = lengths[p90_idx]
-    return max(CHUNK_SIZE_MIN, min(CHUNK_SIZE_MAX, p90 * 3))
+    return max(config.chunk_size_min, min(config.chunk_size_max, p90 * 3))
 
 
 def _safe_memory_strength(value: object) -> float:
@@ -348,31 +337,49 @@ class RetrievalPipeline:
     阶段 2: 邻居合并（同 source 连续条目）
     阶段 3: 重叠去重（并查集）
     阶段 4: 说话人感知降权
+
+    _apply_speaker_filter 通过遍历结果条目中的 speakers 字段工作，
+    不依赖 FaissIndex.get_all_speakers()，迁移 IndexReader 后行为不变。
     """
 
-    def __init__(self, index: FaissIndex, embedding_client: EmbeddingClient) -> None:
+    def __init__(
+        self,
+        index: IndexReader,
+        embedding_client: EmbeddingClient,
+        config: MemoryBankConfig,
+    ) -> None:
         """初始化检索管道。"""
         self._index = index
         self._embedding_client = embedding_client
+        self._config = config
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
-    ) -> list[dict]:
-        """执行四阶段检索管道。"""
+    ) -> tuple[list[dict], bool]:
+        """执行四阶段检索管道。
+
+        Returns:
+            (results, updated): results 是检索结果列表，updated 指示是否有
+            memory_strength 变更（调用方应在合适时机持久化索引）。
+
+        """
         if top_k <= 0:
-            return []
+            return [], False
         query_emb = await self._embedding_client.encode(query)
         index_total = self._index.total
         if index_total == 0:
-            return []
-        coarse_k = min(top_k * COARSE_SEARCH_FACTOR, index_total)
+            return [], False
+        coarse_factor = self._config.coarse_search_factor
+        if coarse_factor <= 0:
+            coarse_factor = 4
+        coarse_k = min(top_k * coarse_factor, index_total)
         results = await self._index.search(query_emb, coarse_k)
         if not results:
-            return []
-        # 过滤已遗忘条目（maybe_forget 在 store.py 中已设 forgotten 标记）
+            return [], False
+        # 过滤已遗忘条目（maybe_forget 在 store.py/lifecycle.py 中已设 forgotten 标记）
         results = [r for r in results if not r.get("forgotten")]
         if not results:
-            return []
+            return [], False
 
         metadata = self._index.get_metadata()
         merged = self._merge_neighbors(results, metadata)
@@ -388,15 +395,13 @@ class RetrievalPipeline:
         )
         for r in merged:
             _clean_search_result(r)
-        if updated:
-            await self._index.save()
-        return merged
+        return merged, updated
 
     def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:
         if not results or not metadata:
             return results
 
-        effective_chunk = _get_effective_chunk_size(metadata)
+        effective_chunk = _get_effective_chunk_size(metadata, self._config)
         indexed = [
             (r, r["_meta_idx"]) for r in results if r.get("_meta_idx") is not None
         ]

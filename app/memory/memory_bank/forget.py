@@ -7,24 +7,30 @@
 import enum
 import logging
 import math
-import os
 import random
 import time
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .config import MemoryBankConfig
 
 logger = logging.getLogger(__name__)
 
-SOFT_FORGET_THRESHOLD = 0.15
-FORGET_INTERVAL_SECONDS = 300
 FORGETTING_TIME_SCALE = 1
 
 
-def forgetting_retention(days_elapsed: float, strength: float) -> float:
+def forgetting_retention(
+    days_elapsed: float,
+    strength: float,
+    time_scale: float = FORGETTING_TIME_SCALE,
+) -> float:
     """计算经过 days_elapsed 天后的记忆留存率。
 
     Args:
         days_elapsed: 距离上次回忆的天数。
         strength: 记忆强度系数，值越大衰减越慢。
+        time_scale: 时间缩放因子，默认 1。
 
     Returns:
         0~1 的留存率。
@@ -34,7 +40,9 @@ def forgetting_retention(days_elapsed: float, strength: float) -> float:
         return 1.0
     if strength <= 0:
         return 0.0
-    return math.exp(-days_elapsed / (FORGETTING_TIME_SCALE * strength))
+    if time_scale <= 0:
+        time_scale = FORGETTING_TIME_SCALE
+    return math.exp(-days_elapsed / (time_scale * strength))
 
 
 class ForgetMode(enum.Enum):
@@ -44,10 +52,8 @@ class ForgetMode(enum.Enum):
     PROBABILISTIC = "probabilistic"
 
 
-def _resolve_forget_mode() -> ForgetMode:
-    """从环境变量 MEMORYBANK_FORGET_MODE 解析遗忘模式。"""
-    mode = os.getenv("MEMORYBANK_FORGET_MODE", "deterministic").lower()
-    if mode == "probabilistic":
+def _forget_mode_from_config(config: MemoryBankConfig) -> ForgetMode:
+    if config.forget_mode == "probabilistic":
         return ForgetMode.PROBABILISTIC
     return ForgetMode.DETERMINISTIC
 
@@ -55,8 +61,8 @@ def _resolve_forget_mode() -> ForgetMode:
 def compute_ingestion_forget_ids(
     metadata: list[dict],
     reference_date: str,
+    config: MemoryBankConfig,
     rng: random.Random | None = None,
-    mode: ForgetMode = ForgetMode.DETERMINISTIC,
 ) -> list[int]:
     """对 metadata 中的条目执行摄入时遗忘，返回应硬删除的 FAISS ID 列表。
 
@@ -77,6 +83,7 @@ def compute_ingestion_forget_ids(
         )
         return []
 
+    mode = _forget_mode_from_config(config)
     ids_to_remove: list[int] = []
     rng_once = rng if rng is not None else random.Random()
     for entry in metadata:
@@ -89,11 +96,11 @@ def compute_ingestion_forget_ids(
             strength = float(entry.get("memory_strength", 1))
         except ValueError, TypeError:
             continue
-        retention = forgetting_retention(days, strength)
+        retention = forgetting_retention(days, strength, config.forgetting_time_scale)
         if mode == ForgetMode.PROBABILISTIC:
             should_forget = rng_once.random() > retention
         else:
-            should_forget = retention < SOFT_FORGET_THRESHOLD
+            should_forget = retention < config.soft_forget_threshold
         if should_forget:
             fid = entry.get("faiss_id")
             if fid is not None:
@@ -106,29 +113,32 @@ class ForgettingCurve:
 
     def __init__(
         self,
-        mode: ForgetMode | None = None,
-        seed: int | None = None,
+        config: MemoryBankConfig,
         rng: random.Random | None = None,
     ) -> None:
         """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。
 
         Args:
-            mode: 遗忘策略模式。
-            seed: 随机种子（与 rng 互斥；仅 mode=PROBABILISTIC 时使用）。
-            rng: 外部 RNG 实例（与 seed 互斥；优先级高于 seed）。
+            config: MemoryBank 配置。
+            rng: 外部 RNG 实例（优先级高于 config.seed）。
 
         """
-        self._mode = mode if mode is not None else _resolve_forget_mode()
-        if seed is not None and rng is not None:
-            msg = "seed and rng are mutually exclusive"
-            raise ValueError(msg)
+        self._config = config
+        self._mode = _forget_mode_from_config(config)
         if rng is not None:
             self._rng = rng
+        elif config.seed is not None and self._mode == ForgetMode.PROBABILISTIC:
+            self._rng = random.Random(config.seed)
+        elif self._mode == ForgetMode.PROBABILISTIC:
+            self._rng = random.Random()
         else:
-            self._rng = (
-                random.Random(seed) if self._mode == ForgetMode.PROBABILISTIC else None
-            )
-        self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
+            self._rng = None
+        self._last_forget_time: float = -float(config.forget_interval_seconds) - 1
+
+    @property
+    def rng(self) -> random.Random | None:
+        """公开 RNG 实例，供同包 lifecycle 使用。"""
+        return self._rng
 
     def maybe_forget(
         self, metadata: list[dict], reference_date: str | None = None
@@ -147,7 +157,7 @@ class ForgettingCurve:
 
         """
         now = time.monotonic()
-        if now - self._last_forget_time < FORGET_INTERVAL_SECONDS:
+        if now - self._last_forget_time < self._config.forget_interval_seconds:
             return None
         self._last_forget_time = now
         today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
@@ -166,12 +176,16 @@ class ForgettingCurve:
                 strength_float = float(strength)
             except ValueError, TypeError:
                 continue
-            retention = forgetting_retention(days, strength_float)
+            retention = forgetting_retention(
+                days,
+                strength_float,
+                self._config.forgetting_time_scale,
+            )
 
             if self._mode == ForgetMode.PROBABILISTIC and self._rng is not None:
                 should_forget = self._rng.random() > retention
             else:
-                should_forget = retention < SOFT_FORGET_THRESHOLD
+                should_forget = retention < self._config.soft_forget_threshold
 
             if should_forget:
                 entry["forgotten"] = True

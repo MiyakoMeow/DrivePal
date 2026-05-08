@@ -168,3 +168,10 @@ class MemoryModule:
         """更新记忆反馈."""
         store = await self._get_store(self._resolve_mode(mode))
         await store.update_feedback(event_id, feedback)
+
+    async def close(self) -> None:
+        """关闭所有 store 的后台任务。"""
+        for store in self._stores.values():
+            closer = getattr(store, "close", None)
+            if closer is not None:
+                await closer()

@@ -128,7 +128,23 @@ deleteScenarioPreset(id): Boolean
 
 ## MemoryBank 记忆系统
 
-`app/memory/stores/memory_bank/`。基于论文 MemoryBank 实现。
+`app/memory/memory_bank/`。基于论文 MemoryBank 实现。
+
+### 文件结构
+
+```
+app/memory/memory_bank/
+├── config.py         # 集中配置（pydantic-settings，MEMORYBANK_ 前缀）
+├── index.py          # FAISS 索引管理（IndexIDMap(IndexFlatIP)）
+├── index_reader.py   # IndexReader Protocol（只读视图）
+├── retrieval.py      # 四阶段检索管道
+├── forget.py         # Ebbinghaus 遗忘曲线
+├── summarizer.py     # 分层摘要 + 人格生成
+├── llm.py            # LLM 封装（上下文截断重试）
+├── lifecycle.py      # 写入/遗忘/摘要编排
+├── store.py          # MemoryBankStore Facade（MemoryStore Protocol 实现）
+└── bg_tasks.py       # 后台任务管理器
+```
 
 ### 架构
 
@@ -137,34 +153,32 @@ deleteScenarioPreset(id): Boolean
 ### FAISS索引
 
 - IndexIDMap(IndexFlatIP) + L2归一化（等价余弦相似度）
-- 每日检索时重建索引，确保数据新鲜
 - 自适应分块（P90×3 动态校准 chunk_size）
-- 关键阈值：`EMBEDDING_MIN_SIMILARITY=0.3`, `SUMMARY_WEIGHT=0.8`
+- 关键阈值：`EMBEDDING_MIN_SIMILARITY=0.3`
 
 ### 四阶段检索管道
 
 1. query embedding + FAISS 粗排（top_k × 4）
 2. 邻居合并（同 source 连续条目）
 3. 重叠去重（并查集）
-4. 说话人感知降权（查询含说话人名的结果加分）
+4. 说话人感知降权（查询含说话人名的无关条目降权 ×0.75）
 
 ### 遗忘曲线
 
-`retention = e^(-days / (5 × strength))`
+`retention = e^(-days / strength)`
 
 - **默认确定性模式**：retention < `SOFT_FORGET_THRESHOLD=0.15` 标记遗忘（memory_strength=0, forgotten=True）
 - **可选概率性模式**：`MEMORYBANK_FORGET_MODE=probabilistic`，每条目独立掷骰子
 - **回忆强化**：检索命中 memory_strength += 1（无上限）
 - **节流**：`FORGET_INTERVAL_SECONDS=300`，两次遗忘判断至少间隔5分钟
-- **搜索评分**：`score = similarity × retention`（遗忘曲线为连续权重）
-- 额外：名称匹配加分（×1.3），时效性衰减（最低0.7）
+- **搜索评分**：FAISS 内积 + 说话人感知降权（×0.75/×1.25）
 
 ### 摘要与人格
 
-- **每日摘要**：事件数达阈值触发，自动/增量
-- **总体摘要**：daily_summaries ≥ 3且有新增时触发
-- **不可变性保护**：已生成条目不覆盖 + _inflight防并发
-- 人格(persionality)也参与遗忘曲线，权重降为 SUMMARY_WEIGHT × 0.8
+- **每日摘要**：每次写入后异步后台生成（不阻塞主流程）
+- **总体摘要**：有 daily_summary 即生成；已存在则跳过（不可变保护）
+- **每日人格**：同上，按日期生成后不覆盖
+- **总体人格**：基于每日人格汇总生成；已存在则跳过
 
 ### 聚合
 
@@ -303,19 +317,16 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 
 | 阈值 | 值 | 位置 |
 |------|-----|------|
-| SOFT_FORGET_THRESHOLD | 0.15 | forget.py |
-| FORGET_INTERVAL_SECONDS | 300 | forget.py |
-| FORGETTING_TIME_SCALE | 1 | forget.py |
-| EMBEDDING_MIN_SIMILARITY | 0.3 | faiss_index.py |
+| SOFT_FORGET_THRESHOLD | 0.15 | config.py |
+| FORGET_INTERVAL_SECONDS | 300 | config.py |
+| FORGETTING_TIME_SCALE | 1 | config.py |
+| EMBEDDING_MIN_SIMILARITY | 0.3 | config.py |
 | COARSE_SEARCH_FACTOR | 4 | retrieval.py |
 | AGGREGATION_SIMILARITY_THRESHOLD | 0.8 | retrieval.py |
 | OVERLAP_RATIO_THRESHOLD | 0.45 | retrieval.py |
-| SUMMARY_WEIGHT | 0.8 | retrieval.py |
-| NAME_BONUS | 1.3 | retrieval.py |
-| MAX_RECENCY_PENALTY | 0.7 | retrieval.py |
-| FATIGUE_THRESHOLD (默认) | 0.7 | rules.py |
-| PERSONALITY_SUMMARY_THRESHOLD | 2 | summarizer.py |
-| OVERALL_PERSONALITY_THRESHOLD | 3 | summarizer.py |
+| DEFAULT_CHUNK_SIZE | 1500（自适应回退值） | retrieval.py |
+| CHUNK_SIZE_MIN | 200 | config.py |
+| CHUNK_SIZE_MAX | 8192 | config.py |
 | HTTP read timeout | 12h | _http.py |
 | Embedding batch size | 32 | embedding.py |
 | Embedding retry | 3次 | embedding.py |

@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.memory.memory_bank.faiss_index import FaissIndex
+from app.memory.memory_bank.config import MemoryBankConfig
+from app.memory.memory_bank.index import FaissIndex
 from app.memory.memory_bank.summarizer import Summarizer
 
 TEST_EMBEDDING = [0.1] * 1536
@@ -27,7 +28,7 @@ async def test_get_daily_summary_returns_text():
 
         mock_llm = AsyncMock()
         mock_llm.call = AsyncMock(return_value="User Gary prefers seat at 30%")
-        summ = Summarizer(mock_llm, idx)
+        summ = Summarizer(mock_llm, idx, MemoryBankConfig())
         result = await summ.get_daily_summary("2024-06-15")
         assert result is not None
         assert "Gary" in result
@@ -46,7 +47,7 @@ async def test_get_daily_summary_returns_none_when_exists():
             {"source": "summary_2024-06-15", "type": "daily_summary"},
         )
         mock_llm = AsyncMock()
-        summ = Summarizer(mock_llm, idx)
+        summ = Summarizer(mock_llm, idx, MemoryBankConfig())
         result = await summ.get_daily_summary("2024-06-15")
         assert result is None
 
@@ -62,7 +63,7 @@ async def test_get_daily_summary_none_on_empty_llm():
         )
         mock_llm = AsyncMock()
         mock_llm.call = AsyncMock(return_value=None)
-        summ = Summarizer(mock_llm, idx)
+        summ = Summarizer(mock_llm, idx, MemoryBankConfig())
         result = await summ.get_daily_summary("2024-06-15")
         assert result is None
 
@@ -81,7 +82,7 @@ async def test_summarize_prompt_includes_user_focus():
         )
         mock_llm = AsyncMock()
         mock_llm.call = AsyncMock(return_value="summary text")
-        summ = Summarizer(mock_llm, idx)
+        summ = Summarizer(mock_llm, idx, MemoryBankConfig())
         await summ.get_daily_summary("2024-06-15")
         call_args = mock_llm.call.call_args
         call_text = (

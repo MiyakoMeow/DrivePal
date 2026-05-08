@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.forget import (
-    ForgetMode,
     ForgettingCurve,
     compute_ingestion_forget_ids,
     forgetting_retention,
@@ -42,7 +42,7 @@ class TestForgettingCurve:
 
     def test_fresh_curve_no_forget(self):
         """验证新条目不被遗忘。"""
-        fc = ForgettingCurve()
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -56,7 +56,7 @@ class TestForgettingCurve:
 
     def test_old_entry_marked_forgotten(self):
         """验证旧条目被标记遗忘。"""
-        fc = ForgettingCurve()
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -70,7 +70,7 @@ class TestForgettingCurve:
 
     def test_daily_summary_exempt(self):
         """验证每日摘要不被遗忘。"""
-        fc = ForgettingCurve()
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -84,7 +84,7 @@ class TestForgettingCurve:
 
     def test_throttle_skips_second_call(self):
         """验证节流机制跳过短时间内重复遗忘（返回 None）。"""
-        fc = ForgettingCurve()
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -107,7 +107,8 @@ class TestProbabilisticForgetting:
 
     def test_probabilistic_maybe_forget_returns_ids(self):
         """概率模式下 maybe_forget 返回被遗忘条目的 FAISS ID。"""
-        fc = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        config = MemoryBankConfig(forget_mode="probabilistic", seed=42)
+        fc = ForgettingCurve(config)
         entries = [
             {
                 "faiss_id": 0,
@@ -130,7 +131,7 @@ class TestProbabilisticForgetting:
 
     def test_deterministic_returns_empty_ids(self):
         """确定性模式 maybe_forget 返回空列表。"""
-        fc = ForgettingCurve(mode=ForgetMode.DETERMINISTIC)
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -144,7 +145,8 @@ class TestProbabilisticForgetting:
 
     def test_summary_exempt_in_probabilistic(self):
         """概率模式下每日摘要豁免遗忘。"""
-        fc = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        config = MemoryBankConfig(forget_mode="probabilistic", seed=42)
+        fc = ForgettingCurve(config)
         entries = [
             {
                 "faiss_id": 0,
@@ -158,8 +160,10 @@ class TestProbabilisticForgetting:
 
     def test_probabilistic_reproducible_with_seed(self):
         """固定 seed 产生可复现的遗忘结果。"""
-        fc1 = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
-        fc2 = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        config1 = MemoryBankConfig(forget_mode="probabilistic", seed=42)
+        config2 = MemoryBankConfig(forget_mode="probabilistic", seed=42)
+        fc1 = ForgettingCurve(config1)
+        fc2 = ForgettingCurve(config2)
         entries1 = [
             {
                 "faiss_id": i,
@@ -185,8 +189,10 @@ class TestProbabilisticForgetting:
     def test_external_rng_consistent_with_internal_seed(self):
         """外部传入 RNG 与同 seed 内部构造 RNG 行为一致。"""
         rng = random.Random(42)
-        fc_ext = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, rng=rng)
-        fc_int = ForgettingCurve(mode=ForgetMode.PROBABILISTIC, seed=42)
+        config_ext = MemoryBankConfig(forget_mode="probabilistic")
+        config_int = MemoryBankConfig(forget_mode="probabilistic", seed=42)
+        fc_ext = ForgettingCurve(config_ext, rng=rng)
+        fc_int = ForgettingCurve(config_int)
         entries_ext = [
             {
                 "faiss_id": i,
@@ -239,7 +245,7 @@ class TestIngestionForget:
         ids = compute_ingestion_forget_ids(
             metadata,
             "2024-06-15",
-            mode=ForgetMode.DETERMINISTIC,
+            config=MemoryBankConfig(forget_mode="deterministic"),
         )
         assert 1 not in ids
 
@@ -257,7 +263,7 @@ class TestIngestionForget:
         ids = compute_ingestion_forget_ids(
             list(metadata),
             today,
-            mode=ForgetMode.DETERMINISTIC,
+            config=MemoryBankConfig(forget_mode="deterministic"),
         )
         assert 0 not in ids
 
@@ -272,18 +278,19 @@ class TestIngestionForget:
             }
             for i in range(50)
         ]
+        config = MemoryBankConfig(forget_mode="probabilistic")
         rng_a = random.Random(42)
         rng_b = random.Random(42)
         ids_a = compute_ingestion_forget_ids(
             metadata,
             "2024-06-15",
+            config=config,
             rng=rng_a,
-            mode=ForgetMode.PROBABILISTIC,
         )
         ids_b = compute_ingestion_forget_ids(
             metadata,
             "2024-06-15",
+            config=config,
             rng=rng_b,
-            mode=ForgetMode.PROBABILISTIC,
         )
         assert ids_a == ids_b

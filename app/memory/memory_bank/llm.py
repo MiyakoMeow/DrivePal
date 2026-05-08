@@ -41,10 +41,6 @@ _CONTEXT_EXCEEDED_PATTERNS = (
 
 _ANCHOR_USER = "Hello! Please help me summarize the content of the conversation."
 _ANCHOR_ASSISTANT = "Sure, I will do my best to assist you."
-_DEFAULT_SYSTEM = (
-    "You are an in-car AI assistant with expertise in remembering "
-    "vehicle preferences, driving habits, and in-car conversation context."
-)
 
 
 class LlmClient:
@@ -61,21 +57,15 @@ class LlmClient:
         self._chat_model = chat_model
         self._rng = rng
 
-    async def call(
-        self, prompt: str, *, system_prompt: str | None = None
-    ) -> str | None:
+    async def call(self, prompt: str, *, system_prompt: str) -> str | None:
         """调用 ChatModel.generate()，使用 4 消息序列。
 
         消息序列：system → user（锚定）→ assistant（应承）→ user（实际 prompt）。
+        system_prompt 由调用方从 config 获取后传入。
         重试时截断 messages[-1]["content"]。
         """
         messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-                if system_prompt is not None
-                else _DEFAULT_SYSTEM,
-            },
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": _ANCHOR_USER},
             {"role": "assistant", "content": _ANCHOR_ASSISTANT},
             {"role": "user", "content": prompt},
