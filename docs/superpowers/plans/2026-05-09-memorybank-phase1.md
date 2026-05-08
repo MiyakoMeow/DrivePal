@@ -416,6 +416,7 @@ git commit -m "feat: add MemoryBank observability metrics"
 - `search()` 改用 `_maybe_save()`；加 corrupted 条目过滤
 - 新增 `format_search_results(query, top_k) -> str`
 - 新增 `metrics` 属性（返回 `MemoryBankMetrics` 实例）
+- `close()` 已存在（调用 `self._bg.shutdown()`），**不删不改**。Task 11 `MemoryModule.close()` 调用此方法
 
 思路：
 - `__init__` 中 `self._index = FaissIndex(user_dir, ...)` 后调用 `load_result = await self._index.load()`，处理 warnings
