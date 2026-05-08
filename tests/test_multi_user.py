@@ -39,7 +39,7 @@ async def test_two_users_data_isolated():
         # Alice 搜自己的数据
         r_a = await s_a.search("seat")
         assert len(r_a) >= 1
-        assert "alice" in str(r_a).lower()
+        assert any("alice" in r.event.get("content", "").lower() for r in r_a)
 
         # Bob 搜自己的数据
         r_b = await s_b.search("AC")

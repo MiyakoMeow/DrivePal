@@ -2,6 +2,7 @@
 
 import logging
 import time
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from app.memory.embedding_client import EmbeddingClient
@@ -112,6 +113,7 @@ class MemoryBankStore:
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """搜索记忆。"""
         await self._ensure_loaded()
+        self._metrics.search_count += 1
         if self._index.total == 0:
             self._metrics.search_empty_count += 1
             return []
@@ -126,7 +128,6 @@ class MemoryBankStore:
             reference_date=self._config.reference_date,
         )
         elapsed = (time.monotonic() - t0) * 1000
-        self._metrics.search_count += 1
         self._metrics.search_latency_ms.append(elapsed)
         if not results:
             self._metrics.search_empty_count += 1
@@ -186,8 +187,6 @@ class MemoryBankStore:
                 parts.append(content)
 
         # 按 source 分组
-        from collections import defaultdict
-
         groups: dict[str, list[SearchResult]] = defaultdict(list)
         group_order: list[str] = []
         for r in regular:
