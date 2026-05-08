@@ -1,4 +1,4 @@
-"""ChatModel 薄封装：重试时自动截断 prompt 上下文。"""
+"""ChatModel 薄封装：4 消息序列 + 重试时自动截断 prompt 上下文。"""
 
 from __future__ import annotations
 
@@ -39,9 +39,16 @@ _CONTEXT_EXCEEDED_PATTERNS = (
     "input length",
 )
 
+_ANCHOR_USER = "Hello! Please help me summarize the content of the conversation."
+_ANCHOR_ASSISTANT = "Sure, I will do my best to assist you."
+_DEFAULT_SYSTEM = (
+    "You are an in-car AI assistant with expertise in remembering "
+    "vehicle preferences, driving habits, and in-car conversation context."
+)
+
 
 class LlmClient:
-    """ChatModel 的薄封装，提供上下文截断重试。"""
+    """ChatModel 的薄封装，4 消息序列 + 上下文截断重试。"""
 
     def __init__(self, chat_model: Any, *, rng: random.Random | None = None) -> None:
         """初始化 LlmClient。
@@ -57,31 +64,30 @@ class LlmClient:
     async def call(
         self, prompt: str, *, system_prompt: str | None = None
     ) -> str | None:
-        """调用 ChatModel.generate()，重试时自动截断 prompt 头部（保留末尾最新内容）。
+        """调用 ChatModel.generate()，使用 4 消息序列。
 
-        AllProviderFailedError 外的不明异常会传播到上层，不在此处静默吞掉。
+        消息序列：system → user（锚定）→ assistant（应承）→ user（实际 prompt）。
+        重试时截断 messages[-1]["content"]。
         """
+        messages = [
+            {"role": "system", "content": system_prompt or _DEFAULT_SYSTEM},
+            {"role": "user", "content": _ANCHOR_USER},
+            {"role": "assistant", "content": _ANCHOR_ASSISTANT},
+            {"role": "user", "content": prompt},
+        ]
         for attempt in range(LLM_MAX_RETRIES):
             try:
-                resp = await self._chat_model.generate(
-                    prompt=prompt,
-                    system_prompt=system_prompt or None,
-                )
+                resp = await self._chat_model.generate(messages=messages)
                 return resp.strip() if resp else ""
             except AllProviderFailedError as exc:
                 err = str(exc).lower()
-                # 错误判定优先级：context exceeded > transient > nontransient
-                # 模式匹配集不互斥，但真实场景中关键词重叠可能性极低。
-                # 上下文超长 → 截断后重试
                 if (
                     any(p in err for p in _CONTEXT_EXCEEDED_PATTERNS)
                     and attempt < LLM_MAX_RETRIES - 1
                 ):
-                    prompt = prompt[
-                        -max(LLM_TRIM_START - LLM_TRIM_STEP * attempt, LLM_TRIM_MIN) :
-                    ]
+                    cut = max(LLM_TRIM_START - LLM_TRIM_STEP * attempt, LLM_TRIM_MIN)
+                    messages[-1]["content"] = messages[-1]["content"][-cut:]
                     continue
-                # 瞬态错误 → 指数退避后重试
                 if (
                     any(p in err for p in _TRANSIENT_PATTERNS)
                     and attempt < LLM_MAX_RETRIES - 1
@@ -91,7 +97,6 @@ class LlmClient:
                         delay += self._rng.random() * 0.5
                     await _sleep(delay)
                     continue
-                # 其他错误（鉴权/模型不存在等）：快速失败，仅重试一次
                 if attempt < LLM_NONTRANSIENT_MAX_RETRIES:
                     continue
                 logger.warning(
@@ -100,4 +105,4 @@ class LlmClient:
                     exc,
                 )
                 return None
-        return None  # 防御性 fallback（LLM_MAX_RETRIES <= 1 时可达）
+        return None
