@@ -85,4 +85,5 @@ class EmbeddingClient:
                     await _SLEEP(delay)
                     continue
                 raise
-        raise AssertionError
+        msg = "unreachable"
+        raise AssertionError(msg)

@@ -31,6 +31,7 @@ exclude = [".agents/**"]
     "S311",  # 退避 jitter 使用伪随机种子，非安全场景
 ]
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
+"app/memory/components.py" = ["TC"]  # FeedbackData 运行时使用，不可移入 TYPE_CHECKING
 "app/memory/memory_bank/store.py" = [
     "D",  # MemoryBankStore 方法功能自明，无需额外 docstring
     "PLR0913",  # __init__ 参数≥6合理（含多个可选依赖注入）
@@ -47,8 +48,10 @@ exclude = [".agents/**"]
     "D",  # 测试类/方法无需 docstring
     "ANN",  # 测试方法无需类型注解
     "ARG002",  # 测试 fake 中未用参数（为满足基类签名而保留）
+    "ARG005",  # 测试中未使用的 lambda 参数
     "ASYNC240",  # 测试中同步写临时文件比 to_thread 更简洁
     "PLR2004",  # 测试中魔法数字（期望值）是标准做法
+    "TC",  # 测试中无需 TYPE_CHECKING 优化
 ]
 
 [format]

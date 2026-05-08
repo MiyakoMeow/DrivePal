@@ -28,32 +28,29 @@ class FeedbackManager:
 
     def __init__(self, data_dir: Path) -> None:
         """初始化反馈管理器."""
-        self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
-        self._feedback_store = TOMLStore(data_dir, Path("feedback.toml"), list)
         self.data_dir = data_dir
 
-    @property
-    def strategies_store(self) -> TOMLStore:
-        """策略存储."""
-        return self._strategies_store
-
-    async def _get_lock(self) -> asyncio.Lock:
+    async def _get_lock(self, user_id: str = "default") -> asyncio.Lock:
+        key = f"{self.data_dir}:{user_id}"
         async with _strategy_locks_lock:
-            if str(self.data_dir) not in _strategy_locks:
-                _strategy_locks[str(self.data_dir)] = asyncio.Lock()
-            return _strategy_locks[str(self.data_dir)]
+            if key not in _strategy_locks:
+                _strategy_locks[key] = asyncio.Lock()
+            return _strategy_locks[key]
 
-    async def _write_feedback(self, feedback: FeedbackData) -> None:
+    async def _write_feedback(self, user_id: str, feedback: FeedbackData) -> None:
         """写入反馈记录."""
-        await self._feedback_store.append(feedback.model_dump())
+        store = TOMLStore(self.data_dir / user_id, Path("feedback.toml"), list)
+        await store.append(feedback.model_dump())
 
     async def _update_strategy(
         self,
+        user_id: str,
         event_type: str,
         action: Literal["accept", "ignore"],
     ) -> None:
         """更新策略权重."""
-        strategies = await self._strategies_store.read()
+        store = TOMLStore(self.data_dir / user_id, Path("strategies.toml"), dict)
+        strategies = await store.read()
 
         if "reminder_weights" not in strategies:
             strategies["reminder_weights"] = {}
@@ -69,15 +66,22 @@ class FeedbackManager:
                 0.1,
             )
 
-        await self._strategies_store.write(strategies)
+        await store.write(strategies)
 
-    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+    async def update_feedback(
+        self,
+        event_id: str,
+        feedback: FeedbackData,
+        *,
+        user_id: str = "default",
+    ) -> None:
         """记录反馈并更新策略权重."""
-        feedback.event_id = event_id
-        feedback.timestamp = datetime.now(UTC).isoformat()
+        feedback = feedback.model_copy(
+            update={"event_id": event_id, "timestamp": datetime.now(UTC).isoformat()}
+        )
         if feedback.action is None:
             raise ActionRequiredError
-        lock = await self._get_lock()
+        lock = await self._get_lock(user_id)
         async with lock:
-            await self._write_feedback(feedback)
-            await self._update_strategy(feedback.type, feedback.action)
+            await self._write_feedback(user_id, feedback)
+            await self._update_strategy(user_id, feedback.type, feedback.action)

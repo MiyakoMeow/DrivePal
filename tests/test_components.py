@@ -33,7 +33,9 @@ class TestFeedbackManager:
             "eid1",
             FeedbackData(action="accept", type="meeting"),
         )
-        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
+        strategies = await TOMLStore(
+            tmp_path / "default", Path("strategies.toml"), dict
+        ).read()
         assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
     async def test_ignore_decreases_weight(
@@ -46,7 +48,9 @@ class TestFeedbackManager:
             "eid2",
             FeedbackData(action="ignore", type="general"),
         )
-        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
+        strategies = await TOMLStore(
+            tmp_path / "default", Path("strategies.toml"), dict
+        ).read()
         assert strategies["reminder_weights"]["general"] == pytest.approx(0.4)
 
     async def test_action_none_raises_error(self, manager: FeedbackManager) -> None:
@@ -68,7 +72,9 @@ class TestFeedbackManager:
                 "eid",
                 FeedbackData(action="accept", type="meeting"),
             )
-        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
+        strategies = await TOMLStore(
+            tmp_path / "default", Path("strategies.toml"), dict
+        ).read()
         assert strategies["reminder_weights"]["meeting"] <= 1.0
 
     async def test_ignore_floored_at_zero_point_one(
@@ -82,7 +88,9 @@ class TestFeedbackManager:
                 "eid",
                 FeedbackData(action="ignore", type="general"),
             )
-        strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
+        strategies = await TOMLStore(
+            tmp_path / "default", Path("strategies.toml"), dict
+        ).read()
         assert strategies["reminder_weights"]["general"] >= WEIGHT_MIN
 
     async def test_feedback_appended_to_history(
@@ -99,5 +107,7 @@ class TestFeedbackManager:
             "eid2",
             FeedbackData(action="ignore", type="general"),
         )
-        feedback = await TOMLStore(tmp_path, Path("feedback.toml"), list).read()
+        feedback = await TOMLStore(
+            tmp_path / "default", Path("feedback.toml"), list
+        ).read()
         assert len(feedback) == FEEDBACK_RECORD_COUNT_2

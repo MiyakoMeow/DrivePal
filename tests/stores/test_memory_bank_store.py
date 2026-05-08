@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 
 from app.memory.memory_bank.store import MemoryBankStore
-from app.memory.schemas import MemoryEvent
+from app.memory.memory_bank.summarizer import GENERATION_EMPTY
+from app.memory.schemas import FeedbackData, MemoryEvent
 
 
 def _make_embedding(dim: int = 8) -> AsyncMock:
@@ -138,8 +139,6 @@ async def test_search_prepend_overall_context(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_search_prepend_filters_empty(tmp_path: Path) -> None:
-    from app.memory.memory_bank.summarizer import GENERATION_EMPTY
-
     emb = _make_embedding()
     store = MemoryBankStore(tmp_path, embedding_model=emb)
     await store.write_interaction("hello", "world")
@@ -250,8 +249,6 @@ async def test_get_event_type_invalid_id(
 
 @pytest.mark.asyncio
 async def test_update_feedback(tmp_store: MemoryBankStore) -> None:
-    from app.memory.schemas import FeedbackData
-
     fb = FeedbackData(action="accept")
     await tmp_store.update_feedback("evt_1", fb)
 

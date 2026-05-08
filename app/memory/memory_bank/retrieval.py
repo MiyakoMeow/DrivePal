@@ -363,6 +363,3 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
     merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
 
     return merged
-
-
-

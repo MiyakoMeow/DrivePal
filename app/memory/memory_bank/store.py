@@ -92,6 +92,7 @@ class MemoryBankStore:
         ref = kwargs.get("reference_date")
         self._reference_date: str | None = ref if isinstance(ref, str) else None
         self._loaded = False
+        self._summary_locks: dict[str, asyncio.Lock] = {}
 
     async def _ensure_loaded(self) -> None:
         if not self._loaded:
@@ -153,15 +154,7 @@ class MemoryBankStore:
             },
         )
 
-        if self._forgetting_enabled:
-            metadata = self._index.get_metadata(user_id)
-            ref = self._reference_date or compute_reference_date(metadata)
-            ids = compute_forget_ids(
-                metadata, ref, mode=self._forget_mode(), rng=self._rng
-            )
-            if ids:
-                await self._index.remove_vectors(user_id, ids)
-                await self._index.save(user_id)
+        await self._apply_forget(user_id)
 
         await self._index.save(user_id)
 
@@ -175,44 +168,52 @@ class MemoryBankStore:
     async def _background_summarize(self, user_id: str, date_key: str) -> None:
         if not self._summarizer or not self._embedding:
             return
-        try:
-            text = await self._summarizer.generate_daily_summary(user_id, date_key)
-            if text:
-                emb = await self._embedding.encode(text)
-                await self._index.add_vector(
-                    user_id,
-                    text,
-                    emb,
-                    f"{date_key}T00:00:00",
-                    {"type": "daily_summary", "source": f"summary_{date_key}"},
+        lock = self._summary_locks.setdefault(user_id, asyncio.Lock())
+        async with lock:
+            needs_save = False
+            try:
+                text = await self._summarizer.generate_daily_summary(user_id, date_key)
+                if text:
+                    emb = await self._embedding.encode(text)
+                    await self._index.add_vector(
+                        user_id,
+                        text,
+                        emb,
+                        f"{date_key}T00:00:00",
+                        {"type": "daily_summary", "source": f"summary_{date_key}"},
+                    )
+                    needs_save = True
+
+                dp = await self._summarizer.generate_daily_personality(
+                    user_id, date_key
                 )
-                await self._index.save(user_id)
+                if dp:
+                    extra = dict(self._index.get_extra(user_id))
+                    daily_p = dict(extra.get("daily_personalities", {}))
+                    daily_p[date_key] = dp
+                    extra["daily_personalities"] = daily_p
+                    self._index.set_extra(user_id, extra)
+                    needs_save = True
 
-            dp = await self._summarizer.generate_daily_personality(user_id, date_key)
-            if dp:
-                extra = dict(self._index.get_extra(user_id))
-                daily_p = dict(extra.get("daily_personalities", {}))
-                daily_p[date_key] = dp
-                extra["daily_personalities"] = daily_p
-                self._index.set_extra(user_id, extra)
-                await self._index.save(user_id)
+                op = await self._summarizer.generate_overall_personality(user_id)
+                if op:
+                    extra = dict(self._index.get_extra(user_id))
+                    extra["overall_personality"] = op
+                    self._index.set_extra(user_id, extra)
+                    needs_save = True
 
-            op = await self._summarizer.generate_overall_personality(user_id)
-            if op:
-                extra = dict(self._index.get_extra(user_id))
-                extra["overall_personality"] = op
-                self._index.set_extra(user_id, extra)
-                await self._index.save(user_id)
+                overall_text = await self._summarizer.generate_overall_summary(user_id)
+                if overall_text:
+                    extra = dict(self._index.get_extra(user_id))
+                    extra["overall_summary"] = overall_text
+                    self._index.set_extra(user_id, extra)
+                    needs_save = True
 
-            overall_text = await self._summarizer.generate_overall_summary(user_id)
-            if overall_text:
-                extra = dict(self._index.get_extra(user_id))
-                extra["overall_summary"] = overall_text
-                self._index.set_extra(user_id, extra)
-                await self._index.save(user_id)
+                if needs_save:
+                    await self._index.save(user_id)
 
-        except Exception:
-            logger.exception("background summarization failed")
+            except Exception:
+                logger.exception("background summarization failed")
 
     async def search(
         self,
@@ -353,15 +354,7 @@ class MemoryBankStore:
                 },
             )
 
-        if self._forgetting_enabled:
-            metadata = self._index.get_metadata(user_id)
-            ref = self._reference_date or compute_reference_date(metadata)
-            ids = compute_forget_ids(
-                metadata, ref, mode=self._forget_mode(), rng=self._rng
-            )
-            if ids:
-                await self._index.remove_vectors(user_id, ids)
-                await self._index.save(user_id)
+        await self._apply_forget(user_id)
 
         await self._index.save(user_id)
 
@@ -398,9 +391,9 @@ class MemoryBankStore:
         event_id: str,
         feedback: FeedbackData,
         *,
-        _user_id: str = "default",
+        user_id: str = "default",
     ) -> None:
-        await self._feedback.update_feedback(event_id, feedback)
+        await self._feedback.update_feedback(event_id, feedback, user_id=user_id)
 
     async def get_event_type(
         self,
