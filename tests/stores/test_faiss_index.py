@@ -57,8 +57,8 @@ async def test_save_and_load_persistence():
 
 
 @pytest.mark.asyncio
-async def test_corrupted_metadata_rebuilds():
-    """损坏的元数据应触发重建空索引。"""
+async def test_corrupted_metadata_rebuilds_skeleton():
+    """损坏的元数据应从 FAISS 索引重建骨架（保留向量）。"""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -66,8 +66,12 @@ async def test_corrupted_metadata_rebuilds():
         await idx.save()
         Path(tmp, "metadata.json").write_text("invalid json")
         idx2 = FaissIndex(Path(tmp))
-        await idx2.load()
-        assert idx2.total == 0
+        result = await idx2.load()
+        # 降级恢复：metadata 损坏但 index 正常 → 从索引重建骨架
+        assert idx2.total == 1
+        assert result.warnings
+        meta = idx2.get_metadata()
+        assert meta[0].get("corrupted") is True
 
 
 @pytest.mark.asyncio

@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.memory.exceptions import LLMCallFailed
+from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.llm import LlmClient
 from app.models.chat import AllProviderFailedError
 
@@ -53,13 +55,13 @@ async def _noop_sleep(*_: object) -> None:
 
 @pytest.mark.asyncio
 async def test_llm_retry_on_transient(monkeypatch: pytest.MonkeyPatch):
-    """瞬态错误（rate limit）会重试直到耗尽。"""
+    """瞬态错误（rate limit）会重试直到耗尽，然后抛 LLMCallFailed。"""
     monkeypatch.setattr("app.memory.memory_bank.llm._sleep", _noop_sleep)
     model = _ConstErrorModel("rate limit exceeded")
-    client = LlmClient(model)
-    result = await client.call("test", system_prompt="test system prompt")
-    assert result is None
-    assert model.call_count == 3  # 瞬态错误重试 3 次
+    client = LlmClient(model, MemoryBankConfig())
+    with pytest.raises(LLMCallFailed, match="3 attempts"):
+        await client.call("test", system_prompt="test system prompt")
+    assert model.call_count == 3
 
 
 @pytest.mark.asyncio
@@ -67,7 +69,7 @@ async def test_llm_transient_then_success(monkeypatch: pytest.MonkeyPatch):
     """瞬态错误后重试成功。"""
     monkeypatch.setattr("app.memory.memory_bank.llm._sleep", _noop_sleep)
     model = _AlternatingModel(fail_count=2)
-    client = LlmClient(model)
+    client = LlmClient(model, MemoryBankConfig())
     result = await client.call("test", system_prompt="test system prompt")
     assert result == "final response"
     assert model.call_count == 3
@@ -77,7 +79,7 @@ async def test_llm_transient_then_success(monkeypatch: pytest.MonkeyPatch):
 async def test_llm_context_trim_on_long_prompt():
     """上下文超长时截断 prompt 后重试。"""
     model = _ContextTrimModel()
-    client = LlmClient(model)
+    client = LlmClient(model, MemoryBankConfig())
     long_prompt = "X" * 2000
     result = await client.call(long_prompt, system_prompt="test")
     assert result == "trimmed response"
@@ -86,11 +88,11 @@ async def test_llm_context_trim_on_long_prompt():
 
 @pytest.mark.asyncio
 async def test_llm_nontransient_exhausts_retries():
-    """非瞬态错误（鉴权失败）快速失败，仅重试一次。"""
+    """非瞬态错误（鉴权失败）快速失败，额外尝试一次后抛 LLMCallFailed。"""
     model = _ConstErrorModel("Incorrect API key")
-    client = LlmClient(model)
-    result = await client.call("test", system_prompt="test system prompt")
-    assert result is None
+    client = LlmClient(model, MemoryBankConfig())
+    with pytest.raises(LLMCallFailed, match="2 attempts"):
+        await client.call("test", system_prompt="test system prompt")
     assert model.call_count == 2
 
 
@@ -114,7 +116,7 @@ class _MessagesRecorder:
 async def test_llm_sends_four_message_sequence():
     """LlmClient.call() 应构建 4 消息序列（system→user→assistant→user）。"""
     recorder = _MessagesRecorder()
-    client = LlmClient(recorder)
+    client = LlmClient(recorder, MemoryBankConfig())
     await client.call("summarize this", system_prompt="You are a helper")
     assert recorder.last_messages is not None
     assert len(recorder.last_messages) == 4
@@ -152,7 +154,7 @@ class _ContextTrimRecorder(_MessagesRecorder):
 async def test_llm_context_trim_shortens_last_message():
     """上下文超长时应截断 messages[-1]["content"]，前 3 条不变。"""
     model = _ContextTrimRecorder()
-    client = LlmClient(model)
+    client = LlmClient(model, MemoryBankConfig())
     long_prompt = "X" * 2000
     result = await client.call(long_prompt, system_prompt="test")
     assert result == "trimmed response"

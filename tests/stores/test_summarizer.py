@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.exceptions import SummarizationEmpty
 from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.index import FaissIndex
 from app.memory.memory_bank.summarizer import Summarizer
@@ -62,7 +63,7 @@ async def test_get_daily_summary_none_on_empty_llm():
             "test", TEST_EMBEDDING, "2024-06-15T00:00:00", {"source": "2024-06-15"}
         )
         mock_llm = AsyncMock()
-        mock_llm.call = AsyncMock(return_value=None)
+        mock_llm.call = AsyncMock(side_effect=SummarizationEmpty())
         summ = Summarizer(mock_llm, idx, MemoryBankConfig())
         result = await summ.get_daily_summary("2024-06-15")
         assert result is None

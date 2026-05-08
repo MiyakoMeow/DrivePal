@@ -14,8 +14,13 @@ from app.memory.schemas import MemoryEvent
 def store():
     """提供 mock embedding 的 MemoryBankStore 实例。"""
     with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
+        emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
+
+        async def _batch_encode(texts: list[str]) -> list[list[float]]:
+            return [[0.1] * 1536 for _ in texts]
+
+        emb.batch_encode = AsyncMock(side_effect=_batch_encode)
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         yield s
 
@@ -65,8 +70,9 @@ async def test_get_event_type_none_for_missing(store):
 async def test_purge_forgotten_removes_from_index():
     """验证 _purge_forgotten 从 FAISS 索引移除已遗忘条目。"""
     with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
+        emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        emb.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         await s.write_interaction("hello", "world")
         await s.write_interaction("test2", "data2")
@@ -87,8 +93,9 @@ async def test_purge_forgotten_removes_from_index():
 async def test_write_parses_multi_speaker_content():
     """验证 write 解析多行发言格式。"""
     with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
+        emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        emb.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         content = "Gary: set seat to 45\nPatricia: set AC to 22"
         event = MemoryEvent(content=content, type="reminder")
@@ -104,8 +111,9 @@ async def test_write_parses_multi_speaker_content():
 async def test_write_interaction_with_user_name():
     """验证 write_interaction 支持指定发言者姓名。"""
     with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
+        emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
+        emb.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         result = await s.write_interaction(
             "set seat to 45",

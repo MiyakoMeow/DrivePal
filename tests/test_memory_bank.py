@@ -14,8 +14,13 @@ from app.memory.schemas import MemoryEvent
 def store():
     """提供 mock embedding 的 MemoryBankStore 实例。"""
     with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
+        emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
+
+        async def _batch_encode(texts: list[str]) -> list[list[float]]:
+            return [[0.1] * 1536 for _ in texts]
+
+        emb.batch_encode = AsyncMock(side_effect=_batch_encode)
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         yield s
 
