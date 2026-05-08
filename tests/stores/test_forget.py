@@ -42,7 +42,7 @@ class TestForgettingCurve:
 
     def test_fresh_curve_no_forget(self):
         """验证新条目不被遗忘。"""
-        fc = ForgettingCurve(MemoryBankConfig())
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -56,7 +56,7 @@ class TestForgettingCurve:
 
     def test_old_entry_marked_forgotten(self):
         """验证旧条目被标记遗忘。"""
-        fc = ForgettingCurve(MemoryBankConfig())
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -70,7 +70,7 @@ class TestForgettingCurve:
 
     def test_daily_summary_exempt(self):
         """验证每日摘要不被遗忘。"""
-        fc = ForgettingCurve(MemoryBankConfig())
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -84,7 +84,7 @@ class TestForgettingCurve:
 
     def test_throttle_skips_second_call(self):
         """验证节流机制跳过短时间内重复遗忘（返回 None）。"""
-        fc = ForgettingCurve(MemoryBankConfig())
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -131,7 +131,7 @@ class TestProbabilisticForgetting:
 
     def test_deterministic_returns_empty_ids(self):
         """确定性模式 maybe_forget 返回空列表。"""
-        fc = ForgettingCurve(MemoryBankConfig())
+        fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
                 "faiss_id": 0,
@@ -245,7 +245,7 @@ class TestIngestionForget:
         ids = compute_ingestion_forget_ids(
             metadata,
             "2024-06-15",
-            config=MemoryBankConfig(),
+            config=MemoryBankConfig(forget_mode="deterministic"),
         )
         assert 1 not in ids
 
@@ -263,7 +263,7 @@ class TestIngestionForget:
         ids = compute_ingestion_forget_ids(
             list(metadata),
             today,
-            config=MemoryBankConfig(),
+            config=MemoryBankConfig(forget_mode="deterministic"),
         )
         assert 0 not in ids
 

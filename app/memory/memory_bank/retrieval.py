@@ -38,7 +38,8 @@ _INTERNAL_KEYS: frozenset[str] = frozenset(
 
 
 def _get_effective_chunk_size(
-    metadata: list[dict], config: MemoryBankConfig,
+    metadata: list[dict],
+    config: MemoryBankConfig,
 ) -> int:
     """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
 
@@ -368,7 +369,10 @@ class RetrievalPipeline:
         index_total = self._index.total
         if index_total == 0:
             return [], False
-        coarse_k = min(top_k * self._config.coarse_search_factor, index_total)
+        coarse_factor = self._config.coarse_search_factor
+        if coarse_factor <= 0:
+            coarse_factor = 4
+        coarse_k = min(top_k * coarse_factor, index_total)
         results = await self._index.search(query_emb, coarse_k)
         if not results:
             return [], False

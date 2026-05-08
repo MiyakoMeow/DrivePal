@@ -40,6 +40,8 @@ def forgetting_retention(
         return 1.0
     if strength <= 0:
         return 0.0
+    if time_scale <= 0:
+        time_scale = FORGETTING_TIME_SCALE
     return math.exp(-days_elapsed / (time_scale * strength))
 
 

@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,20 @@ class MemoryBankConfig(BaseSettings):
     chunk_size_max: int = 8192
     coarse_search_factor: int = 4
     embedding_min_similarity: float = 0.3
+
+    @field_validator("coarse_search_factor")
+    @classmethod
+    def _guard_coarse_factor(cls, v: int) -> int:
+        if v <= 0:
+            return 4
+        return v
+
+    @field_validator("forgetting_time_scale")
+    @classmethod
+    def _guard_time_scale_positive(cls, v: float) -> float:
+        if v <= 0:
+            return 1.0
+        return v
 
     # ── 摘要 ──
     summary_system_prompt: str = (
