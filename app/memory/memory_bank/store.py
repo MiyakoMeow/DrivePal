@@ -168,9 +168,12 @@ class MemoryBankStore:
                 score=float(r.get("score", 0.0)),
                 source=r.get("source", "event"),
             )
-            for r in results[: max(0, top_k - len(prepend))]
-            if not r.get("corrupted")  # 过滤降级恢复的骨架条目
+            for r in results
+            if not r.get("corrupted")
         )
+        # 整体上下文不占用 top_k 配额（prepend 始终在结果前）
+        if len(out) > top_k:
+            out = out[:top_k]
         return out
 
     async def format_search_results(self, query: str, top_k: int = 5) -> str:
