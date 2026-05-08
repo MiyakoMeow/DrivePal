@@ -215,7 +215,7 @@ app/memory/memory_bank/
 | `MemoryEvent` | id, content, type, memory_strength, last_recall_date, interaction_ids, speaker | 语义摘要后的事件（agent 输出） |
 | `InteractionRecord` | id, event_id, query, response, timestamp, memory_strength | 原始用户↔系统交互 |
 | `FeedbackData` | event_id, action(accept\|ignore), modified_content | 用户反馈，action 校验 `InvalidActionError` |
-| `SearchResult` | event(dict), score(float), interactions(list[dict]) | 检索结果包装，`to_public()` 清洗内部评分字段 |
+| `SearchResult` | event(dict), score(float), interactions(list[dict]) | 检索结果包装，`to_public()` 清洗内部评分字段（store 返回前调用） |
 | `InteractionResult` | event_id, interaction_id | 写入结果 |
 
 MemoryEvent 通过 `interaction_ids` 列表关联交互，检索命中时自动展开。
@@ -399,9 +399,9 @@ uv run pytest tests/ -v --test-embedding # 需要真实embedding
 uv run pytest tests/ -v --run-integration # 需要完整服务
 ```
 
-pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
+pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, -n auto。
 
-conftest 提供：
+`tests/conftest.py` 提供：
 - `pytest_configure` 注册 `integration` / `llm` / `embedding` 三个标记
 - `pytest_addoption` 注册 `--run-integration` / `--test-llm` / `--test-embedding` 选项
 - `pytest_collection_modifyitems` 根据选项跳过未标记测试
