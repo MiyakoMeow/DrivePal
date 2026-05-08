@@ -102,7 +102,8 @@ class AgentWorkflow:
             data_dir, Path("strategies.toml"), dict
         )
 
-    def _event_hit_to_dict(self, event_hit: object) -> dict:
+    @staticmethod
+    def _event_hit_to_dict(event_hit: object) -> dict:
         """将搜索结果命中转为可序列化 dict，含防御性类型检查。"""
         if event_hit is None:
             return {}

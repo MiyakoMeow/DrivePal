@@ -48,18 +48,15 @@ def _get_fatigue_threshold() -> float:
         value = float(raw)
     except ValueError:
         logger.warning("Invalid FATIGUE_THRESHOLD=%r, using default 0.7", raw)
-        _fatigue_threshold_cache = 0.7
-        return 0.7
+        value = 0.7
     if not math.isfinite(value):
         logger.warning("FATIGUE_THRESHOLD=%r is NaN/Inf, using default 0.7", raw)
-        _fatigue_threshold_cache = 0.7
-        return 0.7
+        value = 0.7
     if not 0.0 <= value <= 1.0:
         logger.warning(
             "FATIGUE_THRESHOLD=%r out of range [0,1], using default 0.7", raw
         )
-        _fatigue_threshold_cache = 0.7
-        return 0.7
+        value = 0.7
     _fatigue_threshold_cache = value
     return value
 

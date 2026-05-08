@@ -18,6 +18,7 @@ __all__ = [
 import dataclasses
 import logging
 from enum import Enum
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -74,6 +75,8 @@ async def _safe_memory_call[T](
         return await coro
     except GraphQLError:
         raise
+    # 注意：RuntimeError 子类 ChatModelUnavailableError 不流经此处 ——
+    # 由 mutation.py process_query 显式捕获并转为 GraphQLError(extensions=...)
     except OSError as e:
         msg = "Internal storage error"
         logger.exception("%s failed", context_msg)
@@ -91,6 +94,7 @@ async def _safe_memory_call[T](
         raise InternalServerError from e
 
 
+@cache
 def _preset_store() -> TOMLStore:
     return TOMLStore(DATA_DIR, Path("scenario_presets.toml"), list)
 
