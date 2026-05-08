@@ -27,7 +27,7 @@ Python 3.14 + `uv`。
 | LLM | Qwen3.5-2B (vLLM), MiniMax-M2.5, DeepSeek, GLM-4.7-flashx |
 | Embedding | BGE-M3 (vLLM, OpenAI兼容接口, 纯远程) |
 | 记忆 | MemoryBank (FAISS + Ebbinghaus遗忘曲线) |
-| 存储 | TOML文件 (tomllib + tomli-w) |
+| 存储 | TOML (tomllib + tomli-w) + JSONL |
 | 开发 | uv, pytest (asyncio_mode=auto), ruff, ty |
 
 ## 项目结构
@@ -40,8 +40,8 @@ app/
 │   ├── rules.py       # 规则引擎（安全约束 + 合并策略）
 │   └── prompts.py     # 系统提示词模板
 ├── api/               # GraphQL API层
-│   ├── main.py        # FastAPI入口
-│   ├── graphql_schema.py
+│   ├── main.py        # FastAPI入口（lifespan, CORS, 静态文件）
+│   ├── graphql_schema.py  # 输入/输出类型 + 枚举定义
 │   └── resolvers/     # query.py + mutation.py + errors.py + converters.py
 ├── models/            # AI模型封装
 │   ├── chat.py        # LLM调用（多provider自动fallback, 纯异步）
@@ -55,18 +55,24 @@ app/
 │   ├── memory.py      # MemoryModule Facade + 工厂注册表
 │   ├── interfaces.py  # MemoryStore Protocol定义
 │   ├── types.py       # MemoryMode枚举
-│   ├── schemas.py     # MemoryEvent, InteractionRecord等
+│   ├── schemas.py     # MemoryEvent, InteractionRecord, FeedbackData等
+│   ├── singleton.py   # MemoryModule 线程安全单例（双检锁）
+│   ├── embedding_client.py # Embedding薄代理（维度一致性检测）
+│   ├── utils.py       # 余弦相似度 + 事件hash
 │   └── stores/memory_bank/  # MemoryBank后端
-│       ├── store.py        # MemoryStore实现
+│       ├── store.py        # MemoryBankStore Facade（Protocol实现）
 │       ├── faiss_index.py  # FAISS IndexIDMap(IndexFlatIP)
 │       ├── retrieval.py    # 四阶段检索管道
 │       ├── forget.py       # Ebbinghaus遗忘曲线
 │       ├── summarizer.py   # 分层摘要 + 人格生成
-│       └── llm.py          # LLM封装（上下文截断重试）
+│       ├── llm.py          # LLM封装（上下文截断重试）
+│       ├── lifecycle.py    # 写入/遗忘/摘要编排
+│       └── bg_tasks.py     # 后台任务管理器（优雅关闭）
 ├── schemas/
-│   └── context.py     # 驾驶上下文数据模型
+│   └── context.py     # 驾驶上下文数据模型（Pydantic）
 ├── storage/
-│   ├── toml_store.py  # TOML文件存储引擎
+│   ├── toml_store.py  # TOML文件存储引擎（asyncio锁, append/update）
+│   ├── jsonl_store.py # JSONL追加写存储
 │   └── init_data.py   # 数据目录初始化
 ├── config.py
 tests/                 # 测试
@@ -91,6 +97,18 @@ webui/                 # 模拟测试工作台
 | Execution | 决策 → 结果+event_id | 存储事件，返回提醒 |
 
 `run_with_stages()` 返回各阶段详细输出（可解释性）。
+
+### Agent 提示词
+
+`app/agents/prompts.py`。三个 Agent 各有系统提示词，均为中文 + JSON 输出：
+
+| Agent | 职责 | 输出 |
+|-------|------|------|
+| Context | 构建统一上下文（时间/位置/交通/偏好/驾驶员状态） | JSON 上下文对象 |
+| Task | 事件抽取 + 任务归因（meeting/travel/shopping/contact/other）| JSON 任务对象（含置信度）|
+| Strategy | 是否/何时/如何提醒，考虑个性化 + 安全边界 | JSON 决策（should_remind/timing/channel/content/理由）|
+
+Execution Agent 无单独提示词——执行逻辑由规则引擎硬约束 + 代码实现。
 
 ## 规则引擎
 
@@ -135,7 +153,34 @@ saveScenarioPreset(input): ScenarioPreset
 deleteScenarioPreset(id): Boolean
 ```
 
+**枚举：** `MemoryModeEnum`, `EmotionEnum`, `WorkloadEnum`, `CongestionLevelEnum`, `ScenarioEnum`
+
+**输入类型（8个）：** `GeoLocationInput`, `DriverStateInput`, `SpatioTemporalContextInput`, `TrafficConditionInput`, `DrivingContextInput`, `ProcessQueryInput`, `FeedbackInput`, `ScenarioPresetInput`
+
+**输出类型（10个）：** `GeoLocationGQL`, `DriverStateGQL`, `TrafficConditionGQL`, `SpatioTemporalContextGQL`, `DrivingContextGQL`, `WorkflowStagesGQL`, `ProcessQueryResult`, `MemoryEventGQL`, `ScenarioPresetGQL`, `FeedbackResult`
+
+**自定义标量：** `JSON`（WorkflowStages 各阶段输出）
+
+**错误类：**
+- `InternalServerError` — 内部服务器错误
+- `GraphQLInvalidActionError` — 无效操作类型
+- `GraphQLEventNotFoundError` — 事件不存在
+
 支持外部上下文注入（DrivingContext），跳过LLM推断。
+
+输入转换由 `converters.py` 完成：Strawberry Input → `strawberry_to_plain()`（递归 Enum→value, dataclass→dict）→ Pydantic `model_validate()`。
+
+### 服务入口与生命周期
+
+**入口：** `uv run uvicorn app.api.main:app`
+
+**Lifespan 事件：**
+- **启动：** `init_storage(DATA_DIR)` 初始化数据目录和文件
+- **关闭：** `MemoryModule.close()` 关闭 MemoryBank（FAISS 索引落盘 + 后台任务取消等待）
+
+**中间件：** CORS（当前 `allow_origins=["*"]`，开发用）
+
+**静态文件：** `/static` 挂载 WebUI 目录，`GET /` 返回 `index.html`
 
 ## MemoryBank 记忆系统
 
@@ -160,6 +205,20 @@ app/memory/memory_bank/
 ### 架构
 
 三层：Interaction（原始交互）→ Event（语义摘要）→ Summary（层级摘要）
+
+### 记忆数据模型
+
+`app/memory/schemas.py`。核心类型：
+
+| 类型 | 关键字段 | 说明 |
+|------|----------|------|
+| `MemoryEvent` | id, content, type, memory_strength, last_recall_date, interaction_ids, speaker | 语义摘要后的事件（agent 输出） |
+| `InteractionRecord` | id, event_id, query, response, timestamp, memory_strength | 原始用户↔系统交互 |
+| `FeedbackData` | event_id, action(accept\|ignore), modified_content | 用户反馈，action 校验 `InvalidActionError` |
+| `SearchResult` | event(dict), score(float), interactions(list[dict]) | 检索结果包装，`to_public()` 清洗内部评分字段（store 返回前调用） |
+| `InteractionResult` | event_id, interaction_id | 写入结果 |
+
+MemoryEvent 通过 `interaction_ids` 列表关联交互，检索命中时自动展开。
 
 ### FAISS索引
 
@@ -191,6 +250,14 @@ app/memory/memory_bank/
 - **每日人格**：同上，按日期生成后不覆盖
 - **总体人格**：基于每日人格汇总生成；已存在则跳过
 
+### 后台任务管理器
+
+`app/memory/memory_bank/bg_tasks.py`
+
+- asyncio 任务注册与调度（`create_task` + 跟踪集）
+- `close()` 方法：等待所有 inflight 任务完成，支持优雅关闭
+- 摘要生成等异步后处理通过此模块调度，不阻塞写入主流程
+
 ### 聚合
 
 - 字符重叠 ≥ 45% 或余弦相似度 ≥ 0.8 聚合为同一事件
@@ -202,6 +269,26 @@ app/memory/memory_bank/
 - 硬删除 → 软标记（可恢复）
 - 启动时批量遗忘 → 每次搜索末尾渐进式遗忘
 - 无级联删除 summary → 保留所有 summary 更安全
+
+## 记忆模块基础设施
+
+### MemoryModule 单例
+
+`app/memory/singleton.py`
+
+- 线程安全双检锁模式（`threading.Lock`）
+- `get_memory_module()` 懒初始化：`MemoryModule(data_dir, embedding_model, chat_model)`
+- API resolvers 通过此入口获取全局唯一 MemoryModule 实例
+
+### EmbeddingClient 维度检测
+
+`app/memory/embedding_client.py`
+
+- `EmbeddingModel` 的薄代理
+- `encode_batch()` 含双重校验：
+  - 数量匹配：输入数 ≠ 输出数 → `RuntimeError`
+  - 维度一致性：所有向量维度不同 → `RuntimeError`
+- 重试由 `EmbeddingModel` 内部处理（3 次指数退避），此层不再重复
 
 ## 模型配置
 
@@ -250,22 +337,37 @@ model = "local/text-embedding-bge-m3"
 
 ```
 data/
-├── events.toml           # 事件历史
-├── contexts.toml         # 上下文缓存
-├── preferences.toml      # 用户偏好
-├── feedback.toml         # 反馈记录
-├── strategies.toml       # 个性化策略
-├── experiment_results.toml
-├── scenario_presets.toml
+├── events.jsonl          # 事件历史（JSONL）
+├── interactions.jsonl    # 交互记录（JSONL）
+├── feedback.jsonl        # 反馈记录（JSONL）
+├── experiment_results.jsonl # 实验结果（JSONL）
+├── contexts.toml         # 上下文缓存（TOML）
+├── preferences.toml      # 用户偏好（TOML）
+├── strategies.toml       # 个性化策略（TOML）
+├── scenario_presets.toml # 场景预设（TOML）
 └── memorybank/
     ├── index.faiss       # FAISS向量索引
     ├── metadata.json     # 事件元数据
     └── extra_metadata.json  # 额外元数据（summary/personality）
 ```
 
-TOMLStore：异步锁 + 文件级粒度（每个文件独立锁），支持 read/write/append/update。
+### TOMLStore
 
-测试用 JSONLStore：`app/storage/jsonl_store.py`。
+`app/storage/toml_store.py`。异步锁 + 文件级粒度。
+
+- **锁机制**：`_LOCK_REGISTRY` 全局字典，每个文件独立 `asyncio.Lock`
+- **列表存储**：TOML 不支持顶层数组，用 `_list` 键包裹
+- **None 处理**：`_clean_for_toml()` 递归将 `None` 转空字符串（含日志警告）
+- **异常**：`AppendError`（非列表调 append）/ `UpdateError`（非字典调 update）
+- **API**：
+  - `read()` → T
+  - `write(data: T)`
+  - `append(item)` — 仅列表存储
+  - `update(key, value)` — 仅字典存储
+
+### JSONLStore
+
+`app/storage/jsonl_store.py`。JSONL 追加写，用于 events/interactions/feedback/experiment_results 等高频写入数据。
 
 ## 检查流程
 
@@ -297,7 +399,13 @@ uv run pytest tests/ -v --test-embedding # 需要真实embedding
 uv run pytest tests/ -v --run-integration # 需要完整服务
 ```
 
-pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
+pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, -n auto。
+
+`tests/conftest.py` 提供：
+- `pytest_configure` 注册 `integration` / `llm` / `embedding` 三个标记
+- `pytest_addoption` 注册 `--run-integration` / `--test-llm` / `--test-embedding` 选项
+- `pytest_collection_modifyitems` 根据选项跳过未标记测试
+- `llm_provider` 和 `embedding` 两个会话级 fixture
 
 关键测试文件：
 
@@ -312,6 +420,18 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 | test_settings.py | 模型配置加载 |
 | test_storage.py | TOMLStore持久化 |
 
+### CI 工作流
+
+`.github/workflows/python.yml`。push/PR 到 main 时触发，三个并行 job：
+
+| Job | 命令 | 说明 |
+|-----|------|------|
+| `lint` | `ruff check .` + `ruff format --check .` | 代码风格 + 格式 |
+| `typecheck` | `ty check .` | 类型检查 |
+| `test` | `pytest -v` | 单测（无外部 provider） |
+
+额外 workflow `no-suppressions.yml`：扫描 `# noqa` 和 `# type:` 内联抑制注释，禁止绕过。
+
 ## 代码规范
 
 - **注释**：中文，解释 why 非 what
@@ -323,6 +443,23 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 - **不可变优先**：const/final 优先。新对象替换原地 mutate（性能关键路径可破）
 - **测试**：一测试一事。Given → When → Then。名含场景+期望，描述用中文
 - **设计原则**：单一职责、开闭、依赖倒置、接口隔离、迪米特。OOP 附加里氏替换
+
+## 错误处理模式
+
+项目使用分层异常设计：
+
+| 层 | 异常类 | 触发条件 |
+|----|--------|----------|
+| GraphQL | `InternalServerError` | 未预期的服务器错误 |
+| GraphQL | `GraphQLInvalidActionError` | feedback action 非 accept/ignore |
+| GraphQL | `GraphQLEventNotFoundError` | 事件 ID 不存在 |
+| 记忆 | `InvalidActionError` | FeedbackData action 校验失败 |
+| 存储 | `AppendError` / `UpdateError` | TOMLStore 类型不匹配 |
+| 模型 | `ProviderNotFoundError` | 引用字符串中 provider 未配置 |
+| 模型 | `ModelGroupNotFoundError` | 引用字符串中 model_group 未配置 |
+
+GraphQL 异常继承 `graphql.error.GraphQLError`，自动转为标准 GraphQL error response。
+其余异常由上层调用方处理，不跨层泄露实现细节。
 
 ## 关键阈值速查
 
