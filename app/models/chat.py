@@ -18,6 +18,12 @@ from app.models.types import ProviderConfig
 _semaphore_cache: dict[str, asyncio.Semaphore] = {}
 
 
+def clear_semaphore_cache() -> None:
+    """清理 provider semaphore 缓存和锁缓存（供测试使用）。"""
+    _semaphore_cache.clear()
+    _get_lock.cache_clear()
+
+
 class ChatError(RuntimeError):
     """Chat模型错误基类."""
 

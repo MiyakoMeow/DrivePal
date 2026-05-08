@@ -3,7 +3,7 @@
 from contextlib import suppress
 
 import app.memory.singleton
-import app.models.chat
+from app.models.chat import clear_semaphore_cache
 from app.models.embedding import reset_embedding_singleton
 from app.models.settings import LLMSettings
 
@@ -14,8 +14,6 @@ def reset_all_singletons() -> None:
     with suppress(AttributeError):
         LLMSettings.load.cache_clear()
     with suppress(AttributeError):
-        app.models.chat._get_lock.cache_clear()
-    with suppress(AttributeError):
-        app.models.chat._semaphore_cache.clear()
+        clear_semaphore_cache()
     with suppress(AttributeError):
         app.memory.singleton._memory_module_state[0] = None
