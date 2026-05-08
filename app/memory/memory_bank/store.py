@@ -20,8 +20,8 @@ from app.memory.schemas import (
 from .faiss_index import FaissIndex
 from .forget import (
     ForgetMode,
-    ForgettingCurve,
-    compute_ingestion_forget_ids,
+    compute_forget_ids,
+    compute_reference_date,
 )
 from .llm import LlmClient
 from .retrieval import RetrievalPipeline
@@ -80,7 +80,11 @@ class MemoryBankStore:
         self._rng = random.Random(seed)
         self._seed_provided = seed is not None
         self._index = FaissIndex(data_dir)
-        self._forget = ForgettingCurve(rng=self._rng)
+        self._forget_mode = (
+            ForgetMode.PROBABILISTIC
+            if self._seed_provided
+            else ForgetMode.DETERMINISTIC
+        )
         self._feedback = FeedbackManager(data_dir)
         self._chat_model = chat_model
         self._embedding_client = embedding_client or (
@@ -103,34 +107,26 @@ class MemoryBankStore:
         )
 
     async def _purge_forgotten(self, metadata: list[dict]) -> bool:
-        """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
-
-        Returns:
-            True 表示实际执行了删除；节流跳过时返回 False。
-
-        """
-        forgotten_ids = self._forget.maybe_forget(
-            metadata, reference_date=self._reference_date
+        ref = self._reference_date or compute_reference_date(metadata)
+        ids = compute_forget_ids(
+            metadata,
+            ref,
+            mode=self._forget_mode,
+            rng=self._rng,
         )
-        if forgotten_ids is None:
-            return False  # 节流跳过
-        if not forgotten_ids:
-            forgotten_ids = [m["faiss_id"] for m in metadata if m.get("forgotten")]
-        if forgotten_ids:
-            await self._index.remove_vectors(forgotten_ids)
+        if ids:
+            await self._index.remove_vectors(ids)
             return True
         return False
 
     async def _forget_at_ingestion(self) -> None:
-        """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）。"""
-        today = self._reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
-        ids = compute_ingestion_forget_ids(
-            self._index.get_metadata(),
-            today,
+        metadata = self._index.get_metadata()
+        ref = self._reference_date or compute_reference_date(metadata)
+        ids = compute_forget_ids(
+            metadata,
+            ref,
             rng=self._rng,
-            mode=ForgetMode.PROBABILISTIC
-            if self._seed_provided
-            else ForgetMode.DETERMINISTIC,
+            mode=self._forget_mode,
         )
         if ids:
             await self._index.remove_vectors(ids)
