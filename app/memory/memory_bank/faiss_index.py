@@ -17,11 +17,11 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
 import faiss
 import numpy as np
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +141,14 @@ class FaissIndexManager:
                     ep.unlink(missing_ok=True)
             self._users[user_id] = ui
         else:
-            self._users[user_id] = _UserIndex(
-                index=faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
-            )
+            ui = _UserIndex(index=faiss.IndexIDMap(faiss.IndexFlatIP(self._dim)))
+            if ep.exists():
+                try:
+                    e = json.loads(ep.read_text())
+                    ui.extra = e if isinstance(e, dict) else {}
+                except json.JSONDecodeError, OSError, TypeError, ValueError:
+                    ep.unlink(missing_ok=True)
+            self._users[user_id] = ui
 
     async def save(self, user_id: str) -> None:
         """持久化索引 + metadata + extra。"""
@@ -152,14 +157,15 @@ class FaissIndexManager:
             return
         if ui.index.ntotal == 0 and not ui.metadata:
             user_dir = self._user_dir(user_id)
-            # 先持久化 extra（若有）
+            # 有 extra 则持久化（不走清理）
+            ep = user_dir / "extra_metadata.json"
             if ui.extra:
                 user_dir.mkdir(parents=True, exist_ok=True)
-                (user_dir / "extra_metadata.json").write_text(
-                    json.dumps(ui.extra, ensure_ascii=False, indent=2)
-                )
-            # 独立清理每个文件
-            for fname in ("index.faiss", "metadata.json", "extra_metadata.json"):
+                ep.write_text(json.dumps(ui.extra, ensure_ascii=False, indent=2))
+            else:
+                ep.unlink(missing_ok=True)
+            # 清理索引/metadata 文件（空索引无需保留）
+            for fname in ("index.faiss", "metadata.json"):
                 (user_dir / fname).unlink(missing_ok=True)
             return
         user_dir = self._user_dir(user_id)

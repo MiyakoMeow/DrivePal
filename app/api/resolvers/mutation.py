@@ -259,13 +259,7 @@ class Mutation:
             FaissIndexManager.validate_user_id(feedback_input.user_id)
         except ValueError:
             raise GraphQLInvalidUserIDError(feedback_input.user_id) from None
-        try:
-            mm = get_memory_store()
-        except GraphQLError:
-            raise
-        except Exception as e:
-            logger.exception("submitFeedback failed (get_memory_store)")
-            raise InternalServerError from e
+        mm = get_memory_store()
         safe_action: Literal["accept", "ignore"]
         safe_action = "accept" if feedback_input.action == "accept" else "ignore"
 

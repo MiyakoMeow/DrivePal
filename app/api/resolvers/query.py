@@ -6,7 +6,11 @@ from app.api.graphql_schema import (
     MemoryEventGQL,
     ScenarioPresetGQL,
 )
-from app.api.resolvers.mutation import _preset_store, _to_gql_preset
+from app.api.resolvers.mutation import (
+    GraphQLInvalidUserIDError,
+    _preset_store,
+    _to_gql_preset,
+)
 from app.memory.memory_bank.faiss_index import FaissIndexManager
 from app.memory.singleton import get_memory_store
 
@@ -22,7 +26,10 @@ class Query:
         user_id: str = "default",
     ) -> list[MemoryEventGQL]:
         """查询历史记忆事件."""
-        FaissIndexManager.validate_user_id(user_id)
+        try:
+            FaissIndexManager.validate_user_id(user_id)
+        except ValueError:
+            raise GraphQLInvalidUserIDError(user_id) from None
         mm = get_memory_store()
         events = await mm.get_history(user_id=user_id, limit=limit)
         return [

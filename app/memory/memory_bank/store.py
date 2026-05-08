@@ -204,24 +204,24 @@ class MemoryBankStore:
     # ── 后台摘要 ──
 
     async def _background_summarize(self, user_id: str, date_key: str) -> None:
-        try:
-            text = await self._summarizer.get_daily_summary(user_id, date_key)
-            if text:
-                emb = await self._embedding_client.encode(text)
-                await self._index_manager.add_vector(
-                    user_id,
-                    text,
-                    emb,
-                    f"{date_key}T00:00:00",
-                    {"type": "daily_summary", "source": f"summary_{date_key}"},
-                )
+        async with await self._user_lock(user_id):
+            try:
+                text = await self._summarizer.get_daily_summary(user_id, date_key)
+                if text:
+                    emb = await self._embedding_client.encode(text)
+                    await self._index_manager.add_vector(
+                        user_id,
+                        text,
+                        emb,
+                        f"{date_key}T00:00:00",
+                        {"type": "daily_summary", "source": f"summary_{date_key}"},
+                    )
+                await self._summarizer.get_overall_summary(user_id)
+                await self._summarizer.get_daily_personality(user_id, date_key)
+                await self._summarizer.get_overall_personality(user_id)
                 await self._index_manager.save(user_id)
-            await self._summarizer.get_overall_summary(user_id)
-            await self._summarizer.get_daily_personality(user_id, date_key)
-            await self._summarizer.get_overall_personality(user_id)
-            await self._index_manager.save(user_id)
-        except Exception:
-            logger.exception("background summarization failed for user=%s", user_id)
+            except Exception:
+                logger.exception("background summarization failed for user=%s", user_id)
 
     # ── 核心 API ──
 
@@ -250,12 +250,9 @@ class MemoryBankStore:
 
             await self._forget_at_ingestion(user_id)
             await self._index_manager.save(user_id)
-            if self._summarizer:
-                task = asyncio.create_task(
-                    self._background_summarize(user_id, date_key)
-                )
-                _background_tasks.add(task)
-                task.add_done_callback(_finalize_task)
+            task = asyncio.create_task(self._background_summarize(user_id, date_key))
+            _background_tasks.add(task)
+            task.add_done_callback(_finalize_task)
             return str(fid)
 
     async def write_interaction(
@@ -292,12 +289,9 @@ class MemoryBankStore:
             )
             await self._forget_at_ingestion(user_id)
             await self._index_manager.save(user_id)
-            if self._summarizer:
-                task = asyncio.create_task(
-                    self._background_summarize(user_id, date_key)
-                )
-                _background_tasks.add(task)
-                task.add_done_callback(_finalize_task)
+            task = asyncio.create_task(self._background_summarize(user_id, date_key))
+            _background_tasks.add(task)
+            task.add_done_callback(_finalize_task)
             return InteractionResult(event_id=str(fid))
 
     async def search(
@@ -364,13 +358,14 @@ class MemoryBankStore:
             for m in self._index_manager.get_metadata(user_id)
             if m.get("type") != "daily_summary"
         ]
+        entries.sort(key=lambda m: m.get("timestamp", ""), reverse=True)
         return [
             MemoryEvent(
                 content=m.get("raw_content") or m.get("text", ""),
                 type=m.get("event_type", "reminder"),
                 memory_strength=int(m.get("memory_strength", 1)),
             )
-            for m in entries[-limit:]
+            for m in entries[:limit]
         ]
 
     async def get_event_type(self, user_id: str, event_id: str) -> str | None:
