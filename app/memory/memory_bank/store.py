@@ -79,17 +79,19 @@ def _build_pair_entries(
                     f"Conversation content on {date_key}:"
                     f"[|{label_a}|]: {text_a}; [|{label_b}|]: {text_b}"
                 )
+                raw = f"[|{label_a}|]: {text_a}; [|{label_b}|]: {text_b}"
             else:
                 speakers = [speaker_a]
                 conv_text = (
                     f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
                 )
+                raw = f"[|{label_a}|]: {text_a}"
             all_pair_texts.append(conv_text)
             all_pair_metas.append(
                 {
                     "source": date_key,
                     "speakers": sorted({s for s in speakers if s is not None}),
-                    "raw_content": conv_text,
+                    "raw_content": raw,
                     "event_type": event.type,
                 }
             )
@@ -356,7 +358,7 @@ class MemoryBankStore:
                 score=float(r.get("score", 0.0)),
                 source=r.get("source", "event"),
             )
-            for r in results[:top_k]
+            for r in results
         )
         return out
 
