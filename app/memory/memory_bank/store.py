@@ -49,7 +49,15 @@ def _finalize_task(task: asyncio.Task[None]) -> None:
 def _build_pair_entries(
     event: MemoryEvent, date_key: str
 ) -> tuple[list[str], list[dict]]:
-    """解析 event.content 为说话人行配对，返回 (all_pair_texts, all_pair_metas)。"""
+    """解析 event.content 为说话人行配对，返回 (all_pair_texts, all_pair_metas)。
+
+    Note:
+        配对逻辑假设内容为严格交替的两人对话，以 2 行为一组步进拼接。
+        单人内容映射为 "[|Speaker|]: content" 单条向量。
+        非交替模式（如三人对话或一人连续多行）会破坏语义连续性，
+        奇数行末尾被孤立为单条向量。——此为当前设计约束。
+
+    """
     lines = [line.strip() for line in event.content.split("\n") if line.strip()]
     parsed_pairs: list[tuple[str | None, str]] = [
         FaissIndexManager.parse_speaker_line(ln) for ln in lines
@@ -314,7 +322,9 @@ class MemoryBankStore:
                 )
                 await self._index_manager.save(user_id)
 
-        extra = self._index_manager.get_extra(user_id)
+            # 在锁内读取 extra，避免后台摘要并发写 extra 时读到不一致状态
+            extra = dict(self._index_manager.get_extra(user_id))
+
         prepend = []
         for key, label in [
             ("overall_summary", "Overall summary of past memories"),
@@ -332,7 +342,7 @@ class MemoryBankStore:
                         "content": "\n".join(prepend),
                         "type": "overall_context",
                     },
-                    score=float("inf"),
+                    score=1e9,
                     source="overall",
                 )
             )

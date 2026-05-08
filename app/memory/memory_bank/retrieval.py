@@ -58,8 +58,6 @@ def _resolve_chunk_size() -> int:
 
 def _get_effective_chunk_size(metadata: list[dict]) -> int:
     """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。"""
-    if os.getenv("MEMORYBANK_CHUNK_SIZE"):
-        return _resolve_chunk_size()
     lengths = sorted(len(m.get("text", "")) for m in metadata)
     if len(lengths) < _ADAPTIVE_CHUNK_MIN_ENTRIES:
         return DEFAULT_CHUNK_SIZE

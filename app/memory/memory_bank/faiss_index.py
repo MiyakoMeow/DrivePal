@@ -267,6 +267,7 @@ class FaissIndexManager:
         """返回 metadata 的 deep copy。外部修改不影响内部状态。"""
         ui = self._users.get(user_id)
         if ui is None:
+            logger.warning("get_metadata: user=%s 未加载，返回空列表", user_id)
             return []
         return copy.deepcopy(ui.metadata)
 
