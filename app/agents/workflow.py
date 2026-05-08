@@ -32,7 +32,6 @@ def _extract_reminder_content(decision: dict) -> str:
             text = val.get("text") or val.get("content")
             if text:
                 return text
-            continue
     return "无提醒内容"
 
 

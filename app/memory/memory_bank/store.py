@@ -40,9 +40,9 @@ _background_tasks: set[asyncio.Task[None]] = set()
 def _finalize_task(task: asyncio.Task[None]) -> None:
     _background_tasks.discard(task)
     with contextlib.suppress(asyncio.CancelledError):
-        exc = task.exception()
-        if exc is not None:
-            logger.warning("Background task failed: %s", exc)
+        err = task.exception()
+        if err is not None:
+            logger.warning("Background task failed: %s", err)
 
 
 class MemoryBankStore:
