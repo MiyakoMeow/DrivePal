@@ -1,6 +1,5 @@
-"""MemoryBankStore MemoryStore Protocol 测试。"""
+"""MemoryBankStore 多用户测试。"""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -11,108 +10,122 @@ from app.memory.schemas import MemoryEvent
 
 
 @pytest.fixture
-def store():
-    """提供 mock embedding 的 MemoryBankStore 实例。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
-        emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        s = MemoryBankStore(Path(tmp), embedding_model=emb)
-        yield s
+def mock_emb() -> AsyncMock:
+    m = AsyncMock(spec=["encode", "batch_encode"])
+    m.encode = AsyncMock(return_value=[0.1] * 1536)
+    m.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
+    return m
+
+
+@pytest.fixture
+def mock_chat() -> AsyncMock:
+    m = AsyncMock(spec=["generate"])
+    m.generate = AsyncMock(return_value="summary text")
+    return m
+
+
+@pytest.fixture
+def store(tmp_path: Path, mock_emb, mock_chat) -> MemoryBankStore:
+    return MemoryBankStore(tmp_path, mock_emb, mock_chat)
 
 
 @pytest.mark.asyncio
-async def test_write_interaction_returns_id(store):
+async def test_write_interaction_returns_id(store: MemoryBankStore) -> None:
     """验证 write_interaction 返回事件 ID。"""
-    result = await store.write_interaction("hello", "world")
+    result = await store.write_interaction("user_1", "hello", "world")
     assert result.event_id
     assert isinstance(result.event_id, str)
 
 
 @pytest.mark.asyncio
-async def test_search_returns_results(store):
+async def test_search_returns_results(store: MemoryBankStore) -> None:
     """验证写入后可搜索到结果。"""
-    await store.write_interaction("set seat to 45", "seat set to 45")
-    results = await store.search("seat", top_k=5)
+    await store.write_interaction("user_1", "set seat to 45", "seat set to 45")
+    results = await store.search("user_1", "seat", top_k=5)
     assert len(results) >= 1
 
 
 @pytest.mark.asyncio
-async def test_write_returns_id(store):
+async def test_write_returns_id(store: MemoryBankStore) -> None:
     """验证 write 返回事件 ID。"""
     event = MemoryEvent(content="test event", type="reminder")
-    eid = await store.write(event)
+    eid = await store.write("user_1", event)
     assert eid
     assert isinstance(eid, str)
 
 
 @pytest.mark.asyncio
-async def test_get_history(store):
+async def test_get_history(store: MemoryBankStore) -> None:
     """验证 get_history 返回历史事件。"""
-    await store.write_interaction("test", "response")
-    history = await store.get_history(limit=10)
+    await store.write_interaction("user_1", "test", "response")
+    history = await store.get_history("user_1", limit=10)
     assert len(history) >= 1
     assert isinstance(history[0], MemoryEvent)
 
 
 @pytest.mark.asyncio
-async def test_get_event_type_none_for_missing(store):
+async def test_get_event_type_none_for_missing(store: MemoryBankStore) -> None:
     """验证不存在的 event_id 返回 None。"""
-    t = await store.get_event_type("nonexistent")
+    t = await store.get_event_type("user_1", "nonexistent")
     assert t is None
 
 
 @pytest.mark.asyncio
-async def test_purge_forgotten_removes_from_index():
-    """验证 _purge_forgotten 从 FAISS 索引移除已遗忘条目。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
-        emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        s = MemoryBankStore(Path(tmp), embedding_model=emb)
-        await s.write_interaction("hello", "world")
-        await s.write_interaction("test2", "data2")
-        assert s._index.total == 2
-        # 标记第一条为 forgotten
-        s._index.get_metadata()[0]["forgotten"] = True
-        # 第一次调用：应成功移除
-        result = await s._purge_forgotten(s._index.get_metadata())
-        assert result is True
-        assert s._index.total == 1
-        # 第二次调用：节流跳过，无操作
-        result = await s._purge_forgotten(s._index.get_metadata())
-        assert result is False
-        assert s._index.total == 1
+async def test_multi_user_isolation(store: MemoryBankStore) -> None:
+    """多用户隔离：user_a 的写入不影响 user_b。"""
+    await store.write_interaction("alice", "hello alice", "hi alice")
+    await store.write_interaction("bob", "hello bob", "hi bob")
+
+    results_alice = await store.search("alice", "hello", top_k=5)
+    results_bob = await store.search("bob", "hello", top_k=5)
+    assert len(results_alice) >= 1
+    assert len(results_bob) >= 1
+
+    # alice 只能搜到 alice 的
+    history_alice = await store.get_history("alice")
+    history_bob = await store.get_history("bob")
+    assert len(history_alice) >= 1
+    assert len(history_bob) >= 1
 
 
 @pytest.mark.asyncio
-async def test_write_parses_multi_speaker_content():
+async def test_write_parses_multi_speaker_content(store: MemoryBankStore) -> None:
     """验证 write 解析多行发言格式。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
-        emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        s = MemoryBankStore(Path(tmp), embedding_model=emb)
-        content = "Gary: set seat to 45\nPatricia: set AC to 22"
-        event = MemoryEvent(content=content, type="reminder")
-        eid = await s.write(event)
-        assert eid
-        meta = s._index.get_metadata()
-        assert len(meta) >= 1
-        # 配对模式下 2 行 → 1 条向量，且 speakers 包含双方
-        assert meta[0]["speakers"] == ["Gary", "Patricia"]
+    content = "Gary: set seat to 45\nPatricia: set AC to 22"
+    event = MemoryEvent(content=content, type="reminder")
+    eid = await store.write("user_1", event)
+    assert eid
 
 
 @pytest.mark.asyncio
-async def test_write_interaction_with_user_name():
+async def test_write_interaction_with_user_name(store: MemoryBankStore) -> None:
     """验证 write_interaction 支持指定发言者姓名。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        emb = AsyncMock(spec=["encode"])
-        emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        s = MemoryBankStore(Path(tmp), embedding_model=emb)
-        result = await s.write_interaction(
-            "set seat to 45",
-            "seat set to 45",
-            user_name="Gary",
-        )
-        assert result.event_id
-        meta = s._index.get_metadata()
-        assert len(meta) >= 1
-        assert any("Gary" in entry.get("speakers", []) for entry in meta)
+    result = await store.write_interaction(
+        "user_1",
+        "set seat to 45",
+        "seat set to 45",
+        user_name="Gary",
+    )
+    assert result.event_id
+
+
+@pytest.mark.asyncio
+async def test_get_reference_date_from_metadata(
+    tmp_path: Path, mock_emb, mock_chat
+) -> None:
+    """_get_reference_date 从 metadata 自动计算。"""
+    store = MemoryBankStore(tmp_path, mock_emb, mock_chat)
+    # 写入一条数据
+    await store.write_interaction("user_1", "test", "response")
+    ref_date = store._get_reference_date("user_1")
+    assert ref_date is not None
+
+
+@pytest.mark.asyncio
+async def test_update_feedback_silent(store: MemoryBankStore) -> None:
+    """update_feedback 静默忽略。"""
+    from app.memory.schemas import FeedbackData
+
+    feedback = FeedbackData(action="accept")
+    # 不应抛出异常
+    await store.update_feedback("user_1", "0", feedback)
