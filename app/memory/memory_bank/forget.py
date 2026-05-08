@@ -127,6 +127,8 @@ class ForgettingCurve:
             self._rng = rng
         elif config.seed is not None and self._mode == ForgetMode.PROBABILISTIC:
             self._rng = random.Random(config.seed)
+        elif self._mode == ForgetMode.PROBABILISTIC:
+            self._rng = random.Random()
         else:
             self._rng = None
         self._last_forget_time: float = -float(config.forget_interval_seconds) - 1

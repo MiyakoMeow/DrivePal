@@ -11,7 +11,7 @@ from app.memory.memory_bank.lifecycle import MemoryLifecycle
 @pytest.mark.asyncio
 async def test_inflight_prevents_duplicate_summarize():
     """Given inflight 摘要在运行，When 同日期再次触发，Then 不创建新任务。"""
-    config = MemoryBankConfig(enable_summary=True)
+    config = MemoryBankConfig()
     index = MagicMock()
     embed = AsyncMock()
     forget = MagicMock()

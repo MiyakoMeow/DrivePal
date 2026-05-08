@@ -25,7 +25,6 @@ class MemoryBankConfig(BaseSettings):
     embedding_min_similarity: float = 0.3
 
     # ── 摘要 ──
-    enable_summary: bool = True
     summary_system_prompt: str = (
         "You are an in-car AI assistant with expertise in remembering "
         "vehicle preferences, driving habits, and in-car conversation context."
