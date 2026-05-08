@@ -100,7 +100,9 @@ class MemoryBankStore:
         ):
             await self._index.save()
         results, updated = await self._retrieval.search(
-            query, top_k, reference_date=self._config.reference_date,
+            query,
+            top_k,
+            reference_date=self._config.reference_date,
         )
         if updated:
             await self._index.save()

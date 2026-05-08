@@ -169,7 +169,10 @@ def test_adaptive_chunk_few_entries_returns_default():
     popped = os.environ.pop("MEMORYBANK_CHUNK_SIZE", None)
     try:
         meta = [{"text": "hello"}] * 5
-        assert _get_effective_chunk_size(meta, MemoryBankConfig()) == MemoryBankConfig().default_chunk_size
+        assert (
+            _get_effective_chunk_size(meta, MemoryBankConfig())
+            == MemoryBankConfig().default_chunk_size
+        )
     finally:
         if popped is not None:
             os.environ["MEMORYBANK_CHUNK_SIZE"] = popped
