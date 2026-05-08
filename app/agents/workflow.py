@@ -135,8 +135,8 @@ class AgentWorkflow:
             parsed = await self._call_llm_json(prompt)
             context = {
                 "current_datetime": current_datetime,
-                "related_events": relevant_memories,
                 **parsed.model_dump(),
+                "related_events": relevant_memories,
             }
 
         if stages is not None:
