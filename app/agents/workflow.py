@@ -105,35 +105,35 @@ class AgentWorkflow:
         )
         return LLMJsonResponse.from_llm(result)
 
+    async def _search_memories(
+        self,
+        user_input: str,
+    ) -> list[dict]:
+        """搜索相关记忆，失败时回退到最近历史记录. 统一返回可序列化 dict 列表."""
+        try:
+            if not user_input:
+                return []
+            events = await self.memory_module.search(
+                user_input,
+                mode=self._memory_mode,
+            )
+            if events:
+                return [e.to_public() for e in events]
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
+            logger.warning("Memory search failed, fallback to history: %s", e)
+
+        try:
+            history = await self.memory_module.get_history(mode=self._memory_mode)
+            return [e.model_dump() for e in history]
+        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
+            logger.warning("Memory get_history also failed: %s", e)
+            return []
+
     async def _context_node(self, state: AgentState) -> dict:
         user_input = state.get("original_query", "")
         stages = state.get("stages")
 
-        try:
-            related_events = (
-                await self.memory_module.search(user_input, mode=self._memory_mode)
-                if user_input
-                else []
-            )
-        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
-            logger.warning("Memory search failed: %s", e)
-            related_events = []
-
-        try:
-            if related_events:
-                relevant_memories = [e.to_public() for e in related_events]
-            else:
-                relevant_memories = [
-                    e.model_dump()
-                    for e in await self.memory_module.get_history(
-                        mode=self._memory_mode,
-                    )
-                ]
-        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
-            logger.warning("Memory get_history failed: %s", e)
-            relevant_memories = (
-                [e.to_public() for e in related_events] if related_events else []
-            )
+        relevant_memories = await self._search_memories(user_input)
 
         current_datetime = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         driving_context = state.get("driving_context")

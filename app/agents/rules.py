@@ -1,5 +1,6 @@
 """轻量规则引擎 — 安全约束规则定义与合并."""
 
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -20,8 +21,8 @@ class Rule:
 SCENARIO_HIGHWAY = "highway"
 SCENARIO_PARKED = "parked"
 WORKLOAD_OVERLOADED = "overloaded"
-# 疲劳阈值，超过此值触发疲劳抑制规则
-FATIGUE_THRESHOLD = 0.7
+# 疲劳阈值，超过此值触发疲劳抑制规则，通过环境变量 FATIGUE_THRESHOLD 配置
+FATIGUE_THRESHOLD = float(os.environ.get("FATIGUE_THRESHOLD", "0.7"))
 
 # 紧急提醒类型白名单，不受 only_urgent 过滤
 URGENT_TYPES = frozenset({"warning", "safety", "alert"})

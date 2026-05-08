@@ -75,7 +75,7 @@ def llm_provider() -> LLMProviderConfig:
         pytest.skip("无法加载 LLM 配置")
     try:
         providers = settings.get_model_group_providers("default")
-    except KeyError, ValueError, RuntimeError:
+    except KeyError, ValueError, RuntimeError:  # PEP-758: comma-separated except
         pytest.skip("无法获取 LLM providers")
     if not providers:
         pytest.skip("没有配置 LLM providers")
@@ -96,7 +96,7 @@ def embedding() -> Generator[EmbeddingModel]:
     # 验证 embedding provider 配置存在（模型由全局单例创建）
     try:
         provider = settings.get_embedding_provider()
-    except KeyError, RuntimeError:
+    except KeyError, RuntimeError:  # PEP-758: comma-separated except
         pytest.skip("无法获取 embedding provider")
     if provider is None:
         pytest.skip("没有配置 embedding provider")

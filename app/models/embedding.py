@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import random
 
 import openai
 
@@ -167,7 +168,7 @@ class EmbeddingModel:
                 delay = min(
                     _RETRY_BASE_DELAY_SECONDS * (2**attempt),
                     _MAX_RETRY_DELAY_SECONDS,
-                )
+                ) * random.uniform(0.5, 1.5)
                 await asyncio.sleep(delay)
         if last_error is not None:
             raise last_error
