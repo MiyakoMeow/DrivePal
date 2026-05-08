@@ -47,6 +47,7 @@ class LLMJsonResponse(BaseModel):
                 parsed = data
         except json.JSONDecodeError as e:
             logger.warning("LLM JSON parse failed: %s", e)
+        parsed.pop("raw", None)  # prevent collision with explicit raw=text
         return cls(raw=text, **parsed)
 
 
@@ -134,8 +135,8 @@ class AgentWorkflow:
 
             parsed = await self._call_llm_json(prompt)
             context = {
-                "current_datetime": current_datetime,
                 **parsed.model_dump(),
+                "current_datetime": current_datetime,
                 "related_events": relevant_memories,
             }
 
@@ -199,9 +200,7 @@ class AgentWorkflow:
     @staticmethod
     def _extract_content(decision: dict) -> str:
         """从决策 dict 中提取提醒内容."""
-        remind = (
-            decision.get("reminder_content") or decision.get("remind_content") or {}
-        )
+        remind = decision.get("reminder_content") or decision.get("remind_content")
         if isinstance(remind, str):
             return remind
         if isinstance(remind, dict):

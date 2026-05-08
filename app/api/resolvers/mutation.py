@@ -231,13 +231,16 @@ class Mutation:
                 mode=mode,
             )
         except OSError as e:
-            msg = f"Storage error: {e}"
+            logger.exception("Storage error in submitFeedback(get_event_type)")
+            msg = "Internal storage error"
             raise GraphQLError(msg) from e
         except RuntimeError as e:
-            msg = f"Runtime error: {e}"
+            logger.exception("Runtime error in submitFeedback(get_event_type)")
+            msg = "Internal runtime error"
             raise GraphQLError(msg) from e
         except ValueError as e:
-            msg = f"Validation error: {e}"
+            logger.exception("Validation error in submitFeedback(get_event_type)")
+            msg = "Invalid feedback data"
             raise GraphQLError(msg) from e
         except Exception as e:
             logger.exception("submitFeedback failed (get_event_type)")
@@ -256,13 +259,16 @@ class Mutation:
         except GraphQLError:
             raise
         except OSError as e:
-            msg = f"Storage error: {e}"
+            logger.exception("Storage error in submitFeedback(update_feedback)")
+            msg = "Internal storage error"
             raise GraphQLError(msg) from e
         except RuntimeError as e:
-            msg = f"Runtime error: {e}"
+            logger.exception("Runtime error in submitFeedback(update_feedback)")
+            msg = "Internal runtime error"
             raise GraphQLError(msg) from e
         except ValueError as e:
-            msg = f"Validation error: {e}"
+            logger.exception("Validation error in submitFeedback(update_feedback)")
+            msg = "Invalid feedback data"
             raise GraphQLError(msg) from e
         except Exception as e:
             logger.exception("submitFeedback failed (update_feedback)")
