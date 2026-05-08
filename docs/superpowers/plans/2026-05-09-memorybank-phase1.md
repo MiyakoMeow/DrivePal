@@ -13,7 +13,7 @@
 ### 任务 1：新增异常体系
 
 **文件：**
-- 创建：`app/memory/memory_bank/exceptions.py`
+- 创建：`app/memory/exceptions.py`
 
 - [ ] **步骤 1：创建 exceptions.py**
 
@@ -63,12 +63,12 @@ class IndexIntegrityError(FatalError):
 
 - [ ] **步骤 2：验证语法**
 
-`uv run python -c "from app.memory.memory_bank.exceptions import LLMCallFailed, SummarizationEmpty"`
+`uv run python -c "from app.memory.exceptions import LLMCallFailed, SummarizationEmpty"`
 
 - [ ] **步骤 3：Commit**
 
 ```bash
-git add app/memory/memory_bank/exceptions.py
+git add app/memory/exceptions.py
 git commit -m "feat: add MemoryBank exception hierarchy"
 ```
 
@@ -207,13 +207,13 @@ git commit -m "feat: config-based LlmClient with typed exceptions"
 - `compute_ingestion_forget_ids` 静默 `return []` 改为记录 warning
 
 思路：
-- 删除模块级 `FORGETTING_TIME_SCALE` 常量
-- `compute_ingestion_forget_ids` 在 `except ValueError, TypeError` 块中加 `logger.warning("skipping corrupted entry faiss_id=%s", ...)`
+- 删除模块级 `FORGETTING_TIME_SCALE` 常量。`forgetting_retention` 默认 time_scale=1.0，现有两调用方（`compute_ingestion_forget_ids` 通过 config、`ForgettingCurve.maybe_forget` 通过 self._config）均已显式传值，无行为变化
+- `compute_ingestion_forget_ids` 的 except 块加 warning
 
 - [ ] **步骤 1：改 forget.py**
 
 1. 删 `FORGETTING_TIME_SCALE`
-2. `forgetting_retention()` 第 2 行的 `FORGETTING_TIME_SCALE` 默认值改为 `1.0`（调用方始终传入，无影响）
+2. `forgetting_retention()` 默认 time_scale=1.0
 3. `compute_ingestion_forget_ids` 的 except 块加 warning
 
 - [ ] **步骤 2：验证**
@@ -281,6 +281,7 @@ git commit -m "refactor: Summarizer uses exception-based LLM calls with explicit
 - `write()`：收集 `pair_texts` 列表 → 一次 `encode_batch()` → 逐 `add_vector()`
 - `_forget_at_ingestion`：`today = self._config.reference_date or (self._index.compute_reference_date() if self._config.reference_date_auto else datetime.now(UTC)...)`
 - `_background_summarize`：try/except 替代裸 except
+- 埋点：`write()` 中 embedding 调用前后记录 `embedding_latency_ms`；`_background_summarize` 异常路径 `background_task_failures += 1`；`purge_forgotten()` 后 `forget_count += 1`、`forget_removed_count += len(forgotten_ids)`
 
 - [ ] **步骤 1：改 write() 批量嵌入**
 
