@@ -233,6 +233,7 @@ class Mutation:
             actual_type = await mm.get_event_type(
                 feedback_input.event_id,
                 mode=mode,
+                user_id="default",
             )
         except Exception as e:
             logger.exception("submitFeedback failed")
@@ -247,7 +248,9 @@ class Mutation:
                 type=actual_type,
                 modified_content=feedback_input.modified_content,
             )
-            await mm.update_feedback(feedback_input.event_id, feedback, mode=mode)
+            await mm.update_feedback(
+                feedback_input.event_id, feedback, mode=mode, user_id="default"
+            )
         except GraphQLError:
             raise
         except Exception as e:

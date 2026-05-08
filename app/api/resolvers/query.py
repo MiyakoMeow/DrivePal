@@ -26,7 +26,7 @@ class Query:
         """查询历史记忆事件."""
         mm = get_memory_module()
         mode = MemoryMode(memory_mode.value)
-        events = await mm.get_history(limit=limit, mode=mode)
+        events = await mm.get_history(limit=limit, mode=mode, user_id="default")
         return [
             MemoryEventGQL(
                 id=e.id,

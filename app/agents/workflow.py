@@ -74,7 +74,9 @@ class AgentWorkflow:
 
         try:
             related_events = (
-                await self.memory_module.search(user_input, mode=self._memory_mode)
+                await self.memory_module.search(
+                    user_input, mode=self._memory_mode, user_id="default"
+                )
                 if user_input
                 else []
             )
@@ -90,6 +92,7 @@ class AgentWorkflow:
                     e.model_dump()
                     for e in await self.memory_module.get_history(
                         mode=self._memory_mode,
+                        user_id="default",
                     )
                 ]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
@@ -213,6 +216,7 @@ class AgentWorkflow:
             original_query,
             content,
             mode=self._memory_mode,
+            user_id="default",
         )
         event_id = interaction_result.event_id
         if not event_id:
