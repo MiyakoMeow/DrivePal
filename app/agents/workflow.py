@@ -106,9 +106,14 @@ class AgentWorkflow:
     def _event_hit_to_dict(event_hit: object) -> dict:
         """将搜索结果命中转为可序列化 dict，含防御性类型检查。"""
         if event_hit is None:
+            logger.warning("_event_hit_to_dict: event_hit is None, returning empty")
             return {}
         ed = getattr(event_hit, "event", event_hit)
         if not isinstance(ed, dict):
+            logger.warning(
+                "_event_hit_to_dict: event type=%s not a dict, returning empty",
+                type(ed).__name__,
+            )
             return {}
         ed = cast("dict[str, Any]", ed)
         me = MemoryEvent(
@@ -153,7 +158,8 @@ class AgentWorkflow:
                 mode=self._memory_mode,
             )
             if events:
-                return [self._event_hit_to_dict(e) for e in events]
+                hits = [self._event_hit_to_dict(e) for e in events]
+                return [d for d in hits if d]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
             logger.warning("Memory search failed, fallback to history: %s", e)
 
