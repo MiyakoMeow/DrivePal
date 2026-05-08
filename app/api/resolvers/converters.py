@@ -6,13 +6,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from app.api.graphql_schema import (
-    DriverStateGQL,
     DrivingContextGQL,
     DrivingContextInput,
-    GeoLocationGQL,
     ScenarioPresetGQL,
-    SpatioTemporalContextGQL,
-    TrafficConditionGQL,
 )
 from app.config import DATA_DIR
 from app.schemas.context import DrivingContext
@@ -49,43 +45,9 @@ def input_to_context(input_obj: DrivingContextInput) -> DrivingContext:
 
 
 def dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
-    """将 dict 转为 DrivingContextGQL（通过 Pydantic 验证后手工构造）。
-
-    注意：P3 实施后此函数被 DrivingContextGQL.from_pydantic() 替代。
-    """
+    """将 dict 转为 DrivingContextGQL（通过 Pydantic→from_pydantic）。"""
     ctx = DrivingContext.model_validate(d)
-    dest = ctx.spatial.destination
-    return DrivingContextGQL(
-        driver=DriverStateGQL(
-            emotion=ctx.driver.emotion,
-            workload=ctx.driver.workload,
-            fatigue_level=ctx.driver.fatigue_level,
-        ),
-        spatial=SpatioTemporalContextGQL(
-            current_location=GeoLocationGQL(
-                latitude=ctx.spatial.current_location.latitude,
-                longitude=ctx.spatial.current_location.longitude,
-                address=ctx.spatial.current_location.address,
-                speed_kmh=ctx.spatial.current_location.speed_kmh,
-            ),
-            destination=GeoLocationGQL(
-                latitude=dest.latitude,
-                longitude=dest.longitude,
-                address=dest.address,
-                speed_kmh=dest.speed_kmh,
-            )
-            if dest is not None
-            else None,
-            eta_minutes=ctx.spatial.eta_minutes,
-            heading=ctx.spatial.heading,
-        ),
-        traffic=TrafficConditionGQL(
-            congestion_level=ctx.traffic.congestion_level,
-            incidents=ctx.traffic.incidents,
-            estimated_delay_minutes=ctx.traffic.estimated_delay_minutes,
-        ),
-        scenario=ctx.scenario,
-    )
+    return DrivingContextGQL.from_pydantic(ctx)
 
 
 def preset_store() -> TOMLStore:

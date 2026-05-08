@@ -6,3 +6,7 @@ replace-imports-with-any = ["faiss"]
 
 [rules]
 all = "error"
+
+[[overrides]]
+include = ["app/api/resolvers/converters.py"]
+rules = { "unresolved-attribute" = "ignore" }  # strawberry pydantic 装饰器动态添加 from_pydantic 方法
