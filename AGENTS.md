@@ -31,7 +31,7 @@ app/
 ├── api/               # GraphQL API层
 │   ├── main.py        # FastAPI入口
 │   ├── graphql_schema.py
-│   └── resolvers/     # query.py + mutation.py
+│   └── resolvers/     # query.py + mutation.py + _helpers.py
 ├── models/            # AI模型封装
 │   ├── chat.py        # LLM调用（多provider自动fallback, 纯异步）
 │   ├── embedding.py   # Embedding模型封装（纯远程, 重试 + 批量）
@@ -42,7 +42,7 @@ app/
 │   ├── interfaces.py  # MemoryStore Protocol定义
 │   ├── types.py       # MemoryMode枚举
 │   ├── schemas.py     # MemoryEvent, InteractionRecord等
-│   └── stores/memory_bank/  # MemoryBank后端
+│   └── memory_bank/         # MemoryBank后端
 │       ├── store.py        # MemoryStore实现
 │       ├── faiss_index.py  # FAISS IndexIDMap(IndexFlatIP)
 │       ├── retrieval.py    # 四阶段检索管道
@@ -125,7 +125,7 @@ deleteScenarioPreset(id): Boolean
 
 ## MemoryBank 记忆系统
 
-`app/memory/stores/memory_bank/`。基于论文 MemoryBank 实现。
+`app/memory/memory_bank/`。基于论文 MemoryBank 实现。
 
 ### 架构
 
@@ -319,5 +319,5 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 
 ## 未解决问题
 
-1. 反馈学习：`update_feedback` 在 MemoryBankStore 中已移除实现（静默忽略），反馈数据不再写入 strategies.toml 的 reminder_weights
+1. 反馈学习：`update_feedback` 将反馈写入 `feedback.toml`，但数据当前仅存储未消费（无反馈驱动的策略权重更新）
 2. 多用户隔离：当前单驾驶员场景，未实现
