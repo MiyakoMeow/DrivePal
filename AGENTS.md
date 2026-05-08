@@ -31,7 +31,7 @@ app/
 ├── api/               # GraphQL API层
 │   ├── main.py        # FastAPI入口
 │   ├── graphql_schema.py
-│   └── resolvers/     # query.py + mutation.py + _helpers.py
+│   └── resolvers/     # query.py + mutation.py + helpers.py
 ├── models/            # AI模型封装
 │   ├── chat.py        # LLM调用（多provider自动fallback, 纯异步）
 │   ├── embedding.py   # Embedding模型封装（纯远程, 重试 + 批量）

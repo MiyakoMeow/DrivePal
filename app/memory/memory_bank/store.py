@@ -99,6 +99,7 @@ class MemoryBankStore:
             "true",
             "yes",
         )
+        self._feedback_store: TOMLStore | None = None
 
     async def _purge_forgotten(self, metadata: list[dict]) -> bool:
         """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
@@ -338,11 +339,14 @@ class MemoryBankStore:
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """写入反馈到 feedback.toml。"""
-        store = TOMLStore(self._data_dir, Path("feedback.toml"), list)
+        if self._feedback_store is None:
+            self._feedback_store = TOMLStore(
+                self._data_dir, Path("feedback.toml"), list
+            )
         entry = feedback.model_dump(exclude_none=True)
         entry["event_id"] = event_id
         entry["timestamp"] = datetime.now(UTC).isoformat()
-        await store.append(entry)
+        await self._feedback_store.append(entry)
 
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""

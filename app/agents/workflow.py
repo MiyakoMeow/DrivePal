@@ -32,6 +32,11 @@ def _extract_reminder_content(decision: dict) -> str:
     return "无提醒内容"
 
 
+def _is_relevant_strategy(value: object) -> bool:
+    """筛选非空策略值（空列表/空字典视为不相关）。"""
+    return not (isinstance(value, (list, dict)) and not value)
+
+
 class ChatModelUnavailableError(RuntimeError):
     """ChatModel 不可用时抛出的异常."""
 
@@ -212,9 +217,7 @@ class AgentWorkflow:
 
         strategies = await self._strategies_store.read()
         relevant_strategies = {
-            k: v
-            for k, v in strategies.items()
-            if not (isinstance(v, (list, dict)) and not v)
+            k: v for k, v in strategies.items() if _is_relevant_strategy(v)
         }
 
         constraints_block = ""

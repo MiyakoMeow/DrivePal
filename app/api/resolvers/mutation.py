@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal, cast
 import strawberry
 from graphql.error import GraphQLError
 
-from app.agents.workflow import AgentWorkflow
+from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
 from app.api.graphql_schema import (
     FeedbackInput,
     FeedbackResult,
@@ -16,7 +16,7 @@ from app.api.graphql_schema import (
     ScenarioPresetInput,
     WorkflowStagesGQL,
 )
-from app.api.resolvers._helpers import (
+from app.api.resolvers.helpers import (
     GraphQLEventNotFoundError,
     GraphQLInvalidActionError,
     InternalServerError,
@@ -71,6 +71,8 @@ class Mutation:
                 ),
             )
         except GraphQLError:
+            raise
+        except ChatModelUnavailableError:
             raise
         except Exception as e:
             logger.exception("processQuery failed")
