@@ -1,7 +1,6 @@
-"""RetrievalPipeline 单元测试。"""
+"""RetrievalPipeline 单元测试（多用户版）。"""
 
 import os
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -9,17 +8,22 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.memory.embedding_client import EmbeddingClient
-from app.memory.memory_bank.faiss_index import FaissIndex
+from app.memory.memory_bank.faiss_index import FaissIndexManager
 from app.memory.memory_bank.retrieval import (
     DEFAULT_CHUNK_SIZE,
     RetrievalPipeline,
     _clean_search_result,
+    _compute_strength_updates,
     _get_effective_chunk_size,
     _merge_overlapping_results,
     _strip_source_prefix,
-    _update_memory_strengths,
     _word_in_text,
 )
+
+
+@pytest.fixture
+def manager(tmp_path: Path) -> FaissIndexManager:
+    return FaissIndexManager(tmp_path)
 
 
 @pytest.fixture
@@ -31,33 +35,47 @@ def mock_embedding():
 
 
 @pytest.mark.asyncio
-async def test_search_empty_index_returns_empty_list(mock_embedding):
-    """空索引时 search 应返回空列表。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        idx = FaissIndex(Path(tmp))
-        await idx.load()
-        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding))
-        results = await pipe.search("anything")
-        assert results == []
+async def test_search_empty_index_returns_empty(manager: FaissIndexManager, mock_embedding):
+    """空索引时 search 应返回空元组。"""
+    pipe = RetrievalPipeline(manager, EmbeddingClient(mock_embedding))
+    results, updates = await pipe.search("user_1", "anything")
+    assert results == []
+    assert updates == {}
 
 
 @pytest.mark.asyncio
-async def test_search_returns_results(mock_embedding):
+async def test_search_returns_results(manager: FaissIndexManager, mock_embedding):
     """有数据时 search 应返回结果。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        idx = FaissIndex(Path(tmp))
-        await idx.load()
-        emb = [0.1] * 1536
-        for _, text in enumerate(["Gary likes seat 45", "Patricia wants AC at 22"]):
-            await idx.add_vector(
-                text,
-                emb,
-                "2024-06-15T10:00:00",
-                {"source": "2024-06-15", "speakers": [text.split()[0]]},
-            )
-        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding))
-        results = await pipe.search("Gary seat")
-        assert len(results) >= 1
+    emb = [0.1] * 1536
+    for _, text in enumerate(["Gary likes seat 45", "Patricia wants AC at 22"]):
+        await manager.add_vector(
+            "user_1",
+            text,
+            emb,
+            "2024-06-15T10:00:00",
+            {"source": "2024-06-15", "speakers": [text.split()[0]]},
+        )
+    pipe = RetrievalPipeline(manager, EmbeddingClient(mock_embedding))
+    results, updates = await pipe.search("user_1", "Gary seat")
+    assert len(results) >= 1
+    assert isinstance(updates, dict)
+
+
+@pytest.mark.asyncio
+async def test_search_returns_strength_updates(manager: FaissIndexManager, mock_embedding):
+    """检索后应返回强度更新。"""
+    emb = [0.1] * 1536
+    fid = await manager.add_vector(
+        "user_1", "Gary likes seat 45", emb, "2024-06-15T10:00:00",
+        {"source": "2024-06-15", "speakers": ["Gary"]},
+    )
+    pipe = RetrievalPipeline(manager, EmbeddingClient(mock_embedding))
+    _, updates = await pipe.search("user_1", "Gary seat")
+    assert len(updates) > 0
+    # 验证更新字段
+    for meta_idx, fields in updates.items():
+        assert "memory_strength" in fields
+        assert "last_recall_date" in fields
 
 
 def test_merge_overlapping_dedup():
@@ -170,8 +188,8 @@ def test_adaptive_chunk_few_entries_returns_default():
             os.environ["MEMORYBANK_CHUNK_SIZE"] = popped
 
 
-def test_update_memory_strength_refreshes_recall_date():
-    """验证检索命中后 last_recall_date 被刷新。"""
+def test_compute_strength_updates_returns_dict():
+    """_compute_strength_updates 返回更新字典而非原地修改。"""
     meta = [
         {
             "faiss_id": 0,
@@ -182,14 +200,17 @@ def test_update_memory_strength_refreshes_recall_date():
     results = [
         {"_meta_idx": 0, "_all_meta_indices": [0], "score": 0.9},
     ]
-    updated = _update_memory_strengths(results, meta)
-    assert updated
+    updates = _compute_strength_updates(results, meta)
+    assert 0 in updates
+    assert updates[0]["memory_strength"] == 2.0
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    assert meta[0]["last_recall_date"] == today
+    assert updates[0]["last_recall_date"] == today
+    # 验证未修改原 metadata
+    assert meta[0]["memory_strength"] == 1.0
 
 
 def test_memory_strength_no_cap():
-    """验证记忆强度可以超过 10（原版行为）。"""
+    """验证记忆强度可以超过 10（纯函数版）。"""
     meta = [
         {
             "faiss_id": 0,
@@ -202,50 +223,11 @@ def test_memory_strength_no_cap():
     results = [
         {"_meta_idx": 0, "score": 1.0, "_merged_indices": [0]},
     ]
-    _update_memory_strengths(results, meta)
-    assert meta[0]["memory_strength"] == 10.5, (
-        f"expected 10.5, got {meta[0]['memory_strength']}"
-    )
-    _update_memory_strengths(results, meta)
-    assert meta[0]["memory_strength"] == 11.5, (
-        f"expected 11.5, got {meta[0]['memory_strength']}"
-    )
-
-
-@pytest.mark.asyncio
-async def test_pipeline_returns_results_without_retention_weight():
-    """验证移除 retention weight 后检索管道仍正常返回结果。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        idx = FaissIndex(Path(tmp))
-        await idx.load()
-        await idx.add_vector(
-            "entry 0: test preference",
-            [0.1] * 1536,
-            "2024-01-01T00:00:00",
-            {
-                "source": "2024-01-01",
-                "speakers": ["User"],
-                "memory_strength": 1,
-                "last_recall_date": "2024-01-01",
-            },
-        )
-        await idx.add_vector(
-            "entry 1: other topic",
-            [0.2] * 1536,  # 不同向量使相似度不同
-            "2024-06-14T00:00:00",
-            {
-                "source": "2024-06-14",
-                "speakers": ["User"],
-                "memory_strength": 5,
-                "last_recall_date": "2024-06-14",
-            },
-        )
-        mock_emb = AsyncMock(spec=["encode"])
-        # query 与 entry 0 相似
-        mock_emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_emb))
-        results = await pipe.search("test preference", top_k=2)
-        assert len(results) >= 1
+    updates1 = _compute_strength_updates(results, meta)
+    assert updates1[0]["memory_strength"] == 10.5
+    updates2 = _compute_strength_updates(results, meta)
+    # 原 metadata 未被修改，两次应得相同结果
+    assert updates2[0]["memory_strength"] == 10.5
 
 
 def test_adaptive_chunk_many_entries_uses_p90():

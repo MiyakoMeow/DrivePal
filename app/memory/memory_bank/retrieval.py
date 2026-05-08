@@ -1,10 +1,15 @@
-"""四阶段检索管道。
+"""四阶段检索管道（多用户版）。
 
 从 VehicleMemBench memorybank.py 移植并适配：
 - 阶段 1: query embedding + FAISS 粗排
 - 阶段 2: 邻居合并（同 source 连续条目）
 - 阶段 3: 重叠去重（并查集）
 - 阶段 4: 说话人感知降权
+
+变更点：
+- 构造函数接收 FaissIndexManager 而非 FaissIndex
+- search 返回 (results, strength_updates) 元组
+- _compute_strength_updates 为纯函数，不原地修改 metadata
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
 
-    from .faiss_index import FaissIndex
+    from .faiss_index import FaissIndexManager
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +57,7 @@ def _resolve_chunk_size() -> int:
 
 
 def _get_effective_chunk_size(metadata: list[dict]) -> int:
-    """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
-
-    环境变量 MEMORYBANK_CHUNK_SIZE 显式设置时跳过自适应，直接使用该值。
-    metadata 不足 10 条时回退 DEFAULT_CHUNK_SIZE。
-    """
+    """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。"""
     if os.getenv("MEMORYBANK_CHUNK_SIZE"):
         return _resolve_chunk_size()
     lengths = sorted(len(m.get("text", "")) for m in metadata)
@@ -220,15 +221,14 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-def _update_memory_strengths(
+def _compute_strength_updates(
     results: list[dict], metadata: list[dict], reference_date: str | None = None
-) -> bool:
-    """更新命中条目的记忆强度，返回是否有修改。
+) -> dict[int, dict]:
+    """纯函数：返回 {meta_idx: {"memory_strength": new, "last_recall_date": date}}。
 
-    注意：记忆强度不再设上限（原 cap=10），每次检索命中 +1。
-    同一天重复检索同一条目，memory_strength 会持续增长，使之更难被遗忘。
+    不修改传入的 metadata。由调用方应用更新。
     """
-    updated = False
+    updates: dict[int, dict] = {}
     for r in results:
         all_mi: list[int] = []
         ai = r.get("_all_meta_indices")
@@ -246,12 +246,9 @@ def _update_memory_strengths(
                     )
                     + 1.0
                 )
-                metadata[mi]["memory_strength"] = new_strength
                 today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
-                if metadata[mi].get("last_recall_date") != today:
-                    metadata[mi]["last_recall_date"] = today
-                updated = True
-    return updated
+                updates[mi] = {"memory_strength": new_strength, "last_recall_date": today}
+    return updates
 
 
 def _gather_neighbor_indices(
@@ -261,13 +258,11 @@ def _gather_neighbor_indices(
     neighbor_indices: list[int] = [meta_idx]
     pos = meta_idx + 1
     while pos < len(metadata) and metadata[pos].get("source") == source:
-        if not metadata[pos].get("forgotten"):
-            neighbor_indices.append(pos)
+        neighbor_indices.append(pos)
         pos += 1
     pos = meta_idx - 1
     while pos >= 0 and metadata[pos].get("source") == source:
-        if not metadata[pos].get("forgotten"):
-            neighbor_indices.append(pos)
+        neighbor_indices.append(pos)
         pos -= 1
     neighbor_indices.sort()
     if meta_idx not in neighbor_indices:
@@ -342,7 +337,7 @@ def _word_in_text(word: str, text: str) -> bool:
 
 
 class RetrievalPipeline:
-    """四阶段检索管道。
+    """四阶段检索管道（多用户版）。
 
     阶段 1: query embedding + FAISS 粗排
     阶段 2: 邻居合并（同 source 连续条目）
@@ -350,47 +345,50 @@ class RetrievalPipeline:
     阶段 4: 说话人感知降权
     """
 
-    def __init__(self, index: FaissIndex, embedding_client: EmbeddingClient) -> None:
-        """初始化检索管道。"""
-        self._index = index
+    def __init__(
+        self,
+        index_manager: FaissIndexManager,
+        embedding_client: EmbeddingClient,
+    ) -> None:
+        self._index_manager = index_manager
         self._embedding_client = embedding_client
 
     async def search(
-        self, query: str, top_k: int = 5, reference_date: str | None = None
-    ) -> list[dict]:
-        """执行四阶段检索管道。"""
-        if top_k <= 0:
-            return []
-        query_emb = await self._embedding_client.encode(query)
-        index_total = self._index.total
-        if index_total == 0:
-            return []
-        coarse_k = min(top_k * COARSE_SEARCH_FACTOR, index_total)
-        results = await self._index.search(query_emb, coarse_k)
-        if not results:
-            return []
-        # 过滤已遗忘条目（maybe_forget 在 store.py 中已设 forgotten 标记）
-        results = [r for r in results if not r.get("forgotten")]
-        if not results:
-            return []
+        self,
+        user_id: str,
+        query: str,
+        top_k: int = 5,
+        reference_date: str | None = None,
+    ) -> tuple[list[dict], dict[int, dict]]:
+        """执行四阶段检索管道。
 
-        metadata = self._index.get_metadata()
+        Returns:
+            (merged_results, strength_updates) 元组。
+            strength_updates 为 {meta_idx: {"memory_strength": ..., "last_recall_date": ...}}，
+            由调用方应用并持久化。
+        """
+        if top_k <= 0:
+            return [], {}
+        query_emb = await self._embedding_client.encode(query)
+        index_total = await self._index_manager.total(user_id)
+        if index_total == 0:
+            return [], {}
+        coarse_k = min(top_k * COARSE_SEARCH_FACTOR, index_total)
+        results = await self._index_manager.search(user_id, query_emb, coarse_k)
+        if not results:
+            return [], {}
+
+        metadata = self._index_manager.get_metadata(user_id)
         merged = self._merge_neighbors(results, metadata)
-        # 注意：_merge_neighbors 内部已调用 _merge_overlapping_results，
-        # 此处不再重复调用。
 
         merged = self._apply_speaker_filter(merged, query)
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
-        updated = _update_memory_strengths(
-            merged, metadata, reference_date=reference_date
-        )
+        strength_updates = _compute_strength_updates(merged, metadata, reference_date=reference_date)
         for r in merged:
             _clean_search_result(r)
-        if updated:
-            await self._index.save()
-        return merged
+        return merged, strength_updates
 
     def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:
         if not results or not metadata:
