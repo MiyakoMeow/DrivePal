@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 import faiss
@@ -19,6 +22,15 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_DIM = 1536
 _TIMESTAMP_LENGTH = 10
+
+
+@dataclass
+class LoadResult:
+    """FaissIndex.load() 返回值，含恢复信息。"""
+
+    ok: bool
+    warnings: list[str] = field(default_factory=list)
+    recovery_actions: list[str] = field(default_factory=list)
 
 
 def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
@@ -72,48 +84,137 @@ class FaissIndex:
         self._id_to_meta: dict[int, int] = {}
         self._all_speakers: set[str] = set()
 
-    async def load(self) -> None:
-        """从磁盘加载索引与元数据；损坏时不重建，等首次 add_vector 再创建。"""
+    async def load(self) -> LoadResult:
+        """从磁盘加载索引与元数据；损坏时降级恢复，不直接丢弃向量。
+
+        Returns:
+            LoadResult 含 ok / warnings / recovery_actions。
+        """
         if self._index is not None:
-            return
+            return LoadResult(ok=True)
         self._data_dir.mkdir(parents=True, exist_ok=True)
         ip = self._data_dir / "index.faiss"
         mp = self._data_dir / "metadata.json"
         ep = self._data_dir / "extra_metadata.json"
 
-        if ip.exists() and mp.exists():
+        if not ip.exists() or not mp.exists():
+            return LoadResult(ok=True)
+
+        # 1. 尝试加载 FAISS 索引
+        idx: faiss.IndexIDMap | None = None
+        try:
+            idx_raw = faiss.read_index(str(ip))
+            idx = idx_raw  # type: ignore[assignment]
+        except (OSError, RuntimeError) as exc:
+            bak_path = ip.with_suffix(".faiss.bak")
+            logger.warning("FaissIndex index.faiss corrupted, backing up: %s", exc)
+            shutil.copy(str(ip), str(bak_path))
+            ip.unlink(missing_ok=True)
+            mp.unlink(missing_ok=True)
+            ep.unlink(missing_ok=True)
+            return LoadResult(
+                ok=False,
+                warnings=[f"index.faiss corrupted: {exc}"],
+                recovery_actions=[
+                    f"index.faiss backed up to {bak_path}. "
+                    "Rebuilding empty index — re-run data ingestion to recover."
+                ],
+            )
+
+        if idx is None:
+            return LoadResult(ok=True)
+
+        # 2. 尝试加载 metadata
+        meta: list[dict] | None = None
+        meta_warnings: list[str] = []
+        try:
+            raw_meta = json.loads(mp.read_text())
+            meta = _validate_metadata_structure(raw_meta)
+            # 校验 count
+            if idx.ntotal != len(meta):
+                logger.warning(
+                    "FaissIndex count mismatch: ntotal=%d, metadata=%d. "
+                    "Rebuilding metadata skeleton from index.",
+                    idx.ntotal,
+                    len(meta),
+                )
+                # 以 index 为权威——为缺失 ID 补骨架
+                existing_ids = {m["faiss_id"] for m in meta}
+                for i in range(idx.ntotal):
+                    fid = i  # FAISS IDMap 从 0 递增
+                    if fid not in existing_ids:
+                        meta.append(
+                            {
+                                "faiss_id": fid,
+                                "text": "",
+                                "timestamp": "",
+                                "memory_strength": 1,
+                                "last_recall_date": "",
+                                "corrupted": True,
+                            }
+                        )
+                meta.sort(key=lambda m: m["faiss_id"])
+                meta_warnings.append(
+                    f"count mismatch ({idx.ntotal} vs {len(meta)}). "
+                    "Added skeleton entries for missing metadata."
+                )
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            # metadata 损坏但 index 正常——从 index 重建骨架
+            logger.warning(
+                "FaissIndex metadata.json corrupted: %s. "
+                "Rebuilding metadata skeleton from FAISS index.",
+                exc,
+            )
+            meta = [
+                {
+                    "faiss_id": i,
+                    "text": "",
+                    "timestamp": "",
+                    "memory_strength": 1,
+                    "last_recall_date": "",
+                    "corrupted": True,
+                }
+                for i in range(idx.ntotal)
+            ]
+            meta_warnings.append(
+                f"metadata.json corrupted ({exc}). "
+                "Rebuilt {len(meta)} skeleton entries from FAISS index. "
+                "Search results will lack text content — re-ingest data to recover."
+            )
+
+        if meta is None:
+            return LoadResult(ok=True)
+
+        self._index = idx
+        self._dim = idx.d
+        self._metadata = meta
+        self._next_id = (
+            (max(m["faiss_id"] for m in meta) + 1) if meta else 0
+        )
+        self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
+        self._rebuild_speakers_cache()
+
+        # 3. 加载 extra_metadata（损坏仅警告，不阻塞）
+        extra_recovery: list[str] = []
+        if ep.exists():
             try:
-                idx = faiss.read_index(str(ip))
-                raw_meta = json.loads(mp.read_text())
-                meta = _validate_metadata_structure(raw_meta)
-                _validate_index_count(idx, len(meta))
-            except (
-                json.JSONDecodeError,
-                OSError,
-                TypeError,
-                ValueError,
-                RuntimeError,
-            ) as exc:
-                logger.warning("FaissIndex corrupted, removing bad files: %s", exc)
-                ip.unlink(missing_ok=True)
-                mp.unlink(missing_ok=True)
-                ep.unlink(missing_ok=True)
-                return
-            self._index = idx
-            self._dim = idx.d
-            self._metadata = meta
-            self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
-            self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
-            self._rebuild_speakers_cache()
-            if ep.exists():
-                try:
-                    e: object = json.loads(ep.read_text())
-                    self._extra = e if isinstance(e, dict) else {}
-                except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
-                    logger.warning(
-                        "FaissIndex extra_metadata corrupted, unlinking: %s", exc
-                    )
-                    ep.unlink(missing_ok=True)
+                e: object = json.loads(ep.read_text())
+                self._extra = e if isinstance(e, dict) else {}
+            except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "FaissIndex extra_metadata corrupted, ignoring: %s", exc
+                )
+                self._extra = {}
+                extra_recovery.append(
+                    "extra_metadata.json corrupted — ignoring. "
+                    "Summaries and personalities will be regenerated on next write."
+                )
+
+        return LoadResult(
+            ok=True,
+            warnings=meta_warnings,
+            recovery_actions=extra_recovery,
+        )
 
     async def save(self) -> None:
         """将索引与元数据持久化到磁盘。"""
@@ -127,6 +228,27 @@ class FaissIndex:
             (self._data_dir / "extra_metadata.json").write_text(
                 json.dumps(self._extra, ensure_ascii=False, indent=2),
             )
+
+    def compute_reference_date(self, offset_days: int = 1) -> str:
+        """扫描 metadata 找最大 timestamp，返回 +offset_days 的日期。
+
+        若 metadata 为空或无可解析时间戳，返回 UTC 当天。
+        """
+        max_ts = ""
+        for m in self._metadata:
+            ts = m.get("timestamp", "")
+            if len(ts) >= _TIMESTAMP_LENGTH:
+                candidate = ts[:_TIMESTAMP_LENGTH]
+                if candidate > max_ts:
+                    max_ts = candidate
+        if not max_ts:
+            return datetime.now(UTC).strftime("%Y-%m-%d")
+        try:
+            return (date.fromisoformat(max_ts) + timedelta(days=offset_days)).strftime(
+                "%Y-%m-%d"
+            )
+        except (ValueError, TypeError):
+            return datetime.now(UTC).strftime("%Y-%m-%d")
 
     @staticmethod
     def parse_speaker_line(line: str) -> tuple[str | None, str]:
