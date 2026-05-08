@@ -1,24 +1,41 @@
-"""FAISS 索引管理模块。
+"""多用户 FAISS 索引管理器。
 
-提供 FaissIndex 类，封装 FAISS IndexIDMap(IndexFlatIP) 实现余弦相似度检索。
+替代原单用户 FaissIndex，支持 per-user 索引隔离：
+  data_dir/
+    user_{user_id}/
+      index.faiss
+      metadata.json
+      extra_metadata.json
 """
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 import faiss
 import numpy as np
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_DIM = 1536
 _TIMESTAMP_LENGTH = 10
+
+
+@dataclass
+class _UserIndex:
+    """单用户的 FAISS 索引 + 元数据。"""
+
+    index: faiss.IndexIDMap
+    metadata: list[dict[str, Any]] = field(default_factory=list)
+    next_id: int = 0
+    id_to_meta: dict[int, int] = field(default_factory=dict)
+    speakers: set[str] = field(default_factory=set)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
@@ -31,7 +48,7 @@ def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
         if not isinstance(m, dict) or "faiss_id" not in m:
             msg = f"entry {i}: invalid"
             raise ValueError(msg)
-        entry = cast("dict[str, Any]", m)
+        entry: dict[str, Any] = m
         fid: object = entry["faiss_id"]
         if not isinstance(fid, int):
             msg = f"entry {i}: faiss_id={fid!r} 不是整数"
@@ -40,7 +57,7 @@ def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
             msg = f"entry {i}: 重复 faiss_id={fid}"
             raise ValueError(msg)
         seen.add(fid)
-    return cast("list[dict[str, Any]]", meta)
+    return meta
 
 
 def _validate_index_count(idx: faiss.Index, meta_len: int) -> None:
@@ -50,36 +67,34 @@ def _validate_index_count(idx: faiss.Index, meta_len: int) -> None:
         raise ValueError(msg)
 
 
-class FaissIndex:
-    """FAISS 索引包装器，基于 IndexIDMap(IndexFlatIP) 实现向量检索与元数据管理。"""
+class FaissIndexManager:
+    """多用户 FAISS 索引管理器。
 
-    def __init__(
-        self, data_dir: Path, embedding_dim: int = DEFAULT_EMBEDDING_DIM
-    ) -> None:
-        """初始化 FaissIndex。
+    每个 user_id 对应独立 _UserIndex，存储在 data_dir/user_{user_id}/ 下。
+    支持延迟加载、deep copy metadata、per-user extra。
+    """
 
-        Args:
-            data_dir: 持久化目录（含 index.faiss / metadata.json）。
-            embedding_dim: 向量维度，默认 1536。
-
-        """
+    def __init__(self, data_dir: Path, embedding_dim: int = DEFAULT_EMBEDDING_DIM) -> None:
         self._data_dir = data_dir
         self._dim = embedding_dim
-        self._index: faiss.IndexIDMap | None = None
-        self._metadata: list[dict] = []
-        self._extra: dict | None = {}
-        self._next_id: int = 0
-        self._id_to_meta: dict[int, int] = {}
-        self._all_speakers: set[str] = set()
+        self._users: dict[str, _UserIndex] = {}
 
-    async def load(self) -> None:
-        """从磁盘加载索引与元数据；损坏时不重建，等首次 add_vector 再创建。"""
-        if self._index is not None:
+    # ── 用户目录 ──
+
+    def _user_dir(self, user_id: str) -> Path:
+        return self._data_dir / f"user_{user_id}"
+
+    # ── 加载/保存 ──
+
+    async def load(self, user_id: str) -> None:
+        """延迟加载；已加载则跳过。"""
+        if user_id in self._users:
             return
-        self._data_dir.mkdir(parents=True, exist_ok=True)
-        ip = self._data_dir / "index.faiss"
-        mp = self._data_dir / "metadata.json"
-        ep = self._data_dir / "extra_metadata.json"
+        user_dir = self._user_dir(user_id)
+        user_dir.mkdir(parents=True, exist_ok=True)
+        ip = user_dir / "index.faiss"
+        mp = user_dir / "metadata.json"
+        ep = user_dir / "extra_metadata.json"
 
         if ip.exists() and mp.exists():
             try:
@@ -87,116 +102,79 @@ class FaissIndex:
                 raw_meta = json.loads(mp.read_text())
                 meta = _validate_metadata_structure(raw_meta)
                 _validate_index_count(idx, len(meta))
-            except (
-                json.JSONDecodeError,
-                OSError,
-                TypeError,
-                ValueError,
-                RuntimeError,
-            ) as exc:
-                logger.warning("FaissIndex corrupted, removing bad files: %s", exc)
+            except (json.JSONDecodeError, OSError, TypeError, ValueError, RuntimeError) as exc:
+                logger.warning("FaissIndexManager: 损坏 user=%s，重建空索引: %s", user_id, exc)
                 ip.unlink(missing_ok=True)
                 mp.unlink(missing_ok=True)
                 ep.unlink(missing_ok=True)
+                self._users[user_id] = _UserIndex(
+                    index=faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
+                )
                 return
-            self._index = idx
-            self._dim = idx.d
-            self._metadata = meta
-            self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
-            self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
-            self._rebuild_speakers_cache()
+            ui = _UserIndex(
+                index=idx,
+                metadata=meta,
+                next_id=max(m["faiss_id"] for m in meta) + 1 if meta else 0,
+                id_to_meta={m["faiss_id"]: i for i, m in enumerate(meta)},
+            )
+            self._rebuild_speakers(ui)
             if ep.exists():
                 try:
-                    e: object = json.loads(ep.read_text())
-                    self._extra = e if isinstance(e, dict) else {}
-                except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
-                    logger.warning(
-                        "FaissIndex extra_metadata corrupted, unlinking: %s", exc
-                    )
+                    e = json.loads(ep.read_text())
+                    ui.extra = e if isinstance(e, dict) else {}
+                except (json.JSONDecodeError, OSError, TypeError, ValueError):
                     ep.unlink(missing_ok=True)
-
-    async def save(self) -> None:
-        """将索引与元数据持久化到磁盘。"""
-        if self._index is None:
-            return
-        faiss.write_index(self._index, str(self._data_dir / "index.faiss"))
-        (self._data_dir / "metadata.json").write_text(
-            json.dumps(self._metadata, ensure_ascii=False, indent=2),
-        )
-        if self._extra:
-            (self._data_dir / "extra_metadata.json").write_text(
-                json.dumps(self._extra, ensure_ascii=False, indent=2),
+            self._users[user_id] = ui
+        else:
+            self._users[user_id] = _UserIndex(
+                index=faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
             )
 
-    @staticmethod
-    def parse_speaker_line(line: str) -> tuple[str | None, str]:
-        """从 "Speaker: content" 格式解析说话人和内容。
+    async def save(self, user_id: str) -> None:
+        """持久化索引 + metadata + extra。"""
+        ui = self._users.get(user_id)
+        if ui is None or (ui.index.ntotal == 0 and not ui.metadata):
+            return
+        user_dir = self._user_dir(user_id)
+        user_dir.mkdir(parents=True, exist_ok=True)
+        faiss.write_index(ui.index, str(user_dir / "index.faiss"))
+        (user_dir / "metadata.json").write_text(json.dumps(ui.metadata, ensure_ascii=False, indent=2))
+        if ui.extra:
+            (user_dir / "extra_metadata.json").write_text(
+                json.dumps(ui.extra, ensure_ascii=False, indent=2)
+            )
 
-        Returns:
-            (speaker_name, content) — speaker_name 为 None 表示不可解析。
-
-        """
-        colon_pos = line.find(": ")
-        if colon_pos > 0:
-            return line[:colon_pos].strip(), line[colon_pos + 2 :].strip()
-        return None, line.strip()
-
-    def _rebuild_speakers_cache(self) -> None:
-        """从 metadata 重建说话人缓存（在 load/add_vector 后调用）。"""
-        self._all_speakers.clear()
-        for m in self._metadata:
-            for spk in m.get("speakers", []):
-                self._all_speakers.add(spk)
-
-    def get_all_speakers(self) -> list[str]:
-        """返回所有已知说话人列表（若缓存为空则从 metadata 重建）。"""
-        if not self._all_speakers and self._metadata:
-            self._rebuild_speakers_cache()
-        return sorted(self._all_speakers)
+    # ── 向量操作 ──
 
     async def add_vector(
         self,
+        user_id: str,
         text: str,
         embedding: list[float],
         timestamp: str,
         extra_meta: dict | None = None,
     ) -> int:
-        """添加向量并关联文本与时间戳。
-
-        Args:
-            text: 关联文本。
-            embedding: 向量。
-            timestamp: 时间戳。
-            extra_meta: 额外元数据。
-
-        Returns:
-            分配的 faiss_id。
-
-        """
+        """添加向量并关联文本与时间戳。返回 faiss_id。"""
+        if user_id not in self._users:
+            await self.load(user_id)
+        ui = self._users[user_id]
         emb_dim = len(embedding)
-        if self._index is None:
-            self._dim = emb_dim
-            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
-        elif self._index.d != emb_dim:
-            logger.warning(
-                "FaissIndex dimension mismatch: index=%d, vector=%d. "
-                "Check embedding model consistency.",
-                self._index.d,
-                emb_dim,
-            )
-            msg = (
-                f"Embedding dimension mismatch: "
-                f"index expects {self._index.d}-dim, "
-                f"but got {emb_dim}-dim vector. "
-                f"Check embedding model settings or rebuild index."
-            )
-            raise ValueError(msg)
-        fid = self._next_id
-        self._next_id += 1
+        if ui.index.d != emb_dim:
+            if ui.index.ntotal == 0:
+                ui.index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
+            else:
+                msg = (
+                    f"Embedding dimension mismatch: "
+                    f"index expects {ui.index.d}-dim, "
+                    f"but got {emb_dim}-dim vector."
+                )
+                raise ValueError(msg)
+        fid = ui.next_id
+        ui.next_id += 1
         vec = np.array([embedding], dtype=np.float32)
         faiss.normalize_L2(vec)
-        self._index.add_with_ids(vec, np.array([fid], dtype=np.int64))
-        entry = {
+        ui.index.add_with_ids(vec, np.array([fid], dtype=np.int64))
+        entry: dict[str, Any] = {
             "faiss_id": fid,
             "text": text,
             "timestamp": timestamp,
@@ -208,94 +186,127 @@ class FaissIndex:
         if extra_meta:
             entry.update(extra_meta)
             for spk in extra_meta.get("speakers", []):
-                self._all_speakers.add(spk)
-        self._metadata.append(entry)
-        self._id_to_meta[fid] = len(self._metadata) - 1
+                ui.speakers.add(spk)
+        ui.metadata.append(entry)
+        ui.id_to_meta[fid] = len(ui.metadata) - 1
         return fid
 
-    async def search(self, query_emb: list[float], top_k: int) -> list[dict]:
-        """检索最相似的 top_k 条记忆。
-
-        Args:
-            query_emb: 查询向量。
-            top_k: 返回条数。
-
-        Returns:
-            按相似度降序排列的记忆列表。
-
-        """
-        if self._index is None or self._index.ntotal == 0:
+    async def search(
+        self, user_id: str, query_emb: list[float], top_k: int
+    ) -> list[dict]:
+        """检索最相似的 top_k 条记忆。结果含 _meta_idx/text/score/timestamp 等字段。"""
+        ui = self._users.get(user_id)
+        if ui is None or ui.index.ntotal == 0:
             return []
-        k = min(top_k, self._index.ntotal)
+        k = min(top_k, ui.index.ntotal)
         vec = np.array([query_emb], dtype=np.float32)
         faiss.normalize_L2(vec)
-        scores, indices = self._index.search(vec, k)
+        scores, indices = ui.index.search(vec, k)
         results = []
         for s, fid in zip(scores[0], indices[0], strict=True):
-            mi = self._id_to_meta.get(int(fid))
+            mi = ui.id_to_meta.get(int(fid))
             if mi is None:
                 continue
-            m = dict(self._metadata[mi])
+            m = dict(ui.metadata[mi])
             m["score"] = float(s)
             m["_meta_idx"] = mi
             results.append(m)
         return results
 
-    async def update_metadata(self, faiss_id: int, updates: dict) -> None:
-        """更新指定 faiss_id 的元数据。
-
-        Args:
-            faiss_id: 目标 ID。
-            updates: 更新的字段。不存在则忽略。
-
-        """
-        mi = self._id_to_meta.get(faiss_id)
-        if mi is not None:
-            self._metadata[mi].update(updates)
-
-    async def remove_vectors(self, faiss_ids: list[int]) -> None:
-        """从索引和元数据中移除指定向量。
-
-        Args:
-            faiss_ids: 待移除的 ID 列表。
-
-        """
-        if self._index is None:  # pragma: no cover
-            msg = "index not loaded"
-            raise RuntimeError(msg)
-        id_arr = np.array(faiss_ids, dtype=np.int64)
-        self._index.remove_ids(id_arr)
+    async def remove_vectors(self, user_id: str, faiss_ids: list[int]) -> None:
+        """删除向量并同步 next_id/id_to_meta/speakers。next_id 单调递增，不复用已删除 ID。"""
+        ui = self._users.get(user_id)
+        if ui is None:
+            return
+        ui.index.remove_ids(np.array(faiss_ids, dtype=np.int64))
         id_set = set(faiss_ids)
-        self._metadata = [m for m in self._metadata if m["faiss_id"] not in id_set]
-        self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(self._metadata)}
-        self._next_id = max((m["faiss_id"] for m in self._metadata), default=-1) + 1
-        self._rebuild_speakers_cache()
+        ui.metadata = [m for m in ui.metadata if m["faiss_id"] not in id_set]
+        ui.id_to_meta = {m["faiss_id"]: i for i, m in enumerate(ui.metadata)}
+        ui.next_id = max((m["faiss_id"] for m in ui.metadata), default=-1) + 1
+        self._rebuild_speakers(ui)
 
-    def get_metadata(self) -> list[dict]:
-        """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）。"""
-        return self._metadata
+    # ── metadata 访问（不可变保护）──
 
-    def get_metadata_by_id(self, faiss_id: int) -> dict | None:
-        """O(1) 按 faiss_id 查找元数据条目。"""
-        mi = self._id_to_meta.get(faiss_id)
-        if mi is None:
+    def get_metadata(self, user_id: str) -> list[dict]:
+        """返回 metadata 的 deep copy。外部修改不影响内部状态。"""
+        ui = self._users.get(user_id)
+        if ui is None:
+            return []
+        return copy.deepcopy(ui.metadata)
+
+    async def update_metadata(self, user_id: str, faiss_id: int, updates: dict) -> None:
+        """显式更新单条 metadata。"""
+        ui = self._users.get(user_id)
+        if ui is None:
+            return
+        mi = ui.id_to_meta.get(faiss_id)
+        if mi is not None:
+            ui.metadata[mi].update(updates)
+
+    async def batch_update_metadata(
+        self, user_id: str, updates: dict[int, dict]
+    ) -> None:
+        """批量更新 {meta_idx: {field: value}}。"""
+        ui = self._users.get(user_id)
+        if ui is None:
+            return
+        for meta_idx, fields in updates.items():
+            if 0 <= meta_idx < len(ui.metadata):
+                ui.metadata[meta_idx].update(fields)
+
+    def get_metadata_by_id(self, user_id: str, faiss_id: int) -> dict | None:
+        """O(1) 按 faiss_id 查找。"""
+        ui = self._users.get(user_id)
+        if ui is None:
             return None
-        return self._metadata[mi]
+        mi = ui.id_to_meta.get(faiss_id)
+        return dict(ui.metadata[mi]) if mi is not None else None
 
-    def get_extra(self) -> dict:
-        """返回额外元数据（总体摘要/人格）。"""
-        return self._extra if isinstance(self._extra, dict) else {}
+    # ── extra metadata（可变引用）──
 
-    def set_extra(self, extra: dict) -> None:
-        """设置额外元数据。"""
-        self._extra = extra
+    def get_extra(self, user_id: str) -> dict:
+        """返回 extra metadata 的**可变引用**。调用方可原地修改，由 save 持久化。"""
+        ui = self._users.get(user_id)
+        if ui is None:
+            return {}
+        return ui.extra
 
-    @property
-    def total(self) -> int:
+    # ── 统计 ──
+
+    async def total(self, user_id: str) -> int:
         """索引中向量总数。"""
-        return self._index.ntotal if self._index else 0
+        ui = self._users.get(user_id)
+        return ui.index.ntotal if ui is not None else 0
 
-    @property
-    def next_id(self) -> int:
-        """下一个可用 faiss_id。"""
-        return self._next_id
+    def is_loaded(self, user_id: str) -> bool:
+        """是否已加载。"""
+        return user_id in self._users
+
+    def get_all_speakers(self, user_id: str) -> list[str]:
+        """返回所有已知说话人列表。"""
+        ui = self._users.get(user_id)
+        return sorted(ui.speakers) if ui is not None else []
+
+    # ── 静态方法 ──
+
+    @staticmethod
+    def parse_speaker_line(line: str) -> tuple[str | None, str]:
+        """从 "Speaker: content" 格式解析说话人和内容。"""
+        colon_pos = line.find(": ")
+        if colon_pos > 0:
+            return line[:colon_pos].strip(), line[colon_pos + 2:].strip()
+        return None, line.strip()
+
+    # ── 内部 ──
+
+    @staticmethod
+    def _rebuild_speakers(ui: _UserIndex) -> None:
+        """从 metadata 重建 speakers 缓存。"""
+        ui.speakers.clear()
+        for m in ui.metadata:
+            for spk in m.get("speakers", []):
+                ui.speakers.add(spk)
+
+
+# 兼容别名：旧代码导入 FaissIndex 时指向新 Manager（接口不兼容，后续任务统一迁移）
+FaissIndex = FaissIndexManager
