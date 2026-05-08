@@ -59,9 +59,13 @@ def test_is_relevant_strategy_keeps_non_empty() -> None:
     assert _is_relevant_strategy(42) is True
 
 
-def test_is_relevant_strategy_keeps_falsy_non_container() -> None:
-    """非容器 falsy 值（None/0/False）视为相关（非空容器过滤仅针对 list/dict）。"""
-    assert _is_relevant_strategy(None) is True
+def test_is_relevant_strategy_filters_none() -> None:
+    """None 值视为不相关（避免 strategies 中的空值进入 prompt）。"""
+    assert _is_relevant_strategy(None) is False
+
+
+def test_is_relevant_strategy_keeps_other_falsy() -> None:
+    """除 None 外的 falsy 值（0/False）视为相关（非容器不过滤）。"""
     assert _is_relevant_strategy(0) is True
     val = False
     assert _is_relevant_strategy(val) is True

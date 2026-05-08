@@ -353,7 +353,7 @@ class MemoryBankStore:
             self._feedback_store = TOMLStore(
                 self._data_dir, Path("feedback.toml"), list
             )
-        entry = feedback.model_dump(exclude_none=True)
+        entry = feedback.model_dump(exclude={"event_id"})
         entry["event_id"] = event_id
         entry["timestamp"] = datetime.now(UTC).isoformat()
         await self._feedback_store.append(entry)

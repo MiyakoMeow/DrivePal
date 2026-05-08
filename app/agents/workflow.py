@@ -38,7 +38,7 @@ def _extract_reminder_content(decision: dict) -> str:
 
 def _is_relevant_strategy(value: object) -> bool:
     """筛选非空策略值（空列表/空字典视为不相关）。"""
-    return not (isinstance(value, (list, dict)) and not value)
+    return value is not None and not (isinstance(value, (list, dict)) and not value)
 
 
 class ChatModelUnavailableError(RuntimeError):
@@ -300,8 +300,11 @@ class AgentWorkflow:
         event_id = interaction_result.event_id
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
-            event_id = (
-                f"unknown_{hashlib.sha256(str(decision).encode()).hexdigest()[:8]}"
+            event_id = "unknown_{}_{}".format(
+                hashlib.sha256(
+                    json.dumps(decision, sort_keys=True, ensure_ascii=False).encode()
+                ).hexdigest()[:8],
+                datetime.now(UTC).strftime("%H%M%S"),
             )
 
         result = f"提醒已发送: {content}"
