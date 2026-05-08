@@ -282,3 +282,57 @@ class TestMetadataValidation:
         faiss.normalize_L2(vec)
         idx.add_with_ids(vec, np.array([0], dtype=np.int64))
         _validate_index_count(idx, 1)
+
+
+@pytest.mark.asyncio
+async def test_add_vector_dimension_mismatch_raises(tmp_path):
+    """已加载用户索引维度与新向量不匹配时抛 ValueError。"""
+    idx = FaissIndex(tmp_path)
+    await idx.load()
+    await idx.add_vector("u", "first", _emb(), "2024-01-01T00:00:00")
+    assert idx.total("u") == 1
+    with pytest.raises(ValueError, match="dimension mismatch"):
+        await idx.add_vector("u", "bad dim", [0.1] * 30, "2024-01-02T00:00:00")
+    assert idx.total("u") == 1
+
+
+@pytest.mark.asyncio
+async def test_load_syncs_global_dim(tmp_path):
+    """从磁盘加载后 _dim 被同步为索引维度。"""
+    idx = FaissIndex(tmp_path)
+    await idx.load()
+    await idx.add_vector("u", "data", _emb(), "2024-01-01T00:00:00")
+    await idx.save("u")
+
+    idx2 = FaissIndex(tmp_path)
+    await idx2.load()
+    assert idx2._dim == DIM
+    meta = idx2.get_metadata("u")
+    assert len(meta) == 1
+
+
+@pytest.mark.asyncio
+async def test_path_traversal_rejected(tmp_path):
+    """含路径遍历字符的 user_id 被拒绝。"""
+    idx = FaissIndex(tmp_path)
+    await idx.load()
+    with pytest.raises(ValueError, match="非法字符"):
+        await idx.add_vector("../../etc", "hack", _emb(), "2024-01-01T00:00:00")
+
+
+@pytest.mark.asyncio
+async def test_save_cleans_empty_extra(tmp_path):
+    """extra 为空时 save 删除 extra_metadata.json。"""
+    idx = FaissIndex(tmp_path)
+    await idx.load()
+    await idx.add_vector("u", "data", _emb(), "2024-01-01T00:00:00")
+    await idx.save("u")
+
+    extra_path = tmp_path / "u" / "extra_metadata.json"
+    extra_path.write_text('{"key": "val"}')
+    assert extra_path.exists()
+
+    ui = idx._indices["u"]
+    ui.extra = {}
+    await idx.save("u")
+    assert not extra_path.exists()

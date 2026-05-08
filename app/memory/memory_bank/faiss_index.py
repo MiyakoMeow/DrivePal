@@ -60,8 +60,16 @@ def _rebuild_speakers(metadata: list[dict]) -> set[str]:
     return speakers
 
 
+def _validate_user_id(user_id: str) -> None:
+    """校验 user_id 不含路径遍历字符。"""
+    if "/" in user_id or "\\" in user_id or ".." in user_id:
+        msg = f"user_id 含非法字符: {user_id!r}"
+        raise ValueError(msg)
+
+
 def _user_dir(data_dir: Path, user_id: str) -> Path:
     """返回指定用户的磁盘目录。"""
+    _validate_user_id(user_id)
     return data_dir / user_id
 
 
@@ -97,6 +105,7 @@ class FaissIndex:
 
     def _ensure_user(self, user_id: str) -> _UserIndex:
         """获取或创建用户索引。"""
+        _validate_user_id(user_id)
         if user_id not in self._indices:
             dim = self._dim if self._dim is not None else DEFAULT_EMBEDDING_DIM
             self._indices[user_id] = _UserIndex(
@@ -148,6 +157,17 @@ class FaissIndex:
                 logger.warning("FaissIndex 用户 %s extra_metadata 损坏，删除", user_id)
                 ep.unlink(missing_ok=True)
 
+        if self._dim is None:
+            self._dim = idx.d
+        elif idx.d != self._dim:
+            logger.warning(
+                "FaissIndex 用户 %s 维度 %d 与全局 %d 不匹配，跳过加载",
+                user_id,
+                idx.d,
+                self._dim,
+            )
+            return
+
         self._indices[user_id] = _UserIndex(
             index=idx,
             metadata=meta,
@@ -188,6 +208,8 @@ class FaissIndex:
             (ud / "extra_metadata.json").write_text(
                 json.dumps(ui.extra, ensure_ascii=False, indent=2),
             )
+        else:
+            (ud / "extra_metadata.json").unlink(missing_ok=True)
 
     @staticmethod
     def parse_speaker_line(line: str) -> tuple[str | None, str]:
@@ -219,16 +241,8 @@ class FaissIndex:
 
         ui = self._ensure_user(user_id)
         if ui.index.d != emb_dim:
-            self._indices.pop(user_id, None)
-            ui = _UserIndex(
-                index=faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim)),
-                metadata=[],
-                next_id=0,
-                id_to_meta={},
-                all_speakers=set(),
-                extra={},
-            )
-            self._indices[user_id] = ui
+            msg = f"用户 {user_id} 索引维度 {ui.index.d} 与向量维度 {emb_dim} 不匹配"
+            raise ValueError(msg)
 
         fid = ui.next_id
         ui.next_id += 1
