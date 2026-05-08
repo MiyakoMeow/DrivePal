@@ -7,15 +7,13 @@
 import enum
 import logging
 import math
-import os
 import random
-import time
-from datetime import UTC, date, datetime
+from datetime import date
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 SOFT_FORGET_THRESHOLD = 0.15
-FORGET_INTERVAL_SECONDS = 300
 FORGETTING_TIME_SCALE = 1
 
 
@@ -42,14 +40,6 @@ class ForgetMode(enum.Enum):
 
     DETERMINISTIC = "deterministic"
     PROBABILISTIC = "probabilistic"
-
-
-def _resolve_forget_mode() -> ForgetMode:
-    """从环境变量 MEMORYBANK_FORGET_MODE 解析遗忘模式。"""
-    mode = os.getenv("MEMORYBANK_FORGET_MODE", "deterministic").lower()
-    if mode == "probabilistic":
-        return ForgetMode.PROBABILISTIC
-    return ForgetMode.DETERMINISTIC
 
 
 def compute_ingestion_forget_ids(
@@ -101,82 +91,9 @@ def compute_ingestion_forget_ids(
     return ids_to_remove
 
 
+# 兼容空桩：旧 store.py 尚引用 ForgettingCurve，后续任务 5 清理后删除此桩
 class ForgettingCurve:
-    """管理遗忘曲线判定逻辑，控制执行频率。"""
-
-    def __init__(
-        self,
-        mode: ForgetMode | None = None,
-        seed: int | None = None,
-        rng: random.Random | None = None,
-    ) -> None:
-        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。
-
-        Args:
-            mode: 遗忘策略模式。
-            seed: 随机种子（与 rng 互斥；仅 mode=PROBABILISTIC 时使用）。
-            rng: 外部 RNG 实例（与 seed 互斥；优先级高于 seed）。
-
-        """
-        self._mode = mode if mode is not None else _resolve_forget_mode()
-        if seed is not None and rng is not None:
-            msg = "seed and rng are mutually exclusive"
-            raise ValueError(msg)
-        if rng is not None:
-            self._rng = rng
-        else:
-            self._rng = (
-                random.Random(seed) if self._mode == ForgetMode.PROBABILISTIC else None
-            )
-        self._last_forget_time: float = -float(FORGET_INTERVAL_SECONDS) - 1
-
-    def maybe_forget(
-        self, metadata: list[dict], reference_date: str | None = None
-    ) -> list[int] | None:
-        """对达到遗忘阈值的条目标记 forgotten=True。
-
-        概率模式下同时返回应硬删除的 FAISS ID 列表。
-
-        Args:
-            metadata: 记忆条目列表（会被原地修改 forgotten 标记）。
-            reference_date: 参考日期，默认当天 UTC。
-
-        Returns:
-            None 当节流（未执行）；FAISS ID 列表（概率模式返回新遗忘的 ID，
-            确定性模式返回空列表）。
-
-        """
-        now = time.monotonic()
-        if now - self._last_forget_time < FORGET_INTERVAL_SECONDS:
-            return None
-        self._last_forget_time = now
-        today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
-        forgotten_ids: list[int] = []
-        for entry in metadata:
-            if entry.get("type") == "daily_summary":
-                continue
-            if entry.get("forgotten"):
-                continue
-            ts = entry.get("last_recall_date") or entry.get("timestamp", "")[:10]
-            strength = entry.get("memory_strength", 1)
-            try:
-                days = (
-                    date.fromisoformat(today[:10]) - date.fromisoformat(ts[:10])
-                ).days
-                strength_float = float(strength)
-            except ValueError, TypeError:
-                continue
-            retention = forgetting_retention(days, strength_float)
-
-            if self._mode == ForgetMode.PROBABILISTIC and self._rng is not None:
-                should_forget = self._rng.random() > retention
-            else:
-                should_forget = retention < SOFT_FORGET_THRESHOLD
-
-            if should_forget:
-                entry["forgotten"] = True
-                if self._rng is not None:
-                    fid = entry.get("faiss_id")
-                    if fid is not None:
-                        forgotten_ids.append(fid)
-        return forgotten_ids
+    """已删除。留存仅避免 store.py 导入中断。"""
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+    def maybe_forget(self, *args: Any, **kwargs: Any) -> list[int] | None:
+        return []
