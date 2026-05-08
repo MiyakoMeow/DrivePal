@@ -302,3 +302,24 @@ def test_speaker_filter_first_name_matching():
         r for r in filtered if any("Patricia" in s for s in r.get("speakers", []))
     )
     assert patricia["score"] == pytest.approx(0.6)
+
+
+@pytest.mark.asyncio
+async def test_embedding_client_uses_batch_encode():
+    """EmbeddingClient.encode_batch 应调用 EmbeddingModel.batch_encode。"""
+    model = AsyncMock()
+    model.batch_encode = AsyncMock(return_value=[[0.1] * 1536, [0.2] * 1536])
+    client = EmbeddingClient(model)
+    results = await client.encode_batch(["text1", "text2"])
+    assert len(results) == 2
+    model.batch_encode.assert_awaited_once_with(["text1", "text2"])
+
+
+@pytest.mark.asyncio
+async def test_embedding_client_dimension_mismatch_raises():
+    """维度不一致时应抛出 RuntimeError。"""
+    model = AsyncMock()
+    model.batch_encode = AsyncMock(return_value=[[0.1] * 1536, [0.2] * 768])
+    client = EmbeddingClient(model)
+    with pytest.raises(RuntimeError, match="dimension mismatch"):
+        await client.encode_batch(["text1", "text2"])
