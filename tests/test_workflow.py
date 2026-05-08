@@ -1,6 +1,10 @@
 """工作流工具函数测试."""
 
-from app.agents.workflow import _extract_reminder_content, _is_relevant_strategy
+from app.agents.workflow import (
+    AgentWorkflow,
+    _extract_reminder_content,
+    _is_relevant_strategy,
+)
 
 
 def test_extract_reminder_content_from_string() -> None:
@@ -69,3 +73,25 @@ def test_is_relevant_strategy_keeps_other_falsy() -> None:
     assert _is_relevant_strategy(0) is True
     val = False
     assert _is_relevant_strategy(val) is True
+
+
+def test_event_hit_to_dict_with_dict_input() -> None:
+    """直接传入 dict（无 event 属性）可正常解析."""
+    result = AgentWorkflow._event_hit_to_dict(
+        {"raw_content": "hello", "event_type": "reminder"}
+    )
+    assert result["content"] == "hello"
+    assert result["type"] == "reminder"
+    assert "interactions" not in result
+
+
+def test_event_hit_to_dict_none_input() -> None:
+    """None 输入返回空 dict 并记录 warning."""
+    result = AgentWorkflow._event_hit_to_dict(None)
+    assert result == {}
+
+
+def test_event_hit_to_dict_non_dict_event() -> None:
+    """Event 属性为非 dict 时返回空 dict."""
+    result = AgentWorkflow._event_hit_to_dict("string_event")
+    assert result == {}

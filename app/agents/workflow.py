@@ -142,7 +142,11 @@ class AgentWorkflow:
         self,
         user_input: str,
     ) -> list[dict]:
-        """搜索相关记忆，失败时回退到最近历史记录. 统一返回可序列化 dict 列表."""
+        """搜索相关记忆，失败则回退到最近历史记录. 统一返回可序列化 dict 列表.
+
+        异常 fallback 覆盖: OSError(文件IO), ValueError(数据格式),
+        RuntimeError(FAISS内部), TypeError/KeyError(数据异常).
+        """
         if not user_input:
             # 空输入：尝试返回最近历史，失败则直接返回空列表
             try:
@@ -306,12 +310,11 @@ class AgentWorkflow:
         event_id = interaction_result.event_id
         if not event_id:
             logger.warning("Memory write returned empty event_id, using fallback")
-            event_id = "unknown_{}_{}".format(
-                hashlib.sha256(
-                    json.dumps(decision, sort_keys=True, ensure_ascii=False).encode()
-                ).hexdigest()[:8],
-                datetime.now(UTC).strftime("%H%M%S"),
-            )
+            now_ts = datetime.now(UTC).strftime("%H%M%S")
+            decision_hash = hashlib.sha256(
+                json.dumps(decision, sort_keys=True, ensure_ascii=False).encode()
+            ).hexdigest()[:8]
+            event_id = f"unknown_{decision_hash}_{now_ts}"
 
         result = f"提醒已发送: {content}"
         if stages is not None:

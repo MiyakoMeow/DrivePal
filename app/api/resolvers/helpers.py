@@ -120,7 +120,10 @@ def _strawberry_to_plain(obj: object) -> object:
             f.name: _strawberry_to_plain(getattr(obj, f.name))
             for f in dataclasses.fields(obj)
             if getattr(obj, f.name) is not None
+            # None 字段视为"未提供"，下游 DrivingContext.model_validate
+            # 会用 Pydantic 默认值填充，无需保留。
         }
+    logger.exception("Unsupported type in _strawberry_to_plain: %r", type(obj).__name__)
     msg = f"Unsupported type in _strawberry_to_plain: {type(obj).__name__}"
     raise TypeError(msg)
 
