@@ -110,6 +110,7 @@ def _preset_store() -> TOMLStore:
 def _strawberry_to_plain(obj: object) -> object:
     """递归将 Strawberry 类型转普通 Python 对象（Enum→.value，dataclass→dict）。
 
+    跳过 None 值字段，避免 Pydantic 对非 Optional 字段收到 None 引发验证错误。
     结果可直接喂给 Pydantic model_validate。
     """
     if obj is None or isinstance(obj, (str, bytes, int, float, bool)):
@@ -122,6 +123,7 @@ def _strawberry_to_plain(obj: object) -> object:
         return {
             f.name: _strawberry_to_plain(getattr(obj, f.name))
             for f in dataclasses.fields(obj)
+            if getattr(obj, f.name) is not None
         }
     return obj
 
