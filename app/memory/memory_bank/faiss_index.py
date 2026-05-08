@@ -168,10 +168,11 @@ class FaissIndexManager:
         (user_dir / "metadata.json").write_text(
             json.dumps(ui.metadata, ensure_ascii=False, indent=2)
         )
+        ep = user_dir / "extra_metadata.json"
         if ui.extra:
-            (user_dir / "extra_metadata.json").write_text(
-                json.dumps(ui.extra, ensure_ascii=False, indent=2)
-            )
+            ep.write_text(json.dumps(ui.extra, ensure_ascii=False, indent=2))
+        else:
+            ep.unlink(missing_ok=True)
 
     # ── 向量操作 ──
 
@@ -271,6 +272,8 @@ class FaissIndexManager:
         mi = ui.id_to_meta.get(faiss_id)
         if mi is not None:
             ui.metadata[mi].update(updates)
+            if "speakers" in updates:
+                self._rebuild_speakers(ui)
 
     async def batch_update_metadata(
         self, user_id: str, updates: dict[int, dict]
@@ -282,6 +285,8 @@ class FaissIndexManager:
         for meta_idx, fields in updates.items():
             if 0 <= meta_idx < len(ui.metadata):
                 ui.metadata[meta_idx].update(fields)
+        if any("speakers" in fields for fields in updates.values()):
+            self._rebuild_speakers(ui)
 
     def get_metadata_by_id(self, user_id: str, faiss_id: int) -> dict | None:
         """O(1) 按 faiss_id 查找。"""

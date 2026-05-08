@@ -1,6 +1,5 @@
 """GraphQL 端点测试."""
 
-import os
 from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,10 +24,12 @@ _MODULES_WITH_DATA_DIR = [
 
 
 @pytest.fixture
-def isolated_app(tmp_path: Path) -> Generator[TestClient]:
+def isolated_app(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[TestClient]:
     """每个测试获取独立的 FastAPI app 实例."""
     data_dir = tmp_path / "data"
-    os.environ["DATA_DIR"] = str(data_dir)
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
     target = Path(data_dir)
     with ExitStack() as stack:
         for mod in _MODULES_WITH_DATA_DIR:

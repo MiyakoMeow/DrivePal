@@ -3,7 +3,7 @@
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -254,7 +254,7 @@ def test_adaptive_chunk_many_entries_uses_p90():
 
 def test_speaker_filter_negative_score_penalty():
     """负分时惩罚应加重（绝对值增大），非缩小。"""
-    pipe = RetrievalPipeline.__new__(RetrievalPipeline)
+    pipe = RetrievalPipeline(MagicMock(), MagicMock())
     results = [
         {
             "speakers": ["Alice"],
@@ -274,7 +274,7 @@ def test_speaker_filter_negative_score_penalty():
 
 def test_speaker_filter_first_name_matching():
     """Query 中 first name 应匹配全名说话人。"""
-    pipe = RetrievalPipeline.__new__(RetrievalPipeline)
+    pipe = RetrievalPipeline(MagicMock(), MagicMock())
     results = [
         {
             "speakers": ["Gary Smith"],

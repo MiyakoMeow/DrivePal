@@ -145,6 +145,8 @@ class MemoryBankStore:
         self._retrieval = RetrievalPipeline(self._index_manager, self._embedding_client)
         self._summarizer = Summarizer(self._llm, self._index_manager)
         self._reference_date = reference_date
+        self._user_locks: dict[str, asyncio.Lock] = {}
+        self._user_locks_lock = asyncio.Lock()
         self._forgetting_enabled = os.getenv(
             "MEMORYBANK_ENABLE_FORGETTING", "0"
         ).lower() in ("1", "true", "yes")
@@ -192,6 +194,13 @@ class MemoryBankStore:
         if ids:
             await self._index_manager.remove_vectors(user_id, ids)
 
+    async def _user_lock(self, user_id: str) -> asyncio.Lock:
+        if user_id not in self._user_locks:
+            async with self._user_locks_lock:
+                if user_id not in self._user_locks:
+                    self._user_locks[user_id] = asyncio.Lock()
+        return self._user_locks[user_id]
+
     # ── 后台摘要 ──
 
     async def _background_summarize(self, user_id: str, date_key: str) -> None:
@@ -224,27 +233,30 @@ class MemoryBankStore:
 
         """
         await self._index_manager.load(user_id)
-        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        ts = datetime.now(UTC).isoformat()
+        async with await self._user_lock(user_id):
+            date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+            ts = datetime.now(UTC).isoformat()
 
-        all_pair_texts, all_pair_metas = _build_pair_entries(event, date_key)
+            all_pair_texts, all_pair_metas = _build_pair_entries(event, date_key)
 
-        embeddings = await self._embedding_client.encode_batch(all_pair_texts)
-        fid: int | None = None
-        for conv_text, emb, meta in zip(
-            all_pair_texts, embeddings, all_pair_metas, strict=True
-        ):
-            fid = await self._index_manager.add_vector(
-                user_id, conv_text, emb, ts, meta
-            )
+            embeddings = await self._embedding_client.encode_batch(all_pair_texts)
+            fid: int | None = None
+            for conv_text, emb, meta in zip(
+                all_pair_texts, embeddings, all_pair_metas, strict=True
+            ):
+                fid = await self._index_manager.add_vector(
+                    user_id, conv_text, emb, ts, meta
+                )
 
-        await self._forget_at_ingestion(user_id)
-        await self._index_manager.save(user_id)
-        if self._summarizer:
-            task = asyncio.create_task(self._background_summarize(user_id, date_key))
-            _background_tasks.add(task)
-            task.add_done_callback(_finalize_task)
-        return str(fid)
+            await self._forget_at_ingestion(user_id)
+            await self._index_manager.save(user_id)
+            if self._summarizer:
+                task = asyncio.create_task(
+                    self._background_summarize(user_id, date_key)
+                )
+                _background_tasks.add(task)
+                task.add_done_callback(_finalize_task)
+            return str(fid)
 
     async def write_interaction(
         self,
@@ -258,49 +270,55 @@ class MemoryBankStore:
     ) -> InteractionResult:
         """记录一次交互到记忆库。"""
         await self._index_manager.load(user_id)
-        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        ts = datetime.now(UTC).isoformat()
-        text = (
-            f"Conversation content on {date_key}:"
-            f"[|{user_name}|]: {query}; [|{ai_name}|]: {response}"
-        )
-        emb = await self._embedding_client.encode(text)
-        fid = await self._index_manager.add_vector(
-            user_id,
-            text,
-            emb,
-            ts,
-            {
-                "source": date_key,
-                "speakers": [user_name, ai_name],
-                "raw_content": query,
-                "event_type": event_type,
-            },
-        )
-        await self._forget_at_ingestion(user_id)
-        await self._index_manager.save(user_id)
-        if self._summarizer:
-            task = asyncio.create_task(self._background_summarize(user_id, date_key))
-            _background_tasks.add(task)
-            task.add_done_callback(_finalize_task)
-        return InteractionResult(event_id=str(fid))
+        async with await self._user_lock(user_id):
+            date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+            ts = datetime.now(UTC).isoformat()
+            text = (
+                f"Conversation content on {date_key}:"
+                f"[|{user_name}|]: {query}; [|{ai_name}|]: {response}"
+            )
+            emb = await self._embedding_client.encode(text)
+            fid = await self._index_manager.add_vector(
+                user_id,
+                text,
+                emb,
+                ts,
+                {
+                    "source": date_key,
+                    "speakers": [user_name, ai_name],
+                    "raw_content": query,
+                    "event_type": event_type,
+                },
+            )
+            await self._forget_at_ingestion(user_id)
+            await self._index_manager.save(user_id)
+            if self._summarizer:
+                task = asyncio.create_task(
+                    self._background_summarize(user_id, date_key)
+                )
+                _background_tasks.add(task)
+                task.add_done_callback(_finalize_task)
+            return InteractionResult(event_id=str(fid))
 
     async def search(
         self, user_id: str, query: str, top_k: int = 5
     ) -> list[SearchResult]:
         """搜索记忆。"""
         await self._index_manager.load(user_id)
-        total = await self._index_manager.total(user_id)
-        if total == 0:
-            return []
+        async with await self._user_lock(user_id):
+            total = await self._index_manager.total(user_id)
+            if total == 0:
+                return []
 
-        ref_date = self._get_reference_date(user_id)
-        results, strength_updates = await self._retrieval.search(
-            user_id, query, top_k, reference_date=ref_date
-        )
-        if strength_updates:
-            await self._index_manager.batch_update_metadata(user_id, strength_updates)
-            await self._index_manager.save(user_id)
+            ref_date = self._get_reference_date(user_id)
+            results, strength_updates = await self._retrieval.search(
+                user_id, query, top_k, reference_date=ref_date
+            )
+            if strength_updates:
+                await self._index_manager.batch_update_metadata(
+                    user_id, strength_updates
+                )
+                await self._index_manager.save(user_id)
 
         extra = self._index_manager.get_extra(user_id)
         prepend = []
