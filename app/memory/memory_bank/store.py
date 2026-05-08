@@ -337,9 +337,7 @@ class MemoryBankStore:
         ]
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-        """更新反馈。"""
-        msg = "Feedback not supported"
-        raise NotImplementedError(msg)
+        """反馈功能已移除，静默忽略。"""
 
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""
