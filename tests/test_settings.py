@@ -104,7 +104,9 @@ class TestLLMSettingsLoad:
             ),
         )
         monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        LLMSettings.load.cache_clear()
         settings = LLMSettings.load()
+        LLMSettings.load.cache_clear()
         assert "default" in settings.model_groups
         assert settings.embedding_model == "openai/text-embedding-3-small"
 
@@ -392,6 +394,8 @@ def test_llm_settings_loads_judge(
     config_file.write_text(tomli_w.dumps(config))
     monkeypatch.setenv("CONFIG_PATH", str(config_file))
 
+    LLMSettings.load.cache_clear()
     settings = LLMSettings.load()
+    LLMSettings.load.cache_clear()
     assert settings.judge_provider is not None
     assert settings.judge_provider.provider.model == "deepseek-chat"
