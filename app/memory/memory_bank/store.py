@@ -239,6 +239,9 @@ class MemoryBankStore:
             SearchResult(
                 event={
                     "content": r.get("text", ""),
+                    "raw_content": r.get("raw_content", ""),
+                    "event_type": r.get("event_type", "reminder"),
+                    "created_at": r.get("timestamp", ""),
                     "source": r.get("source", ""),
                     "memory_strength": int(r.get("memory_strength", 1)),
                 },

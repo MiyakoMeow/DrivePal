@@ -190,7 +190,9 @@ def test_fatigue_threshold_cache_reset(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("FATIGUE_THRESHOLD", "0.5")
         assert _get_fatigue_threshold() == 0.5
     reset_fatigue_threshold_cache()
-    assert _get_fatigue_threshold() == 0.7
+    with monkeypatch.context() as m:
+        m.delenv("FATIGUE_THRESHOLD", raising=False)
+        assert _get_fatigue_threshold() == 0.7
 
 
 def test_empty_driver_dict() -> None:

@@ -220,6 +220,9 @@ class ChatModel:
         """并行批量生成回复，通过 semaphore 限制并发保护 provider。"""
         if not prompts:
             return []
+        if max_concurrency <= 0:
+            msg = f"max_concurrency must be > 0, got {max_concurrency}"
+            raise ValueError(msg)
         sem = asyncio.Semaphore(max_concurrency)
 
         async def _bounded(p: str) -> str:
