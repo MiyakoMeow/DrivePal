@@ -5,7 +5,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
+from app.models.exceptions import ProviderNotFoundError
 from app.models.types import ResolvedModel
 
 
@@ -67,50 +67,6 @@ def _resolve_provider(provider_name: str) -> dict:
     if provider_name not in providers:
         raise ProviderNotFoundError(provider_name)
     return providers[provider_name]
-
-
-def get_model_group_providers(name: str) -> list[dict]:
-    """按组名获取 LLMProviderConfig 字典列表（底层接口）.
-
-    Args:
-        name: 模型组名称
-
-    Returns:
-        LLMProviderConfig 字典列表
-
-    Raises:
-        KeyError: 模型组不存在时
-
-    """
-    config = _load_config()
-    model_groups = config.get("model_groups", {})
-    if name not in model_groups:
-        raise ModelGroupNotFoundError(name)
-
-    model_refs = model_groups[name].get("models", [])
-    if not model_refs:
-        return []
-
-    result = []
-    for ref in model_refs:
-        resolved = resolve_model_string(ref)
-        provider_config = _resolve_provider(resolved.provider_name)
-        api_key_env = provider_config.get("api_key_env")
-        if api_key_env:
-            api_key: str | None = os.environ.get(api_key_env, "")
-        else:
-            api_key = provider_config.get("api_key")
-        result.append(
-            {
-                "model": resolved.model_name,
-                "base_url": provider_config.get("base_url"),
-                "api_key": api_key,
-                "temperature": resolved.params.get("temperature", 0.7),
-                "max_tokens": resolved.params.get("max_tokens"),
-                "concurrency": provider_config.get("concurrency", 4),
-            },
-        )
-    return result
 
 
 def resolve_model_string(model_str: str) -> ResolvedModel:
