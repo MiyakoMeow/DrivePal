@@ -458,11 +458,13 @@ git commit -m "feat: multi-user isolation, throttled persistence, format_search_
 接口：
 - `MemoryModule` 加 `_stores: dict[str, MemoryBankStore]`
 - `get_store(user_id) -> MemoryBankStore` 懒初始化
+- `get_metrics(user_id) -> dict | None` 透传 store.metrics.snapshot()
 - `close()` 遍历关闭所有 store
 
 思路：
 - 现有 `MemoryModule.__init__` 中 `self._stores = {}`
 - `get_store` 逻辑见规格阶段一 MemoryModule 薄注册表
+- `get_metrics(user_id)`：`store = self._stores.get(user_id)` → `store.metrics.snapshot() if store else None`
 - `close()` 遍历 `self._stores.values()` 逐个 `close()`
 
 - [ ] **步骤 1：改 memory.py**
@@ -721,7 +723,7 @@ git commit -m "test: expand memory_bank tests with speaker filter and merge case
 
 - [ ] **步骤 1：运行全部测试**
 
-`uv run pytest tests/ -v --timeout=30`
+`uv run pytest tests/ -v --timeout=30 -x -m "not (test_llm or test_embedding or integration)"`
 
 - [ ] **步骤 2：运行 lint/type check**
 
