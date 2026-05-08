@@ -168,8 +168,8 @@ class GeoLocationGQL:
 class DriverStateGQL:
     """驾驶员状态输出."""
 
-    emotion: EmotionEnum
-    workload: WorkloadEnum
+    emotion: str
+    workload: str
     fatigue_level: auto
 
 
@@ -177,7 +177,7 @@ class DriverStateGQL:
 class TrafficConditionGQL:
     """交通状况输出."""
 
-    congestion_level: CongestionLevelEnum
+    congestion_level: str
     incidents: auto
     estimated_delay_minutes: auto
 
@@ -199,7 +199,7 @@ class DrivingContextGQL:
     driver: auto
     spatial: auto
     traffic: auto
-    scenario: ScenarioEnum
+    scenario: str
 
 
 @strawberry.type
