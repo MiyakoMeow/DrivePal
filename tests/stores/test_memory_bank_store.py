@@ -74,11 +74,11 @@ async def test_purge_forgotten_removes_from_index():
         # 标记第一条为 forgotten
         s._index.get_metadata()[0]["forgotten"] = True
         # 第一次调用：应成功移除
-        result = await s._purge_forgotten(s._index.get_metadata())
+        result = await s._lifecycle.purge_forgotten(s._index.get_metadata())
         assert result is True
         assert s._index.total == 1
         # 第二次调用：节流跳过，无操作
-        result = await s._purge_forgotten(s._index.get_metadata())
+        result = await s._lifecycle.purge_forgotten(s._index.get_metadata())
         assert result is False
         assert s._index.total == 1
 

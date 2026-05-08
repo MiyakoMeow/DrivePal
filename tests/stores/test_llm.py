@@ -57,7 +57,7 @@ async def test_llm_retry_on_transient(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.memory.memory_bank.llm._sleep", _noop_sleep)
     model = _ConstErrorModel("rate limit exceeded")
     client = LlmClient(model)
-    result = await client.call("test")
+    result = await client.call("test", system_prompt="test system prompt")
     assert result is None
     assert model.call_count == 3  # 瞬态错误重试 3 次
 
@@ -68,7 +68,7 @@ async def test_llm_transient_then_success(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.memory.memory_bank.llm._sleep", _noop_sleep)
     model = _AlternatingModel(fail_count=2)
     client = LlmClient(model)
-    result = await client.call("test")
+    result = await client.call("test", system_prompt="test system prompt")
     assert result == "final response"
     assert model.call_count == 3
 
@@ -79,7 +79,7 @@ async def test_llm_context_trim_on_long_prompt():
     model = _ContextTrimModel()
     client = LlmClient(model)
     long_prompt = "X" * 2000
-    result = await client.call(long_prompt)
+    result = await client.call(long_prompt, system_prompt="test")
     assert result == "trimmed response"
     assert model.call_count == 2
 
@@ -89,7 +89,7 @@ async def test_llm_nontransient_exhausts_retries():
     """非瞬态错误（鉴权失败）快速失败，仅重试一次。"""
     model = _ConstErrorModel("Incorrect API key")
     client = LlmClient(model)
-    result = await client.call("test")
+    result = await client.call("test", system_prompt="test system prompt")
     assert result is None
     assert model.call_count == 2
 
@@ -154,7 +154,7 @@ async def test_llm_context_trim_shortens_last_message():
     model = _ContextTrimRecorder()
     client = LlmClient(model)
     long_prompt = "X" * 2000
-    result = await client.call(long_prompt)
+    result = await client.call(long_prompt, system_prompt="test")
     assert result == "trimmed response"
     assert model.call_count == 2
     assert model.trimmed_messages is not None
