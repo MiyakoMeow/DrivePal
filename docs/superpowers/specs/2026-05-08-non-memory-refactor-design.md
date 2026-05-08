@@ -22,6 +22,7 @@
    - `events.toml` → `events.jsonl`
    - `feedback.toml` → `feedback.jsonl`
    - `interactions.toml` → `interactions.jsonl`
+   - `experiment_results.toml` → `experiment_results.jsonl`
 3. `TOMLStore` 保留，仅给 `strategies.toml`, `preferences.toml`, `scenario_presets.toml` 等 dict/小数据用
 4. `init_data.py` 创建 `.jsonl` 文件（空文件），移除旧 TOML 创建逻辑
 5. 不保留旧 TOML → JSONL 的向后兼容迁移
