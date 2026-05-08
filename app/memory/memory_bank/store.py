@@ -107,9 +107,7 @@ class MemoryBankStore:
         if not metadata:
             return
         ref = self._reference_date or compute_reference_date(metadata)
-        ids = compute_forget_ids(
-            metadata, ref, mode=self._forget_mode(), rng=self._rng
-        )
+        ids = compute_forget_ids(metadata, ref, mode=self._forget_mode(), rng=self._rng)
         if ids:
             await self._index.remove_vectors(user_id, ids)
             await self._index.save(user_id)
@@ -164,9 +162,7 @@ class MemoryBankStore:
         await self._index.save(user_id)
 
         if self._summarizer and self._embedding:
-            task = asyncio.create_task(
-                self._background_summarize(user_id, date_key)
-            )
+            task = asyncio.create_task(self._background_summarize(user_id, date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
 
@@ -333,8 +329,7 @@ class MemoryBankStore:
                 else:
                     speakers = [speaker_a]
                     conv_text = (
-                        f"Conversation content on {date_key}:"
-                        f"[|{label_a}|]: {text_a}"
+                        f"Conversation content on {date_key}:[|{label_a}|]: {text_a}"
                     )
                 emb = await self._embedding.encode(conv_text)
                 fid = await self._index.add_vector(
@@ -344,18 +339,14 @@ class MemoryBankStore:
                     ts,
                     {
                         "source": date_key,
-                        "speakers": sorted(
-                            {s for s in speakers if s is not None}
-                        ),
+                        "speakers": sorted({s for s in speakers if s is not None}),
                         "raw_content": conv_text,
                         "event_type": event.type,
                     },
                 )
         else:
             spk = event.speaker or "System"
-            conv_text = (
-                f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
-            )
+            conv_text = f"Conversation content on {date_key}:[|{spk}|]: {event.content}"
             emb = await self._embedding.encode(conv_text)
             fid = await self._index.add_vector(
                 user_id,
@@ -383,9 +374,7 @@ class MemoryBankStore:
         await self._index.save(user_id)
 
         if self._summarizer and self._embedding:
-            task = asyncio.create_task(
-                self._background_summarize(user_id, date_key)
-            )
+            task = asyncio.create_task(self._background_summarize(user_id, date_key))
             _background_tasks.add(task)
             task.add_done_callback(_finalize_task)
 

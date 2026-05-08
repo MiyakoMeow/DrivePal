@@ -5,33 +5,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from app.memory.schemas import (
-    FeedbackData,
-    SearchResult,
-)
+from app.memory.schemas import FeedbackData
 from app.storage.toml_store import TOMLStore
-
-SUMMARY_WEIGHT = 0.8
-
-
-class KeywordSearch:
-    """关键词大小写不敏感搜索."""
-
-    def search(
-        self,
-        query: str,
-        events: list[dict],
-        top_k: int = 10,
-    ) -> list[SearchResult]:
-        """关键词搜索事件."""
-        query_lower = query.lower()
-        matched = [
-            e
-            for e in events
-            if query_lower in e.get("content", "").lower()
-            or query_lower in e.get("description", "").lower()
-        ]
-        return [SearchResult(event=e) for e in matched[:top_k]]
 
 
 class ActionRequiredError(ValueError):

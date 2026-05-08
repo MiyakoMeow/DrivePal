@@ -15,12 +15,13 @@ def _make_embedding(dim: int = 8) -> AsyncMock:
     rng = np.random.RandomState(42)
     model = AsyncMock()
     model.encode = AsyncMock(
-        side_effect=lambda text: (rng.randn(dim) / np.linalg.norm(rng.randn(dim))).tolist()
+        side_effect=lambda text: (
+            rng.randn(dim) / np.linalg.norm(rng.randn(dim))
+        ).tolist()
     )
     model.batch_encode = AsyncMock(
         side_effect=lambda texts: [
-            (rng.randn(dim) / np.linalg.norm(rng.randn(dim))).tolist()
-            for _ in texts
+            (rng.randn(dim) / np.linalg.norm(rng.randn(dim))).tolist() for _ in texts
         ]
     )
     return model
@@ -79,9 +80,7 @@ async def test_write_interaction_no_embedding_raises(tmp_path: Path) -> None:
 async def test_write_interaction_with_user_id(tmp_path: Path) -> None:
     emb = _make_embedding()
     store = MemoryBankStore(tmp_path, embedding_model=emb)
-    result = await store.write_interaction(
-        "hello", "world", user_id="alice"
-    )
+    result = await store.write_interaction("hello", "world", user_id="alice")
     assert result.event_id
     meta_alice = store._index.get_metadata("alice")
     meta_default = store._index.get_metadata("default")
@@ -282,7 +281,10 @@ async def test_forgetting_enabled_removes_old_entries(
     text = "old entry"
     vec = await emb.encode(text)
     await store._index.add_vector(
-        "default", text, vec, "2020-01-01T00:00:00",
+        "default",
+        text,
+        vec,
+        "2020-01-01T00:00:00",
         {"source": "2020-01-01"},
     )
     await store._index.save("default")
@@ -335,12 +337,8 @@ async def test_background_summarize_creates_daily_summary(
 async def test_multi_user_write_and_search(tmp_path: Path) -> None:
     emb = _make_embedding()
     store = MemoryBankStore(tmp_path, embedding_model=emb)
-    await store.write_interaction(
-        "alice likes jazz", "ok", user_id="alice"
-    )
-    await store.write_interaction(
-        "bob likes rock", "ok", user_id="bob"
-    )
+    await store.write_interaction("alice likes jazz", "ok", user_id="alice")
+    await store.write_interaction("bob likes rock", "ok", user_id="bob")
     res_alice = await store.search("jazz", top_k=5, user_id="alice")
     res_bob = await store.search("rock", top_k=5, user_id="bob")
     assert len(res_alice) >= 1
@@ -356,8 +354,6 @@ async def test_multi_user_write_and_search(tmp_path: Path) -> None:
 async def test_write_interaction_custom_event_type(
     tmp_store: MemoryBankStore,
 ) -> None:
-    result = await tmp_store.write_interaction(
-        "hello", "world", event_type="custom"
-    )
+    result = await tmp_store.write_interaction("hello", "world", event_type="custom")
     et = await tmp_store.get_event_type(result.event_id)
     assert et == "custom"
