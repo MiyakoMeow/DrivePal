@@ -130,7 +130,7 @@ class MemoryModule:
     async def search(
         self,
         query: str,
-        top_k: int = 10,
+        top_k: int = 5,
         *,
         mode: MemoryMode | None = None,
     ) -> list[SearchResult]:
