@@ -17,13 +17,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-FORGETTING_TIME_SCALE = 1
-
 
 def forgetting_retention(
     days_elapsed: float,
     strength: float,
-    time_scale: float = FORGETTING_TIME_SCALE,
+    time_scale: float = 1.0,
 ) -> float:
     """计算经过 days_elapsed 天后的记忆留存率。
 
@@ -41,7 +39,7 @@ def forgetting_retention(
     if strength <= 0:
         return 0.0
     if time_scale <= 0:
-        time_scale = FORGETTING_TIME_SCALE
+        time_scale = 1.0
     return math.exp(-days_elapsed / (time_scale * strength))
 
 
@@ -95,6 +93,12 @@ def compute_ingestion_forget_ids(
             days = (ref_dt - mem_dt).days
             strength = float(entry.get("memory_strength", 1))
         except ValueError, TypeError:
+            logger.warning(
+                "compute_ingestion_forget_ids: skipping corrupted entry faiss_id=%s, "
+                "unparseable date=%r",
+                entry.get("faiss_id"),
+                ts,
+            )
             continue
         retention = forgetting_retention(days, strength, config.forgetting_time_scale)
         if mode == ForgetMode.PROBABILISTIC:
