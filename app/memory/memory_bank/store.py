@@ -217,7 +217,12 @@ class MemoryBankStore:
     # ── 核心 API ──
 
     async def write(self, user_id: str, event: MemoryEvent) -> str:
-        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。"""
+        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
+
+        Note:
+            多说话人时返回最后一个向量的 faiss_id，前序 ID 不保留。
+
+        """
         await self._index_manager.load(user_id)
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()

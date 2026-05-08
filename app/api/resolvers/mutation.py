@@ -49,6 +49,14 @@ class InternalServerError(GraphQLError):
         super().__init__("Internal server error")
 
 
+class GraphQLInvalidUserIDError(GraphQLError):
+    """无效的用户 ID."""
+
+    def __init__(self, user_id: str) -> None:
+        """初始化无效用户 ID 错误."""
+        super().__init__(f"Invalid user_id: {user_id!r}")
+
+
 class GraphQLInvalidActionError(GraphQLError):
     """无效的操作类型."""
 
@@ -204,6 +212,9 @@ class Mutation:
         """处理用户查询并返回工作流结果."""
         try:
             FaissIndexManager.validate_user_id(query_input.user_id)
+        except ValueError:
+            raise GraphQLInvalidUserIDError(query_input.user_id) from None
+        try:
             mm = get_memory_store()
             workflow = AgentWorkflow(
                 data_dir=DATA_DIR,
@@ -246,6 +257,9 @@ class Mutation:
 
         try:
             FaissIndexManager.validate_user_id(feedback_input.user_id)
+        except ValueError:
+            raise GraphQLInvalidUserIDError(feedback_input.user_id) from None
+        try:
             mm = get_memory_store()
         except GraphQLError:
             raise
