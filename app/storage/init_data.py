@@ -35,10 +35,6 @@ def init_storage(data_dir: Path | None = None) -> None:
         "strategies.toml": {
             "preferred_time_offset": 15,
             "preferred_method": "visual",
-            "reminder_weights": {},
-            "ignored_patterns": [],
-            "modified_keywords": [],
-            "cooldown_periods": {},
         },
     }
 

@@ -104,7 +104,7 @@ class TOMLStore:
 
     async def _read_unsafe(self) -> T:
         """读操作，不获取锁（调用方必须持有锁）."""
-        if not await asyncio.to_thread(self.filepath.exists):
+        if not self.filepath.exists():
             await self._ensure_file()
         async with aiofiles.open(self.filepath, "rb") as f:
             content = await f.read()
