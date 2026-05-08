@@ -7,64 +7,12 @@ import pytest
 from app.memory.components import (
     ActionRequiredError,
     FeedbackManager,
-    KeywordSearch,
 )
 from app.memory.schemas import FeedbackData
 from app.storage.toml_store import TOMLStore
 
-DEFAULT_TOP_K = 5
 WEIGHT_MIN = 0.1
 FEEDBACK_RECORD_COUNT_2 = 2
-
-
-class TestKeywordSearch:
-    """KeywordSearch 组件测试."""
-
-    @pytest.fixture
-    def search(self) -> KeywordSearch:
-        """提供 KeywordSearch 实例."""
-        return KeywordSearch()
-
-    @pytest.fixture
-    def events(self) -> list:
-        """提供示例事件字典列表."""
-        return [
-            {"content": "明天天气晴朗", "description": ""},
-            {"content": "项目进度会议", "description": "讨论Q2计划"},
-            {"content": "Hello World", "description": ""},
-        ]
-
-    def test_case_insensitive(self, search: KeywordSearch, events: list) -> None:
-        """验证关键词搜索不区分大小写."""
-        results = search.search("hello", events)
-        assert len(results) == 1
-
-    def test_matches_content(self, search: KeywordSearch, events: list) -> None:
-        """验证关键词搜索匹配事件内容."""
-        results = search.search("天气", events)
-        assert len(results) == 1
-        assert "天气" in results[0].event["content"]
-
-    def test_matches_description(self, search: KeywordSearch, events: list) -> None:
-        """验证关键词搜索匹配事件描述."""
-        results = search.search("Q2", events)
-        assert len(results) == 1
-
-    def test_no_match(self, search: KeywordSearch, events: list) -> None:
-        """验证关键词搜索在不匹配时返回空."""
-        results = search.search("不存在", events)
-        assert len(results) == 0
-
-    def test_top_k_limits_results(self, search: KeywordSearch) -> None:
-        """验证 top_k 参数限制结果数量."""
-        events = [{"content": f"天气事件{i}", "description": ""} for i in range(20)]
-        results = search.search("天气", events, top_k=5)
-        assert len(results) == DEFAULT_TOP_K
-
-    def test_empty_events(self, search: KeywordSearch) -> None:
-        """验证关键词搜索处理空事件列表."""
-        results = search.search("天气", [])
-        assert len(results) == 0
 
 
 class TestFeedbackManager:

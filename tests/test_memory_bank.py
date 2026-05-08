@@ -61,7 +61,7 @@ async def test_write_paired_vectorization(store):
     ]
     content = "\n".join(lines)
     await store.write(MemoryEvent(content=content))
-    meta = store._index.get_metadata()
+    meta = store._index.get_metadata("default")
     # 验证配对格式（含双方说话人标记）
     paired_texts = [
         m.get("text", "")
