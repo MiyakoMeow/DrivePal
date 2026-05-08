@@ -352,7 +352,7 @@ class MemoryBankStore:
                 score=float(r.get("score", 0.0)),
                 source=r.get("source", "event"),
             )
-            for r in results[: max(0, top_k - len(prepend))]
+            for r in results[:top_k]
         )
         return out
 
