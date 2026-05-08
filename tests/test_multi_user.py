@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.memory.memory_bank.store import MemoryBankStore
-from app.memory.schemas import MemoryEvent
 
 
 def _make_embedding_mock():
@@ -57,8 +56,8 @@ async def test_store_close_persists_then_shuts_down():
         s = MemoryBankStore(Path(tmp), embedding_model=_make_embedding_mock())
         await s.write_interaction("test", "ok")
         await s.close()
-        # close 不应抛异常
-        assert True
+        # close 不应抛异常，且后台任务已清理
+        assert s._bg._tasks == set()
 
 
 @pytest.mark.asyncio

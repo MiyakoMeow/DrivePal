@@ -1,10 +1,9 @@
 """FaissIndex 降级恢复测试。"""
 
+import json
 import tempfile
 from pathlib import Path
 
-import faiss
-import numpy as np
 import pytest
 
 from app.memory.memory_bank.index import FaissIndex
@@ -59,8 +58,6 @@ async def test_count_mismatch_adds_skeleton_entries():
         await idx.add_vector("b", [0.2] * 1536, "2024-01-02T00:00:00", {})
         await idx.save()
         # 删掉 metadata 中第一条
-        import json
-
         meta = json.loads(Path(tmp, "metadata.json").read_text())
         meta.pop(0)
         Path(tmp, "metadata.json").write_text(json.dumps(meta))

@@ -167,7 +167,7 @@ async def test_speaker_filter_downweights_positive(pipeline, mock_index, mock_em
     # Bob 的 score 应被降权
     bob_result = next((r for r in results if "Bob" in r.get("text", "")), None)
     assert bob_result is not None
-    assert bob_result.get("score", 0.0) <= 0.75 + 0.01
+    assert bob_result.get("score", 0.0) <= 0.76
 
 
 @pytest.mark.asyncio

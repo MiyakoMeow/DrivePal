@@ -179,7 +179,7 @@ class FaissIndex:
             ]
             meta_warnings.append(
                 f"metadata.json corrupted ({exc}). "
-                "Rebuilt {len(meta)} skeleton entries from FAISS index. "
+                f"Rebuilt {len(meta)} skeleton entries from FAISS index. "
                 "Search results will lack text content — re-ingest data to recover."
             )
 

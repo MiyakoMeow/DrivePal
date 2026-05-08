@@ -48,8 +48,8 @@ class Summarizer:
             result = await self._llm.call(
                 self._summarize_prompt("\n".join(texts)),
                 system_prompt=self._config.summary_system_prompt,
-                temperature=0.3,
-                max_tokens=400,
+                temperature=self._config.llm_temperature or 0.3,
+                max_tokens=self._config.llm_max_tokens or 400,
             )
             return f"The summary of the conversation on {date_key} is: {result}"
         except SummarizationEmpty:
