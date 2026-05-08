@@ -4,7 +4,18 @@
 
 ## 项目配置
 
-Python 3.14 + `uv`。NixOS 下运行异常则 `nix develop --command` 包裹。
+Python 3.14 + `uv`。
+
+## 环境配置参考
+
+> 以下为当前开发机器上的目录布局，**不同机器路径不同**，仅作本地参考。
+
+| 内容 | 路径 |
+|------|------|
+| 本仓库 | `~/Codes/DrivePal-2` |
+| VehicleMemBench 基准测试 | `~/Codes/VehicleMemBench` |
+| 论文 | `~/Papers/` |
+
 
 ## 技术栈
 
@@ -330,6 +341,26 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 | HTTP read timeout | 12h | _http.py |
 | Embedding batch size | 32 | embedding.py |
 | Embedding retry | 3次 | embedding.py |
+
+## Benchmark
+
+基准测试已从本仓库移除（commit `fbe453b`），独立为外部项目 MiyakoMeow/VehicleMemBench。
+
+VehicleMemBench 提供：
+- 50 组数据集（`benchmark/qa_data/qa_{1..50}.json` + `benchmark/history/history_{1..50}.txt`）
+- 23 个车辆模块模拟器（`environment/`）
+- 五类记忆策略：None（零样本）、Gold（理论上限）、Summary（递归摘要）、Key-Value（键值存储）、MemoryBank（本系统方案）
+- 评测指标：Exact State Match、Field-level P/R/F1、Value-level P/R/F1、Tool Call Count
+- 模型评估（A 组，评估 backbone 模型）+ 内存系统评估（B 组，含第三方系统 Mem0/MemOS/LightMem/Supermemory/Memobase）
+
+本项目的 MemoryBank 实现已与 VehicleMemBench 对齐（确定性遗忘种子、参考日期、说话人感知检索等），可直接在 VehicleMemBench 中运行对照实验。
+
+## 主要参考文献
+
+| 论文 | 链接 | 说明 |
+|------|------|------|
+| MemoryBank: Enhancing Large Language Models with Long-Term Memory | [arxiv-2305.10250](https://arxiv.org/abs/2305.10250) | 记忆系统理论基础——三层记忆架构、Ebbinghaus 遗忘曲线、分层摘要 |
+| VehicleMemBench: An Executable Benchmark for Multi-User Long-Term Memory in In-Vehicle Agents | [arxiv-2603.23840](https://arxiv.org/abs/2603.23840) | 基准测试框架——50 组数据集、23 模块模拟器、五种记忆策略对比 |
 
 ## 未解决问题
 
