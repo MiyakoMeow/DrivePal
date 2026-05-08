@@ -72,8 +72,12 @@ class Mutation:
             )
         except GraphQLError:
             raise
-        except ChatModelUnavailableError:
-            raise
+        except ChatModelUnavailableError as e:
+            msg = "AI 模型未就绪"
+            raise GraphQLError(
+                msg,
+                extensions={"code": "CHAT_MODEL_UNAVAILABLE"},
+            ) from e
         except Exception as e:
             logger.exception("processQuery failed")
             raise InternalServerError from e
@@ -92,8 +96,9 @@ class Mutation:
         except Exception as e:
             logger.exception("submitFeedback failed (get_memory_module)")
             raise InternalServerError from e
-        safe_action: Literal["accept", "ignore"]
-        safe_action = "accept" if feedback_input.action == "accept" else "ignore"
+        safe_action: Literal["accept", "ignore"] = cast(
+            "Literal['accept', 'ignore']", feedback_input.action
+        )
         mode = MemoryMode(feedback_input.memory_mode.value)
 
         actual_type = await _safe_memory_call(
@@ -122,20 +127,29 @@ class Mutation:
         preset_input: Annotated[ScenarioPresetInput, strawberry.argument(name="input")],
     ) -> ScenarioPresetGQL:
         """保存场景预设."""
-        store = _preset_store()
         preset = ScenarioPreset(name=preset_input.name)
         if preset_input.context:
             preset.context = _input_to_context(preset_input.context)
-        await store.append(preset.model_dump())
+        store = _preset_store()
+        await _safe_memory_call(
+            store.append(preset.model_dump()),
+            "save_scenario_preset(append)",
+        )
         return _to_gql_preset(preset.model_dump())
 
     @strawberry.mutation
     async def delete_scenario_preset(self, preset_id: str) -> bool:
         """删除场景预设."""
         store = _preset_store()
-        presets = await store.read()
+        presets = await _safe_memory_call(
+            store.read(),
+            "delete_scenario_preset(read)",
+        )
         new_presets = [p for p in presets if p.get("id") != preset_id]
         if len(new_presets) == len(presets):
             return False
-        await store.write(new_presets)
+        await _safe_memory_call(
+            store.write(new_presets),
+            "delete_scenario_preset(write)",
+        )
         return True

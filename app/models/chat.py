@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import openai
 
@@ -63,8 +63,9 @@ def _get_lock() -> asyncio.Lock:
 async def _get_provider_semaphore(
     provider_name: str,
     concurrency: int,
+    model: str = "",
 ) -> asyncio.Semaphore:
-    """获取或创建 provider 级别的 semaphore."""
+    """获取或创建 provider 级别的 semaphore。"""
     async with _get_lock():
         if provider_name not in _semaphore_cache:
             _semaphore_cache[provider_name] = (
@@ -75,8 +76,10 @@ async def _get_provider_semaphore(
             _, existing_conc = _semaphore_cache[provider_name]
             if existing_conc != concurrency:
                 logger.warning(
-                    "Semaphore %r exists with concurrency=%d, ignoring %d",
+                    "Semaphore %r (model=%s) exists with concurrency=%d, "
+                    "ignoring requested concurrency=%d",
                     provider_name,
+                    model,
                     existing_conc,
                     concurrency,
                 )
@@ -140,7 +143,11 @@ class ChatModel:
     async def _acquire_slot(self, provider: LLMProviderConfig) -> asyncio.Semaphore:
         """获取 provider 的 semaphore slot."""
         provider_key = provider.provider.base_url or "default"
-        return await _get_provider_semaphore(provider_key, provider.concurrency)
+        return await _get_provider_semaphore(
+            provider_key,
+            provider.concurrency,
+            model=provider.provider.model,
+        )
 
     async def generate(
         self,
@@ -177,12 +184,12 @@ class ChatModel:
         prompt: str = "",
         system_prompt: str | None = None,
         messages: list[ChatCompletionMessageParam] | None = None,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> AsyncIterator[str]:
         """流式生成回复."""
         if messages is None:
             messages = self._build_messages(prompt, system_prompt)
-        json_mode = _kwargs.pop("json_mode", False) if _kwargs else False
+        json_mode = kwargs.pop("json_mode", False)
 
         errors = []
         for provider in self.providers:
@@ -216,18 +223,21 @@ class ChatModel:
         prompts: list[str],
         system_prompt: str | None = None,
         max_concurrency: int = 8,
+        **kwargs: object,
     ) -> list[str]:
         """并行批量生成回复，通过 semaphore 限制并发保护 provider。"""
-        if not prompts:
-            return []
         if max_concurrency <= 0:
             msg = f"max_concurrency must be > 0, got {max_concurrency}"
             raise ValueError(msg)
+        if not prompts:
+            return []
         sem = asyncio.Semaphore(max_concurrency)
 
         async def _bounded(p: str) -> str:
             async with sem:
-                return await self.generate(p, system_prompt)
+                return await self.generate(
+                    p, system_prompt, **cast("dict[str, Any]", kwargs)
+                )
 
         return list(await asyncio.gather(*[_bounded(p) for p in prompts]))
 

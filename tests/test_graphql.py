@@ -168,9 +168,11 @@ async def test_feedback_success_writes_to_feedback_toml(
         Path("feedback.toml"),
         list,
     ).read()
-    assert len(feedback_data) >= 1
-    entry = feedback_data[-1]
-    assert entry["event_id"] == event_id
+    entry = next(
+        (e for e in feedback_data if e.get("event_id") == event_id),
+        None,
+    )
+    assert entry is not None, f"feedback with event_id={event_id!r} not found"
     assert entry["action"] == "accept"
 
 

@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -28,7 +29,10 @@ def _extract_reminder_content(decision: dict) -> str:
         if isinstance(val, str) and val.strip():
             return val.strip()
         if isinstance(val, dict):
-            return val.get("text") or val.get("content") or "无提醒内容"
+            text = val.get("text") or val.get("content")
+            if text:
+                return text
+            continue
     return "无提醒内容"
 
 
@@ -98,6 +102,26 @@ class AgentWorkflow:
             data_dir, Path("strategies.toml"), dict
         )
 
+    def _event_hit_to_dict(self, event_hit: object) -> dict:
+        """将搜索结果命中转为可序列化 dict，含防御性类型检查。"""
+        if event_hit is None:
+            return {}
+        ed = cast("dict[str, Any]", getattr(event_hit, "event", event_hit))
+        if not isinstance(ed, dict):
+            return {}
+        me = MemoryEvent(
+            content=ed.get("raw_content") or ed.get("content", ""),
+            type=ed.get("event_type", "reminder"),
+            memory_strength=int(ed.get("memory_strength", 1)),
+            created_at=ed.get("created_at", ""),
+            id=str(ed.get("id", "")),
+        )
+        d = me.model_dump()
+        interactions = getattr(event_hit, "interactions", None)
+        if interactions:
+            d["interactions"] = interactions
+        return d
+
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
             raise ChatModelUnavailableError
@@ -127,21 +151,7 @@ class AgentWorkflow:
                 mode=self._memory_mode,
             )
             if events:
-                result = []
-                for e in events:
-                    ed = e.event
-                    me = MemoryEvent(
-                        content=ed.get("raw_content") or ed.get("content", ""),
-                        type=ed.get("event_type", "reminder"),
-                        memory_strength=int(ed.get("memory_strength", 1)),
-                        created_at=ed.get("created_at", ""),
-                        id=str(ed.get("id", "")),
-                    )
-                    d = me.model_dump()
-                    if e.interactions:
-                        d["interactions"] = e.interactions
-                    result.append(d)
-                return result
+                return [self._event_hit_to_dict(e) for e in events]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
             logger.warning("Memory search failed, fallback to history: %s", e)
 
@@ -331,8 +341,7 @@ class AgentWorkflow:
             except Exception as e:
                 logger.exception("Workflow node %s failed", node_fn.__name__)
                 state["result"] = f"处理失败：{node_fn.__name__} 阶段出错"
-                if stages is not None:
-                    stages.execution = {"error": str(e), "node": node_fn.__name__}
+                stages.execution = {"error": str(e), "node": node_fn.__name__}
                 break
 
         result = state.get("result") or "处理完成"

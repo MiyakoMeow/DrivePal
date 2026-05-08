@@ -230,7 +230,14 @@ class MemoryBankStore:
         if prepend:
             out.append(
                 SearchResult(
-                    event={"content": "\n".join(prepend), "type": "overall_context"},
+                    event={
+                        "content": "\n".join(prepend),
+                        "raw_content": "",
+                        "event_type": "overall_context",
+                        "created_at": "",
+                        "source": "overall",
+                        "memory_strength": 0,
+                    },
                     score=float("inf"),
                     source="overall",
                 )

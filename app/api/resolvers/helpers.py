@@ -1,4 +1,19 @@
-"""GraphQL resolver 共享工具模块."""
+"""GraphQL resolver 共享工具模块.
+
+以下函数虽以下划线命名，但设计为跨 resolver 共享，均列于 __all__。
+"""
+
+__all__ = [
+    "GraphQLEventNotFoundError",
+    "GraphQLInvalidActionError",
+    "InternalServerError",
+    "_dict_to_gql_context",
+    "_input_to_context",
+    "_preset_store",
+    "_safe_memory_call",
+    "_strawberry_to_plain",
+    "_to_gql_preset",
+]
 
 import dataclasses
 import logging
@@ -81,8 +96,14 @@ def _preset_store() -> TOMLStore:
 
 
 def _strawberry_to_plain(obj: object) -> object:
-    if obj is None or isinstance(obj, (str, bytes, int, float, bool)):
+    """将 Strawberry GraphQL 输入对象转为普通 Python dict/list。
+
+    支持 dataclass、Enum、list、嵌套转换。输入 dict 原样递归转换。
+    """
+    if obj is None or isinstance(obj, (str, bytes, bool, int, float)):
         return obj
+    if isinstance(obj, dict):
+        return {k: _strawberry_to_plain(v) for k, v in obj.items()}
     if isinstance(obj, Enum):
         return obj.value
     if isinstance(obj, list):
@@ -143,11 +164,13 @@ def _dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
 def _to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
     ctx_raw = p.get("context", {})
     safe = {k: v for k, v in ctx_raw.items() if k in DrivingContext.model_fields}
-    sp = safe.get("spatial", {})
+    sp = safe.get("spatial")
     if isinstance(sp, dict):
+        sp = dict(sp)
         for key in ("destination", "eta_minutes", "heading"):
             if sp.get(key) == "":
                 sp[key] = None
+        safe["spatial"] = sp
     ctx = DrivingContext.model_validate(safe)
     return ScenarioPresetGQL(
         id=p.get("id", ""),

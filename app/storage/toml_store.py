@@ -104,10 +104,13 @@ class TOMLStore:
 
     async def _read_unsafe(self) -> T:
         """读操作，不获取锁（调用方必须持有锁）."""
-        if not self.filepath.exists():
+        try:
+            async with aiofiles.open(self.filepath, "rb") as f:
+                content = await f.read()
+        except FileNotFoundError:
             await self._ensure_file()
-        async with aiofiles.open(self.filepath, "rb") as f:
-            content = await f.read()
+            async with aiofiles.open(self.filepath, "rb") as f:
+                content = await f.read()
         raw = tomllib.loads(content.decode("utf-8"))
         if _LIST_WRAPPER_KEY in raw and len(raw) == 1:
             return raw[_LIST_WRAPPER_KEY]

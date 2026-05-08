@@ -50,7 +50,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
+if WEBUI_DIR.exists():
+    app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
 
 def _mount_graphql() -> None:
