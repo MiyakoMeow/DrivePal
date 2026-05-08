@@ -132,21 +132,25 @@ class ChatModel:
         prompt: str = "",
         system_prompt: str | None = None,
         messages: list[ChatCompletionMessageParam] | None = None,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> str:
-        """异步生成回复."""
+        """异步生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode。"""
         if messages is None:
             messages = self._build_messages(prompt, system_prompt)
+        json_mode = kwargs.pop("json_mode", False)
         errors = []
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
             try:
                 async with sem, self._create_client(provider) as client:
-                    response = await client.chat.completions.create(
-                        model=provider.provider.model,
-                        messages=messages,
-                        temperature=self._get_temperature(provider),
-                    )
+                    create_kwargs: dict = {
+                        "model": provider.provider.model,
+                        "messages": messages,
+                        "temperature": self._get_temperature(provider),
+                    }
+                    if json_mode:
+                        create_kwargs["response_format"] = {"type": "json_object"}
+                    response = await client.chat.completions.create(**create_kwargs)
                     return response.choices[0].message.content or ""
             except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
