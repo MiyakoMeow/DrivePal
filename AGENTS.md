@@ -38,16 +38,17 @@ app/
 │   ├── settings.py    # 模型组/Provider配置加载
 │   └── model_string.py
 ├── memory/            # 记忆模块
-│   ├── memory.py      # MemoryModule Facade + 工厂注册表
-│   ├── interfaces.py  # MemoryStore Protocol定义
-│   ├── types.py       # MemoryMode枚举
+│   ├── interfaces.py  # MemoryStore Protocol定义（多用户版）
 │   ├── schemas.py     # MemoryEvent, InteractionRecord等
-│   └── stores/memory_bank/  # MemoryBank后端
-│       ├── store.py        # MemoryStore实现
-│       ├── faiss_index.py  # FAISS IndexIDMap(IndexFlatIP)
-│       ├── retrieval.py    # 四阶段检索管道
-│       ├── forget.py       # Ebbinghaus遗忘曲线
-│       ├── summarizer.py   # 分层摘要 + 人格生成
+│   ├── singleton.py   # MemoryBankStore 单例
+│   ├── embedding_client.py  # EmbeddingModel 薄代理
+│   ├── utils.py       # 工具函数
+│   └── memory_bank/   # MemoryBank后端
+│       ├── store.py        # 多用户 MemoryBankStore
+│       ├── faiss_index.py  # 多用户 FaissIndexManager
+│       ├── retrieval.py    # 四阶段检索管道（纯函数强度更新）
+│       ├── forget.py       # Ebbinghaus遗忘曲线（纯函数）
+│       ├── summarizer.py   # 分层摘要 + 人格生成（多用户）
 │       └── llm.py          # LLM封装（上下文截断重试）
 ├── schemas/
 │   └── context.py     # 驾驶上下文数据模型
@@ -109,32 +110,35 @@ Strawberry GraphQL, code-first。端点 `/graphql`（内置 Playground）。
 
 **Query:**
 ```graphql
-history(limit, memoryMode): [MemoryEvent]
+history(limit, userId): [MemoryEvent]
 scenarioPresets: [ScenarioPreset]
 ```
 
 **Mutation:**
 ```graphql
-processQuery(input: {query, memoryMode, context}): {result, eventId, stages}
-submitFeedback(input: {eventId, action, memoryMode}): {status}
+processQuery(input: {query, userId, context}): {result, eventId, stages}
+submitFeedback(input: {eventId, action, userId}): {status}
 saveScenarioPreset(input): ScenarioPreset
 deleteScenarioPreset(id): Boolean
 ```
 
+所有方法通过 `userId` 参数实现 per-user 索引隔离（默认 `"default"`）。
 支持外部上下文注入（DrivingContext），跳过LLM推断。
 
 ## MemoryBank 记忆系统
 
-`app/memory/stores/memory_bank/`。基于论文 MemoryBank 实现。
+`app/memory/memory_bank/`。基于论文 MemoryBank 实现。
 
 ### 架构
 
 三层：Interaction（原始交互）→ Event（语义摘要）→ Summary（层级摘要）
 
-### FAISS索引
+### FaissIndexManager（多用户）
 
-- IndexIDMap(IndexFlatIP) + L2归一化（等价余弦相似度）
-- 每日检索时重建索引，确保数据新鲜
+- `FaissIndexManager` 管理 per-user FAISS 索引（`data_dir/user_{user_id}/`）
+- 每用户独立 `_UserIndex`：IndexIDMap(IndexFlatIP) + L2归一化
+- `get_metadata()` 返回 deep copy，外部不可 mutate
+- `get_extra()` 返回可变引用（由调用方原地修改后 save 持久化）
 - 自适应分块（P90×3 动态校准 chunk_size）
 - 关键阈值：`EMBEDDING_MIN_SIMILARITY=0.3`, `SUMMARY_WEIGHT=0.8`
 
@@ -147,18 +151,22 @@ deleteScenarioPreset(id): Boolean
 
 ### 遗忘曲线
 
-`retention = e^(-days / (5 × strength))`
+`retention = e^(-days / (FORGETTING_TIME_SCALE × strength))`
 
-- **默认确定性模式**：retention < `SOFT_FORGET_THRESHOLD=0.15` 标记遗忘（memory_strength=0, forgotten=True）
-- **可选概率性模式**：`MEMORYBANK_FORGET_MODE=probabilistic`，每条目独立掷骰子
-- **回忆强化**：检索命中 memory_strength += 1（无上限）
-- **节流**：`FORGET_INTERVAL_SECONDS=300`，两次遗忘判断至少间隔5分钟
+- **`compute_ingestion_forget_ids`** 纯函数，返回应硬删除的 FAISS ID 列表，不修改 metadata
+- **确定性模式**（默认）：retention < `SOFT_FORGET_THRESHOLD=0.15` 返回 ID
+- **概率性模式**：`MEMORYBANK_FORGET_MODE=probabilistic`，每条目独立掷骰子
+- **触发时机**：仅在 `write`/`write_interaction` 末尾执行（搜索路径不触发遗忘）
+- **启用**：`MEMORYBANK_ENABLE_FORGETTING=1`（默认关闭）
+- **硬删除**：直接 `remove_vectors`，无软标记路径
+- **`ForgettingCurve` 类已删除**：不再需要节流（移除 `FORGET_INTERVAL_SECONDS`）
+- **回忆强化**：`_compute_strength_updates` 纯函数返回 `{meta_idx: {memory_strength, last_recall_date}}`
 - **搜索评分**：`score = similarity × retention`（遗忘曲线为连续权重）
 - 额外：名称匹配加分（×1.3），时效性衰减（最低0.7）
 
-### 摘要与人格
+### 摘要与人格（多用户版）
 
-- **每日摘要**：事件数达阈值触发，自动/增量
+- **每日摘要**：事件数达阈值触发，自动/增量。所有方法加 `user_id` 参数
 - **总体摘要**：daily_summaries ≥ 3且有新增时触发
 - **不可变性保护**：已生成条目不覆盖 + _inflight防并发
 - 人格(persionality)也参与遗忘曲线，权重降为 SUMMARY_WEIGHT × 0.8
@@ -171,9 +179,11 @@ deleteScenarioPreset(id): Boolean
 
 ### 与原始论文差异
 
-- 硬删除 → 软标记（可恢复）
-- 启动时批量遗忘 → 每次搜索末尾渐进式遗忘
-- 无级联删除 summary → 保留所有 summary 更安全
+- 原始论文概率性遗忘 → 本项目新增确定性模式（默认）+ 概率性可选
+- 原始论文级联删除 summary → 本项目保留所有 summary（更安全）
+- 原始论文搜索路径执行遗忘 → 本项目仅写入时遗忘（搜索路径不触发，设计取舍）
+- 本项目新增**事件聚合**（字符重叠 ≥45% 或余弦相似度 ≥0.8 → 并查集合并）
+- 本项目新增**批量嵌入**（`encode_batch`），减少远端 API 调用
 
 ## 模型配置
 
@@ -229,10 +239,10 @@ data/
 ├── strategies.toml       # 个性化策略
 ├── experiment_results.toml
 ├── scenario_presets.toml
-└── memorybank/
-    ├── index.faiss       # FAISS向量索引
-    ├── metadata.json     # 事件元数据
-    └── extra_metadata.json  # 额外元数据（summary/personality）
+├── user_{user_id}/
+│   ├── index.faiss       # FAISS向量索引
+│   ├── metadata.json     # 事件元数据
+│   └── extra_metadata.json  # 额外元数据（summary/personality）
 ```
 
 TOMLStore：异步锁 + 文件级粒度（每个文件独立锁），支持 read/write/append/update。
@@ -278,9 +288,12 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 | test_rules.py | 规则引擎合并策略 |
 | test_context_schemas.py | 数据模型验证 |
 | test_graphql.py | GraphQL端点 |
-| test_memory_bank.py | 遗忘曲线、摘要、交互聚合 |
-| test_memory_store_contract.py | MemoryStore Protocol 契约 |
-| test_memory_module_facade.py | Facade工厂注册 |
+| test_memory_bank.py | write → search → get_history 集成 |
+| test_faiss_index_manager.py | 多用户索引隔离、deep copy、持久化 |
+| test_forget.py | 遗忘纯函数（retention、compute_ingestion_forget_ids） |
+| test_retrieval.py | 检索管道（邻居合并、重叠去重、说话人降权） |
+| test_summarizer.py | 摘要/人格生成（mock LLM） |
+| test_memory_bank_store.py | MemoryBankStore 多用户核心 API |
 | test_settings.py | 模型配置加载 |
 | test_storage.py | TOMLStore持久化 |
 
@@ -301,7 +314,6 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 | 阈值 | 值 | 位置 |
 |------|-----|------|
 | SOFT_FORGET_THRESHOLD | 0.15 | forget.py |
-| FORGET_INTERVAL_SECONDS | 300 | forget.py |
 | FORGETTING_TIME_SCALE | 1 | forget.py |
 | EMBEDDING_MIN_SIMILARITY | 0.3 | faiss_index.py |
 | COARSE_SEARCH_FACTOR | 4 | retrieval.py |
@@ -319,5 +331,5 @@ pytest.ini：asyncio_mode=auto, timeout=30, -n auto。
 
 ## 未解决问题
 
-1. 反馈学习：`update_feedback` 在 MemoryBankStore 中已移除实现（静默忽略），反馈数据不再写入 strategies.toml 的 reminder_weights
-2. 多用户隔离：当前单驾驶员场景，未实现
+1. 反馈学习：`update_feedback` 已移除实现（静默忽略），反馈数据不再写入 strategies.toml 的 reminder_weights
+2. 遗忘仅在写入时触发：搜索路径不执行遗忘（设计取舍）。读多写少场景数据可能膨胀
