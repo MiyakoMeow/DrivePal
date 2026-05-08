@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import shutil
@@ -83,6 +84,7 @@ class FaissIndex:
         self._next_id: int = 0
         self._id_to_meta: dict[int, int] = {}
         self._all_speakers: set[str] = set()
+        self._save_lock = asyncio.Lock()
 
     async def load(self) -> LoadResult:
         """从磁盘加载索引与元数据；损坏时降级恢复，不直接丢弃向量。
@@ -220,17 +222,18 @@ class FaissIndex:
         )
 
     async def save(self) -> None:
-        """将索引与元数据持久化到磁盘。"""
-        if self._index is None:
-            return
-        faiss.write_index(self._index, str(self._data_dir / "index.faiss"))
-        (self._data_dir / "metadata.json").write_text(
-            json.dumps(self._metadata, ensure_ascii=False, indent=2),
-        )
-        if self._extra:
-            (self._data_dir / "extra_metadata.json").write_text(
-                json.dumps(self._extra, ensure_ascii=False, indent=2),
+        """将索引与元数据持久化到磁盘（协程安全——内部持有 asyncio.Lock）。"""
+        async with self._save_lock:
+            if self._index is None:
+                return
+            faiss.write_index(self._index, str(self._data_dir / "index.faiss"))
+            (self._data_dir / "metadata.json").write_text(
+                json.dumps(self._metadata, ensure_ascii=False, indent=2),
             )
+            if self._extra:
+                (self._data_dir / "extra_metadata.json").write_text(
+                    json.dumps(self._extra, ensure_ascii=False, indent=2),
+                )
 
     def compute_reference_date(self, offset_days: int = 1) -> str:
         """扫描 metadata 找最大 timestamp，返回 +offset_days 的日期。

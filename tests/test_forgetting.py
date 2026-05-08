@@ -20,9 +20,9 @@ class TestForgettingRetention:
         assert forgetting_retention(10, 0) == 0.0
 
     def test_decay_follows_ebbinghaus(self):
-        # R = e^{-t/S}
+        expected = math.exp(-1)
         r = forgetting_retention(1, 1)
-        assert r == math.exp(-1)
+        assert r == pytest.approx(expected)
 
     def test_higher_strength_slower_decay(self):
         r_weak = forgetting_retention(5, 1)

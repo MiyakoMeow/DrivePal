@@ -1,10 +1,11 @@
 """MemoryBank 可观测性指标收集，低开销（仅计数/累加）。"""
 
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
 
-def _p50(values: list[float]) -> float:
+def _p50(values: list[float] | deque) -> float:
     if not values:
         return 0.0
     s = sorted(values)
@@ -14,8 +15,7 @@ def _p50(values: list[float]) -> float:
     return (s[n // 2 - 1] + s[n // 2]) / 2.0
 
 
-def _p90(values: list[float]) -> float:
-    """第 90 百分位数——当列表长度为 1 时返回该唯一值。"""
+def _p90(values: list[float] | deque) -> float:
     if not values:
         return 0.0
     s = sorted(values)
@@ -27,11 +27,13 @@ def _p90(values: list[float]) -> float:
 class MemoryBankMetrics:
     search_count: int = 0
     search_empty_count: int = 0
-    search_latency_ms: list[float] = field(default_factory=list)
+    search_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
     forget_count: int = 0
     forget_removed_count: int = 0
     background_task_failures: int = 0
-    index_load_warnings: list[str] = field(default_factory=list)
+    index_load_warnings: deque[str] = field(
+        default_factory=lambda: deque(maxlen=100)
+    )
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -46,7 +48,7 @@ class MemoryBankMetrics:
             "forget_count": self.forget_count,
             "forget_removed_count": self.forget_removed_count,
             "background_task_failures": self.background_task_failures,
-            "index_load_warnings": self.index_load_warnings[-10:],
+            "index_load_warnings": list(self.index_load_warnings),
         }
 
     def reset(self) -> None:
