@@ -73,7 +73,7 @@ class MemoryLifecycle:
             self._index.get_metadata(),
             today,
             config=self._config,
-            rng=self._forget._rng if mode == ForgetMode.PROBABILISTIC else None,
+            rng=self._forget.rng if mode == ForgetMode.PROBABILISTIC else None,
         )
         if ids:
             await self._index.remove_vectors(ids)

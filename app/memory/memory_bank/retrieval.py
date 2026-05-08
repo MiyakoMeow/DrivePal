@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
 
-    from .index import FaissIndex
+    from .config import MemoryBankConfig
     from .index_reader import IndexReader
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,7 @@ _INTERNAL_KEYS: frozenset[str] = frozenset(
 
 
 def _get_effective_chunk_size(
-    metadata: list[dict],
-    config: Any,
+    metadata: list[dict], config: MemoryBankConfig,
 ) -> int:
     """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
 
@@ -350,7 +349,7 @@ class RetrievalPipeline:
         self,
         index: IndexReader,
         embedding_client: EmbeddingClient,
-        config: Any,
+        config: MemoryBankConfig,
     ) -> None:
         """初始化检索管道。"""
         self._index = index
@@ -359,22 +358,28 @@ class RetrievalPipeline:
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
-    ) -> list[dict]:
-        """执行四阶段检索管道。"""
+    ) -> tuple[list[dict], bool]:
+        """执行四阶段检索管道。
+
+        Returns:
+            (results, updated): results 是检索结果列表，updated 指示是否有
+            memory_strength 变更（调用方应在合适时机持久化索引）。
+
+        """
         if top_k <= 0:
-            return []
+            return [], False
         query_emb = await self._embedding_client.encode(query)
         index_total = self._index.total
         if index_total == 0:
-            return []
+            return [], False
         coarse_k = min(top_k * COARSE_SEARCH_FACTOR, index_total)
         results = await self._index.search(query_emb, coarse_k)
         if not results:
-            return []
-        # 过滤已遗忘条目（maybe_forget 在 store.py 中已设 forgotten 标记）
+            return [], False
+        # 过滤已遗忘条目（maybe_forget 在 store.py/lifecycle.py 中已设 forgotten 标记）
         results = [r for r in results if not r.get("forgotten")]
         if not results:
-            return []
+            return [], False
 
         metadata = self._index.get_metadata()
         merged = self._merge_neighbors(results, metadata)
@@ -390,9 +395,7 @@ class RetrievalPipeline:
         )
         for r in merged:
             _clean_search_result(r)
-        if updated:
-            await cast("FaissIndex", self._index).save()
-        return merged
+        return merged, updated
 
     def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:
         if not results or not metadata:

@@ -40,8 +40,9 @@ async def test_search_empty_index_returns_empty_list(mock_embedding):
         pipe = RetrievalPipeline(
             idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
         )
-        results = await pipe.search("anything")
+        results, updated = await pipe.search("anything")
         assert results == []
+        assert updated is False
 
 
 @pytest.mark.asyncio
@@ -61,7 +62,7 @@ async def test_search_returns_results(mock_embedding):
         pipe = RetrievalPipeline(
             idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
         )
-        results = await pipe.search("Gary seat")
+        results, _updated = await pipe.search("Gary seat")
         assert len(results) >= 1
 
 
@@ -249,7 +250,7 @@ async def test_pipeline_returns_results_without_retention_weight():
         # query 与 entry 0 相似
         mock_emb.encode = AsyncMock(return_value=[0.1] * 1536)
         pipe = RetrievalPipeline(idx, EmbeddingClient(mock_emb), MemoryBankConfig())
-        results = await pipe.search("test preference", top_k=2)
+        results, _updated = await pipe.search("test preference", top_k=2)
         assert len(results) >= 1
 
 

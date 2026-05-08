@@ -48,14 +48,18 @@ class BackgroundTaskRunner:
             return
         for t in self._tasks:
             t.cancel()
-        results = await asyncio.gather(
-            *self._tasks,
-            return_exceptions=True,
-        )
-        for r in results:
-            if isinstance(r, Exception) and not isinstance(
-                r,
-                asyncio.CancelledError,
-            ):
-                logger.warning("Background task raised during shutdown: %s", r)
+        try:
+            async with asyncio.timeout(self._config.shutdown_timeout_seconds):
+                await asyncio.gather(
+                    *self._tasks,
+                    return_exceptions=True,
+                )
+        except TimeoutError:
+            logger.warning(
+                "Background tasks did not finish within %s seconds during shutdown",
+                self._config.shutdown_timeout_seconds,
+            )
+        for t in self._tasks:
+            if not t.done():
+                logger.warning("Background task still running after shutdown timeout")
         self._tasks.clear()

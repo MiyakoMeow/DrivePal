@@ -103,11 +103,11 @@ class MemoryBankStore:
             self._index.get_metadata()
         ):
             await self._index.save()
-        results = await self._retrieval.search(
-            query,
-            top_k,
-            reference_date=self._config.reference_date,
+        results, updated = await self._retrieval.search(
+            query, top_k, reference_date=self._config.reference_date,
         )
+        if updated:
+            await self._index.save()
         extra = self._index.get_extra()
         prepend = []
         for key, label in [

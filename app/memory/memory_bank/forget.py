@@ -17,8 +17,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SOFT_FORGET_THRESHOLD = 0.15
-FORGET_INTERVAL_SECONDS = 300
 FORGETTING_TIME_SCALE = 1
 
 
@@ -132,6 +130,11 @@ class ForgettingCurve:
         else:
             self._rng = None
         self._last_forget_time: float = -float(config.forget_interval_seconds) - 1
+
+    @property
+    def rng(self) -> random.Random | None:
+        """公开 RNG 实例，供同包 lifecycle 使用。"""
+        return self._rng
 
     def maybe_forget(
         self, metadata: list[dict], reference_date: str | None = None
