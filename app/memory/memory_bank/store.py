@@ -8,7 +8,6 @@ import random
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from app.memory.components import FeedbackManager
 from app.memory.embedding_client import EmbeddingClient
 from app.memory.schemas import (
     FeedbackData,
@@ -81,7 +80,6 @@ class MemoryBankStore:
         self._seed_provided = seed is not None
         self._index = FaissIndex(data_dir)
         self._forget = ForgettingCurve(rng=self._rng)
-        self._feedback = FeedbackManager(data_dir)
         self._chat_model = chat_model
         self._embedding_client = embedding_client or (
             EmbeddingClient(embedding_model) if embedding_model else None
@@ -206,7 +204,7 @@ class MemoryBankStore:
         except Exception:
             logger.exception("background summarization failed")
 
-    async def search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+    async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """搜索记忆."""
         await self._index.load()
         if self._index.total == 0 or not self._retrieval:
@@ -339,8 +337,9 @@ class MemoryBankStore:
         ]
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-        """更新反馈."""
-        await self._feedback.update_feedback(event_id, feedback)
+        """更新反馈。"""
+        msg = "Feedback not supported"
+        raise NotImplementedError(msg)
 
     async def get_event_type(self, event_id: str) -> str | None:
         """按 event_id 查找事件类型."""

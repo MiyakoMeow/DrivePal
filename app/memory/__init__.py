@@ -2,7 +2,6 @@
 
 from app.memory.memory import MemoryModule, register_store
 from app.memory.schemas import (
-    FeedbackData,
     InteractionRecord,
     InteractionResult,
     MemoryEvent,
@@ -10,7 +9,6 @@ from app.memory.schemas import (
 )
 
 __all__ = [
-    "FeedbackData",
     "InteractionRecord",
     "InteractionResult",
     "MemoryEvent",
