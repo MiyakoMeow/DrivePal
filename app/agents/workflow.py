@@ -110,11 +110,16 @@ class AgentWorkflow:
         user_input: str,
     ) -> list[dict]:
         """搜索相关记忆，失败时回退到最近历史记录. 统一返回可序列化 dict 列表."""
-        try:
-            if not user_input:
-                # 空输入时返回最近历史，保障 prompt 有上下文
+        if not user_input:
+            # 空输入：尝试返回最近历史，失败则直接返回空列表
+            try:
                 history = await self.memory_module.get_history(mode=self._memory_mode)
                 return [e.model_dump() for e in history]
+            except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
+                logger.warning("Memory get_history failed for empty input: %s", e)
+                return []
+
+        try:
             events = await self.memory_module.search(
                 user_input,
                 mode=self._memory_mode,

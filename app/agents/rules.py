@@ -1,8 +1,11 @@
 """轻量规则引擎 — 安全约束规则定义与合并."""
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -26,7 +29,12 @@ WORKLOAD_OVERLOADED = "overloaded"
 # 疲劳阈值，超过此值触发疲劳抑制规则，通过环境变量 FATIGUE_THRESHOLD 配置
 # 设为函数调用而非模块常量，支持测试中 monkeypatch.setenv 切换
 def _get_fatigue_threshold() -> float:
-    return float(os.environ.get("FATIGUE_THRESHOLD", "0.7"))
+    raw = os.environ.get("FATIGUE_THRESHOLD", "0.7")
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid FATIGUE_THRESHOLD=%r, using default 0.7", raw)
+        return 0.7
 
 
 # 紧急提醒类型白名单，不受 only_urgent 过滤
