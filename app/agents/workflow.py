@@ -13,11 +13,23 @@ from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
 from app.agents.state import AgentState, WorkflowStages
 from app.memory.memory import MemoryModule
+from app.memory.schemas import MemoryEvent
 from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_reminder_content(decision: dict) -> str:
+    """从 decision dict 中提取提醒内容，多处 key 兜底。"""
+    for key in ("reminder_content", "remind_content", "content"):
+        val = decision.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        if isinstance(val, dict):
+            return val.get("text") or val.get("content") or "无提醒内容"
+    return "无提醒内容"
 
 
 class ChatModelUnavailableError(RuntimeError):
@@ -51,24 +63,6 @@ class LLMJsonResponse(BaseModel):
         return cls(raw=text, **parsed)
 
 
-class ReminderContent(BaseModel):
-    """提醒内容校验模型。"""
-
-    text: str = ""
-    content: str = ""
-
-    @classmethod
-    def from_decision(cls, decision: dict) -> str:
-        """从 decision dict 中提取提醒内容，多处 key 兜底。"""
-        for key in ("reminder_content", "remind_content", "content"):
-            val = decision.get(key)
-            if isinstance(val, str) and val.strip():
-                return val.strip()
-            if isinstance(val, dict):
-                return val.get("text") or val.get("content") or "无提醒内容"
-        return "无提醒内容"
-
-
 class AgentWorkflow:
     """多Agent协作工作流."""
 
@@ -77,6 +71,7 @@ class AgentWorkflow:
         data_dir: Path = Path("data"),
         memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
         memory_module: MemoryModule | None = None,
+        strategies_store: TOMLStore | None = None,
     ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
@@ -94,7 +89,9 @@ class AgentWorkflow:
             self._strategy_node,
             self._execution_node,
         ]
-        self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
+        self._strategies_store = strategies_store or TOMLStore(
+            data_dir, Path("strategies.toml"), dict
+        )
 
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
@@ -125,7 +122,21 @@ class AgentWorkflow:
                 mode=self._memory_mode,
             )
             if events:
-                return [e.to_public() for e in events]
+                result = []
+                for e in events:
+                    ed = e.event
+                    me = MemoryEvent(
+                        content=ed.get("raw_content") or ed.get("text", ""),
+                        type=ed.get("event_type", "reminder"),
+                        memory_strength=int(ed.get("memory_strength", 1)),
+                        created_at=ed.get("created_at", ""),
+                        id=str(ed.get("id", "")),
+                    )
+                    d = me.model_dump()
+                    if e.interactions:
+                        d["interactions"] = e.interactions
+                    result.append(d)
+                return result
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
             logger.warning("Memory search failed, fallback to history: %s", e)
 
@@ -163,7 +174,7 @@ class AgentWorkflow:
 
             parsed = await self._call_llm_json(prompt)
             context = {
-                **parsed.model_dump(),
+                **parsed.model_dump(exclude={"raw"}),
                 "current_datetime": current_datetime,
                 "related_events": relevant_memories,
             }
@@ -187,7 +198,7 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象. """
 
-        task = (await self._call_llm_json(prompt)).model_dump()
+        task = (await self._call_llm_json(prompt)).model_dump(exclude={"raw"})
         if stages is not None:
             stages.task = task
         return {
@@ -200,6 +211,11 @@ class AgentWorkflow:
         stages = state.get("stages")
 
         strategies = await self._strategies_store.read()
+        relevant_strategies = {
+            k: v
+            for k, v in strategies.items()
+            if not (isinstance(v, (list, dict)) and not v)
+        }
 
         constraints_block = ""
         driving_context = state.get("driving_context")
@@ -213,22 +229,17 @@ class AgentWorkflow:
 
 上下文: {json.dumps(context, ensure_ascii=False)}
 任务: {json.dumps(task, ensure_ascii=False)}
-个性化策略: {json.dumps(strategies, ensure_ascii=False)}{constraints_block}
+个性化策略: {json.dumps(relevant_strategies, ensure_ascii=False)}{constraints_block}
 
 请输出JSON格式的决策结果. """
 
-        decision = (await self._call_llm_json(prompt)).model_dump()
+        decision = (await self._call_llm_json(prompt)).model_dump(exclude={"raw"})
         decision["postpone"] = postpone
         if stages is not None:
             stages.decision = decision
         return {
             "decision": decision,
         }
-
-    @staticmethod
-    def _extract_content(decision: dict) -> str:
-        """从决策 dict 中提取提醒内容。"""
-        return ReminderContent.from_decision(decision)
 
     async def _execution_node(self, state: AgentState) -> dict:
         decision = state.get("decision") or {}
@@ -264,7 +275,7 @@ class AgentWorkflow:
                 "event_id": None,
             }
 
-        content = self._extract_content(decision)
+        content = _extract_reminder_content(decision)
         original_query = state.get("original_query", "")
         interaction_result = await self.memory_module.write_interaction(
             original_query,
@@ -309,8 +320,17 @@ class AgentWorkflow:
         }
 
         for node_fn in self._nodes:
-            updates = await node_fn(state)
-            state.update(updates)
+            try:
+                updates = await node_fn(state)
+                state.update(updates)
+            except ChatModelUnavailableError:
+                raise
+            except Exception as e:
+                logger.exception("Workflow node %s failed", node_fn.__name__)
+                state["result"] = f"处理失败：{node_fn.__name__} 阶段出错"
+                if stages is not None:
+                    stages.execution = {"error": str(e), "node": node_fn.__name__}
+                break
 
         result = state.get("result") or "处理完成"
         event_id = state.get("event_id")

@@ -36,6 +36,7 @@ exclude = [".agents/**"]
 ]
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
 "app/agents/rules.py" = ["PLW0603"]  # 模块级缓存变量需要 global 语句
+"app/agents/workflow.py" = ["BLE001"]  # 工作流节点错误隔离需要捕获所有 Exception（已逐级向上重抛 ChatModelUnavailableError）
 "app/memory/memory_bank/store.py" = [
     "PLR0913",  # __init__ 参数≥6合理（含多个可选依赖注入）
     "S311",  # 概率遗忘使用伪随机种子，非安全场景
