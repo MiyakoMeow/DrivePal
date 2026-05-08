@@ -105,20 +105,8 @@ class AgentWorkflow:
         )
         return LLMJsonResponse.from_llm(result)
 
-    async def _search_memories(
-        self,
-        user_input: str,
-    ) -> list[dict]:
-        """搜索相关记忆，失败时回退到最近历史记录. 统一返回可序列化 dict 列表."""
-        if not user_input:
-            # 空输入：尝试返回最近历史，失败则直接返回空列表
-            try:
-                history = await self.memory_module.get_history(mode=self._memory_mode)
-                return [e.model_dump() for e in history]
-            except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
-                logger.warning("Memory get_history failed for empty input: %s", e)
-                return []
-
+    async def _safe_memory_search(self, user_input: str) -> list[dict] | None:
+        """搜索相关记忆，失败或结果为空返回 None。"""
         try:
             events = await self.memory_module.search(
                 user_input,
@@ -127,14 +115,29 @@ class AgentWorkflow:
             if events:
                 return [e.to_public() for e in events]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
-            logger.warning("Memory search failed, fallback to history: %s", e)
+            logger.warning("Memory search failed: %s", e)
+        return None
 
+    async def _safe_memory_history(self) -> list[dict]:
+        """获取最近历史记录，失败返回空列表。"""
         try:
             history = await self.memory_module.get_history(mode=self._memory_mode)
             return [e.model_dump() for e in history]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
-            logger.warning("Memory get_history also failed: %s", e)
+            logger.warning("Memory get_history failed: %s", e)
             return []
+
+    async def _search_memories(
+        self,
+        user_input: str,
+    ) -> list[dict]:
+        """搜索相关记忆，失败时回退到最近历史记录。"""
+        if not user_input:
+            return await self._safe_memory_history()
+        events = await self._safe_memory_search(user_input)
+        if events:
+            return events
+        return await self._safe_memory_history()
 
     async def _context_node(self, state: AgentState) -> dict:
         user_input = state.get("original_query", "")

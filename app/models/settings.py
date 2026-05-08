@@ -53,13 +53,9 @@ class LLMProviderConfig:
     concurrency: int = 4
 
     @classmethod
-    def from_dict(cls, d: dict) -> LLMProviderConfig:
+    def from_dict(cls, d: dict[str, Any]) -> LLMProviderConfig:
         """从字典创建配置实例."""
-        provider, extra = _build_provider_config_from_dict(
-            d,
-            {"temperature": 0.7, "concurrency": 4},
-        )
-        return cls(provider=provider, **extra)
+        return _make_provider_config(cls, d, {"temperature": 0.7, "concurrency": 4})
 
 
 @dataclass
@@ -69,10 +65,9 @@ class EmbeddingProviderConfig:
     provider: ProviderConfig
 
     @classmethod
-    def from_dict(cls, d: dict) -> EmbeddingProviderConfig:
+    def from_dict(cls, d: dict[str, Any]) -> EmbeddingProviderConfig:
         """从字典创建配置实例."""
-        provider, _ = _build_provider_config_from_dict(d, {})
-        return cls(provider=provider)
+        return _make_provider_config(cls, d, {})
 
 
 @dataclass
@@ -83,10 +78,9 @@ class JudgeProviderConfig:
     temperature: float = 0.1
 
     @classmethod
-    def from_dict(cls, d: dict) -> JudgeProviderConfig:
+    def from_dict(cls, d: dict[str, Any]) -> JudgeProviderConfig:
         """从字典创建配置实例."""
-        provider, extra = _build_provider_config_from_dict(d, {"temperature": 0.1})
-        return cls(provider=provider, **extra)
+        return _make_provider_config(cls, d, {"temperature": 0.1})
 
 
 @dataclass
@@ -219,6 +213,26 @@ def _build_provider_config_from_dict(
     for key, default in extra_fields.items():
         result[key] = d.get(key, default)
     return provider, result
+
+
+def _make_provider_config[T](
+    cls: type[T],
+    d: dict[str, Any],
+    defaults: dict[str, Any],
+) -> T:
+    """泛型工厂：从字典构建 ProviderConfig 子类实例。
+
+    Args:
+        cls: ProviderConfig 子类。
+        d: 配置字典。
+        defaults: 额外字段名到默认值的映射。
+
+    Returns:
+        构造的 ProviderConfig 实例。
+
+    """
+    provider, extra = _build_provider_config_from_dict(d, defaults)
+    return cls(provider=provider, **extra)
 
 
 def _build_provider_config_from_ref(

@@ -4,10 +4,7 @@ from pathlib import Path
 
 import tomli_w
 
-
-def get_data_dir() -> Path:
-    """获取数据目录路径."""
-    return Path(__file__).parent.parent.parent / "data"
+from app.config import DATA_DIR
 
 
 def _write_toml_data(filepath: Path, data: dict) -> None:
@@ -19,7 +16,7 @@ def _write_toml_data(filepath: Path, data: dict) -> None:
 def init_storage(data_dir: Path | None = None) -> None:
     """初始化存储目录和数据文件."""
     if data_dir is None:
-        data_dir = get_data_dir()
+        data_dir = DATA_DIR
     data_dir.mkdir(exist_ok=True)
 
     jsonl_files = [
