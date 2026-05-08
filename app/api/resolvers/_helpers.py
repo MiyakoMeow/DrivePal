@@ -8,9 +8,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from graphql.error import GraphQLError
 
-if TYPE_CHECKING:
-    from collections.abc import Awaitable
-
 from app.api.graphql_schema import (
     DriverStateGQL,
     DrivingContextGQL,
@@ -23,6 +20,9 @@ from app.api.graphql_schema import (
 from app.config import DATA_DIR
 from app.schemas.context import DrivingContext
 from app.storage.toml_store import TOMLStore
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
 
 logger = logging.getLogger(__name__)
 
