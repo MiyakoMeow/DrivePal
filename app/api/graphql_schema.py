@@ -3,7 +3,25 @@
 from enum import Enum
 
 import strawberry
+from strawberry import auto
+from strawberry.experimental.pydantic import type as pydantic_type
 from strawberry.scalars import JSON
+
+from app.schemas.context import (
+    DriverState as _DriverState,
+)
+from app.schemas.context import (
+    DrivingContext as _DrivingContext,
+)
+from app.schemas.context import (
+    GeoLocation as _GeoLocation,
+)
+from app.schemas.context import (
+    SpatioTemporalContext as _SpatioTemporalContext,
+)
+from app.schemas.context import (
+    TrafficCondition as _TrafficCondition,
+)
 
 
 @strawberry.enum
@@ -136,51 +154,51 @@ JSONScalar = strawberry.scalar(
 )
 
 
-@strawberry.type
+@pydantic_type(_GeoLocation)
 class GeoLocationGQL:
     """地理位置输出."""
 
-    latitude: float
-    longitude: float
-    address: str
-    speed_kmh: float
+    latitude: auto
+    longitude: auto
+    address: auto
+    speed_kmh: auto
 
 
-@strawberry.type
+@pydantic_type(_DriverState)
 class DriverStateGQL:
     """驾驶员状态输出."""
 
     emotion: str
     workload: str
-    fatigue_level: float
+    fatigue_level: auto
 
 
-@strawberry.type
-class SpatioTemporalContextGQL:
-    """时空上下文输出."""
-
-    current_location: GeoLocationGQL | None
-    destination: GeoLocationGQL | None
-    eta_minutes: float | None
-    heading: float | None
-
-
-@strawberry.type
+@pydantic_type(_TrafficCondition)
 class TrafficConditionGQL:
     """交通状况输出."""
 
     congestion_level: str
-    incidents: list[str]
-    estimated_delay_minutes: int
+    incidents: auto
+    estimated_delay_minutes: auto
 
 
-@strawberry.type
+@pydantic_type(_SpatioTemporalContext)
+class SpatioTemporalContextGQL:
+    """时空上下文输出."""
+
+    current_location: auto
+    destination: auto
+    eta_minutes: auto
+    heading: auto
+
+
+@pydantic_type(_DrivingContext)
 class DrivingContextGQL:
     """驾驶上下文输出."""
 
-    driver: DriverStateGQL
-    spatial: SpatioTemporalContextGQL
-    traffic: TrafficConditionGQL
+    driver: auto
+    spatial: auto
+    traffic: auto
     scenario: str
 
 
