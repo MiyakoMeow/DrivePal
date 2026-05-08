@@ -89,7 +89,8 @@ class MemoryBankStore:
             "yes",
         )
         self._rng = random.Random(seed)
-        self._reference_date = kwargs.get("reference_date")
+        ref = kwargs.get("reference_date")
+        self._reference_date: str | None = ref if isinstance(ref, str) else None
         self._loaded = False
 
     async def _ensure_loaded(self) -> None:
