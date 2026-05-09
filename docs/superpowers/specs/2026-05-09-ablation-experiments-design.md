@@ -1,6 +1,6 @@
 # DrivePal-2 消融实验设计
 
-> 状态：已通过自审，待用户审查 | 日期：2026-05-09
+> 状态：已通过自审（6轮），待用户审查 | 日期：2026-05-09
 
 ## 一、目的
 
@@ -305,8 +305,10 @@ safety_group 运行：
 ## 七、新增文件结构
 
 ```
-tests/experiments/
+experiments/ablation/
 ├── __init__.py
+├── __main__.py                # python -m experiments.ablation 入口
+├── cli.py                     # argparse CLI（--group safety|architecture|personalization|all）
 ├── scenario_synthesizer.py    # LLM 场景合成器
 ├── ablation_runner.py         # 消融变体调度器
 ├── judge.py                   # LLM-as-Judge 评分
@@ -314,8 +316,7 @@ tests/experiments/
 ├── architecture_group.py      # 架构组实验
 ├── personalization_group.py   # 个性化组实验
 ├── metrics.py                 # 指标计算与统计
-├── report.py                  # 结果表格/图表生成
-└── conftest.py                # 共享 fixture
+└── report.py                  # 结果表格/图表生成
 ```
 
 数据目录：
@@ -329,9 +330,41 @@ data/experiments/
     └── personalization.jsonl  # 个性化组原始结果
 ```
 
+### 7.1 运行方式
+
+```
+# 全部三组实验（依次执行）
+uv run python -m experiments.ablation --group all
+
+# 单组实验
+uv run python -m experiments.ablation --group safety
+uv run python -m experiments.ablation --group architecture
+uv run python -m experiments.ablation --group personalization
+
+# 仅合成场景（不运行实验）
+uv run python -m experiments.ablation --synthesize-only
+
+# 仅 Judge 评分（重新评分已有结果）
+uv run python -m experiments.ablation --judge-only --group safety
+```
+
+### 7.2 为何不用 pytest
+
+实验非测试，不匹配 pytest 语义：
+
+| 维度 | pytest | experiments/ablation |
+|------|--------|---------------------|
+| 断言 | pass/fail 二值 | LLM Judge 连续评分，无 ground truth |
+| 入 CI | ✅ | ❌（需真实 LLM，数十分钟） |
+| 输出 | 测试报告 | JSON → 统计表格 → 图表 |
+| 运行频率 | 每次提交 | 1-2 次（论文用） |
+| 并发 | pytest-xdist 自动 | 顺序执行（LLM API 限流） |
+
+框架本身的单元测试（合成器逻辑、Judge 输出解析、指标计算）仍入 `tests/`，用 pytest + mock LLM，入 CI。
+
 ## 八、交付物
 
-1. **`tests/experiments/` 完整代码** —— 可通过 `uv run pytest tests/experiments/ -v --test-llm` 运行
+1. **`experiments/ablation/` 完整代码** —— `uv run python -m experiments.ablation --group all` 运行全量实验
 2. **实验数据** —— 合成场景集 + 评分结果（`data/experiments/`）
 3. **论文表格** —— 安全合规率对比表、决策质量对比表、偏好匹配率对比表
 4. **论文图表** —— 权重收敛曲线、分场景决策质量柱状图、消融贡献瀑布图
@@ -347,3 +380,4 @@ data/experiments/
 | 随机种子 | 固定 seed | 结果可复现 |
 | LLM 重试 | Judge 3 次取中位数 | 减少非确定性噪声 |
 | Memory 消融 | 不独立做 | VehicleMemBench 已充分覆盖 |
+| 不入 pytest | CLI 入口（`python -m`），非 pytest runner | 实验非测试——无断言、入 CI 无意义、输出为 JSON 非测试报告 |
