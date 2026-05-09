@@ -17,6 +17,7 @@ from app.agents.probabilistic import (
 )
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.outputs import OutputRouter
+from app.agents.pending import PendingReminderManager
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
@@ -309,6 +310,25 @@ class AgentWorkflow:
         decision = state.get("decision") or {}
         stages = state.get("stages")
 
+        # --- 快捷指令 action 处理 ---
+        action = decision.get("action", "")
+        if action == "cancel_last":
+            pm = PendingReminderManager(user_data_dir(self.current_user))
+            cancelled = await pm.cancel_last()
+            result = "提醒已取消" if cancelled else "暂无待取消的提醒"
+            if stages is not None:
+                stages.execution = {
+                    "content": None,
+                    "event_id": None,
+                    "result": result,
+                    "cancelled": cancelled,
+                }
+            return {
+                "result": result,
+                "event_id": None,
+                "action_result": {"cancelled": cancelled},
+            }
+
         # 规则硬约束：LLM 决策后强制覆盖，不可绕过
         driving_ctx = state.get("driving_context")
         if driving_ctx:
@@ -326,17 +346,71 @@ class AgentWorkflow:
             return {"result": result, "event_id": None}
 
         postpone = decision.get("postpone", False)
-        if postpone:
-            result = "提醒已延后：当前驾驶状态不适合发送提醒"
+        timing = decision.get("timing", "")
+
+        # 延迟 / 位置触发 → 创建 PendingReminder
+        if postpone or timing in ("delay", "location", "location_time"):
+            output_router = OutputRouter()
+            scenario = ""
+            rules_result = {}
+            if driving_ctx:
+                rules_result = apply_rules(driving_ctx)
+                scenario = driving_ctx.get("scenario", "")
+            output_content = output_router.route(decision, scenario, rules_result)
+
+            pm = PendingReminderManager(user_data_dir(self.current_user))
+            trigger_type, trigger_target, trigger_text = _map_pending_trigger(
+                decision, driving_ctx
+            )
+            pending_ids: list[str] = []
+
+            if trigger_type == "location_time":
+                loc_target = trigger_target.get("location", {})
+                time_target = trigger_target.get("time", "")
+                pr1 = await pm.add(
+                    content=output_content,
+                    trigger_type="location",
+                    trigger_target=loc_target,
+                    event_id="",
+                    trigger_text="到达目的地时",
+                )
+                if time_target:
+                    pr2 = await pm.add(
+                        content=output_content,
+                        trigger_type="time",
+                        trigger_target={"time": time_target},
+                        event_id="",
+                        trigger_text=f"到达 {time_target} 时",
+                    )
+                    pending_ids = [pr1.id, pr2.id]
+                else:
+                    pending_ids = [pr1.id]
+            else:
+                pr = await pm.add(
+                    content=output_content,
+                    trigger_type=trigger_type,
+                    trigger_target=trigger_target,
+                    event_id="",
+                    trigger_text=trigger_text,
+                )
+                pending_ids = [pr.id]
+
+            result = (
+                f"提醒已延后：{decision.get('reason', '')}。"
+                f"将在条件满足时提醒"
+            )
             if stages is not None:
                 stages.execution = {
                     "content": None,
                     "event_id": None,
                     "result": result,
+                    "pending_reminder_ids": pending_ids,
                 }
             return {
                 "result": result,
                 "event_id": None,
+                "output_content": output_content.model_dump(),
+                "pending_reminder_id": pending_ids[0] if pending_ids else None,
             }
 
         # 频次约束检查
