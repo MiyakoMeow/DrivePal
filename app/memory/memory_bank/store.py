@@ -172,8 +172,20 @@ class MemoryBankStore:
             if not r.get("corrupted")
         )
         # 整体上下文不占用 top_k 配额（prepend 始终在结果前）
-        if len(out) > top_k:
-            out = out[:top_k]
+        actual_limit = top_k - len(prepend)
+        out.extend(
+            SearchResult(
+                event={
+                    "content": r.get("text", ""),
+                    "source": r.get("source", ""),
+                    "memory_strength": int(r.get("memory_strength", 1)),
+                },
+                score=float(r.get("score", 0.0)),
+                source=r.get("source", "event"),
+            )
+            for r in results[: max(0, actual_limit)]
+            if not r.get("corrupted")
+        )
         return out
 
     async def format_search_results(self, query: str, top_k: int = 5) -> str:

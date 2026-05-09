@@ -105,8 +105,8 @@ class LlmClient:
                         delay += self._rng.random() * 0.5
                     await _sleep(delay)
                     continue
-                # 非瞬态错误：若总重试次数充裕则额外尝试一次
-                if attempt < max(0, self._config.llm_max_retries - 2):
+                # 非瞬态错误：仅额外尝试一次（非瞬态应快速失败）
+                if attempt < 1:
                     continue
                 raise LLMCallFailed(
                     f"LLM call failed after {attempt + 1} attempts: {exc}"

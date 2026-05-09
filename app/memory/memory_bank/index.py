@@ -173,8 +173,8 @@ class FaissIndex:
                     # 降级：无法提取实际 ID，从 0 连续分配
                     actual_ids = list(range(idx.ntotal))
                     meta_warnings.append(
-                        "Cannot extract FAISS id_map — assuming contiguous IDs "
-                        "(0..{idx.ntotal - 1}). Metadata may be misaligned."
+                        f"Cannot extract FAISS id_map — assuming contiguous IDs "
+                        f"(0..{idx.ntotal - 1}). Metadata may be misaligned."
                     )
                 for fid in actual_ids:
                     if fid not in existing_ids:

@@ -186,6 +186,7 @@ class MemoryModule:
         await store.update_feedback(event_id, feedback)
 
     async def close(self) -> None:
+        failed: list[str] = []
         for key, store in list(self._stores.items()):
             closer = getattr(store, "close", None)
             if closer is not None:
@@ -193,4 +194,8 @@ class MemoryModule:
                     await closer()
                 except Exception:
                     logger.exception("Failed to close store %s", key)
-        self._stores.clear()
+                    failed.append(key)
+        if not failed:
+            self._stores.clear()
+        else:
+            logger.warning("Stores not cleared due to close failures: %s", failed)
