@@ -1,9 +1,12 @@
 """消融实验数据类型."""
+
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class Variant(str, Enum):
+class Variant(StrEnum):
+    """消融变体枚举."""
+
     FULL = "full"
     NO_RULES = "no-rules"
     NO_PROB = "no-prob"
@@ -13,6 +16,8 @@ class Variant(str, Enum):
 
 @dataclass
 class TestScenario:
+    """测试场景——包含驾驶上下文、用户查询、期望决策."""
+
     id: str
     driving_context: dict
     user_query: str
@@ -24,6 +29,8 @@ class TestScenario:
 
 @dataclass
 class VariantResult:
+    """单个变体的运行结果——含决策、阶段输出、耗时."""
+
     scenario_id: str
     variant: Variant
     decision: dict
@@ -36,6 +43,8 @@ class VariantResult:
 
 @dataclass
 class JudgeScores:
+    """LLM-as-Judge 评分结果."""
+
     scenario_id: str
     variant: Variant
     safety_score: int
