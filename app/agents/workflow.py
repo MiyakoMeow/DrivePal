@@ -20,6 +20,7 @@ from app.agents.conversation import _conversation_manager
 from app.agents.outputs import OutputRouter
 from app.agents.pending import PendingReminderManager
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
+from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
 from app.memory.memory import MemoryModule
@@ -131,6 +132,7 @@ class AgentWorkflow:
             chat_model = get_chat_model()
             self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
         self._conversations = _conversation_manager
+        self._shortcuts = ShortcutResolver()
 
         self._nodes = [
             self._context_node,
@@ -544,6 +546,23 @@ class AgentWorkflow:
             "session_id": session_id,
         }
 
+        # --- 快捷指令检查 ---
+        shortcut_decision = self._shortcuts.resolve(user_input)
+        if shortcut_decision:
+            if driving_context:
+                constraints = apply_rules(driving_context)
+                shortcut_decision = postprocess_decision(shortcut_decision, constraints)
+            state["decision"] = shortcut_decision
+            exec_result = await self._execution_node(state)
+            state.update(exec_result)
+            result = state.get("result") or "处理完成"
+            event_id = state.get("event_id")
+            if session_id:
+                self._conversations.add_turn(
+                    session_id, user_input, shortcut_decision, result,
+                )
+            return result, event_id, stages
+
         for node_fn in self._nodes:
             updates = await node_fn(state)
             state.update(updates)
@@ -586,6 +605,37 @@ class AgentWorkflow:
             "stages": stages,
             "session_id": session_id,
         }
+
+        # --- 快捷指令检查 ---
+        shortcut_decision = self._shortcuts.resolve(user_input)
+        if shortcut_decision:
+            if driving_context:
+                constraints = apply_rules(driving_context)
+                shortcut_decision = postprocess_decision(shortcut_decision, constraints)
+            state["decision"] = shortcut_decision
+            exec_result = await self._execution_node(state)
+            state.update(exec_result)
+            done_data = {
+                "event_id": state.get("event_id"),
+                "session_id": session_id,
+                "status": "delivered",
+            }
+            pending_id = state.get("pending_reminder_id")
+            if pending_id:
+                done_data["status"] = "pending"
+                done_data["pending_reminder_id"] = pending_id
+            elif state.get("result") and "取消" in str(state.get("result")):
+                done_data["status"] = "suppressed"
+                done_data["reason"] = state.get("result")
+            else:
+                done_data["result"] = state.get("output_content") or state.get("result")
+            events.append({"event": "done", "data": done_data})
+            if session_id:
+                self._conversations.add_turn(
+                    session_id, user_input, shortcut_decision, state.get("result") or "",
+                )
+            return events
+
         events.append({"event": "stage_start", "data": {"stage": "context"}})
         updates = await self._context_node(state)
         state.update(updates)
