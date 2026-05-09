@@ -107,7 +107,29 @@ class FaissIndex:
         idx: faiss.IndexIDMap | None = None
         try:
             idx_raw = faiss.read_index(str(ip))
-            idx = idx_raw  # type: ignore[assignment]
+            if isinstance(idx_raw, faiss.IndexIDMap):
+                idx = idx_raw
+            else:
+                logger.warning(
+                    "FaissIndex loaded index is not IndexIDMap (type=%s), "
+                    "rebuilding empty index",
+                    type(idx_raw).__name__,
+                )
+                bak_path = ip.with_suffix(".faiss.bak")
+                shutil.copy(str(ip), str(bak_path))
+                ip.unlink(missing_ok=True)
+                mp.unlink(missing_ok=True)
+                ep.unlink(missing_ok=True)
+                return LoadResult(
+                    ok=False,
+                    warnings=[
+                        f"index.faiss is not IndexIDMap (type={type(idx_raw).__name__})"
+                    ],
+                    recovery_actions=[
+                        f"index.faiss backed up to {bak_path}. "
+                        "Rebuilding empty index — re-run data ingestion to recover."
+                    ],
+                )
         except (OSError, RuntimeError) as exc:
             bak_path = ip.with_suffix(".faiss.bak")
             logger.warning("FaissIndex index.faiss corrupted, backing up: %s", exc)

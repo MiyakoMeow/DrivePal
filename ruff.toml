@@ -68,6 +68,7 @@ exclude = [".agents/**"]
     "C901",  # load() 含三级降级分支，复杂度合理
     "PLR0915",  # 降级恢复逻辑多但平铺直叙
     "PLR0912",  # 降级分支 13 > 12，每个分支平铺直叙
+    "PLR0911",  # 降级路径多导致 return 语句7条，每个场景独立可读
 ]
 "app/memory/memory_bank/observability.py" = [
     "D101",  # 数据类由字段级 docstring 阐明语义
