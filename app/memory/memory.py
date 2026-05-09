@@ -205,5 +205,7 @@ class MemoryModule:
                 del self._stores[key]
         if failed:
             logger.warning(
-                "%d store(s) failed to close, references retained: %s", len(failed), failed
+                "%d store(s) failed to close, references retained: %s",
+                len(failed),
+                failed,
             )
