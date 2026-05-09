@@ -63,6 +63,8 @@ class MemoryBankStore:
         self._index = FaissIndex(user_dir, self._config.embedding_dim)
         self._metrics = MemoryBankMetrics()
         self._bg = BackgroundTaskRunner(self._config)
+        self._interaction_map: dict[str, list[str]] = {}  # event_faiss_id → [interaction_faiss_id, ...]
+        self._event_faiss_map: dict[str, str] = {}  # MemoryEvent.id → faiss_id(str)
 
         llm = LlmClient(chat_model, self._config) if chat_model else None
         summarizer = Summarizer(llm, self._index, self._config) if llm else None
@@ -109,12 +111,19 @@ class MemoryBankStore:
 
     async def write(self, event: MemoryEvent) -> str:
         await self._ensure_loaded()
-        return await self._lifecycle.write(event)
+        fid = await self._lifecycle.write(event)
+        if event.id:
+            self._event_faiss_map[event.id] = fid
+        return fid
 
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
         """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
         await self._ensure_loaded()
-        return await self._lifecycle.write_batch(events)
+        fids = await self._lifecycle.write_batch(events)
+        for ev, fid in zip(events, fids, strict=True):
+            if ev.id:
+                self._event_faiss_map[ev.id] = fid
+        return fids
 
     async def write_interaction(
         self,
@@ -124,12 +133,22 @@ class MemoryBankStore:
         **kwargs: object,
     ) -> InteractionResult:
         await self._ensure_loaded()
-        return await self._lifecycle.write_interaction(
+        result = await self._lifecycle.write_interaction(
             query,
             response,
             event_type,
             **kwargs,
         )
+        # 将 interaction 关联到同 source（同 date_key）的所有事件条目
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        for m in self._index.get_metadata():
+            if m.get("source") == date_key and not m.get("type") == "daily_summary":
+                eid = str(m.get("faiss_id"))
+                if eid not in self._interaction_map:
+                    self._interaction_map[eid] = []
+                if result.event_id not in self._interaction_map[eid]:
+                    self._interaction_map[eid].append(result.event_id)
+        return result
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """搜索记忆。"""
@@ -235,7 +254,12 @@ class MemoryBankStore:
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         await self._ensure_loaded()
-        return await self._lifecycle.get_history(limit)
+        events = await self._lifecycle.get_history(limit)
+        for ev in events:
+            faiss_id = self._event_faiss_map.get(ev.id or "")
+            if faiss_id and faiss_id in self._interaction_map:
+                ev.interaction_ids = self._interaction_map[faiss_id]
+        return events
 
     async def get_event_type(self, event_id: str) -> str | None:
         await self._ensure_loaded()
