@@ -106,11 +106,11 @@ class LlmClient:
                     await _sleep(delay)
                     continue
                 # 非瞬态错误：仅额外尝试一次（非瞬态应快速失败）
-                if attempt < 1:
+                if attempt < min(1, self._config.llm_max_retries - 1):
                     continue
                 raise LLMCallFailed(
                     f"LLM call failed after {attempt + 1} attempts: {exc}"
                 ) from exc
         raise LLMCallFailed(
-            "LLM call failed — unexpected: loop exhausted without raising"
+            f"LLM call failed — all {self._config.llm_max_retries} attempts exhausted"
         )

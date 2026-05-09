@@ -72,7 +72,7 @@ class MemoryBankStore:
             metrics=self._metrics,
         )
         self._retrieval = RetrievalPipeline(self._index, embed_client, self._config)
-        self._last_save_time: float = 0.0
+        self._last_save_time: float = time.monotonic()
 
     async def _ensure_loaded(self) -> None:
         """加载索引，消费 LoadResult 告警。"""
@@ -221,9 +221,11 @@ class MemoryBankStore:
         return "\n\n".join(parts)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        await self._ensure_loaded()
         return await self._lifecycle.get_history(limit)
 
     async def get_event_type(self, event_id: str) -> str | None:
+        await self._ensure_loaded()
         return await self._lifecycle.get_event_type(event_id)
 
     async def update_feedback(

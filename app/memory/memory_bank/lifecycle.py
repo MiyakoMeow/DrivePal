@@ -101,8 +101,9 @@ class MemoryLifecycle:
 
         多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
         嵌入编码使用批量 API 以降低往返延迟。
+
+        索引加载由 store 层 _ensure_loaded() 负责，此处不再重复加载。
         """
-        await self._index.load()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
 
@@ -184,8 +185,10 @@ class MemoryLifecycle:
         event_type: str = "reminder",
         **kwargs: object,
     ) -> InteractionResult:
-        """记录一次交互到记忆库。"""
-        await self._index.load()
+        """记录一次交互到记忆库。
+
+        索引加载由 store 层 _ensure_loaded() 负责，此处不再重复加载。
+        """
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
         user_name = kwargs.get("user_name") or "User"
@@ -260,8 +263,7 @@ class MemoryLifecycle:
                 self._inflight_summaries.discard(date_key)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
-        """获取历史事件."""
-        await self._index.load()
+        """获取历史事件。索引加载由 store 层 _ensure_loaded() 负责。"""
         entries = [
             m for m in self._index.get_metadata() if m.get("type") != "daily_summary"
         ]
@@ -275,8 +277,7 @@ class MemoryLifecycle:
         ]
 
     async def get_event_type(self, event_id: str) -> str | None:
-        """按 event_id 查找事件类型."""
-        await self._index.load()
+        """按 event_id 查找事件类型。索引加载由 store 层 _ensure_loaded() 负责。"""
         try:
             fid = int(event_id)
         except ValueError, TypeError:

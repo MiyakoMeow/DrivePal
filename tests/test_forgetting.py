@@ -176,8 +176,8 @@ class TestIngestionForget:
         ids = compute_ingestion_forget_ids(meta, "2020-02-01", config)
         assert ids == []
 
-    def test_deterministic_returns_empty_ids(self):
-        """确定性模式下 compute_ingestion_forget_ids 仅计算 ID，不标记 metadata。"""
+    def test_deterministic_high_strength_no_forgetting(self):
+        """确定性模式高记忆强度条目不应被遗忘。"""
         config = MemoryBankConfig(forget_mode="deterministic", seed=42)
         meta = [
             {

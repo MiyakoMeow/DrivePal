@@ -251,8 +251,9 @@ class FaissIndex:
             except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
                 logger.warning("FaissIndex extra_metadata corrupted, ignoring: %s", exc)
                 self._extra = {}
+                ep.unlink(missing_ok=True)
                 extra_recovery.append(
-                    "extra_metadata.json corrupted — ignoring. "
+                    "extra_metadata.json corrupted — deleted. "
                     "Summaries and personalities will be regenerated on next write."
                 )
 

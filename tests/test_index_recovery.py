@@ -66,6 +66,10 @@ async def test_count_mismatch_adds_skeleton_entries():
         result = await idx2.load()
         assert idx2.total == 2
         assert result.warnings
+        # skeleton entry 含 corrupted 标记和空 text
+        meta2 = idx2.get_metadata()
+        assert any(m.get("corrupted") for m in meta2)
+        assert any(m.get("text") == "" for m in meta2)
 
 
 @pytest.mark.asyncio
