@@ -1,0 +1,51 @@
+# 安全约束规则定义
+# 条件字段：scenario, not_scenario, workload, fatigue_above, has_passengers
+# 所有条件为 AND 关系。优先级：仅排序，高优先级不覆盖低优先级。
+# 合并：allowed_channels 取交，extra_channels 追加，max_frequency 取 min，only_urgent/postpone 取或。
+
+[[rules]]
+name = "highway_audio_only"
+scenario = "highway"
+allowed_channels = ["audio"]
+max_frequency_minutes = 30
+priority = 10
+
+[[rules]]
+name = "fatigue_suppress"
+fatigue_above = 0.7
+only_urgent = true
+allowed_channels = ["audio"]
+priority = 20
+
+[[rules]]
+name = "overloaded_postpone"
+workload = "overloaded"
+postpone = true
+priority = 15
+
+[[rules]]
+name = "parked_all_channels"
+scenario = "parked"
+allowed_channels = ["visual", "audio", "detailed"]
+priority = 5
+
+[[rules]]
+name = "city_driving_limit"
+scenario = "city_driving"
+allowed_channels = ["audio"]
+max_frequency_minutes = 15
+priority = 8
+
+[[rules]]
+name = "traffic_jam_calm"
+scenario = "traffic_jam"
+allowed_channels = ["audio", "visual"]
+max_frequency_minutes = 10
+priority = 7
+
+[[rules]]
+name = "passenger_present_relax"
+has_passengers = true
+not_scenario = "highway"
+extra_channels = ["visual"]
+priority = 3

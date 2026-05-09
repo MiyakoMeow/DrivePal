@@ -3,7 +3,9 @@
 import logging
 import math
 import os
+import tomllib
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
@@ -22,13 +24,9 @@ class Rule:
     priority: int = 0
 
 
-SCENARIO_HIGHWAY = "highway"
-SCENARIO_PARKED = "parked"
-WORKLOAD_OVERLOADED = "overloaded"
+URGENT_TYPES = frozenset({"warning", "safety", "alert"})
 
 
-# 疲劳阈值，超过此值触发疲劳抑制规则，通过环境变量 FATIGUE_THRESHOLD 配置
-# 设为函数调用而非模块常量，支持测试中 monkeypatch.setenv 切换
 def _get_fatigue_threshold() -> float:
     raw = os.environ.get("FATIGUE_THRESHOLD", "0.7")
     try:
@@ -47,14 +45,10 @@ def _get_fatigue_threshold() -> float:
     return value
 
 
-# 紧急提醒类型白名单，不受 only_urgent 过滤
-URGENT_TYPES = frozenset({"warning", "safety", "alert"})
-
-
-SAFETY_RULES: list[Rule] = [
+_FALLBACK_RULES: list[Rule] = [
     Rule(
         name="highway_audio_only",
-        condition=lambda ctx: ctx.get("scenario") == SCENARIO_HIGHWAY,
+        condition=lambda ctx: ctx.get("scenario") == "highway",
         constraint={"allowed_channels": ["audio"], "max_frequency_minutes": 30},
         priority=10,
     ),
@@ -68,19 +62,95 @@ SAFETY_RULES: list[Rule] = [
     ),
     Rule(
         name="overloaded_postpone",
-        condition=lambda ctx: (
-            ctx.get("driver", {}).get("workload", "") == WORKLOAD_OVERLOADED
-        ),
+        condition=lambda ctx: ctx.get("driver", {}).get("workload", "") == "overloaded",
         constraint={"postpone": True},
         priority=15,
     ),
     Rule(
         name="parked_all_channels",
-        condition=lambda ctx: ctx.get("scenario") == SCENARIO_PARKED,
+        condition=lambda ctx: ctx.get("scenario") == "parked",
         constraint={"allowed_channels": ["visual", "audio", "detailed"]},
         priority=5,
     ),
 ]
+
+
+def _build_condition(rule_cfg: dict) -> Callable[[dict], bool]:
+    """从 TOML 配置项构造 Rule.condition 闭包。各条件 AND 组合。"""
+    checks: list[Callable[[dict], bool]] = []
+
+    if "scenario" in rule_cfg:
+        val = rule_cfg["scenario"]
+        checks.append(lambda ctx, v=val: ctx.get("scenario") == v)
+
+    if "not_scenario" in rule_cfg:
+        val = rule_cfg["not_scenario"]
+        # scenario 缺失时不触发
+        checks.append(
+            lambda ctx, v=val: bool(ctx.get("scenario")) and ctx.get("scenario") != v
+        )
+
+    if "workload" in rule_cfg:
+        val = rule_cfg["workload"]
+        checks.append(lambda ctx, v=val: ctx.get("driver", {}).get("workload") == v)
+
+    if "fatigue_above" in rule_cfg:
+        threshold = rule_cfg["fatigue_above"]
+        checks.append(
+            lambda ctx, t=threshold: ctx.get("driver", {}).get("fatigue_level", 0) > t
+        )
+
+    if "has_passengers" in rule_cfg:
+        checks.append(lambda ctx: bool(ctx.get("passengers")))
+
+    def condition(ctx: dict) -> bool:
+        return all(check(ctx) for check in checks) if checks else False
+
+    return condition
+
+
+# TOML 约束字段名集合——不在 condition 条件字段中的。
+_CONSTRAINT_FIELDS = frozenset(
+    {
+        "allowed_channels",
+        "max_frequency_minutes",
+        "only_urgent",
+        "postpone",
+        "extra_channels",
+    }
+)
+
+
+def load_rules(path: Path) -> list[Rule]:
+    """从 TOML 文件加载规则列表。失败时回退到默认规则。"""
+    try:
+        with path.open("rb") as f:
+            data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError, ValueError) as e:
+        logger.warning("Failed to load rules from %s: %s, using fallback", path, e)
+        return list(_FALLBACK_RULES)
+
+    raw_rules = data.get("rules", [])
+    if not raw_rules:
+        logger.warning("No rules found in %s, using fallback", path)
+        return list(_FALLBACK_RULES)
+
+    rules: list[Rule] = []
+    for cfg in raw_rules:
+        constraint = {k: v for k, v in cfg.items() if k in _CONSTRAINT_FIELDS}
+        rules.append(
+            Rule(
+                name=cfg["name"],
+                condition=_build_condition(cfg),
+                constraint=constraint,
+                priority=cfg.get("priority", 0),
+            )
+        )
+    return rules
+
+
+_RULES_PATH = Path("config/rules.toml")
+SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
 
 
 def apply_rules(
@@ -98,9 +168,18 @@ def apply_rules(
             channels &= set(r.constraint["allowed_channels"])
         if not channels:
             channels = {"visual", "audio", "detailed"}
-        merged_channels = sorted(channels)
+        merged_channels = list(channels)
     else:
         merged_channels = sorted(["visual", "audio", "detailed"])
+
+    # extra_channels：交集后追加
+    extra = set()
+    for r in matched:
+        ec = r.constraint.get("extra_channels", [])
+        if isinstance(ec, list):
+            extra.update(ec)
+    if extra:
+        merged_channels = sorted(set(merged_channels) | extra)
 
     only_urgent = any(r.constraint.get("only_urgent", False) for r in matched)
     postpone = any(r.constraint.get("postpone", False) for r in matched)
@@ -141,12 +220,7 @@ def format_constraints(constraints: dict[str, Any]) -> str:
 
 
 def postprocess_decision(decision: dict, driving_context: dict) -> dict:
-    """在 LLM 决策后强制应用安全规则，不可绕过。
-
-    输入 LLM 输出的 decision dict + driving_context，
-    输出安全规则强制覆盖后的 decision。
-    规则为硬约束——LLM 无法通过修改 prompt 绕过。
-    """
+    """在 LLM 决策后强制应用安全规则，不可绕过。"""
     result = dict(decision)
     constraints = apply_rules(driving_context)
 
