@@ -267,26 +267,21 @@ def parse_duration(s: str) -> int | None:
 
 
 def parse_time(s: str) -> str | None:
-    """解析中文时间字符串为 ISO 时间 HH:MM:SS。
-
-    支持 '3点'→'15:00', '下午3点'→'15:00', '上午9点'→'09:00'。
-    上/下午缺省时 < 8 算下午。
-    """
+    """Parse Chinese time string to full ISO datetime HH:MM:SS."""
     s = s.strip()
     m = re.match(r"(上午|下午)?(\d+)点", s)
     if not m:
         return None
-    noon = 12
-    afternoon_threshold = 8  # 缺省上/下午时，< 8 点视为下午
     am_pm = m.group(1)
     hour = int(m.group(2))
-    max_hour = 23
-    if hour < 0 or hour > max_hour:
+    if hour < 0 or hour > 23:
         return None
-    if am_pm == "上午" and hour == noon:
+    if am_pm == "上午" and hour == 12:
         hour = 0
-    elif (am_pm == "下午" and hour != noon) or (
-        am_pm is None and hour < afternoon_threshold
-    ):
-        hour += noon
-    return f"{hour:02d}:00:00"
+    elif am_pm == "下午" and hour != 12:
+        hour += 12
+    elif am_pm is None:
+        if hour < 8:
+            hour += 12
+    today = datetime.now(UTC).date().isoformat()
+    return f"{today}T{hour:02d}:00:00"
