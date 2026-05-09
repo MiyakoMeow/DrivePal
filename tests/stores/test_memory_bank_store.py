@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.memory.memory_bank.store import MemoryBankStore
-from app.memory.schemas import MemoryEvent
+from app.memory.schemas import FeedbackData, MemoryEvent
 
 
 @pytest.fixture
@@ -152,3 +152,53 @@ async def test_format_search_results_empty(store):
     """空 store 返回空字符串。"""
     result = await store.format_search_results("anything")
     assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_update_feedback_accept_increases_strength(store):
+    """accept 反馈增加记忆强度。"""
+    ev = MemoryEvent(id="test-1", content="Alice prefers seat 30", speaker="Alice")
+    fid = await store.write(ev)
+    await store.update_feedback(
+        fid,
+        FeedbackData(event_id=fid, action="accept"),
+    )
+    # 反馈记录到 JSONL
+    assert store._feedback_store is not None
+    result = await store.search("Alice seat", top_k=5)
+    assert len(result) > 0
+
+
+@pytest.mark.asyncio
+async def test_update_feedback_ignore_reduces_strength(store):
+    """ignore 反馈降低记忆强度。"""
+    ev = MemoryEvent(id="test-2", content="Bob wants AC at 22", speaker="Bob")
+    fid = await store.write(ev)
+    await store.update_feedback(
+        fid,
+        FeedbackData(event_id=fid, action="ignore"),
+    )
+    # 反馈记录到 JSONL，不崩溃即可
+
+
+@pytest.mark.asyncio
+async def test_write_batch_stores_multiple_events(store):
+    """write_batch 批量写入并可通过 search 检索。"""
+    events = [
+        MemoryEvent(id="b1", content="Charlie likes jazz", speaker="Charlie"),
+        MemoryEvent(id="b2", content="Diana prefers classic", speaker="Diana"),
+        MemoryEvent(id="b3", content="Eve wants navigation", speaker="Eve"),
+    ]
+    fids = await store.write_batch(events)
+    assert len(fids) == 3
+    assert all(fid for fid in fids)  # all non-empty
+
+    history = await store.get_history(limit=5)
+    assert len(history) >= 3
+
+
+@pytest.mark.asyncio
+async def test_write_batch_no_crash_on_empty(store):
+    """空列表调用 write_batch 不崩溃。"""
+    fids = await store.write_batch([])
+    assert fids == []

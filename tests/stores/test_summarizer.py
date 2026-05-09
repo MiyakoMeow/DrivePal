@@ -190,3 +190,79 @@ async def test_daily_personality_skips_when_exists():
         result = await summ.get_daily_personality("2024-06-15")
         assert result is None
         mock_llm.call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_prefix_format():
+    """摘要文本含预期前缀格式。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        await idx.add_vector(
+            "Alice likes music",
+            TEST_EMBEDDING,
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15"},
+        )
+        mock_llm = AsyncMock()
+        mock_llm.call = AsyncMock(
+            return_value="The summary of the conversation on 2024-06-15 is: Alice likes music"
+        )
+        summ = Summarizer(mock_llm, idx, MemoryBankConfig())
+        result = await summ.get_daily_summary("2024-06-15")
+        assert result is not None
+        assert "The summary of the conversation on 2024-06-15 is:" in result
+
+
+@pytest.mark.asyncio
+async def test_daily_personality_stored_in_extra():
+    """daily_personality 存入 extra['daily_personalities'][date_key]。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        await idx.add_vector(
+            "Alice prefers classical music",
+            TEST_EMBEDDING,
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15"},
+        )
+        mock_llm = AsyncMock()
+        mock_llm.call = AsyncMock(return_value="Alice: music lover")
+        summ = Summarizer(mock_llm, idx, MemoryBankConfig())
+        await summ.get_daily_personality("2024-06-15")
+        extra = idx.get_extra()
+        assert "daily_personalities" in extra
+        assert extra["daily_personalities"].get("2024-06-15") is not None
+
+
+@pytest.mark.asyncio
+async def test_overall_personality_aggregates_daily():
+    """overall_personality prompt 包含所有 daily_personality 文本。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        idx.set_extra(
+            {
+                "daily_personalities": {
+                    "2024-06-14": "Bob: cautious driver",
+                    "2024-06-15": "Alice: music lover",
+                }
+            }
+        )
+        await idx.add_vector(
+            "test",
+            TEST_EMBEDDING,
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15"},
+        )
+        mock_llm = AsyncMock()
+        mock_llm.call = AsyncMock(return_value="aggregated personality")
+        summ = Summarizer(mock_llm, idx, MemoryBankConfig())
+        result = await summ.get_overall_personality()
+        assert result is not None
+        call_args = mock_llm.call.call_args
+        prompt = (
+            call_args.args[0] if call_args.args else call_args.kwargs.get("prompt", "")
+        )
+        assert "Bob: cautious driver" in prompt
+        assert "Alice: music lover" in prompt

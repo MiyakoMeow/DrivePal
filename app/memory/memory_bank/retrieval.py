@@ -259,8 +259,6 @@ def _gather_neighbor_indices(
             neighbor_indices.append(pos)
         pos -= 1
     neighbor_indices.sort()
-    if meta_idx not in neighbor_indices:
-        neighbor_indices.insert(0, meta_idx)
     return neighbor_indices
 
 
@@ -352,30 +350,6 @@ class RetrievalPipeline:
         self._index = index
         self._embedding_client = embedding_client
         self._config = config
-        self._cached_chunk_size: int | None = None
-        self._cached_metadata_len: int = 0
-        self._cached_first_text: str = ""
-        self._cached_last_text: str = ""
-
-    def _get_chunk_size(self, metadata: list[dict]) -> int:
-        """缓存版 chunk_size：metadata 长度 + 首尾文本哈希不变则直接返回。"""
-        if (
-            self._cached_chunk_size is not None
-            and len(metadata) == self._cached_metadata_len
-        ):
-            # 快速碰撞检测：首尾条目文本未变则假设所有条目未变
-            first_text = metadata[0].get("text", "") if metadata else ""
-            last_text = metadata[-1].get("text", "") if metadata else ""
-            if (
-                first_text == self._cached_first_text
-                and last_text == self._cached_last_text
-            ):
-                return self._cached_chunk_size
-        self._cached_chunk_size = _get_effective_chunk_size(metadata, self._config)
-        self._cached_metadata_len = len(metadata)
-        self._cached_first_text = metadata[0].get("text", "") if metadata else ""
-        self._cached_last_text = metadata[-1].get("text", "") if metadata else ""
-        return self._cached_chunk_size
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
@@ -402,6 +376,12 @@ class RetrievalPipeline:
             return [], False
         # 过滤已遗忘条目（maybe_forget 在 store.py/lifecycle.py 中已设 forgotten 标记）
         results = [r for r in results if not r.get("forgotten")]
+        # 过滤低于相似度阈值的条目（低分不配获得邻居扩展）
+        results = [
+            r
+            for r in results
+            if float(r.get("score", 0.0)) >= self._config.embedding_min_similarity
+        ]
         if not results:
             return [], False
 
@@ -425,7 +405,7 @@ class RetrievalPipeline:
         if not results or not metadata:
             return results
 
-        effective_chunk = self._get_chunk_size(metadata)
+        effective_chunk = _get_effective_chunk_size(metadata, self._config)
         indexed = [
             (r, r["_meta_idx"]) for r in results if r.get("_meta_idx") is not None
         ]

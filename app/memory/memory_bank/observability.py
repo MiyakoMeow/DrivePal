@@ -31,6 +31,11 @@ class MemoryBankMetrics:
     search_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
     forget_count: int = 0
     forget_removed_count: int = 0
+    write_count: int = 0
+    write_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
+    embedding_latency_ms: deque[float] = field(
+        default_factory=lambda: deque(maxlen=1000)
+    )
     background_task_failures: int = 0
     index_load_warnings: deque[str] = field(default_factory=lambda: deque(maxlen=100))
 
@@ -47,6 +52,11 @@ class MemoryBankMetrics:
             "search_latency_p90_ms": _p90(self.search_latency_ms),
             "forget_count": self.forget_count,
             "forget_removed_count": self.forget_removed_count,
+            "write_count": self.write_count,
+            "write_latency_p50_ms": _p50(self.write_latency_ms),
+            "write_latency_p90_ms": _p90(self.write_latency_ms),
+            "embedding_latency_p50_ms": _p50(self.embedding_latency_ms),
+            "embedding_latency_p90_ms": _p90(self.embedding_latency_ms),
             "background_task_failures": self.background_task_failures,
             "index_load_warnings": list(self.index_load_warnings),
         }
@@ -58,5 +68,8 @@ class MemoryBankMetrics:
         self.search_latency_ms.clear()
         self.forget_count = 0
         self.forget_removed_count = 0
+        self.write_count = 0
+        self.write_latency_ms.clear()
+        self.embedding_latency_ms.clear()
         self.background_task_failures = 0
         self.index_load_warnings.clear()

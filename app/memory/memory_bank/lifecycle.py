@@ -1,12 +1,12 @@
 """记忆生命周期管理：写入、遗忘、摘要编排。"""
 
-import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
-from app.memory.schemas import InteractionResult, MemoryEvent
+from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 
 from .config import resolve_reference_date
 from .forget import ForgettingCurve, compute_ingestion_forget_ids
@@ -15,7 +15,6 @@ from .index import FaissIndex
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
 
-    from .bg_tasks import BackgroundTaskRunner
     from .config import MemoryBankConfig
     from .observability import MemoryBankMetrics
     from .summarizer import Summarizer
@@ -33,7 +32,6 @@ class MemoryLifecycle:
         forget: ForgettingCurve,
         summarizer: Summarizer | None,
         config: MemoryBankConfig,
-        bg: BackgroundTaskRunner,
         metrics: MemoryBankMetrics | None = None,
     ) -> None:
         self._index = index
@@ -41,10 +39,7 @@ class MemoryLifecycle:
         self._forget = forget
         self._summarizer = summarizer
         self._config = config
-        self._bg = bg
         self._metrics = metrics
-        self._inflight_summaries: set[str] = set()
-        self._inflight_lock = asyncio.Lock()
 
     async def purge_forgotten(self, metadata: list[dict]) -> bool:
         """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
@@ -79,7 +74,7 @@ class MemoryLifecycle:
             self._index.get_metadata(),
             today,
             config=self._config,
-            rng=None,  # 使用独立 RNG，不与 purge_forgotten 共享状态
+            rng=self._forget.rng,
         )
         if ids:
             if self._metrics:
@@ -87,24 +82,16 @@ class MemoryLifecycle:
                 self._metrics.forget_removed_count += len(ids)
             await self._index.remove_vectors(ids)
 
-    async def write(self, event: MemoryEvent) -> str:
-        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
-
-        多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
-        嵌入编码使用批量 API 以降低往返延迟。
-
-        索引加载由 store 层 _ensure_loaded() 负责，此处不再重复加载。
-        """
-        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        ts = datetime.now(UTC).isoformat()
-
+    @staticmethod
+    def _build_pair_texts(
+        event: MemoryEvent, date_key: str
+    ) -> tuple[list[str], list[dict]]:
+        """解析事件内容，返回 (pair_texts, pair_metas)。"""
         lines = [line.strip() for line in event.content.split("\n") if line.strip()]
         parsed_pairs: list[tuple[str | None, str]] = [
             FaissIndex.parse_speaker_line(ln) for ln in lines
         ]
         has_speakers = any(spk is not None for spk, _ in parsed_pairs)
-
-        # 收集阶段：先构建所有 pair texts，再批量编码
         pair_texts: list[str] = []
         pair_metas: list[dict] = []
 
@@ -146,26 +133,85 @@ class MemoryLifecycle:
                     "event_type": event.type,
                 }
             )
+        return pair_texts, pair_metas
+
+    async def write(self, event: MemoryEvent) -> str:
+        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
+
+        多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
+        嵌入编码使用批量 API 以降低往返延迟。
+
+        索引加载由 store 层 _ensure_loaded() 负责，此处不再重复加载。
+        """
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        ts = datetime.now(UTC).isoformat()
+        pair_texts, pair_metas = self._build_pair_texts(event, date_key)
 
         # 批量编码
+        t0 = time.perf_counter()
         embeddings = await self._embedding_client.encode_batch(pair_texts)
+        embed_elapsed = (time.perf_counter() - t0) * 1000
         fid: int | None = None
         for text_item, emb, meta in zip(
             pair_texts, embeddings, pair_metas, strict=True
         ):
             fid = await self._index.add_vector(text_item, emb, ts, meta)
 
-        await self._post_write_forget_and_summarize(date_key)
+        write_elapsed = (time.perf_counter() - t0) * 1000
+        if self._metrics:
+            self._metrics.write_count += 1
+            self._metrics.write_latency_ms.append(write_elapsed)
+            self._metrics.embedding_latency_ms.append(embed_elapsed)
+
+        # 写入后仅持久化，不触发摘要/遗忘（遗忘归 finalize/purge_forgotten）
+        await self._index.save()
         return str(fid) if fid is not None else ""
 
-    async def _post_write_forget_and_summarize(self, date_key: str) -> None:
-        """写入后遗忘 + 持久化 + 后台摘要触发（write/write_interaction 公共）。"""
-        if self._config.enable_forgetting:
-            await self.purge_forgotten(self._index.get_metadata())
-            await self._forget_at_ingestion()
+    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+        """批量写入，返回 faiss_id 列表（每事件最后一条记录的 ID）。不触发摘要/遗忘。
+
+        多说话人事件可能产生多条 pair_text，仅返回最后一条的 faiss_id（对齐 write() 行为）。
+        """
+        if not events:
+            return []
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        ts = datetime.now(UTC).isoformat()
+        all_pair_texts: list[str] = []
+        all_pair_metas: list[dict] = []
+        event_pair_counts: list[int] = []  # 每条 event 对应多少 pair_text
+
+        for event in events:
+            pts, pms = self._build_pair_texts(event, date_key)
+            all_pair_texts.extend(pts)
+            all_pair_metas.extend(pms)
+            event_pair_counts.append(len(pts))
+
+        # 一次批量编码
+        t0 = time.perf_counter()
+        embeddings = await self._embedding_client.encode_batch(all_pair_texts)
+        if self._metrics:
+            self._metrics.embedding_latency_ms.append((time.perf_counter() - t0) * 1000)
+
+        # 逐条 add_vector，按 event 分组返回最后一条 fid
+        fids: list[str] = []
+        idx = 0
+        for count in event_pair_counts:
+            last_fid = ""
+            for _ in range(count):
+                fid = await self._index.add_vector(
+                    all_pair_texts[idx], embeddings[idx], ts, all_pair_metas[idx]
+                )
+                last_fid = str(fid)
+                idx += 1
+            fids.append(last_fid)
+
+        if self._metrics:
+            self._metrics.write_count += len(events)
+            self._metrics.write_latency_ms.append((time.perf_counter() - t0) * 1000)
+
+        # 持久化（不触发摘要/遗忘）
         await self._index.save()
-        if self._summarizer:
-            await self._trigger_background_summarize(date_key)
+        return fids
 
     async def write_interaction(
         self,
@@ -198,23 +244,49 @@ class MemoryLifecycle:
                 "event_type": event_type,
             },
         )
-        await self._post_write_forget_and_summarize(date_key)
+        await self._index.save()
         return InteractionResult(event_id=str(fid))
 
-    async def _trigger_background_summarize(self, date_key: str) -> None:
-        """带 inflight 防护的后台摘要触发。同日期不重复提交。"""
+    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """根据用户反馈修改记忆强度。
+
+        accept → memory_strength += 2（主动确认高于被动回忆 +1）
+        ignore → memory_strength = max(1, strength - 1)
+        两者均更新 last_recall_date 为当天。
+        """
+        try:
+            fid = int(event_id)
+        except ValueError, TypeError:
+            logger.warning("update_feedback: invalid event_id=%r", event_id)
+            return
+
+        m = self._index.get_metadata_by_id(fid)
+        if m is None:
+            logger.warning("update_feedback: event_id=%r not found", event_id)
+            return
+
+        try:
+            old_strength = float(m.get("memory_strength", 1))
+        except ValueError, TypeError:
+            logger.warning(
+                "update_feedback: invalid memory_strength for event_id=%r", event_id
+            )
+            return
+        if feedback.action == "accept":
+            m["memory_strength"] = old_strength + 2.0
+        elif feedback.action == "ignore":
+            m["memory_strength"] = max(1.0, old_strength - 1.0)
+        else:
+            logger.warning("update_feedback: unknown action=%r", feedback.action)
+            return
+        m["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
+        await self._index.save()
+
+    async def _finalize_date_summary(self, date_key: str) -> None:
+        """为单个日期生成 daily_summary + daily_personality。"""
         if not self._summarizer:
             return
-        async with self._inflight_lock:
-            if date_key in self._inflight_summaries:
-                return
-            self._inflight_summaries.add(date_key)
-        self._bg.spawn(self._background_summarize(date_key))
-
-    async def _background_summarize(self, date_key: str) -> None:
         try:
-            if not self._summarizer:
-                return
             text = await self._summarizer.get_daily_summary(date_key)
             if text:
                 emb = await self._embedding_client.encode(text)
@@ -224,17 +296,14 @@ class MemoryLifecycle:
                     f"{date_key}T00:00:00",
                     {"type": "daily_summary", "source": f"summary_{date_key}"},
                 )
-            await self._summarizer.get_overall_summary()
             await self._summarizer.get_daily_personality(date_key)
-            await self._summarizer.get_overall_personality()
-            await self._index.save()
         except SummarizationEmpty:
-            logger.debug("background summarization empty for date=%s", date_key)
+            return
         except LLMCallFailed:
             if self._metrics:
                 self._metrics.background_task_failures += 1
             logger.warning(
-                "background summarization failed (LLM) for date=%s",
+                "finalize: LLM failed for daily summary for date=%s",
                 date_key,
                 exc_info=True,
             )
@@ -242,13 +311,53 @@ class MemoryLifecycle:
             if self._metrics:
                 self._metrics.background_task_failures += 1
             logger.warning(
-                "background summarization failed for date=%s",
-                date_key,
-                exc_info=True,
+                "finalize: unexpected error for date=%s", date_key, exc_info=True
             )
-        finally:
-            async with self._inflight_lock:
-                self._inflight_summaries.discard(date_key)
+
+    async def finalize(self) -> None:
+        """遍历所有日期，串行生成缺失摘要/人格，执行摄入遗忘，保存。
+
+        应在批量写入完成后调用（对应 VMB 一次性串行调用模式）。
+        """
+        if self._summarizer:
+            metadata = self._index.get_metadata()
+
+            # 收集所有唯一 source（即 date_key）
+            sources: set[str] = set()
+            for m in metadata:
+                src = m.get("source", "")
+                if src and not src.startswith("summary_"):
+                    sources.add(src)
+
+            # 串行调用摘要/人格生成（不经过后台任务，与 VMB 行为一致）
+            for src in sorted(sources):
+                await self._finalize_date_summary(src)
+
+            try:
+                await self._summarizer.get_overall_summary()
+                await self._summarizer.get_overall_personality()
+            except LLMCallFailed:
+                if self._metrics:
+                    self._metrics.background_task_failures += 1
+                logger.warning(
+                    "finalize: LLM failed for overall summary/personality",
+                    exc_info=True,
+                )
+            except Exception:
+                if self._metrics:
+                    self._metrics.background_task_failures += 1
+                logger.warning(
+                    "finalize: unexpected error for overall summary/personality",
+                    exc_info=True,
+                )
+
+        # 摄入遗忘 + 清理已标记条目（独立于 summarizer，无条件执行）
+        if self._config.enable_forgetting:
+            await self.purge_forgotten(self._index.get_metadata())
+            await self._forget_at_ingestion()
+
+        # 持久化
+        await self._index.save()
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         """获取历史事件。索引加载由 store 层 _ensure_loaded() 负责。"""
@@ -257,6 +366,7 @@ class MemoryLifecycle:
         ]
         return [
             MemoryEvent(
+                id=str(m.get("faiss_id", "")),
                 content=m.get("raw_content") or m.get("text", ""),
                 type=m.get("event_type", "reminder"),
                 memory_strength=int(m.get("memory_strength", 1)),

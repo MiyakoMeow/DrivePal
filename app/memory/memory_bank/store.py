@@ -15,7 +15,6 @@ from app.memory.schemas import (
 )
 from app.storage.jsonl_store import JSONLinesStore
 
-from .bg_tasks import BackgroundTaskRunner
 from .config import MemoryBankConfig, resolve_reference_date
 from .forget import ForgettingCurve
 from .index import FaissIndex
@@ -62,7 +61,12 @@ class MemoryBankStore:
         self._feedback_store: JSONLinesStore | None = None
         self._index = FaissIndex(user_dir, self._config.embedding_dim)
         self._metrics = MemoryBankMetrics()
-        self._bg = BackgroundTaskRunner(self._config)
+        self._interaction_map: dict[
+            str, list[str]
+        ] = {}  # event_faiss_id → [interaction_faiss_id, ...]
+        self._source_event_index: dict[
+            str, list[str]
+        ] = {}  # date_key → [event_faiss_id, ...]
 
         llm = LlmClient(chat_model, self._config) if chat_model else None
         summarizer = Summarizer(llm, self._index, self._config) if llm else None
@@ -73,7 +77,6 @@ class MemoryBankStore:
             ForgettingCurve(self._config),
             summarizer,
             self._config,
-            self._bg,
             metrics=self._metrics,
         )
         self._retrieval = RetrievalPipeline(self._index, embed_client, self._config)
@@ -109,7 +112,18 @@ class MemoryBankStore:
 
     async def write(self, event: MemoryEvent) -> str:
         await self._ensure_loaded()
-        return await self._lifecycle.write(event)
+        fid = await self._lifecycle.write(event)
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        self._source_event_index.setdefault(date_key, []).append(fid)
+        return fid
+
+    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+        """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
+        await self._ensure_loaded()
+        fids = await self._lifecycle.write_batch(events)
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        self._source_event_index.setdefault(date_key, []).extend(fids)
+        return fids
 
     async def write_interaction(
         self,
@@ -119,12 +133,30 @@ class MemoryBankStore:
         **kwargs: object,
     ) -> InteractionResult:
         await self._ensure_loaded()
-        return await self._lifecycle.write_interaction(
+        result = await self._lifecycle.write_interaction(
             query,
             response,
             event_type,
             **kwargs,
         )
+        # 将 interaction 关联到同 source（同 date_key）的所有事件条目
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        event_ids = self._source_event_index.get(date_key)
+        if event_ids is None:
+            # 回退：进程启动后当日尚无 write()，全量扫描 metadata
+            event_ids = []
+            for m in self._index.get_metadata():
+                if m.get("source") == date_key and m.get("type") != "daily_summary":
+                    fid = m.get("faiss_id")
+                    if fid is not None:
+                        event_ids.append(str(fid))
+            self._source_event_index[date_key] = event_ids
+        for eid in event_ids:
+            if eid not in self._interaction_map:
+                self._interaction_map[eid] = []
+            if result.event_id not in self._interaction_map[eid]:
+                self._interaction_map[eid].append(result.event_id)
+        return result
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """搜索记忆。"""
@@ -133,12 +165,10 @@ class MemoryBankStore:
         if self._index.total == 0:
             self._metrics.search_empty_index_count += 1
             return []
-        if self._config.enable_forgetting and await self._lifecycle.purge_forgotten(
-            self._index.get_metadata()
-        ):
-            await self._maybe_save()
+        if self._config.enable_forgetting:
+            await self._lifecycle.purge_forgotten(self._index.get_metadata())
         t0 = time.perf_counter()
-        results, updated = await self._retrieval.search(
+        results, _updated = await self._retrieval.search(
             query,
             top_k,
             reference_date=self._get_reference_date(),
@@ -148,8 +178,7 @@ class MemoryBankStore:
         if not results:
             self._metrics.search_empty_count += 1
 
-        if updated:
-            await self._maybe_save()
+        await self._maybe_save()
         extra = self._index.get_extra()
         prepend = []
         for key, label in [
@@ -231,7 +260,12 @@ class MemoryBankStore:
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         await self._ensure_loaded()
-        return await self._lifecycle.get_history(limit)
+        events = await self._lifecycle.get_history(limit)
+        for ev in events:
+            faiss_id = ev.id or ""
+            if faiss_id in self._interaction_map:
+                ev.interaction_ids = self._interaction_map[faiss_id]
+        return events
 
     async def get_event_type(self, event_id: str) -> str | None:
         await self._ensure_loaded()
@@ -242,7 +276,7 @@ class MemoryBankStore:
         event_id: str,
         feedback: FeedbackData,
     ) -> None:
-        """记录用户反馈到 feedback.jsonl。"""
+        """记录用户反馈并更新记忆强度。"""
         if self._feedback_store is None:
             self._feedback_store = JSONLinesStore(
                 user_dir=self._user_root,
@@ -261,6 +295,12 @@ class MemoryBankStore:
             event_id,
             feedback.action,
         )
+        await self._lifecycle.update_feedback(event_id, feedback)
+
+    async def finalize_ingestion(self) -> None:
+        """摘要 + 遗忘 + 持久化。应在批量写入完成后调用。"""
+        await self._ensure_loaded()
+        await self._lifecycle.finalize()
 
     @property
     def metrics(self) -> MemoryBankMetrics:
@@ -268,8 +308,10 @@ class MemoryBankStore:
 
     async def close(self) -> None:
         try:
-            await self._index.save()
+            await self.finalize_ingestion()
         except Exception:
-            logger.warning("Failed to save index during close", exc_info=True)
-        finally:
-            await self._bg.shutdown()
+            logger.warning("Failed to finalize ingestion during close", exc_info=True)
+            try:
+                await self._index.save()
+            except Exception:
+                logger.warning("Fallback save also failed during close", exc_info=True)

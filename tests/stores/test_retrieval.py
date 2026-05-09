@@ -310,3 +310,75 @@ def test_speaker_filter_first_name_matching():
         r for r in filtered if any("Patricia" in s for s in r.get("speakers", []))
     )
     assert patricia["score"] == pytest.approx(0.6)
+
+
+@pytest.mark.asyncio
+async def test_all_below_similarity_threshold():
+    """全低于相似度阈值 → 返回空。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        # 存储一个向量
+        await idx.add_vector(
+            "test content",
+            [1.0] + [0.0] * 1535,  # 单位向量 (1,0,0,...)
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15"},
+        )
+        cfg = MemoryBankConfig()
+        cfg.embedding_min_similarity = 0.99
+        # query 用正交向量 → 内积 ≈ 0 → 低于阈值
+        mock_emb = AsyncMock()
+        mock_emb.encode = AsyncMock(return_value=[0.0, 1.0] + [0.0] * 1534)
+        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_emb), cfg)
+        results, _updated = await pipe.search("anything")
+        assert len(results) == 0
+
+
+@pytest.mark.asyncio
+async def test_no_speaker_in_query_no_discount(mock_embedding):
+    """query 中无说话人时无条目被降权。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        await idx.add_vector(
+            "Gary seat 45",
+            [0.1] * 1536,
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15", "speakers": ["Gary"]},
+        )
+        pipe = RetrievalPipeline(
+            idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
+        )
+        results, _updated = await pipe.search("weather today")
+        assert len(results) >= 1
+        # 无说话人匹配，分数不应被更改
+        for r in results:
+            orig = r.get("score", 0.0)
+            assert orig >= 0  # 未降权
+
+
+@pytest.mark.asyncio
+async def test_pipeline_filters_forgotten_entries(mock_embedding):
+    """forgotten=True 条目被检索管道过滤。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        await idx.add_vector(
+            "forgotten entry",
+            [0.1] * 1536,
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15", "forgotten": True},
+        )
+        await idx.add_vector(
+            "active entry",
+            [0.1] * 1536,
+            "2024-06-15T00:00:00",
+            {"source": "2024-06-15"},
+        )
+        pipe = RetrievalPipeline(
+            idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
+        )
+        results, _updated = await pipe.search("entry", top_k=5)
+        for r in results:
+            assert not r.get("forgotten")

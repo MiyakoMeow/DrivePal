@@ -10,7 +10,7 @@ import math
 import random
 import time
 from datetime import UTC, date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from .config import MemoryBankConfig
@@ -83,13 +83,8 @@ def compute_ingestion_forget_ids(
 
     mode = _forget_mode_from_config(config)
     ids_to_remove: list[int] = []
-    rng_once = (
-        rng
-        if rng is not None
-        else random.Random(config.seed)
-        if config.seed is not None
-        else random.Random()
-    )
+    if mode == ForgetMode.PROBABILISTIC and rng is None:
+        rng = random.Random(config.seed) if config.seed is not None else random.Random()
     for entry in metadata:
         if entry.get("type") == "daily_summary":
             continue
@@ -108,7 +103,8 @@ def compute_ingestion_forget_ids(
             continue
         retention = forgetting_retention(days, strength, config.forgetting_time_scale)
         if mode == ForgetMode.PROBABILISTIC:
-            should_forget = rng_once.random() > retention
+            _rng = cast("random.Random", rng)
+            should_forget = _rng.random() > retention
         else:
             should_forget = retention < config.soft_forget_threshold
         if should_forget:

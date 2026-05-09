@@ -294,3 +294,49 @@ class TestIngestionForget:
             rng=rng_b,
         )
         assert ids_a == ids_b
+
+
+class TestForgetBoundaries:
+    """遗忘边界条件测试。"""
+
+    def test_compute_ingestion_deterministic_threshold(self):
+        """确定性模式 compute_ingestion_forget_ids 用 0.3 阈值判定。"""
+        metadata = [
+            {
+                "faiss_id": 0,
+                "last_recall_date": "2024-01-01",
+                "timestamp": "2024-01-01T00:00:00",
+                "memory_strength": 1,
+            },
+        ]
+        # strength=1, ~165天, retention≈e^(-165/1)≈0 → <0.3 → 应遗忘
+        ids = compute_ingestion_forget_ids(
+            metadata,
+            "2024-06-15",
+            config=MemoryBankConfig(forget_mode="deterministic"),
+        )
+        assert 0 in ids
+
+    def test_ingestion_skip_corrupted_date(self):
+        """格式错误的日期条目被跳过。"""
+        metadata = [
+            {
+                "faiss_id": 0,
+                "last_recall_date": "invalid-date",
+                "timestamp": "invalid-date",
+                "memory_strength": 1,
+            },
+            {
+                "faiss_id": 1,
+                "last_recall_date": "2024-06-10",
+                "timestamp": "2024-06-10T00:00:00",
+                "memory_strength": 5,
+            },
+        ]
+        ids = compute_ingestion_forget_ids(
+            metadata,
+            "2024-06-15",
+            config=MemoryBankConfig(forget_mode="deterministic"),
+        )
+        assert 0 not in ids  # 格式错误跳过
+        assert 1 not in ids  # 近期条目保留
