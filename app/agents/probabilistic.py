@@ -12,7 +12,8 @@ _SCENARIO_MAP = {"parked": 0.0, "city_driving": 0.4, "traffic_jam": 0.3, "highwa
 
 _SPEED_THRESHOLD_40 = 40
 _SPEED_THRESHOLD_80 = 80
-_OVERLOADED_WARNING_THRESHOLD = 0.36
+_OVERLOADED_SCORE = 0.9
+OVERLOADED_WARNING_THRESHOLD = 0.36  # 公开常量，workflow.py 等共享
 
 
 def _speed_factor(speed_kmh: float) -> float:
@@ -96,7 +97,7 @@ def compute_interrupt_risk(driving_context: dict) -> float:
 
     risk = 0.4 * fatigue + 0.3 * w_score + 0.2 * s_risk + 0.1 * sf
 
-    if w_score >= _OVERLOADED_SCORE and risk >= _OVERLOADED_WARNING_THRESHOLD:
+    if w_score >= _OVERLOADED_SCORE and risk >= OVERLOADED_WARNING_THRESHOLD:
         logger.info("High interrupt risk (%.2f) with overloaded workload", risk)
 
     return min(max(risk, 0.0), 1.0)

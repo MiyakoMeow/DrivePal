@@ -9,16 +9,21 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from app.agents.probabilistic import (
+    OVERLOADED_WARNING_THRESHOLD,
+    compute_interrupt_risk,
+    infer_intent,
+    is_enabled,
+)
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
 from app.memory.memory import MemoryModule
+from app.memory.privacy import sanitize_context
 from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
-
-_OVERLOADED_WARNING_THRESHOLD = 0.36
 
 logger = logging.getLogger(__name__)
 
@@ -223,12 +228,6 @@ class AgentWorkflow:
 
         # 概率推断 + 反馈权重注入
         prob_block = ""
-        from app.agents.probabilistic import (  # noqa: PLC0415
-            compute_interrupt_risk,
-            infer_intent,
-            is_enabled,
-        )
-
         if is_enabled() and self._memory_mode == MemoryMode.MEMORY_BANK:
             try:
                 intent = await infer_intent(
@@ -238,7 +237,7 @@ class AgentWorkflow:
                 risk = compute_interrupt_risk(driving_context or {})
                 intent["interrupt_risk"] = round(risk, 2)
                 prob_block = f"\n\n概率推断: {json.dumps(intent, ensure_ascii=False)}"
-                if risk >= _OVERLOADED_WARNING_THRESHOLD:
+                if risk >= OVERLOADED_WARNING_THRESHOLD:
                     prob_block += "\n⚠ 当前打断风险较高，请谨慎决定"
             except (OSError, RuntimeError, ValueError, TypeError) as e:
                 logger.warning("Probabilistic inference failed: %s", e)
@@ -348,8 +347,6 @@ class AgentWorkflow:
         original_query = state.get("original_query", "")
 
         # 隐私脱敏：写入前脱敏 driving_ctx 中的位置信息
-        from app.memory.privacy import sanitize_context  # noqa: PLC0415
-
         safe_ctx = sanitize_context(driving_ctx) if driving_ctx else None
         if safe_ctx is not None and stages is not None:
             stages.context = safe_ctx  # 更新 stages 中上下文为脱敏版本

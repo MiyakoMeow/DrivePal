@@ -24,6 +24,10 @@ _MODULES_WITH_DATA_DIR = [
     "app.memory.singleton",
 ]
 
+_MODULES_WITH_DATA_ROOT = [
+    "app.config",
+]
+
 
 @pytest.fixture
 def isolated_app(tmp_path: Path) -> Generator[TestClient]:
@@ -34,6 +38,8 @@ def isolated_app(tmp_path: Path) -> Generator[TestClient]:
     with ExitStack() as stack:
         for mod in _MODULES_WITH_DATA_DIR:
             stack.enter_context(patch(f"{mod}.DATA_DIR", target))
+        for mod in _MODULES_WITH_DATA_ROOT:
+            stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
         reset_all_singletons()
         yield TestClient(app)
         reset_all_singletons()

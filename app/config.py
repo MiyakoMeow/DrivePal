@@ -10,4 +10,4 @@ DATA_DIR = DATA_ROOT
 
 def user_data_dir(user_id: str = "default") -> Path:
     """返回指定用户的 per-user 数据目录路径。"""
-    return DATA_ROOT / "users" / user_id
+    return DATA_DIR / "users" / user_id

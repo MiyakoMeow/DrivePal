@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
     from strawberry.scalars import JSON
 
-from app.agents.workflow import AgentWorkflow
+from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
 from app.api.graphql_schema import (
     ExportDataResult,
     FeedbackInput,
@@ -43,6 +43,13 @@ from app.schemas.context import (
 from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)
+
+_INVALID_USER_ID_MSG = "Invalid user ID"
+
+
+def _validate_user_id(current_user: str) -> None:
+    if ".." in current_user or current_user.startswith("/"):
+        raise GraphQLError(_INVALID_USER_ID_MSG)
 
 
 async def _safe_memory_call[T](
@@ -122,6 +129,14 @@ class Mutation:
             )
         except GraphQLError:
             raise
+        # ChatModelUnavailableError 也可能不经 _safe_memory_call
+        # 直接由 workflow._call_llm_json 抛出，此处兜底。
+        except ChatModelUnavailableError as e:
+            msg = "AI 模型未就绪"
+            raise GraphQLError(
+                msg,
+                extensions={"code": "CHAT_MODEL_UNAVAILABLE"},
+            ) from e
         except Exception as e:
             logger.exception("processQuery failed")
             raise InternalServerError from e
@@ -170,7 +185,6 @@ class Mutation:
             filename="strategies.toml",
             default_factory=dict,
         )
-        await strategy_store.read()  # 确保文件存在
         current_strategy = await strategy_store.read()
         weights = current_strategy.get("reminder_weights", {})
         delta = 0.1 if safe_action == "accept" else -0.1
@@ -211,6 +225,7 @@ class Mutation:
     @strawberry.mutation
     async def export_data(self, current_user: str) -> ExportDataResult:
         """导出当前用户全量文本数据."""
+        _validate_user_id(current_user)
         u_dir = user_data_dir(current_user)
         files: dict[str, str] = {}
         if u_dir.exists():
@@ -227,7 +242,9 @@ class Mutation:
     @strawberry.mutation
     async def delete_all_data(self, current_user: str) -> bool:
         """删除当前用户全量数据."""
+        _validate_user_id(current_user)
         u_dir = user_data_dir(current_user)
-        if u_dir.exists():
-            shutil.rmtree(u_dir)
+        if not u_dir.exists():
+            return False
+        shutil.rmtree(u_dir)
         return True

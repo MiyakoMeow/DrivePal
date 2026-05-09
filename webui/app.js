@@ -160,7 +160,11 @@ async function savePreset() {
             { name, context }
         );
         alert('预设已保存');
-loadPresets();
+        loadPresets();
+    } catch (e) {
+        alert('保存失败: ' + e.message);
+    }
+}
 
 let _experimentChart = null;
 
@@ -196,10 +200,6 @@ async function loadExperimentData() {
         });
     } catch (e) {
         console.error('Failed to load experiment data:', e);
-    }
-}
-    } catch (e) {
-        alert('保存失败: ' + e.message);
     }
 }
 

@@ -100,7 +100,6 @@ def init_user_dir(user_id: str) -> Path:
     for fname in jsonl_files:
         fp = u_dir / fname
         if not fp.exists():
-            fp.parent.mkdir(parents=True, exist_ok=True)
             fp.write_text("", encoding="utf-8")
 
     dict_files = {
