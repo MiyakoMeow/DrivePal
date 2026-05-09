@@ -259,8 +259,6 @@ def _gather_neighbor_indices(
             neighbor_indices.append(pos)
         pos -= 1
     neighbor_indices.sort()
-    if meta_idx not in neighbor_indices:
-        neighbor_indices.insert(0, meta_idx)
     return neighbor_indices
 
 
