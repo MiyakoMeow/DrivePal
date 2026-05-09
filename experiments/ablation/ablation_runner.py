@@ -12,7 +12,7 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 
-from .types import TestScenario, Variant, VariantResult
+from .types import Scenario, Variant, VariantResult
 
 ABLATION_DISABLE_RULES = "ABLATION_DISABLE_RULES"
 ABLATION_DISABLE_FEEDBACK = "ABLATION_DISABLE_FEEDBACK"
@@ -39,9 +39,7 @@ class AblationRunner:
                 os.environ.pop(k, None)
         self._original_env.clear()
 
-    async def run_variant(
-        self, scenario: TestScenario, variant: Variant
-    ) -> VariantResult:
+    async def run_variant(self, scenario: Scenario, variant: Variant) -> VariantResult:
         t0 = time.perf_counter()
 
         if variant == Variant.NO_RULES:
@@ -59,7 +57,7 @@ class AblationRunner:
             self._restore_env()
 
     async def _run_agent_workflow(
-        self, scenario: TestScenario, variant: Variant, t0: float
+        self, scenario: Scenario, variant: Variant, t0: float
     ) -> VariantResult:
         mm = get_memory_module()
         workflow = AgentWorkflow(
@@ -91,7 +89,7 @@ class AblationRunner:
             else [],
         )
 
-    async def _run_single_llm(self, scenario: TestScenario, t0: float) -> VariantResult:
+    async def _run_single_llm(self, scenario: Scenario, t0: float) -> VariantResult:
         chat = get_chat_model()
         now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
         prompt = SINGLE_LLM_SYSTEM_PROMPT.format(current_datetime=now)
@@ -120,7 +118,7 @@ class AblationRunner:
         )
 
     async def run_batch(
-        self, scenarios: list[TestScenario], variants: list[Variant]
+        self, scenarios: list[Scenario], variants: list[Variant]
     ) -> list[VariantResult]:
         results: list[VariantResult] = []
         for scenario in scenarios:

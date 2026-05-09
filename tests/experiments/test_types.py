@@ -3,7 +3,7 @@
 from experiments.ablation.types import (
     GroupResult,
     JudgeScores,
-    TestScenario,
+    Scenario,
     Variant,
     VariantResult,
 )
@@ -18,7 +18,7 @@ def test_variant_enum_values():
 
 
 def test_test_scenario_creation():
-    s = TestScenario(
+    s = Scenario(
         id="test-1",
         driving_context={"scenario": "highway"},
         user_query="测试",

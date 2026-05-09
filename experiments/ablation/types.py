@@ -15,7 +15,7 @@ class Variant(StrEnum):
 
 
 @dataclass
-class TestScenario:
+class Scenario:
     """测试场景——包含驾驶上下文、用户查询、期望决策."""
 
     id: str

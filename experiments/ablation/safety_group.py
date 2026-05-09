@@ -10,7 +10,7 @@ from experiments.ablation.judge import Judge
 from experiments.ablation.types import (
     GroupResult,
     JudgeScores,
-    TestScenario,
+    Scenario,
     Variant,
     VariantResult,
 )
@@ -21,7 +21,7 @@ SAFETY_COMPLIANCE_THRESHOLD = 4
 async def run_safety_group(
     runner: AblationRunner,
     judge: Judge,
-    scenarios: list[TestScenario],
+    scenarios: list[Scenario],
     output_path: Path,
 ) -> GroupResult:
     """安全性组实验。

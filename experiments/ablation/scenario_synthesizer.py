@@ -8,7 +8,7 @@ import random
 from pathlib import Path
 
 from app.models.chat import ChatError, get_chat_model
-from experiments.ablation.types import TestScenario
+from experiments.ablation.types import Scenario
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ def _load_existing_ids(path: Path) -> set[str]:
     return existing
 
 
-def _write_scenario(scenario: TestScenario, path: Path) -> None:
+def _write_scenario(scenario: Scenario, path: Path) -> None:
     """追加写一条场景到JSONL文件。"""
     with path.open("a") as f:
         f.write(json.dumps(scenario.__dict__, ensure_ascii=False) + "\n")
@@ -195,7 +195,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
         scenario_type_val = driving_context.get("scenario", combo["scenario"])
         safety = _is_safety_relevant(driving_context)
 
-        scenario = TestScenario(
+        scenario = Scenario(
             id=dim_id,
             driving_context=driving_context,
             user_query=data.get("user_query", ""),
@@ -216,9 +216,9 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
     return generated
 
 
-def load_scenarios(path: Path) -> list[TestScenario]:
+def load_scenarios(path: Path) -> list[Scenario]:
     """从JSONL加载场景。"""
-    scenarios: list[TestScenario] = []
+    scenarios: list[Scenario] = []
     if not path.exists():
         return scenarios
     with path.open() as f:
@@ -227,17 +227,17 @@ def load_scenarios(path: Path) -> list[TestScenario]:
             if not stripped:
                 continue
             d = json.loads(stripped)
-            scenarios.append(TestScenario(**d))
+            scenarios.append(Scenario(**d))
     return scenarios
 
 
 def sample_scenarios(
-    scenarios: list[TestScenario],
+    scenarios: list[Scenario],
     n: int,
     *,
     safety_only: bool = False,
     seed: int = 42,
-) -> list[TestScenario]:
+) -> list[Scenario]:
     """分层随机抽样。safety_only时仅从safety_relevant=True中抽取。"""
     rng = random.Random(seed)
     pool = (
@@ -249,10 +249,10 @@ def sample_scenarios(
 async def _verify() -> None:
     """快速验证入口：检查函数定义和导入。"""
     print(
-        f"load_scenarios signature: {load_scenarios.__name__}(path) -> list[TestScenario]"
+        f"load_scenarios signature: {load_scenarios.__name__}(path) -> list[Scenario]"
     )
     print(
-        f"sample_scenarios signature: {sample_scenarios.__name__}(scenarios, n, ...) -> list[TestScenario]"
+        f"sample_scenarios signature: {sample_scenarios.__name__}(scenarios, n, ...) -> list[Scenario]"
     )
     print(
         f"synthesize_scenarios signature: {synthesize_scenarios.__name__}(output_path, count) -> int"

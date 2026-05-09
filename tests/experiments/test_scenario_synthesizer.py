@@ -8,7 +8,7 @@ from experiments.ablation.scenario_synthesizer import (
     load_scenarios,
     sample_scenarios,
 )
-from experiments.ablation.types import TestScenario
+from experiments.ablation.types import Scenario
 
 
 def test_load_scenarios_empty():
@@ -41,9 +41,9 @@ def test_load_scenarios():
 
 def test_sample_scenarios_safety_only():
     scenarios = [
-        TestScenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
-        TestScenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
-        TestScenario("s3", {}, "", {}, "", safety_relevant=True, scenario_type=""),
+        Scenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
+        Scenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
+        Scenario("s3", {}, "", {}, "", safety_relevant=True, scenario_type=""),
     ]
     sampled = sample_scenarios(scenarios, 2, safety_only=True, seed=42)
     assert len(sampled) == 2
@@ -52,8 +52,8 @@ def test_sample_scenarios_safety_only():
 
 def test_sample_scenarios_all():
     scenarios = [
-        TestScenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
-        TestScenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
+        Scenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
+        Scenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
     ]
     sampled = sample_scenarios(scenarios, 2, safety_only=False)
     assert len(sampled) == 2

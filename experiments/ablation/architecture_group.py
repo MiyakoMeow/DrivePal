@@ -10,7 +10,7 @@ from experiments.ablation.judge import Judge
 from experiments.ablation.types import (
     GroupResult,
     JudgeScores,
-    TestScenario,
+    Scenario,
     Variant,
     VariantResult,
 )
@@ -19,7 +19,7 @@ from experiments.ablation.types import (
 async def run_architecture_group(
     runner: AblationRunner,
     judge: Judge,
-    scenarios: list[TestScenario],
+    scenarios: list[Scenario],
     output_path: Path,
 ) -> GroupResult:
     """架构组实验。

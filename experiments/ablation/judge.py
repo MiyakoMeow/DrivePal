@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from app.models.chat import ChatModel, get_chat_model, get_judge_model
 from app.models.settings import NoJudgeModelConfiguredError
-from experiments.ablation.types import JudgeScores, TestScenario, VariantResult
+from experiments.ablation.types import JudgeScores, Scenario, VariantResult
 
 JUDGE_SYSTEM_PROMPT = """你是一个车载AI决策质量评估专家。请对以下车载助手的决策进行评分。
 
@@ -30,7 +30,7 @@ class Judge:
 
     async def score_variant(
         self,
-        scenario: TestScenario,
+        scenario: Scenario,
         result: VariantResult,
     ) -> JudgeScores:
         """评分单个变体输出。"""
@@ -67,7 +67,7 @@ class Judge:
 
     async def score_batch(
         self,
-        scenario: TestScenario,
+        scenario: Scenario,
         results: list[VariantResult],
     ) -> list[JudgeScores]:
         """盲评多个变体——shuffle 顺序后逐个评分。每场景评 3 次取中位数。"""
@@ -81,11 +81,45 @@ class Judge:
                 all_scores.append(score)
         return _median_scores(all_scores)
 
-    async def score_stages(
-        self, scenario: TestScenario, result: VariantResult
-    ) -> dict[str, dict]:
+    async def score_stages(self, result: VariantResult) -> dict[str, dict]:
         """架构组用：对 Context/Task/Strategy 中间阶段独立评分。返回 {stage: {score, explanation}}。"""
-        raise NotImplementedError
+        stages = result.stages
+        stage_scores: dict[str, dict] = {}
+        stage_configs = [
+            (
+                "context",
+                "请评估以下驾驶上下文推断的质量（1-5分）。关注：时间/位置/交通/偏好/状态的准确性和完整性。输出JSON: {score: int, explanation: str}",
+            ),
+            (
+                "task",
+                "请评估以下事件归因的质量（1-5分）。关注：事件类型是否正确、置信度是否合理。输出JSON: {score: int, explanation: str}",
+            ),
+            (
+                "decision",
+                "请评估以下决策的质量（1-5分）。关注：should_remind/timing/channel/content 是否合理（忽略规则后处理）。输出JSON: {score: int, explanation: str}",
+            ),
+        ]
+        for stage_name, criteria in stage_configs:
+            stage_data = stages.get(stage_name, {})
+            if not stage_data:
+                stage_scores[stage_name] = {
+                    "score": 0,
+                    "explanation": f"无{stage_name}阶段数据",
+                }
+                continue
+            prompt = f"{criteria}\n\n阶段输出:\n{json.dumps(stage_data, ensure_ascii=False, indent=2)}"
+            try:
+                response = await self.model.generate(
+                    prompt=prompt, json_mode=True, temperature=0.0
+                )
+                scores = json.loads(response)
+                stage_scores[stage_name] = {
+                    "score": int(scores.get("score", 3)),
+                    "explanation": scores.get("explanation", ""),
+                }
+            except json.JSONDecodeError, TypeError, ValueError:
+                stage_scores[stage_name] = {"score": 3, "explanation": "评分失败"}
+        return stage_scores
 
 
 def _get_judge_model() -> ChatModel:
