@@ -112,7 +112,9 @@ class TestPollingTriggerLocation:
         triggered = await pm.poll(
             {
                 "scenario": "parked",
-                "spatial": {"current_location": {"latitude": 30.00, "longitude": 120.00}},
+                "spatial": {
+                    "current_location": {"latitude": 30.00, "longitude": 120.00}
+                },
             }
         )
         assert len(triggered) == 1
@@ -164,7 +166,9 @@ class TestPollingTriggerContext:
         triggered = await pm.poll({"scenario": "parked"})
         assert len(triggered) == 1
 
-    async def test_context_trigger_same_scenario_not_triggered(self, tmp_user_dir, sample_content):
+    async def test_context_trigger_same_scenario_not_triggered(
+        self, tmp_user_dir, sample_content
+    ):
         """Given context trigger, When scenario 未变, Then 不触发."""
         pm = PendingReminderManager(tmp_user_dir)
         await pm.add(

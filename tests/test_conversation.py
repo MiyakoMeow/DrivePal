@@ -10,7 +10,9 @@ class TestConversationManager:
         """Given 新会话, When 追加 turn, Then 轮次数正确."""
         cm = ConversationManager()
         sid = cm.create("user1")
-        cm.add_turn(sid, "提醒我到公司", {"should_remind": True, "type": "travel"}, "已设置提醒")
+        cm.add_turn(
+            sid, "提醒我到公司", {"should_remind": True, "type": "travel"}, "已设置提醒"
+        )
         history = cm.get_history(sid)
         assert len(history) == 1
         assert history[0].query == "提醒我到公司"

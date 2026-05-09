@@ -5,10 +5,14 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from app.agents.outputs import MultiFormatContent
 from app.storage.toml_store import TOMLStore
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from app.agents.outputs import MultiFormatContent
 
 
 @dataclass
@@ -35,7 +39,7 @@ class PendingReminder:
         event_id: str,
         trigger_text: str = "",
         ttl_seconds: int = 3600,
-    ) -> "PendingReminder":
+    ) -> PendingReminder:
         return cls(
             id=f"pr_{uuid.uuid4().hex[:12]}",
             event_id=event_id,
@@ -84,7 +88,7 @@ class PendingReminderManager:
                         target_dt = target_dt.replace(tzinfo=UTC)
                     delta = (target_dt - datetime.now(UTC)).total_seconds()
                     ttl_seconds = int(max(delta, 0)) + 1800
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     ttl_seconds = 3600
             else:
                 ttl_seconds = 3600
@@ -140,18 +144,22 @@ class PendingReminderManager:
                 if (now - created).total_seconds() > (r.get("ttl_seconds") or 3600):
                     r["status"] = "cancelled"
                     continue
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
 
             # 触发评估
             trigger_type = r.get("trigger_type", "")
-            if trigger_type == "location" and self._check_location(r, driving_context):
-                r["status"] = "triggered"
-                triggered.append(r)
-            elif trigger_type == "time" and self._check_time(r):
-                r["status"] = "triggered"
-                triggered.append(r)
-            elif trigger_type == "context" and self._check_context(r, driving_context):
+            if (
+                (
+                    trigger_type == "location"
+                    and self._check_location(r, driving_context)
+                )
+                or (trigger_type == "time" and self._check_time(r))
+                or (
+                    trigger_type == "context"
+                    and self._check_context(r, driving_context)
+                )
+            ):
                 r["status"] = "triggered"
                 triggered.append(r)
 
@@ -166,7 +174,10 @@ class PendingReminderManager:
         phi1, phi2 = math.radians(lat1), math.radians(lat2)
         dphi = math.radians(lat2 - lat1)
         dlam = math.radians(lon2 - lon1)
-        a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+        a = (
+            math.sin(dphi / 2) ** 2
+            + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+        )
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     @staticmethod
@@ -198,7 +209,7 @@ class PendingReminderManager:
             return False
         try:
             target_time = datetime.fromisoformat(target_time_str)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return False
         if target_time.tzinfo is None:
             target_time = target_time.replace(tzinfo=UTC)
@@ -206,7 +217,7 @@ class PendingReminderManager:
 
     @staticmethod
     def _check_context(reminder: dict, ctx: dict) -> bool:
-        """context 触发：当前 scenario != 入队时的 scenario（场景切换）。"""
+        """Context 触发：当前 scenario != 入队时的 scenario（场景切换）。"""
         target = reminder.get("trigger_target", {})
         prev = target.get("previous_scenario", "")
         current = ctx.get("scenario", "")
@@ -241,9 +252,6 @@ def parse_time(s: str) -> str | None:
     hour = int(m.group(2))
     if am_pm == "上午" and hour == 12:
         hour = 0
-    elif am_pm == "下午" and hour != 12:
+    elif (am_pm == "下午" and hour != 12) or (am_pm is None and hour < 8):
         hour += 12
-    elif am_pm is None:
-        if hour < 8:
-            hour += 12
     return f"{hour:02d}:00:00"

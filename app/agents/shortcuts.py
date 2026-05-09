@@ -20,7 +20,7 @@ class ShortcutResolver:
             with open(_SHORTCUTS_PATH, "rb") as f:
                 data = tomllib.load(f)
             self._shortcuts = data.get("shortcuts", [])
-        except (OSError, tomllib.TOMLDecodeError):
+        except OSError, tomllib.TOMLDecodeError:
             self._shortcuts = []
 
     def resolve(self, query: str) -> dict | None:
@@ -28,11 +28,7 @@ class ShortcutResolver:
         candidates = []
         for sc in self._shortcuts:
             for pat in sc.get("patterns", []):
-                if query == pat:
-                    candidates.append(
-                        (len(pat), sc.get("priority", 0), sc, query[len(pat) :].strip())
-                    )
-                elif query.startswith(pat):
+                if query == pat or query.startswith(pat):
                     candidates.append(
                         (len(pat), sc.get("priority", 0), sc, query[len(pat) :].strip())
                     )
@@ -66,7 +62,11 @@ class ShortcutResolver:
         if sc_type == "action":
             action = shortcut.get("action", "")
             if action == "cancel_last":
-                return {"should_remind": False, "timing": "skip", "action": "cancel_last"}
+                return {
+                    "should_remind": False,
+                    "timing": "skip",
+                    "action": "cancel_last",
+                }
             if action == "snooze":
                 secs = parse_duration(params) if params else 300
                 return {

@@ -9,6 +9,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from app.agents.conversation import _conversation_manager
+from app.agents.outputs import OutputRouter
+from app.agents.pending import PendingReminderManager
 from app.agents.probabilistic import (
     OVERLOADED_WARNING_THRESHOLD,
     compute_interrupt_risk,
@@ -16,9 +19,6 @@ from app.agents.probabilistic import (
     is_enabled,
 )
 from app.agents.prompts import SYSTEM_PROMPTS
-from app.agents.conversation import _conversation_manager
-from app.agents.outputs import OutputRouter
-from app.agents.pending import PendingReminderManager
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
 from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
@@ -97,17 +97,29 @@ def _map_pending_trigger(
     """从 decision 映射 trigger_type、trigger_target、trigger_text."""
     timing = decision.get("timing", "")
     if timing == "location":
-        return "location", _extract_location_target(decision, driving_ctx), "到达目的地时"
+        return (
+            "location",
+            _extract_location_target(decision, driving_ctx),
+            "到达目的地时",
+        )
     if timing == "location_time":
-        return "location_time", {
-            "location": _extract_location_target(decision, driving_ctx),
-            "time": decision.get("target_time", ""),
-        }, "到达目的地或到时间时"
+        return (
+            "location_time",
+            {
+                "location": _extract_location_target(decision, driving_ctx),
+                "time": decision.get("target_time", ""),
+            },
+            "到达目的地或到时间时",
+        )
     target_time = decision.get("target_time", "")
     if target_time:
         return "time", {"time": target_time}, f"{target_time} 时"
     if driving_ctx:
-        return "context", {"previous_scenario": driving_ctx.get("scenario", "")}, "驾驶状态恢复时"
+        return (
+            "context",
+            {"previous_scenario": driving_ctx.get("scenario", "")},
+            "驾驶状态恢复时",
+        )
     return "time", {"time": ""}, ""
 
 
@@ -453,10 +465,7 @@ class AgentWorkflow:
                 )
                 pending_ids = [pr.id]
 
-            result = (
-                f"提醒已延后：{decision.get('reason', '')}。"
-                f"将在条件满足时提醒"
-            )
+            result = f"提醒已延后：{decision.get('reason', '')}。将在条件满足时提醒"
             if stages is not None:
                 stages.execution = {
                     "content": None,
@@ -559,7 +568,10 @@ class AgentWorkflow:
             event_id = state.get("event_id")
             if session_id:
                 self._conversations.add_turn(
-                    session_id, user_input, shortcut_decision, result,
+                    session_id,
+                    user_input,
+                    shortcut_decision,
+                    result,
                 )
             return result, event_id, stages
 
@@ -632,7 +644,10 @@ class AgentWorkflow:
             events.append({"event": "done", "data": done_data})
             if session_id:
                 self._conversations.add_turn(
-                    session_id, user_input, shortcut_decision, state.get("result") or "",
+                    session_id,
+                    user_input,
+                    shortcut_decision,
+                    state.get("result") or "",
                 )
             return events
 
@@ -645,14 +660,21 @@ class AgentWorkflow:
         events.append({"event": "stage_start", "data": {"stage": "task"}})
         updates = await self._task_node(state)
         state.update(updates)
-        events.append({"event": "task_done", "data": {"tasks": state.get("task") or {}}})
+        events.append(
+            {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
+        )
 
         # Stage 3: Strategy
         events.append({"event": "stage_start", "data": {"stage": "strategy"}})
         updates = await self._strategy_node(state)
         state.update(updates)
         decision = state.get("decision") or {}
-        events.append({"event": "decision", "data": {"should_remind": decision.get("should_remind")}})
+        events.append(
+            {
+                "event": "decision",
+                "data": {"should_remind": decision.get("should_remind")},
+            }
+        )
 
         # Stage 4: Execution
         events.append({"event": "stage_start", "data": {"stage": "execution"}})

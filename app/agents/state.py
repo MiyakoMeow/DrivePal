@@ -14,7 +14,7 @@ class AgentState(TypedDict):
     result: str | None
     event_id: str | None
     driving_context: dict | None
-    stages: WorkflowStages | None  # noqa: F821
+    stages: WorkflowStages | None
     output_content: NotRequired[dict | None]
     session_id: NotRequired[str | None]
     pending_reminder_id: NotRequired[str | None]

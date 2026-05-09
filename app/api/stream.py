@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -10,7 +11,9 @@ from app.agents.workflow import AgentWorkflow
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
-from app.schemas.query import ProcessQueryRequest
+
+if TYPE_CHECKING:
+    from app.schemas.query import ProcessQueryRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

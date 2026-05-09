@@ -150,7 +150,9 @@ class TestOutputRouterChannel:
         result = router.route(
             decision,
             scenario="highway",
-            rules_result={"allowed_channels": [OutputChannel.AUDIO, OutputChannel.VISUAL]},
+            rules_result={
+                "allowed_channels": [OutputChannel.AUDIO, OutputChannel.VISUAL]
+            },
         )
         assert result.channel == OutputChannel.AUDIO
 

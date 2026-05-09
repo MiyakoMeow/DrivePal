@@ -314,8 +314,8 @@ class Mutation:
                 status=r.get("status", ""),
                 created_at=r.get("created_at", ""),
             )
-                for r in pending
-            ]
+            for r in pending
+        ]
 
     # --- 多轮对话（模块 4.3） ---
 

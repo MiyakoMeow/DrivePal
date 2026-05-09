@@ -70,7 +70,7 @@ class ConversationManager:
             if datetime.now(UTC) - last > timedelta(minutes=self._ttl):
                 del self._sessions[session_id]
                 return []
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
         return list(session["turns"])
 
@@ -87,7 +87,7 @@ class ConversationManager:
                     last = last.replace(tzinfo=UTC)
                 if now - last > timedelta(minutes=self._ttl):
                     expired.append(sid)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 expired.append(sid)
         for sid in expired:
             del self._sessions[sid]
