@@ -268,6 +268,8 @@ def parse_time(s: str) -> str | None:
     hour = int(m.group(2))
     if am_pm == "上午" and hour == noon:
         hour = 0
-    elif (am_pm == "下午" and hour != noon) or (am_pm is None and hour < afternoon_threshold):
+    elif (am_pm == "下午" and hour != noon) or (
+        am_pm is None and hour < afternoon_threshold
+    ):
         hour += noon
     return f"{hour:02d}:00:00"
