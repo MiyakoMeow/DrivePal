@@ -177,6 +177,8 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
     combos = _build_dimension_combinations()
     rng.shuffle(combos)
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     chat_model = get_chat_model(temperature=0.7)
     batch_size = 10
     generated = 0
@@ -221,7 +223,6 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
         generated += 1
 
         if generated % batch_size == 0:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
             logger.info("synthesized %d/%d scenarios", generated, count)
 
     return generated

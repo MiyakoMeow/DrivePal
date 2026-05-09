@@ -1,7 +1,7 @@
 """测试指标计算."""
 
 from experiments.ablation.metrics import cohens_d, compute_comparison
-from experiments.ablation.types import JudgeScores, Variant, VariantResult
+from experiments.ablation.types import JudgeScores, Variant
 
 
 def test_cohens_d_large_effect():
@@ -31,13 +31,7 @@ def test_compute_comparison():
         JudgeScores("1", Variant.NO_RULES, 3, 3, 3, ["channel_violation"], ""),
         JudgeScores("2", Variant.NO_RULES, 2, 2, 2, ["channel_violation"], ""),
     ]
-    results = [
-        VariantResult("1", Variant.FULL, {}, "", None, {}, 100.0),
-        VariantResult("2", Variant.FULL, {}, "", None, {}, 120.0),
-        VariantResult("1", Variant.NO_RULES, {}, "", None, {}, 80.0),
-        VariantResult("2", Variant.NO_RULES, {}, "", None, {}, 90.0),
-    ]
-    comparison = compute_comparison(scores, results)
+    comparison = compute_comparison(scores)
     assert "no-rules" in comparison
     assert comparison["no-rules"]["mean_score"] == 2.5
     assert comparison["no-rules"]["mean_diff"] == -2.0  # 2.5 - 4.5

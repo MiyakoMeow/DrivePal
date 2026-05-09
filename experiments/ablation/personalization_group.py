@@ -258,11 +258,13 @@ def _compute_overfitting_gap(
         return 0.0
 
     # weight_history[i] 对应第 i+1 轮，results 列表按 run_variant 调用顺序排列
-    # 每轮产生 2 个结果（FULL 在前，NO_FEEDBACK 在后），故 full_rounds[i] 对应 weight_history[i]
+    # 每轮产生 2 个结果（FULL 在前，NO_FEEDBACK 在后）
+    # 故 full_rounds[i] ≡ 第 i+1 轮 FULL，no_fb_rounds[i] ≡ 第 i+1 轮 NO_FEEDBACK
+    # 此切片依赖上述执行顺序保证；若 run_personalization_group 调整顺序，此处需同步修改
+    # mixed 阶段轮次连续（rounds 15-19），否则 mixed_rounds 切片会错误
     full_rounds = [r for r in results if r.variant == Variant.FULL]
     no_fb_rounds = [r for r in results if r.variant == Variant.NO_FEEDBACK]
 
-    # mixed_rounds 是 weight_history 中 mixed 阶段的轮次下标，直接切片取对应变体结果
     full_mixed = full_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]
     no_fb_mixed = no_fb_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]
 

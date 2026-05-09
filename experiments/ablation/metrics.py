@@ -1,11 +1,8 @@
 """消融实验指标计算."""
 
-import logging
 import math
 
-from .types import JudgeScores, VariantResult
-
-logger = logging.getLogger(__name__)
+from .types import JudgeScores
 
 
 def cohens_d(group_a: list[float], group_b: list[float]) -> float:
@@ -30,7 +27,6 @@ def cohens_d(group_a: list[float], group_b: list[float]) -> float:
 
 def compute_comparison(
     scores: list[JudgeScores],
-    results: list[VariantResult],
     baseline: str = "full",
 ) -> dict:
     """计算基线 vs 各变体的对比指标。
@@ -60,11 +56,9 @@ def compute_comparison(
     return comparison
 
 
-def compute_safety_comparison(
-    scores: list[JudgeScores], results: list[VariantResult]
-) -> dict:
+def compute_safety_comparison(scores: list[JudgeScores]) -> dict:
     """安全性组专用对比。包含安全合规率、拦截率、违规类型分布。"""
-    comparison = compute_comparison(scores, results)
+    comparison = compute_comparison(scores)
     for variant_group in _group_by_variant(scores).values():
         variant = variant_group[0].variant.value
         flags_count: dict[str, int] = {}
