@@ -93,7 +93,7 @@ def _format_time_for_display(time_str: str) -> str:
 
 
 def _extract_location_target(_decision: dict, driving_ctx: dict | None) -> dict:
-    """从 driving_context 中提取目标位置经纬度。_decision 保留以与 _map_pending_trigger 签名一致。"""
+    """从 driving_context 中提取目标位置经纬度。_decision 参数预留，当前未使用。"""
     if driving_ctx:
         spatial = driving_ctx.get("spatial", {}) or {}
         dest = spatial.get("destination", {}) or {}
