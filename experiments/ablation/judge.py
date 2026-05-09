@@ -32,7 +32,6 @@ class Judge:
     def __init__(self, model: ChatModel | None = None) -> None:
         """初始化 Judge，可选注入外部 ChatModel 否则自动获取 judge 模型。"""
         self.model = model or _get_judge_model()
-        self.model.temperature = 0.0
 
     async def score_variant(
         self,
