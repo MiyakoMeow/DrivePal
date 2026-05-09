@@ -160,18 +160,24 @@ class Mutation:
         if actual_type is None:
             raise GraphQLEventNotFoundError(feedback_input.event_id)
 
+        current_user = feedback_input.current_user
+
         feedback = FeedbackData(
             action=safe_action,
             type=actual_type,
             modified_content=feedback_input.modified_content,
         )
         await _safe_memory_call(
-            mm.update_feedback(feedback_input.event_id, feedback, mode=mode),
+            mm.update_feedback(
+                feedback_input.event_id,
+                feedback,
+                mode=mode,
+                user_id=current_user,
+            ),
             "submitFeedback(update_feedback)",
         )
 
-        # 更新 reminder_weights（反馈学习）
-        current_user = feedback_input.current_user
+        # 权重更新：读→改→写 strategies.toml
         user_dir = user_data_dir(current_user)
         strategy_store = TOMLStore(
             user_dir=user_dir,

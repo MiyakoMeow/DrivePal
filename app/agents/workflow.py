@@ -135,7 +135,10 @@ class AgentWorkflow:
     async def _safe_memory_history(self) -> list[dict]:
         """获取最近历史记录，失败返回空列表。"""
         try:
-            history = await self.memory_module.get_history(mode=self._memory_mode)
+            history = await self.memory_module.get_history(
+                mode=self._memory_mode,
+                user_id=self.current_user,
+            )
             return [e.model_dump() for e in history]
         except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
             logger.warning("Memory get_history failed: %s", e)
@@ -356,6 +359,7 @@ class AgentWorkflow:
             original_query,
             content,
             mode=self._memory_mode,
+            user_id=self.current_user,
         )
         event_id = interaction_result.event_id
         if not event_id:

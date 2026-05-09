@@ -73,16 +73,24 @@ async def test_feedback_history_appended(tmp_path: Path) -> None:
     注意：此测试写入2个事件，会触发 DAILY_SUMMARY_THRESHOLD=2，
     从而调用 LLM 生成摘要，因此需要 @pytest.mark.llm 标记。
     """
+    from app.storage.jsonl_store import JSONLinesStore
+
     memory = MemoryModule(tmp_path)
     eid1 = await memory.write(MemoryEvent(content="会议A", type="meeting"))
     eid2 = await memory.write(MemoryEvent(content="会议B", type="meeting"))
-    await memory.update_feedback(eid1, FeedbackData(action="accept", type="meeting"))
-    await memory.update_feedback(eid2, FeedbackData(action="ignore", type="meeting"))
-    feedback = await TOMLStore(
-        user_dir=tmp_path,
-        filename="feedback.toml",
-        default_factory=list,
-    ).read()
+    await memory.update_feedback(
+        eid1,
+        FeedbackData(action="accept", type="meeting"),
+    )
+    await memory.update_feedback(
+        eid2,
+        FeedbackData(action="ignore", type="meeting"),
+    )
+    # update_feedback 写入 JSONLinesStore → feedback.jsonl
+    feedback = await JSONLinesStore(
+        user_dir=tmp_path / "users" / "default",
+        filename="feedback.jsonl",
+    ).read_all()
     assert len(feedback) == FEEDBACK_HISTORY_COUNT
 
 
