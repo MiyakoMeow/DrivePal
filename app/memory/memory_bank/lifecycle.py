@@ -168,29 +168,40 @@ class MemoryLifecycle:
         return str(fid) if fid is not None else ""
 
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
-        """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
+        """批量写入，返回 faiss_id 列表（每事件最后一条记录的 ID）。不触发摘要/遗忘。
+
+        多说话人事件可能产生多条 pair_text，仅返回最后一条的 faiss_id（对齐 write() 行为）。
+        """
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
-        pair_texts: list[str] = []
-        pair_metas: list[dict] = []
+        all_pair_texts: list[str] = []
+        all_pair_metas: list[dict] = []
+        event_pair_counts: list[int] = []  # 每条 event 对应多少 pair_text
+
         for event in events:
             pts, pms = self._build_pair_texts(event, date_key)
-            pair_texts.extend(pts)
-            pair_metas.extend(pms)
+            all_pair_texts.extend(pts)
+            all_pair_metas.extend(pms)
+            event_pair_counts.append(len(pts))
 
         # 一次批量编码
         t0 = time.perf_counter()
-        embeddings = await self._embedding_client.encode_batch(pair_texts)
+        embeddings = await self._embedding_client.encode_batch(all_pair_texts)
         if self._metrics:
             self._metrics.embedding_latency_ms.append((time.perf_counter() - t0) * 1000)
 
-        # 逐条 add_vector
+        # 逐条 add_vector，按 event 分组返回最后一条 fid
         fids: list[str] = []
-        for text_item, emb, meta in zip(
-            pair_texts, embeddings, pair_metas, strict=True
-        ):
-            fid = await self._index.add_vector(text_item, emb, ts, meta)
-            fids.append(str(fid))
+        idx = 0
+        for count in event_pair_counts:
+            last_fid = ""
+            for _ in range(count):
+                fid = await self._index.add_vector(
+                    all_pair_texts[idx], embeddings[idx], ts, all_pair_metas[idx]
+                )
+                last_fid = str(fid)
+                idx += 1
+            fids.append(last_fid)
 
         if self._metrics:
             self._metrics.write_count += len(events)
@@ -331,7 +342,8 @@ class MemoryLifecycle:
             )
 
         # 摄入遗忘
-        await self._forget_at_ingestion()
+        if self._config.enable_forgetting:
+            await self._forget_at_ingestion()
 
         # 持久化
         await self._index.save()
