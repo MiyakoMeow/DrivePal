@@ -173,10 +173,10 @@ async def test_update_feedback_accept_increases_strength(store):
 async def test_update_feedback_ignore_reduces_strength(store):
     """ignore 反馈降低记忆强度。"""
     ev = MemoryEvent(id="test-2", content="Bob wants AC at 22", speaker="Bob")
-    await store.write(ev)
+    fid = await store.write(ev)
     await store.update_feedback(
-        "0",
-        FeedbackData(event_id="0", action="ignore"),
+        fid,
+        FeedbackData(event_id=fid, action="ignore"),
     )
     # 反馈记录到 JSONL，不崩溃即可
 

@@ -292,12 +292,16 @@ class MemoryLifecycle:
         except SummarizationEmpty:
             return
         except LLMCallFailed:
+            if self._metrics:
+                self._metrics.background_task_failures += 1
             logger.warning(
                 "finalize: LLM failed for daily summary for date=%s",
                 date_key,
                 exc_info=True,
             )
         except Exception:
+            if self._metrics:
+                self._metrics.background_task_failures += 1
             logger.warning(
                 "finalize: unexpected error for date=%s", date_key, exc_info=True
             )
@@ -327,10 +331,14 @@ class MemoryLifecycle:
             await self._summarizer.get_overall_summary()
             await self._summarizer.get_overall_personality()
         except LLMCallFailed:
+            if self._metrics:
+                self._metrics.background_task_failures += 1
             logger.warning(
                 "finalize: LLM failed for overall summary/personality", exc_info=True
             )
         except Exception:
+            if self._metrics:
+                self._metrics.background_task_failures += 1
             logger.warning(
                 "finalize: unexpected error for overall summary/personality",
                 exc_info=True,

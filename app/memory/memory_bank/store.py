@@ -15,7 +15,6 @@ from app.memory.schemas import (
 )
 from app.storage.jsonl_store import JSONLinesStore
 
-from .bg_tasks import BackgroundTaskRunner
 from .config import MemoryBankConfig, resolve_reference_date
 from .forget import ForgettingCurve
 from .index import FaissIndex
@@ -62,7 +61,6 @@ class MemoryBankStore:
         self._feedback_store: JSONLinesStore | None = None
         self._index = FaissIndex(user_dir, self._config.embedding_dim)
         self._metrics = MemoryBankMetrics()
-        self._bg = BackgroundTaskRunner(self._config)
         self._interaction_map: dict[
             str, list[str]
         ] = {}  # event_faiss_id → [interaction_faiss_id, ...]
@@ -321,5 +319,3 @@ class MemoryBankStore:
                 await self._index.save()
             except Exception:
                 logger.warning("Fallback save also failed during close", exc_info=True)
-        finally:
-            await self._bg.shutdown()
