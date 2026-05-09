@@ -26,7 +26,8 @@ def _p90(values: list[float] | deque) -> float:
 @dataclass
 class MemoryBankMetrics:
     search_count: int = 0
-    search_empty_count: int = 0
+    search_empty_index_count: int = 0  # 索引为空
+    search_empty_count: int = 0  # 结果为空（含过滤后空）
     search_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
     forget_count: int = 0
     forget_removed_count: int = 0
@@ -41,6 +42,7 @@ class MemoryBankMetrics:
                 if self.search_count > 0
                 else 0.0
             ),
+            "search_empty_index_count": self.search_empty_index_count,
             "search_latency_p50_ms": _p50(self.search_latency_ms),
             "search_latency_p90_ms": _p90(self.search_latency_ms),
             "forget_count": self.forget_count,
@@ -52,6 +54,7 @@ class MemoryBankMetrics:
     def reset(self) -> None:
         self.search_count = 0
         self.search_empty_count = 0
+        self.search_empty_index_count = 0
         self.search_latency_ms.clear()
         self.forget_count = 0
         self.forget_removed_count = 0

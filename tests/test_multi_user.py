@@ -33,24 +33,27 @@ async def test_two_users_data_isolated():
             base, embedding_model=_make_embedding_mock(), user_id="bob"
         )
 
-        await s_a.write_interaction("alice's preference: seat 30", "noted")
-        await s_b.write_interaction("bob's preference: AC 22", "noted")
+        try:
+            await s_a.write_interaction("alice's preference: seat 30", "noted")
+            await s_b.write_interaction("bob's preference: AC 22", "noted")
 
-        # Alice 搜自己的数据
-        r_a = await s_a.search("seat")
-        assert len(r_a) >= 1
-        assert any("alice" in r.event.get("content", "").lower() for r in r_a)
+            # Alice 搜自己的数据
+            r_a = await s_a.search("seat")
+            assert len(r_a) >= 1
+            assert any("alice" in r.event.get("content", "").lower() for r in r_a)
 
-        # Bob 搜自己的数据
-        r_b = await s_b.search("AC")
-        assert len(r_b) >= 1
+            # Bob 搜自己的数据
+            r_b = await s_b.search("AC")
+            assert len(r_b) >= 1
 
-        # Alice 不应看到 Bob 的数据
-        r_a_bob = await s_a.search("AC")
-        # 可能为空，也可能只是缺少内容（骨架）
-        for r in r_a_bob:
-            content = r.event.get("content", "")
-            assert "bob" not in content.lower()
+            # Alice 不应看到 Bob 的数据
+            r_a_bob = await s_a.search("AC")
+            for r in r_a_bob:
+                content = r.event.get("content", "")
+                assert "bob" not in content.lower()
+        finally:
+            await s_a.close()
+            await s_b.close()
 
 
 @pytest.mark.asyncio
@@ -61,13 +64,12 @@ async def test_store_close_persists_then_shuts_down():
         await s.write_interaction("test", "ok")
         await s.close()
         # close 不应抛异常，且后台任务已清理
-        assert s._bg._tasks == set()
+        assert s._bg.pending_count == 0
 
 
 @pytest.mark.asyncio
-async def test_same_user_id_reuses_store():
-    """同 user_id 多次 get_store 返回同一实例行为。"""
-    # 验证 MemoryModule 功能——此处直接测 store 层面
+async def test_single_user_store_write_and_close():
+    """单用户 store 写入后正确关闭。"""
     with tempfile.TemporaryDirectory() as tmp:
         s1 = MemoryBankStore(
             Path(tmp), embedding_model=_make_embedding_mock(), user_id="same"

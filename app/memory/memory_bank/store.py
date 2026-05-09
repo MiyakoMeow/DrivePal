@@ -100,6 +100,7 @@ class MemoryBankStore:
     # ── 委托方法 ──
 
     async def write(self, event: MemoryEvent) -> str:
+        await self._ensure_loaded()
         return await self._lifecycle.write(event)
 
     async def write_interaction(
@@ -109,6 +110,7 @@ class MemoryBankStore:
         event_type: str = "reminder",
         **kwargs: object,
     ) -> InteractionResult:
+        await self._ensure_loaded()
         return await self._lifecycle.write_interaction(
             query,
             response,
@@ -121,7 +123,7 @@ class MemoryBankStore:
         await self._ensure_loaded()
         self._metrics.search_count += 1
         if self._index.total == 0:
-            self._metrics.search_empty_count += 1
+            self._metrics.search_empty_index_count += 1
             return []
         if self._config.enable_forgetting and await self._lifecycle.purge_forgotten(
             self._index.get_metadata()

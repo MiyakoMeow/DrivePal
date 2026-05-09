@@ -35,6 +35,11 @@ class BackgroundTaskRunner:
         task.add_done_callback(self._on_task_done)
         return task
 
+    @property
+    def pending_count(self) -> int:
+        """未完成任务数。"""
+        return len(self._tasks)
+
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
         self._tasks.discard(task)
         with contextlib.suppress(asyncio.CancelledError):
