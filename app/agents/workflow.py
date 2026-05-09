@@ -472,7 +472,8 @@ class AgentWorkflow:
                 )
                 pending_ids = [pr.id]
 
-            result = f"提醒已延后：{decision.get('reason', '')}。将在条件满足时提醒"
+            reason = decision.get("reason", "")
+            result = f"提醒已延后：{reason}。将在条件满足时提醒" if reason else "提醒已延后，将在条件满足时提醒"
             if stages is not None:
                 stages.execution = {
                     "content": None,

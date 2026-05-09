@@ -116,6 +116,7 @@ class Mutation:
             result, event_id, stages = await workflow.run_with_stages(
                 query_input.query,
                 driving_context,
+                session_id=query_input.session_id,
             )
             return ProcessQueryResult(
                 result=result,

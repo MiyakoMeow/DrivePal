@@ -129,6 +129,7 @@ class ProcessQueryInput:
     memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
     context: DrivingContextInput | None = None
     current_user: str = "default"
+    session_id: str | None = None  # 多轮对话 session，None=单轮模式
 
 
 @strawberry.input

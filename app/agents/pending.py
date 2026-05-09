@@ -144,6 +144,7 @@ class PendingReminderManager:
         """返回满足触发条件的提醒列表，并将其标记为 triggered。"""
         all_rem = await self._read_all()
         triggered = []
+        has_change = False  # TTL 取消或触发均需持久化
         now = datetime.now(UTC)
         for r in all_rem:
             if r.get("status") != "pending":
@@ -156,6 +157,7 @@ class PendingReminderManager:
                     created = created.replace(tzinfo=UTC)
                 if (now - created).total_seconds() > (r.get("ttl_seconds") or 3600):
                     r["status"] = "cancelled"
+                    has_change = True
                     continue
             except ValueError, TypeError:
                 pass
@@ -175,8 +177,9 @@ class PendingReminderManager:
             ):
                 r["status"] = "triggered"
                 triggered.append(r)
+                has_change = True
 
-        if triggered:
+        if has_change:
             await self._write_all(all_rem)
         return triggered
 
