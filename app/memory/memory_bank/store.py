@@ -63,7 +63,9 @@ class MemoryBankStore:
         self._index = FaissIndex(user_dir, self._config.embedding_dim)
         self._metrics = MemoryBankMetrics()
         self._bg = BackgroundTaskRunner(self._config)
-        self._interaction_map: dict[str, list[str]] = {}  # event_faiss_id → [interaction_faiss_id, ...]
+        self._interaction_map: dict[
+            str, list[str]
+        ] = {}  # event_faiss_id → [interaction_faiss_id, ...]
         self._event_faiss_map: dict[str, str] = {}  # MemoryEvent.id → faiss_id(str)
 
         llm = LlmClient(chat_model, self._config) if chat_model else None
@@ -161,7 +163,7 @@ class MemoryBankStore:
         ):
             pass  # purge 后有修改，末尾无条件 _maybe_save 兜底
         t0 = time.perf_counter()
-        results, updated = await self._retrieval.search(
+        results, _updated = await self._retrieval.search(
             query,
             top_k,
             reference_date=self._get_reference_date(),

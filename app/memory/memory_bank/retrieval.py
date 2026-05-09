@@ -351,7 +351,6 @@ class RetrievalPipeline:
         self._embedding_client = embedding_client
         self._config = config
 
-
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
     ) -> tuple[list[dict], bool]:
@@ -379,7 +378,8 @@ class RetrievalPipeline:
         results = [r for r in results if not r.get("forgotten")]
         # 过滤低于相似度阈值的条目（低分不配获得邻居扩展）
         results = [
-            r for r in results
+            r
+            for r in results
             if float(r.get("score", 0.0)) >= self._config.embedding_min_similarity
         ]
         if not results:

@@ -14,6 +14,7 @@ from .index import FaissIndex
 
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
+
     from .config import MemoryBankConfig
     from .observability import MemoryBankMetrics
     from .summarizer import Summarizer
@@ -181,9 +182,7 @@ class MemoryLifecycle:
         t0 = time.perf_counter()
         embeddings = await self._embedding_client.encode_batch(pair_texts)
         if self._metrics:
-            self._metrics.embedding_latency_ms.append(
-                (time.perf_counter() - t0) * 1000
-            )
+            self._metrics.embedding_latency_ms.append((time.perf_counter() - t0) * 1000)
 
         # 逐条 add_vector
         fids: list[str] = []
@@ -195,9 +194,7 @@ class MemoryLifecycle:
 
         if self._metrics:
             self._metrics.write_count += len(events)
-            self._metrics.write_latency_ms.append(
-                (time.perf_counter() - t0) * 1000
-            )
+            self._metrics.write_latency_ms.append((time.perf_counter() - t0) * 1000)
 
         # 持久化（不触发摘要/遗忘）
         await self._index.save()
@@ -239,7 +236,7 @@ class MemoryLifecycle:
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """根据用户反馈修改记忆强度。
-        
+
         accept → memory_strength += 2（主动确认高于被动回忆 +1）
         ignore → memory_strength = max(1, strength - 1)
         两者均更新 last_recall_date 为当天。
@@ -271,6 +268,34 @@ class MemoryLifecycle:
         if modified:
             await self._index.save()
 
+    async def _finalize_date_summary(self, date_key: str) -> None:
+        """为单个日期生成 daily_summary + daily_personality。"""
+        if not self._summarizer:
+            return
+        try:
+            text = await self._summarizer.get_daily_summary(date_key)
+            if text:
+                emb = await self._embedding_client.encode(text)
+                await self._index.add_vector(
+                    text,
+                    emb,
+                    f"{date_key}T00:00:00",
+                    {"type": "daily_summary", "source": f"summary_{date_key}"},
+                )
+            await self._summarizer.get_daily_personality(date_key)
+        except SummarizationEmpty:
+            return
+        except LLMCallFailed:
+            logger.warning(
+                "finalize: LLM failed for daily summary for date=%s",
+                date_key,
+                exc_info=True,
+            )
+        except Exception:
+            logger.warning(
+                "finalize: unexpected error for date=%s", date_key, exc_info=True
+            )
+
     async def finalize(self) -> None:
         """遍历所有日期，串行生成缺失摘要/人格，执行摄入遗忘，保存。
 
@@ -290,32 +315,20 @@ class MemoryLifecycle:
 
         # 串行调用摘要/人格生成（不经过后台任务，与 VMB 行为一致）
         for src in sorted(sources):
-            try:
-                text = await self._summarizer.get_daily_summary(src)
-                if text:
-                    emb = await self._embedding_client.encode(text)
-                    await self._index.add_vector(
-                        text,
-                        emb,
-                        f"{src}T00:00:00",
-                        {"type": "daily_summary", "source": f"summary_{src}"},
-                    )
-                await self._summarizer.get_daily_personality(src)
-            except SummarizationEmpty:
-                continue
-            except LLMCallFailed:
-                logger.warning("finalize: LLM failed for daily summary for date=%s", src, exc_info=True)
-            except Exception:
-                logger.warning("finalize: unexpected error for date=%s", src, exc_info=True)
-                continue
+            await self._finalize_date_summary(src)
 
         try:
             await self._summarizer.get_overall_summary()
             await self._summarizer.get_overall_personality()
         except LLMCallFailed:
-            logger.warning("finalize: LLM failed for overall summary/personality", exc_info=True)
+            logger.warning(
+                "finalize: LLM failed for overall summary/personality", exc_info=True
+            )
         except Exception:
-            logger.warning("finalize: unexpected error for overall summary/personality", exc_info=True)
+            logger.warning(
+                "finalize: unexpected error for overall summary/personality",
+                exc_info=True,
+            )
 
         # 摄入遗忘
         await self._forget_at_ingestion()

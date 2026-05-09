@@ -33,7 +33,9 @@ class MemoryBankMetrics:
     forget_removed_count: int = 0
     write_count: int = 0
     write_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
-    embedding_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
+    embedding_latency_ms: deque[float] = field(
+        default_factory=lambda: deque(maxlen=1000)
+    )
     background_task_failures: int = 0
     index_load_warnings: deque[str] = field(default_factory=lambda: deque(maxlen=100))
 

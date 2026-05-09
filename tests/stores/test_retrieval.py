@@ -347,7 +347,9 @@ async def test_no_speaker_in_query_no_discount(mock_embedding):
             "2024-06-15T00:00:00",
             {"source": "2024-06-15", "speakers": ["Gary"]},
         )
-        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding), MemoryBankConfig())
+        pipe = RetrievalPipeline(
+            idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
+        )
         results, _updated = await pipe.search("weather today")
         assert len(results) >= 1
         # 无说话人匹配，分数不应被更改
@@ -374,7 +376,9 @@ async def test_pipeline_filters_forgotten_entries(mock_embedding):
             "2024-06-15T00:00:00",
             {"source": "2024-06-15"},
         )
-        pipe = RetrievalPipeline(idx, EmbeddingClient(mock_embedding), MemoryBankConfig())
+        pipe = RetrievalPipeline(
+            idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
+        )
         results, _updated = await pipe.search("entry", top_k=5)
         for r in results:
             assert not r.get("forgotten")

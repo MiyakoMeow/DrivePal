@@ -340,5 +340,3 @@ class TestForgetBoundaries:
         )
         assert 0 not in ids  # 格式错误跳过
         assert 1 not in ids  # 近期条目保留
-
-
