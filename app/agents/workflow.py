@@ -601,7 +601,7 @@ class AgentWorkflow:
         shortcut_decision = self._shortcuts.resolve(user_input)
         if shortcut_decision:
             if driving_context:
-                shortcut_decision = postprocess_decision(
+                shortcut_decision, _modifications = postprocess_decision(
                     shortcut_decision, driving_context
                 )
             state["decision"] = shortcut_decision
@@ -665,7 +665,7 @@ class AgentWorkflow:
         shortcut_decision = self._shortcuts.resolve(user_input)
         if shortcut_decision:
             if driving_context:
-                shortcut_decision = postprocess_decision(
+                shortcut_decision, _modifications = postprocess_decision(
                     shortcut_decision, driving_context
                 )
             state["decision"] = shortcut_decision
