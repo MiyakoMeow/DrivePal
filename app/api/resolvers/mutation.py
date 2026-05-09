@@ -1,6 +1,5 @@
 """Mutation 解析器."""
 
-import json
 import logging
 import shutil
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
@@ -10,6 +9,8 @@ from graphql.error import GraphQLError
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
+
+    from strawberry.scalars import JSON
 
 from app.agents.workflow import AgentWorkflow
 from app.api.graphql_schema import (
@@ -221,7 +222,7 @@ class Mutation:
                         continue
                     rel = str(fpath.relative_to(u_dir))
                     files[rel] = content
-        return ExportDataResult(files=json.dumps(files, ensure_ascii=False))
+        return ExportDataResult(files=cast("JSON", files))
 
     @strawberry.mutation
     async def delete_all_data(self, current_user: str) -> bool:

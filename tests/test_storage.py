@@ -24,7 +24,7 @@ FEEDBACK_HISTORY_COUNT = 2
 
 async def test_events_persist_across_instances(tmp_path: Path) -> None:
     """验证创建新 MemoryModule 实例时事件持久化."""
-    init_storage(tmp_path)
+    init_storage()
     m1 = MemoryModule(tmp_path)
     await m1.write(MemoryEvent(content="项目进度会议", type="meeting"))
     m2 = MemoryModule(tmp_path)
@@ -71,7 +71,7 @@ async def test_feedback_history_appended(tmp_path: Path) -> None:
 
 async def test_write_interaction_receives_original_query(tmp_path: Path) -> None:
     """验证 write_interaction 收到的是原始用户查询而非中间结果."""
-    init_storage(tmp_path)
+    init_storage()
     memory = MemoryModule(tmp_path)
     original_query = "明天下午三点有个会议"
     _result = await memory.write_interaction(original_query, "好的，已记录")
