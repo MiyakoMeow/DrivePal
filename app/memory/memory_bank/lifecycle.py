@@ -263,7 +263,13 @@ class MemoryLifecycle:
             logger.warning("update_feedback: event_id=%r not found", event_id)
             return
 
-        old_strength = float(m.get("memory_strength", 1))
+        try:
+            old_strength = float(m.get("memory_strength", 1))
+        except ValueError, TypeError:
+            logger.warning(
+                "update_feedback: invalid memory_strength for event_id=%r", event_id
+            )
+            return
         if feedback.action == "accept":
             m["memory_strength"] = old_strength + 2.0
         elif feedback.action == "ignore":
