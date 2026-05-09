@@ -164,17 +164,9 @@ class MemoryLifecycle:
             self._metrics.write_latency_ms.append(write_elapsed)
             self._metrics.embedding_latency_ms.append(embed_elapsed)
 
-        await self._post_write_forget_and_summarize(date_key)
-        return str(fid) if fid is not None else ""
-
-    async def _post_write_forget_and_summarize(self, date_key: str) -> None:
-        """写入后遗忘 + 持久化 + 后台摘要触发（write/write_interaction 公共）。"""
-        if self._config.enable_forgetting:
-            await self.purge_forgotten(self._index.get_metadata())
-            await self._forget_at_ingestion()
+        # 写入后仅持久化，不触发摘要/遗忘（遗忘归 finalize/purge_forgotten）
         await self._index.save()
-        if self._summarizer:
-            await self._trigger_background_summarize(date_key)
+        return str(fid) if fid is not None else ""
 
     async def write_interaction(
         self,
@@ -207,7 +199,7 @@ class MemoryLifecycle:
                 "event_type": event_type,
             },
         )
-        await self._post_write_forget_and_summarize(date_key)
+        await self._index.save()
         return InteractionResult(event_id=str(fid))
 
     async def _trigger_background_summarize(self, date_key: str) -> None:
@@ -258,6 +250,50 @@ class MemoryLifecycle:
         finally:
             async with self._inflight_lock:
                 self._inflight_summaries.discard(date_key)
+
+    async def finalize(self) -> None:
+        """遍历所有日期，串行生成缺失摘要/人格，执行摄入遗忘，保存。
+
+        应在批量写入完成后调用（对应 VMB 一次性串行调用模式）。
+        """
+        if not self._summarizer:
+            await self._index.save()
+            return
+        metadata = self._index.get_metadata()
+
+        # 收集所有唯一 source（即 date_key）
+        sources: set[str] = set()
+        for m in metadata:
+            src = m.get("source", "")
+            if src and not src.startswith("summary_"):
+                sources.add(src)
+
+        # 串行调用摘要/人格生成（不经过后台任务，与 VMB 行为一致）
+        for src in sorted(sources):
+            try:
+                text = await self._summarizer.get_daily_summary(src)
+                if text:
+                    emb = await self._embedding_client.encode(text)
+                    await self._index.add_vector(
+                        text,
+                        emb,
+                        f"{src}T00:00:00",
+                        {"type": "daily_summary", "source": f"summary_{src}"},
+                    )
+                await self._summarizer.get_daily_personality(src)
+            except SummarizationEmpty:
+                continue
+            except LLMCallFailed:
+                logger.warning("finalize: LLM failed for date=%s", src)
+
+        await self._summarizer.get_overall_summary()
+        await self._summarizer.get_overall_personality()
+
+        # 摄入遗忘
+        await self._forget_at_ingestion()
+
+        # 持久化
+        await self._index.save()
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
         """获取历史事件。索引加载由 store 层 _ensure_loaded() 负责。"""

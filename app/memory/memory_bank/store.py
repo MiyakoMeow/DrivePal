@@ -261,6 +261,11 @@ class MemoryBankStore:
             feedback.action,
         )
 
+    async def finalize_ingestion(self) -> None:
+        """摘要 + 遗忘 + 持久化。应在批量写入完成后调用。"""
+        await self._ensure_loaded()
+        await self._lifecycle.finalize()
+
     @property
     def metrics(self) -> MemoryBankMetrics:
         return self._metrics
