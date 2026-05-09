@@ -377,6 +377,11 @@ class RetrievalPipeline:
             return [], False
         # 过滤已遗忘条目（maybe_forget 在 store.py/lifecycle.py 中已设 forgotten 标记）
         results = [r for r in results if not r.get("forgotten")]
+        # 过滤低于相似度阈值的条目（低分不配获得邻居扩展）
+        results = [
+            r for r in results
+            if float(r.get("score", 0.0)) >= self._config.embedding_min_similarity
+        ]
         if not results:
             return [], False
 
