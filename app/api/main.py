@@ -47,7 +47,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     async def _periodic_cleanup() -> None:
         while True:
             await asyncio.sleep(300)
-            _conversation_manager.cleanup_expired()
+            try:
+                _conversation_manager.cleanup_expired()
+            except Exception:
+                logger.exception("Periodic conversation cleanup failed")
 
     cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield

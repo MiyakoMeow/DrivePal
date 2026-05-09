@@ -46,7 +46,7 @@ class TestPendingReminderCRUD:
     async def test_cancel(self, tmp_user_dir, sample_content):
         """Given 一条 pending reminder, When cancel, Then status 变为 cancelled."""
         pm = PendingReminderManager(tmp_user_dir)
-        pr = await pm.add(sample_content, "location", {}, "evt_001")
+        pr = await pm.add(trigger_type="location", trigger_target={}, event_id="evt_001", content=sample_content, trigger_text="到达")
         await pm.cancel(pr.id)
         assert len(await pm.list_pending()) == 0
 
@@ -59,8 +59,8 @@ class TestPendingReminderCRUD:
     async def test_cancel_last_with_pending(self, tmp_user_dir, sample_content):
         """Given 有 pending, When cancel_last, Then 取消最近一条."""
         pm = PendingReminderManager(tmp_user_dir)
-        await pm.add(sample_content, "location", {}, "evt_001")
-        await pm.add(sample_content, "location", {}, "evt_002")
+        await pm.add(trigger_type="location", trigger_target={}, event_id="evt_001", content=sample_content, trigger_text="到达")
+        await pm.add(trigger_type="location", trigger_target={}, event_id="evt_002", content=sample_content, trigger_text="到达")
         cancelled = await pm.cancel_last()
         assert cancelled is True
         pending = await pm.list_pending()

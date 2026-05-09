@@ -94,16 +94,22 @@ class OutputRouter:
         rc = decision.get("reminder_content", {})
         if isinstance(rc, str):
             rc = {"detailed": rc}
+        if not isinstance(rc, dict):
+            rc = {"detailed": str(rc)}
 
         detailed = rc.get("detailed", "") or ""
 
         speakable = rc.get("speakable_text", "")
         if not speakable:
             speakable = self._truncate(str(detailed), 15)
+        else:
+            speakable = self._truncate(speakable, 15)
 
         display = rc.get("display_text", "")
         if not display:
             display = self._truncate(str(detailed), 20)
+        else:
+            display = self._truncate(display, 20)
 
         return MultiFormatContent(
             speakable_text=str(speakable),
