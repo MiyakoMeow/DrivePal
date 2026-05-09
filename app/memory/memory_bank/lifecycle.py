@@ -195,6 +195,9 @@ class MemoryLifecycle:
 
         if self._metrics:
             self._metrics.write_count += len(events)
+            self._metrics.write_latency_ms.append(
+                (time.perf_counter() - t0) * 1000
+            )
 
         # 持久化（不触发摘要/遗忘）
         await self._index.save()
@@ -302,12 +305,17 @@ class MemoryLifecycle:
                 continue
             except LLMCallFailed:
                 logger.warning("finalize: LLM failed for daily summary for date=%s", src, exc_info=True)
+            except Exception:
+                logger.warning("finalize: unexpected error for date=%s", src, exc_info=True)
+                continue
 
         try:
             await self._summarizer.get_overall_summary()
             await self._summarizer.get_overall_personality()
         except LLMCallFailed:
             logger.warning("finalize: LLM failed for overall summary/personality", exc_info=True)
+        except Exception:
+            logger.warning("finalize: unexpected error for overall summary/personality", exc_info=True)
 
         # 摄入遗忘
         await self._forget_at_ingestion()

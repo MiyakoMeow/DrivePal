@@ -83,8 +83,8 @@ def compute_ingestion_forget_ids(
 
     mode = _forget_mode_from_config(config)
     ids_to_remove: list[int] = []
-    if rng is None:
-        rng = random.Random()  # 生产调用方始终传入 self._forget.rng（确定性模式为 None 但此处不用 rng）
+    if mode == ForgetMode.PROBABILISTIC and rng is None:
+        rng = random.Random(config.seed) if config.seed is not None else random.Random()
     for entry in metadata:
         if entry.get("type") == "daily_summary":
             continue
