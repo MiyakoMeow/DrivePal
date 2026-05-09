@@ -80,6 +80,11 @@ exclude = [".agents/**"]
     "T201",  # _verify() 调试入口 print 合理
     "TC003",  # Path 用于类型注解但实际运行时 path.open()/exists() 操作，ruff 误判
 ]
+"experiments/ablation/ablation_runner.py" = [
+    "D102",  # Facade 委托方法由类级 docstring 阐明语义
+    "D107",  # __init__ 由类级 docstring 阐明语义
+    "PERF401",  # run_batch 笛卡尔积 for-loop 可读性优先
+]
 "app/memory/memory_bank/index_reader.py" = [
     "D102",  # Protocol 桩方法由类级 docstring 阐明语义
 ]
