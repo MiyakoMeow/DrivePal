@@ -258,26 +258,21 @@ class MemoryLifecycle:
             logger.warning("update_feedback: invalid event_id=%r", event_id)
             return
 
-        metadata = self._index.get_metadata()
-        modified = False
-        for m in metadata:
-            if m.get("faiss_id") == fid:
-                old_strength = float(m.get("memory_strength", 1))
-                if feedback.action == "accept":
-                    m["memory_strength"] = old_strength + 2.0
-                elif feedback.action == "ignore":
-                    m["memory_strength"] = max(1.0, old_strength - 1.0)
-                else:
-                    logger.warning(
-                        "update_feedback: unknown action=%r", feedback.action
-                    )
-                    return
-                m["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
-                modified = True
-                break
+        m = self._index.get_metadata_by_id(fid)
+        if m is None:
+            logger.warning("update_feedback: event_id=%r not found", event_id)
+            return
 
-        if modified:
-            await self._index.save()
+        old_strength = float(m.get("memory_strength", 1))
+        if feedback.action == "accept":
+            m["memory_strength"] = old_strength + 2.0
+        elif feedback.action == "ignore":
+            m["memory_strength"] = max(1.0, old_strength - 1.0)
+        else:
+            logger.warning("update_feedback: unknown action=%r", feedback.action)
+            return
+        m["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
+        await self._index.save()
 
     async def _finalize_date_summary(self, date_key: str) -> None:
         """为单个日期生成 daily_summary + daily_personality。"""

@@ -67,6 +67,9 @@ class MemoryBankStore:
             str, list[str]
         ] = {}  # event_faiss_id → [interaction_faiss_id, ...]
         self._event_faiss_map: dict[str, str] = {}  # MemoryEvent.id → faiss_id(str)
+        self._source_event_index: dict[
+            str, list[str]
+        ] = {}  # date_key → [event_faiss_id, ...]
 
         llm = LlmClient(chat_model, self._config) if chat_model else None
         summarizer = Summarizer(llm, self._index, self._config) if llm else None
@@ -115,6 +118,8 @@ class MemoryBankStore:
         fid = await self._lifecycle.write(event)
         if event.id:
             self._event_faiss_map[event.id] = fid
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        self._source_event_index.setdefault(date_key, []).append(fid)
         return fid
 
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
@@ -124,6 +129,8 @@ class MemoryBankStore:
         for ev, fid in zip(events, fids, strict=True):
             if ev.id:
                 self._event_faiss_map[ev.id] = fid
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        self._source_event_index.setdefault(date_key, []).extend(fids)
         return fids
 
     async def write_interaction(
@@ -142,13 +149,11 @@ class MemoryBankStore:
         )
         # 将 interaction 关联到同 source（同 date_key）的所有事件条目
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        for m in self._index.get_metadata():
-            if m.get("source") == date_key and m.get("type") != "daily_summary":
-                eid = str(m.get("faiss_id"))
-                if eid not in self._interaction_map:
-                    self._interaction_map[eid] = []
-                if result.event_id not in self._interaction_map[eid]:
-                    self._interaction_map[eid].append(result.event_id)
+        for eid in self._source_event_index.get(date_key, []):
+            if eid not in self._interaction_map:
+                self._interaction_map[eid] = []
+            if result.event_id not in self._interaction_map[eid]:
+                self._interaction_map[eid].append(result.event_id)
         return result
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
@@ -158,10 +163,8 @@ class MemoryBankStore:
         if self._index.total == 0:
             self._metrics.search_empty_index_count += 1
             return []
-        if self._config.enable_forgetting and await self._lifecycle.purge_forgotten(
-            self._index.get_metadata()
-        ):
-            pass  # purge 后有修改，末尾无条件 _maybe_save 兜底
+        if self._config.enable_forgetting:
+            await self._lifecycle.purge_forgotten(self._index.get_metadata())
         t0 = time.perf_counter()
         results, _updated = await self._retrieval.search(
             query,
@@ -257,8 +260,8 @@ class MemoryBankStore:
         await self._ensure_loaded()
         events = await self._lifecycle.get_history(limit)
         for ev in events:
-            faiss_id = self._event_faiss_map.get(ev.id or "")
-            if faiss_id and faiss_id in self._interaction_map:
+            faiss_id = ev.id or ""
+            if faiss_id in self._interaction_map:
                 ev.interaction_ids = self._interaction_map[faiss_id]
         return events
 
