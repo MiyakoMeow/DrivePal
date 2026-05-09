@@ -221,13 +221,28 @@ def format_constraints(constraints: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def postprocess_decision(decision: dict, driving_context: dict) -> dict:
-    """在 LLM 决策后强制应用安全规则，不可绕过。"""
+def postprocess_decision(
+    decision: dict, driving_context: dict
+) -> tuple[dict, list[str]]:
+    """在 LLM 决策后强制应用安全规则，不可绕过。
+
+    Returns:
+        (修改后的决策, 被修改的字段列表)
+
+    """
+    if os.getenv("ABLATION_DISABLE_RULES") == "1":
+        return decision, []
+
     result = dict(decision)
+    modifications: list[str] = []
     constraints = apply_rules(driving_context)
 
     # 硬约束 1：postpone → 禁止发送
     if constraints.get("postpone", False):
+        if result.get("should_remind", True):
+            modifications.append("should_remind→false(postpone)")
+        if result.get("reminder_content"):
+            modifications.append("reminder_content→cleared(postpone)")
         result["should_remind"] = False
         result["reminder_content"] = ""
 
@@ -237,13 +252,20 @@ def postprocess_decision(decision: dict, driving_context: dict) -> dict:
         channels = result.get("allowed_channels", list(allowed))
         if isinstance(channels, list):
             filtered = [c for c in channels if c in allowed]
+            if len(filtered) != len(channels):
+                removed = set(channels) - set(filtered)
+                modifications.append(f"allowed_channels −{removed}")
             result["allowed_channels"] = filtered or allowed
 
     # 硬约束 3：only_urgent → 非紧急类型禁止
     if constraints.get("only_urgent", False):
         event_type = (result.get("type", "general") or "").lower()
         if event_type not in URGENT_TYPES:
+            if result.get("should_remind", True):
+                modifications.append("should_remind→false(only_urgent)")
+            if result.get("reminder_content"):
+                modifications.append("reminder_content→cleared(only_urgent)")
             result["should_remind"] = False
             result["reminder_content"] = ""
 
-    return result
+    return result, modifications

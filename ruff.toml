@@ -69,6 +69,9 @@ exclude = [".agents/**"]
     "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
     "PLR2004",  # parse_time 中 23/12/8 为时间解析域常量，定义命名常量反降低可读性
 ]
+"app/agents/rules.py" = [
+    "C901",  # postprocess_decision 含三约束分支+修改追踪，复杂度可接受
+]
 "app/agents/probabilistic.py" = [
     "ANN401",  # infer_intent memory_store 为 duck-typing Any
 ]
