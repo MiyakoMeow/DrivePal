@@ -63,6 +63,7 @@ async def run_personalization_group(
 def simulate_feedback(
     decision: dict, stage: str, rng: random.Random
 ) -> Literal["accept", "ignore"]:
+    """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。"""
     if stage == "high-freq":
         return "accept" if decision.get("should_remind") else "ignore"
     if stage == "silent":

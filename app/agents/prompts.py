@@ -76,7 +76,7 @@ SINGLE_LLM_SYSTEM_PROMPT = """你是一个车载AI智能体，负责情境建模
 
 考虑个性化策略和安全边界。
 
-输出JSON格式: {"context": {...}, "task": {...}, "decision": {...}}"""
+输出JSON格式: {{"context": {{...}}, "task": {{...}}, "decision": {{...}}}}"""
 
 SYSTEM_PROMPTS = {
     "context": CONTEXT_SYSTEM_PROMPT,

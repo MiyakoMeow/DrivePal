@@ -1,11 +1,14 @@
 """场景合成器——调用LLM批量生成消融实验测试场景，缓存至JSONL文件。"""
 
 import asyncio
+import dataclasses
 import json
 import logging
 import os
 import random
 from pathlib import Path
+
+import aiofiles
 
 from app.models.chat import ChatError, get_chat_model
 
@@ -153,10 +156,12 @@ def _load_existing_ids(path: Path) -> set[str]:
     return existing
 
 
-def _write_scenario(scenario: Scenario, path: Path) -> None:
+async def _write_scenario(scenario: Scenario, path: Path) -> None:
     """追加写一条场景到JSONL文件。"""
-    with path.open("a") as f:
-        f.write(json.dumps(scenario.__dict__, ensure_ascii=False) + "\n")
+    async with aiofiles.open(path, "a") as f:
+        await f.write(
+            json.dumps(dataclasses.asdict(scenario), ensure_ascii=False) + "\n"
+        )
 
 
 async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
@@ -207,7 +212,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
             scenario_type=scenario_type_val,
         )
 
-        _write_scenario(scenario, output_path)
+        await _write_scenario(scenario, output_path)
         existing.add(dim_id)
         generated += 1
 
@@ -228,8 +233,12 @@ def load_scenarios(path: Path) -> list[Scenario]:
             stripped = raw_line.strip()
             if not stripped:
                 continue
-            d = json.loads(stripped)
-            scenarios.append(Scenario(**d))
+            try:
+                d = json.loads(stripped)
+                scenarios.append(Scenario(**d))
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning("跳过无效场景行: %s", e)
+                continue
     return scenarios
 
 
