@@ -75,7 +75,7 @@ def compute_ingestion_forget_ids(
     metadata: list[dict],
     reference_date: str,
     config: MemoryBankConfig,
-    rng: random.Random | None = None,  # 由调用方传入，None 时用 config.seed 初始化
+    rng: random.Random | None = None,  # 由 MemoryLifecycle._forget_at_ingestion 传入 self._forget.rng；None 仅测试用
 ) -> list[int]:
 ```
 
@@ -148,10 +148,10 @@ metadata 条目无反向引用。
 
 ```python
 # store.py
-self._interaction_map: dict[str, list[str]] = {}  # event_id → [interaction_id, ...]
+self._interaction_map: dict[str, list[str]] = {}  # faiss_id → [interaction_faiss_id, ...]
 ```
 
-- `write_interaction()` 写入后，将 interaction 的 faiss_id 追加到 metadata 中同 `source`（即同 date_key）的所有事件条目。`_interaction_map` 以事件 `faiss_id`（字符串）为键，值为该事件关联的 interaction faiss_id 列表。
+- `write_interaction()` 写入后，将 interaction 的 faiss_id 追加到 metadata 中同 `source`（即同 date_key）的所有事件条目。此为有意设计——轻量方案下不作精确匹配，一个日期下所有 interaction 与所有事件互关联。`_interaction_map` 以事件 `faiss_id`（字符串）为键，值为该事件关联的 interaction faiss_id 列表。
 - `get_history()` 返回时，从 `_interaction_map` 查表填充 `MemoryEvent.interaction_ids`。
 
 缺陷：内存映射在服务重启后丢失。如需持久化，后续可改为存入 `extra_metadata` 或独立 JSON 文件。
@@ -166,7 +166,7 @@ self._interaction_map: dict[str, list[str]] = {}  # event_id → [interaction_id
 
 **现状：** `search()` 中两次 `_maybe_save()`——L131（purge 后）+ L147（strength 更新后）。
 
-**改法：** 删除 L131 的调用。purge 若有修改，末尾的 `_maybe_save` 会兜底。
+**改法：** 删除 L131 的调用。L147 处改为无条件 `_maybe_save()`（去掉 `if updated` 守卫），使 purge 修改不漏。
 
 ### 3.2 移除 chunk_size 缓存
 
