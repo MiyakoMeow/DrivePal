@@ -1,5 +1,7 @@
 """隐私保护工具：位置脱敏。"""
 
+from copy import deepcopy
+
 
 def sanitize_location(
     latitude: float, longitude: float, address: str
@@ -15,8 +17,8 @@ def sanitize_location(
 
 
 def sanitize_context(context: dict) -> dict:
-    """递归脱敏 context 中的位置信息（current_location + destination）。"""
-    result = dict(context)
+    """递归脱敏 context 中的位置信息（current_location + destination）。深度拷贝避免副作用。"""
+    result = deepcopy(context)
     spatial = result.get("spatial", {})
     if isinstance(spatial, dict):
         loc = spatial.get("current_location")

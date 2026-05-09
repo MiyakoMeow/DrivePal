@@ -151,13 +151,6 @@ class ScenarioPresetInput:
     current_user: str = "default"
 
 
-@strawberry.input
-class DeleteDataInput:
-    """删除数据输入."""
-
-    current_user: str
-
-
 JSONScalar = strawberry.scalar(
     name="JSON",
     serialize=lambda v: v,

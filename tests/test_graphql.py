@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.main import app
+from app.config import user_data_dir
 from app.memory.singleton import get_memory_module
 from app.storage.toml_store import TOMLStore
 from tests.fixtures import reset_all_singletons
@@ -169,7 +170,7 @@ async def test_feedback_success_updates_strategy_weight(
     assert result["data"]["submitFeedback"]["status"] == "success"
 
     strategies = await TOMLStore(
-        user_dir=Path(os.environ["DATA_DIR"]),
+        user_dir=user_data_dir("default"),
         filename="strategies.toml",
         default_factory=dict,
     ).read()

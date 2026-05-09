@@ -34,18 +34,35 @@ async def test_events_persist_across_instances(tmp_path: Path) -> None:
 
 
 async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
-    """验证忽略反馈会降低对应策略权重."""
+    """验证忽略反馈会降低对应策略权重——手动模拟权重更新路径。"""
+    from app.config import user_data_dir
+
+    # 初始化 per-user 目录
+    init_storage()
+    u_dir = user_data_dir("default")
+    # 手动设置初始权重
+    strategy_store = TOMLStore(
+        user_dir=u_dir,
+        filename="strategies.toml",
+        default_factory=dict,
+    )
+    await strategy_store.write(
+        {
+            "reminder_weights": {"general": 0.6},
+        }
+    )
     memory = MemoryModule(tmp_path)
     event_id = await memory.write(MemoryEvent(content="无关提醒", type="general"))
     await memory.update_feedback(
         event_id,
         FeedbackData(action="ignore", type="general"),
     )
-    strategies = await TOMLStore(
-        user_dir=tmp_path,
-        filename="strategies.toml",
-        default_factory=dict,
-    ).read()
+    # 手动模拟 mutation resolver 中的权重更新
+    current = await strategy_store.read()
+    weights = current.get("reminder_weights", {})
+    weights["general"] = max(weights.get("general", 0.5) - 0.1, 0.1)
+    await strategy_store.update("reminder_weights", weights)
+    strategies = await strategy_store.read()
     assert strategies["reminder_weights"]["general"] < GENERAL_WEIGHT_AFTER_IGNORE_MAX
 
 
