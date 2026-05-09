@@ -60,6 +60,9 @@ class PendingReminder:
         )
 
 
+_PER_USER_LOCKS: dict[Path, asyncio.Lock] = {}
+
+
 class PendingReminderManager:
     """管理待触发提醒的增删查与轮询触发."""
 
@@ -75,7 +78,9 @@ class PendingReminderManager:
             filename="pending_reminders.toml",
             default_factory=list,
         )
-        self._lock = asyncio.Lock()
+        if user_dir not in _PER_USER_LOCKS:
+            _PER_USER_LOCKS[user_dir] = asyncio.Lock()
+        self._lock = _PER_USER_LOCKS[user_dir]
         """保护 read-modify-write 操作原子性，防止并发 add/poll/cancel 丢数据。"""
 
     async def _read_all(self) -> list[dict]:
