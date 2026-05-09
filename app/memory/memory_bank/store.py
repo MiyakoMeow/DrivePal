@@ -149,7 +149,15 @@ class MemoryBankStore:
         )
         # 将 interaction 关联到同 source（同 date_key）的所有事件条目
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        for eid in self._source_event_index.get(date_key, []):
+        event_ids = self._source_event_index.get(date_key)
+        if event_ids is None:
+            # 回退：进程启动后当日尚无 write()，全量扫描 metadata
+            event_ids = []
+            for m in self._index.get_metadata():
+                if m.get("source") == date_key and m.get("type") != "daily_summary":
+                    event_ids.append(str(m.get("faiss_id")))
+            self._source_event_index[date_key] = event_ids
+        for eid in event_ids:
             if eid not in self._interaction_map:
                 self._interaction_map[eid] = []
             if result.event_id not in self._interaction_map[eid]:
