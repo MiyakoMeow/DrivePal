@@ -14,8 +14,6 @@ from .index import FaissIndex
 
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
-
-    from .bg_tasks import BackgroundTaskRunner
     from .config import MemoryBankConfig
     from .observability import MemoryBankMetrics
     from .summarizer import Summarizer
@@ -33,7 +31,6 @@ class MemoryLifecycle:
         forget: ForgettingCurve,
         summarizer: Summarizer | None,
         config: MemoryBankConfig,
-        bg: BackgroundTaskRunner,
         metrics: MemoryBankMetrics | None = None,
     ) -> None:
         self._index = index
@@ -41,7 +38,6 @@ class MemoryLifecycle:
         self._forget = forget
         self._summarizer = summarizer
         self._config = config
-        self._bg = bg
         self._metrics = metrics
 
     async def purge_forgotten(self, metadata: list[dict]) -> bool:
@@ -305,13 +301,13 @@ class MemoryLifecycle:
             except SummarizationEmpty:
                 continue
             except LLMCallFailed:
-                logger.warning("finalize: LLM failed for daily summary for date=%s", src)
+                logger.warning("finalize: LLM failed for daily summary for date=%s", src, exc_info=True)
 
         try:
             await self._summarizer.get_overall_summary()
             await self._summarizer.get_overall_personality()
         except LLMCallFailed:
-            logger.warning("finalize: LLM failed for overall summary/personality")
+            logger.warning("finalize: LLM failed for overall summary/personality", exc_info=True)
 
         # 摄入遗忘
         await self._forget_at_ingestion()

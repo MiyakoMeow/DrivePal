@@ -75,7 +75,6 @@ class MemoryBankStore:
             ForgettingCurve(self._config),
             summarizer,
             self._config,
-            self._bg,
             metrics=self._metrics,
         )
         self._retrieval = RetrievalPipeline(self._index, embed_client, self._config)

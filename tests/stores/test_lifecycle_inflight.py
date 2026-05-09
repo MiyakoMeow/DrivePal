@@ -12,6 +12,7 @@ def _make_index() -> MagicMock:
     index = MagicMock()
     index.save = AsyncMock()
     index.add_vector = AsyncMock()
+    index.remove_vectors = AsyncMock()
     return index
 
 
@@ -33,10 +34,9 @@ async def test_finalize_generates_summaries():
     summarizer.get_daily_personality = AsyncMock(return_value="personality")
     summarizer.get_overall_summary = AsyncMock(return_value="overall")
     summarizer.get_overall_personality = AsyncMock(return_value="overall personality")
-    bg = MagicMock()
     config = MemoryBankConfig()
 
-    lifecycle = MemoryLifecycle(index, embed, forget, summarizer, config, bg)
+    lifecycle = MemoryLifecycle(index, embed, forget, summarizer, config)
     await lifecycle.finalize()
 
     assert summarizer.get_daily_summary.call_count == 2
@@ -61,7 +61,6 @@ async def test_finalize_skips_existing_summaries():
     forget = MagicMock()
     forget.rng = None
     config = MemoryBankConfig()
-    bg = MagicMock()
 
     async def mock_daily_summary(date_key: str) -> str | None:
         if date_key == "2024-06-15":
@@ -74,7 +73,7 @@ async def test_finalize_skips_existing_summaries():
     summarizer.get_overall_summary = AsyncMock(return_value="overall")
     summarizer.get_overall_personality = AsyncMock(return_value="overall personality")
 
-    lifecycle = MemoryLifecycle(index, embed, forget, summarizer, config, bg)
+    lifecycle = MemoryLifecycle(index, embed, forget, summarizer, config)
     await lifecycle.finalize()
 
     # 只有 2024-06-16 的摘要新增向量
@@ -87,9 +86,8 @@ async def test_finalize_without_summarizer_just_saves():
     index = _make_index()
     embed = AsyncMock()
     forget = MagicMock()
-    bg = MagicMock()
 
-    lifecycle = MemoryLifecycle(index, embed, forget, None, MemoryBankConfig(), bg)
+    lifecycle = MemoryLifecycle(index, embed, forget, None, MemoryBankConfig())
     await lifecycle.finalize()
 
     assert index.save.called
