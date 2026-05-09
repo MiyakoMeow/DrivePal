@@ -79,6 +79,36 @@ class ReminderContent(BaseModel):
         return "无提醒内容"
 
 
+def _extract_location_target(decision: dict, driving_ctx: dict | None) -> dict:
+    """从 driving_context 中提取目标位置经纬度."""
+    if driving_ctx:
+        spatial = driving_ctx.get("spatial", {}) or {}
+        dest = spatial.get("destination", {}) or {}
+        if dest.get("latitude") is not None:
+            return {"latitude": dest["latitude"], "longitude": dest["longitude"]}
+    return {}
+
+
+def _map_pending_trigger(
+    decision: dict, driving_ctx: dict | None
+) -> tuple[str, dict, str]:
+    """从 decision 映射 trigger_type、trigger_target、trigger_text."""
+    timing = decision.get("timing", "")
+    if timing == "location":
+        return "location", _extract_location_target(decision, driving_ctx), "到达目的地时"
+    if timing == "location_time":
+        return "location_time", {
+            "location": _extract_location_target(decision, driving_ctx),
+            "time": decision.get("target_time", ""),
+        }, "到达目的地或到时间时"
+    target_time = decision.get("target_time", "")
+    if target_time:
+        return "time", {"time": target_time}, f"{target_time} 时"
+    if driving_ctx:
+        return "context", {"previous_scenario": driving_ctx.get("scenario", "")}, "驾驶状态恢复时"
+    return "time", {"time": ""}, ""
+
+
 class AgentWorkflow:
     """多Agent协作工作流."""
 
