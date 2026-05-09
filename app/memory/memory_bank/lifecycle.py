@@ -80,7 +80,7 @@ class MemoryLifecycle:
             self._index.get_metadata(),
             today,
             config=self._config,
-            rng=None,  # 使用独立 RNG，不与 purge_forgotten 共享状态
+            rng=self._forget.rng,
         )
         if ids:
             if self._metrics:
