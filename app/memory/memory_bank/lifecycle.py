@@ -1,6 +1,5 @@
 """记忆生命周期管理：写入、遗忘、摘要编排。"""
 
-import asyncio
 import logging
 import time
 from datetime import UTC, datetime
@@ -44,8 +43,6 @@ class MemoryLifecycle:
         self._config = config
         self._bg = bg
         self._metrics = metrics
-        self._inflight_summaries: set[str] = set()
-        self._inflight_lock = asyncio.Lock()
 
     async def purge_forgotten(self, metadata: list[dict]) -> bool:
         """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
@@ -201,7 +198,7 @@ class MemoryLifecycle:
             fids.append(str(fid))
 
         if self._metrics:
-            self._metrics.write_count += 1
+            self._metrics.write_count += len(events)
 
         # 持久化（不触发摘要/遗忘）
         await self._index.save()
@@ -240,55 +237,6 @@ class MemoryLifecycle:
         )
         await self._index.save()
         return InteractionResult(event_id=str(fid))
-
-    async def _trigger_background_summarize(self, date_key: str) -> None:
-        """带 inflight 防护的后台摘要触发。同日期不重复提交。"""
-        if not self._summarizer:
-            return
-        async with self._inflight_lock:
-            if date_key in self._inflight_summaries:
-                return
-            self._inflight_summaries.add(date_key)
-        self._bg.spawn(self._background_summarize(date_key))
-
-    async def _background_summarize(self, date_key: str) -> None:
-        try:
-            if not self._summarizer:
-                return
-            text = await self._summarizer.get_daily_summary(date_key)
-            if text:
-                emb = await self._embedding_client.encode(text)
-                await self._index.add_vector(
-                    text,
-                    emb,
-                    f"{date_key}T00:00:00",
-                    {"type": "daily_summary", "source": f"summary_{date_key}"},
-                )
-            await self._summarizer.get_overall_summary()
-            await self._summarizer.get_daily_personality(date_key)
-            await self._summarizer.get_overall_personality()
-            await self._index.save()
-        except SummarizationEmpty:
-            logger.debug("background summarization empty for date=%s", date_key)
-        except LLMCallFailed:
-            if self._metrics:
-                self._metrics.background_task_failures += 1
-            logger.warning(
-                "background summarization failed (LLM) for date=%s",
-                date_key,
-                exc_info=True,
-            )
-        except Exception:
-            if self._metrics:
-                self._metrics.background_task_failures += 1
-            logger.warning(
-                "background summarization failed for date=%s",
-                date_key,
-                exc_info=True,
-            )
-        finally:
-            async with self._inflight_lock:
-                self._inflight_summaries.discard(date_key)
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
         """根据用户反馈修改记忆强度。

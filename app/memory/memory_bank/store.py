@@ -142,7 +142,7 @@ class MemoryBankStore:
         # 将 interaction 关联到同 source（同 date_key）的所有事件条目
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         for m in self._index.get_metadata():
-            if m.get("source") == date_key and not m.get("type") == "daily_summary":
+            if m.get("source") == date_key and m.get("type") != "daily_summary":
                 eid = str(m.get("faiss_id"))
                 if eid not in self._interaction_map:
                     self._interaction_map[eid] = []
@@ -301,6 +301,10 @@ class MemoryBankStore:
         return self._metrics
 
     async def close(self) -> None:
+        try:
+            await self.finalize_ingestion()
+        except Exception:
+            logger.warning("Failed to finalize ingestion during close", exc_info=True)
         try:
             await self._index.save()
         except Exception:
