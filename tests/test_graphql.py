@@ -163,9 +163,9 @@ async def test_feedback_success_updates_strategy_weight(
     assert result["data"]["submitFeedback"]["status"] == "success"
 
     strategies = await TOMLStore(
-        Path(os.environ["DATA_DIR"]),
-        Path("strategies.toml"),
-        dict,
+        user_dir=Path(os.environ["DATA_DIR"]),
+        filename="strategies.toml",
+        default_factory=dict,
     ).read()
     assert "meeting" in strategies.get("reminder_weights", {})
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
