@@ -1,5 +1,6 @@
 """主动触发框架——PendingReminder 管理和轮询触发."""
 
+import asyncio
 import math
 import re
 import uuid
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from app.agents.outputs import MultiFormatContent
 
 _PROXIMITY_RADIUS_M = 500
+_PROXIMITY_RADIUS_PARKED_M = 1000  # 停车时放宽距离容差（GPS 偏移）
 _DEFAULT_TTL_SECONDS = 3600
 _TTL_EXTRA_FOR_TIME = 1800
 
@@ -73,6 +75,8 @@ class PendingReminderManager:
             filename="pending_reminders.toml",
             default_factory=list,
         )
+        self._lock = asyncio.Lock()
+        """保护 read-modify-write 操作原子性，防止并发 add/poll/cancel 丢数据。"""
 
     async def _read_all(self) -> list[dict]:
         return await self._store.read()
@@ -112,9 +116,10 @@ class PendingReminderManager:
             trigger_text=trigger_text,
             ttl_seconds=ttl_seconds,
         )
-        all_rem = await self._read_all()
-        all_rem.append(asdict(pr))
-        await self._write_all(all_rem)
+        async with self._lock:
+            all_rem = await self._read_all()
+            all_rem.append(asdict(pr))
+            await self._write_all(all_rem)
         return pr
 
     async def list_pending(self) -> list[dict]:
@@ -124,63 +129,66 @@ class PendingReminderManager:
 
     async def cancel(self, reminder_id: str) -> None:
         """取消指定 ID 的待触发提醒。"""
-        all_rem = await self._read_all()
-        for r in all_rem:
-            if r.get("id") == reminder_id:
-                r["status"] = "cancelled"
-        await self._write_all(all_rem)
+        async with self._lock:
+            all_rem = await self._read_all()
+            for r in all_rem:
+                if r.get("id") == reminder_id:
+                    r["status"] = "cancelled"
+            await self._write_all(all_rem)
 
     async def cancel_last(self) -> bool:
         """取消最近一条 pending reminder。返回是否成功取消。"""
-        all_rem = await self._read_all()
-        pending = [r for r in all_rem if r.get("status") == "pending"]
-        if not pending:
-            return False
-        pending[-1]["status"] = "cancelled"
-        await self._write_all(all_rem)
+        async with self._lock:
+            all_rem = await self._read_all()
+            pending = [r for r in all_rem if r.get("status") == "pending"]
+            if not pending:
+                return False
+            pending[-1]["status"] = "cancelled"
+            await self._write_all(all_rem)
         return True
 
     async def poll(self, driving_context: dict) -> list[dict]:
         """返回满足触发条件的提醒列表，并将其标记为 triggered。"""
-        all_rem = await self._read_all()
-        triggered = []
-        has_change = False  # TTL 取消或触发均需持久化
-        now = datetime.now(UTC)
-        for r in all_rem:
-            if r.get("status") != "pending":
-                continue
-            # TTL 超时
-            created_str = r.get("created_at", "")
-            try:
-                created = datetime.fromisoformat(created_str)
-                if created.tzinfo is None:
-                    created = created.replace(tzinfo=UTC)
-                if (now - created).total_seconds() > (r.get("ttl_seconds") or 3600):
-                    r["status"] = "cancelled"
-                    has_change = True
+        async with self._lock:
+            all_rem = await self._read_all()
+            triggered = []
+            has_change = False  # TTL 取消或触发均需持久化
+            now = datetime.now(UTC)
+            for r in all_rem:
+                if r.get("status") != "pending":
                     continue
-            except ValueError, TypeError:
-                pass
+                # TTL 超时
+                created_str = r.get("created_at", "")
+                try:
+                    created = datetime.fromisoformat(created_str)
+                    if created.tzinfo is None:
+                        created = created.replace(tzinfo=UTC)
+                    if (now - created).total_seconds() > (r.get("ttl_seconds") or 3600):
+                        r["status"] = "cancelled"
+                        has_change = True
+                        continue
+                except ValueError, TypeError:
+                    pass
 
-            # 触发评估
-            trigger_type = r.get("trigger_type", "")
-            if (
-                (
-                    trigger_type == "location"
-                    and self._check_location(r, driving_context)
-                )
-                or (trigger_type == "time" and self._check_time(r))
-                or (
-                    trigger_type == "context"
-                    and self._check_context(r, driving_context)
-                )
-            ):
-                r["status"] = "triggered"
-                triggered.append(r)
-                has_change = True
+                # 触发评估
+                trigger_type = r.get("trigger_type", "")
+                if (
+                    (
+                        trigger_type == "location"
+                        and self._check_location(r, driving_context)
+                    )
+                    or (trigger_type == "time" and self._check_time(r))
+                    or (
+                        trigger_type == "context"
+                        and self._check_context(r, driving_context)
+                    )
+                ):
+                    r["status"] = "triggered"
+                    triggered.append(r)
+                    has_change = True
 
-        if has_change:
-            await self._write_all(all_rem)
+            if has_change:
+                await self._write_all(all_rem)
         return triggered
 
     @staticmethod
@@ -203,8 +211,6 @@ class PendingReminderManager:
         cur_loc = spatial.get("current_location") or {}
         if not cur_loc:
             return False
-        if ctx.get("scenario") == "parked":
-            return True
         target_lat = target.get("latitude")
         target_lon = target.get("longitude")
         if target_lat is None or target_lon is None:
@@ -215,7 +221,12 @@ class PendingReminderManager:
             float(target_lat),
             float(target_lon),
         )
-        return dist < _PROXIMITY_RADIUS_M
+        radius = (
+            _PROXIMITY_RADIUS_PARKED_M
+            if ctx.get("scenario") == "parked"
+            else _PROXIMITY_RADIUS_M
+        )
+        return dist < radius
 
     @staticmethod
     def _check_time(reminder: dict) -> bool:

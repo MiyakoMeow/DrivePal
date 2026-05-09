@@ -99,8 +99,29 @@ class TestPollingTriggerLocation:
         )
         assert len(triggered) == 0
 
-    async def test_parked_triggers_immediately(self, tmp_user_dir, sample_content):
-        """Given location trigger, When scenario=parked, Then 立即触发（不等距离）."""
+    async def test_parked_within_range_triggers(self, tmp_user_dir, sample_content):
+        """Given location trigger, When scenario=parked 且在放宽半径内, Then 触发（不等精确 500m）."""
+        pm = PendingReminderManager(tmp_user_dir)
+        await pm.add(
+            sample_content,
+            trigger_type="location",
+            trigger_target={"latitude": 31.23, "longitude": 121.47},
+            event_id="evt_001",
+            trigger_text="到达",
+        )
+        # 约 0.01 度 ≈ 950m，在停车放宽半径 1000m 内
+        triggered = await pm.poll(
+            {
+                "scenario": "parked",
+                "spatial": {
+                    "current_location": {"latitude": 31.23, "longitude": 121.48}
+                },
+            }
+        )
+        assert len(triggered) == 1
+
+    async def test_parked_far_away_not_triggered(self, tmp_user_dir, sample_content):
+        """Given location trigger, When scenario=parked 但远超放宽半径, Then 不触发."""
         pm = PendingReminderManager(tmp_user_dir)
         await pm.add(
             sample_content,
@@ -117,7 +138,7 @@ class TestPollingTriggerLocation:
                 },
             }
         )
-        assert len(triggered) == 1
+        assert len(triggered) == 0
 
     async def test_no_location_data_not_triggered(self, tmp_user_dir, sample_content):
         """Given 无 GPS 数据, When poll, Then 不触发."""
