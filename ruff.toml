@@ -48,6 +48,10 @@ exclude = [".agents/**"]
     "D107",  # __init__ 由类级 docstring 阐明语义
     "PLC0415",  # 局部导入由 try/except 防御模式驱动
     "BLE001",  # close() 中宽捕获 Exception 合理——持久化失败不应阻止 shutdown
+    "ARG002",  # user_id 保留——MemoryStore Protocol 接口兼容
+]
+"app/agents/workflow.py" = [
+    "C901",  # _execution_node 含多条安全规则分支（postpone/only_urgent/frequency guard），复杂度可接受
 ]
 "app/memory/memory_bank/index_reader.py" = [
     "D102",  # Protocol 桩方法由类级 docstring 阐明语义

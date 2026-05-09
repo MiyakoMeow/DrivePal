@@ -54,9 +54,9 @@ class MemoryBankStore:
             msg = "embedding_model required"
             raise RuntimeError(msg)
 
-        user_dir = data_dir / f"user_{user_id}"
-        self._user_root = data_dir  # per-user root (data/users/{id}/ after Task 7)
-        self._user_dir = user_dir  # MemoryBank subdirectory
+        user_dir = data_dir / "memorybank"  # FAISS 存储在 memorybank 子目录
+        self._user_root = data_dir  # per-user 根目录
+        self._user_dir = user_dir
         self._index = FaissIndex(user_dir, self._config.embedding_dim)
         self._metrics = MemoryBankMetrics()
         self._bg = BackgroundTaskRunner(self._config)

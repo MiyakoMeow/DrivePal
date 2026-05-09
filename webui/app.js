@@ -160,7 +160,44 @@ async function savePreset() {
             { name, context }
         );
         alert('预设已保存');
-        loadPresets();
+loadPresets();
+
+let _experimentChart = null;
+
+async function loadExperimentData() {
+    try {
+        const data = await graphql(
+            `query { experimentResults { strategies { strategy exact_match field_f1 value_f1 } } }`
+        );
+        const strats = data.experimentResults.strategies;
+        const labels = strats.map(s => s.strategy);
+        const exact = strats.map(s => s.exact_match);
+        const field = strats.map(s => s.field_f1);
+        const value = strats.map(s => s.value_f1);
+
+        const ctx = document.getElementById('experimentChart').getContext('2d');
+        if (_experimentChart) _experimentChart.destroy();
+        _experimentChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Exact Match', data: exact, backgroundColor: '#4285F4' },
+                    { label: 'Field F1', data: field, backgroundColor: '#34A853' },
+                    { label: 'Value F1', data: value, backgroundColor: '#FBBC05' },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: { display: true, text: '五策略对比' },
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Failed to load experiment data:', e);
+    }
+}
     } catch (e) {
         alert('保存失败: ' + e.message);
     }

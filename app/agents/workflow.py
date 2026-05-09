@@ -347,6 +347,13 @@ class AgentWorkflow:
         content = self._extract_content(decision)
         original_query = state.get("original_query", "")
 
+        # 隐私脱敏：写入前脱敏 driving_ctx 中的位置信息
+        from app.memory.privacy import sanitize_context  # noqa: PLC0415
+
+        safe_ctx = sanitize_context(driving_ctx) if driving_ctx else None
+        if safe_ctx is not None and stages is not None:
+            stages.context = safe_ctx  # 更新 stages 中上下文为脱敏版本
+
         interaction_result = await self.memory_module.write_interaction(
             original_query,
             content,

@@ -544,5 +544,9 @@ VehicleMemBench 提供：
 
 ## 未解决问题
 
-1. 反馈学习：`update_feedback` 在 MemoryBankStore 中仅记录 debug 日志，反馈数据不更新 memory_strength 或写入 strategies.toml
-2. ~~多用户隔离~~：已实现——`MemoryModule.get_store(user_id)` per-user 注册表 + `user_{user_id}` 子目录隔离
+1. 反馈学习：已实现——反馈记录到 feedback.jsonl，权重更新在 submit_feedback resolver 中（accept +0.1 / ignore -0.1，限幅 [0.1, 1.0]，初始 0.5）
+2. 多用户隔离：已实现——全栈 per-user 目录（`data/users/{user_id}/`），含 MemoryBank 子目录 + 独立 JSONL/TOML 文件
+3. 规则引擎：已补全至 7 条（含 city_driving/traffic_jam/乘客在场），数据驱动加载自 `config/rules.toml`
+4. 概率推断：已实现——嵌入向量相似度意图推断 + 打断风险加权公式，环境变量开关
+5. 隐私保护：已实现——位置脱敏工具 `app/memory/privacy.py` + `exportData`/`deleteAllData` GraphQL mutation
+6. 突发事件处理：由 Strategy Agent 语义推理 + 规则引擎联合覆盖（无独立模块），论文中说明此设计决策

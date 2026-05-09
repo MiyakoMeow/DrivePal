@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>知行车秘 — 模拟测试工作台</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="header">
@@ -168,6 +169,16 @@
                 <div class="section-title">历史记录</div>
                 <div id="historyList"><span class="empty-hint">暂无历史记录</span></div>
             </div>
+        </div>
+    </div>
+
+    <div class="experiment-section" style="max-width:1200px;margin:20px auto;padding:0 20px;">
+        <div class="card" style="padding:16px;">
+            <div class="section-title">实验结果对比</div>
+            <div style="margin-bottom:10px;">
+                <button class="btn btn-secondary" onclick="loadExperimentData()">加载数据</button>
+            </div>
+            <canvas id="experimentChart" height="200"></canvas>
         </div>
     </div>
 

@@ -44,26 +44,35 @@ def _migrate_text_files(default_dir: Path, old_root: Path) -> bool:
 
 
 def _migrate_memorybank(default_dir: Path, old_root: Path) -> None:
-    """迁移 data/memorybank/ 到 per-user 目录。"""
+    """迁移 data/memorybank/ 和 data/user_*/ 到 data/users/ 结构。"""
+    # 检查 data/memorybank/ 子目录（如果有的话）
     mb_dir = old_root / "memorybank"
-    if not mb_dir.exists():
-        return
-    user_dirs = [
-        d for d in mb_dir.iterdir() if d.is_dir() and d.name.startswith("user_")
-    ]
-    if user_dirs:
-        for ud in user_dirs:
-            user_id = ud.name[5:]
-            target = user_data_dir(user_id) / "memorybank"
+    if mb_dir.exists():
+        user_dirs = [
+            d for d in mb_dir.iterdir() if d.is_dir() and d.name.startswith("user_")
+        ]
+        if user_dirs:
+            for ud in user_dirs:
+                user_id = ud.name[5:]
+                target = user_data_dir(user_id) / "memorybank"
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(ud), str(target))
+            if not any(mb_dir.iterdir()):
+                mb_dir.rmdir()
+        else:
+            target = default_dir / "memorybank"
             if not target.exists():
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(ud), str(target))
-        if not any(mb_dir.iterdir()):
-            mb_dir.rmdir()
-    else:
-        target = default_dir / "memorybank"
-        if not target.exists():
-            shutil.move(str(mb_dir), str(target))
+                shutil.move(str(mb_dir), str(target))
+
+    # 检查 data/user_*/ 平铺目录（store 旧路径 data/user_{id}/）
+    for entry in old_root.iterdir():
+        if entry.is_dir() and entry.name.startswith("user_"):
+            user_id = entry.name[5:]  # 去掉 "user_" 前缀
+            target_root = user_data_dir(user_id)
+            target_root.parent.mkdir(parents=True, exist_ok=True)
+            if not target_root.exists():
+                shutil.move(str(entry), str(target_root))
 
 
 def _migrate_legacy() -> bool:

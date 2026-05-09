@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.config import user_data_dir
 from app.memory.memory_bank import MemoryBankStore
 from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
@@ -91,7 +92,7 @@ class MemoryModule:
         if mode not in _STORES_REGISTRY:
             raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
-        kwargs: dict[str, Any] = {"data_dir": self._data_dir}
+        kwargs: dict[str, Any] = {"data_dir": user_data_dir(user_id)}
         if getattr(store_cls, "requires_embedding", False):
             if self._embedding_model is None:
                 self._embedding_model = get_cached_embedding_model()
