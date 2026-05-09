@@ -420,8 +420,9 @@ class AgentWorkflow:
 
         # 规则硬约束：LLM 决策后强制覆盖，不可绕过
         driving_ctx = state.get("driving_context")
+        modifications: list[str] = []
         if driving_ctx:
-            decision = postprocess_decision(decision, driving_ctx)
+            decision, modifications = postprocess_decision(decision, driving_ctx)
 
         # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
         if not decision.get("should_remind", True):
@@ -431,6 +432,7 @@ class AgentWorkflow:
                     "content": None,
                     "event_id": None,
                     "result": result,
+                    "modifications": modifications,
                 }
             return {"result": result, "event_id": None}
 
@@ -499,6 +501,7 @@ class AgentWorkflow:
                     "event_id": None,
                     "result": result,
                     "pending_reminder_ids": pending_ids,
+                    "modifications": modifications,
                 }
             return {
                 "result": result,
@@ -515,6 +518,7 @@ class AgentWorkflow:
                     "content": None,
                     "event_id": None,
                     "result": freq_msg,
+                    "modifications": modifications,
                 }
             return {"result": freq_msg, "event_id": None}
 
@@ -555,6 +559,7 @@ class AgentWorkflow:
                 "event_id": event_id,
                 "result": result,
                 "output": output_content.model_dump(),
+                "modifications": modifications,
             }
         return {
             "result": result,
