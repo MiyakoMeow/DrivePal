@@ -117,6 +117,10 @@ class FaissIndex:
                 )
                 bak_path = ip.with_suffix(".faiss.bak")
                 shutil.copy(str(ip), str(bak_path))
+                if mp.exists():
+                    shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
+                if ep.exists():
+                    shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
                 ip.unlink(missing_ok=True)
                 mp.unlink(missing_ok=True)
                 ep.unlink(missing_ok=True)
@@ -134,6 +138,10 @@ class FaissIndex:
             bak_path = ip.with_suffix(".faiss.bak")
             logger.warning("FaissIndex index.faiss corrupted, backing up: %s", exc)
             shutil.copy(str(ip), str(bak_path))
+            if mp.exists():
+                shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
+            if ep.exists():
+                shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
             ip.unlink(missing_ok=True)
             mp.unlink(missing_ok=True)
             ep.unlink(missing_ok=True)
