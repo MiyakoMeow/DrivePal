@@ -46,3 +46,4 @@ config/llm.json
 
 # Nix
 result
+/.worktrees
