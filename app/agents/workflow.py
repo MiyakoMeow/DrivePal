@@ -16,6 +16,7 @@ from app.agents.probabilistic import (
     is_enabled,
 )
 from app.agents.prompts import SYSTEM_PROMPTS
+from app.agents.outputs import OutputRouter
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
@@ -352,6 +353,15 @@ class AgentWorkflow:
         content = self._extract_content(decision)
         original_query = state.get("original_query", "")
 
+        # --- 多格式输出路由 ---
+        output_router = OutputRouter()
+        scenario = ""
+        rules_result = {}
+        if driving_ctx:
+            rules_result = apply_rules(driving_ctx)
+            scenario = driving_ctx.get("scenario", "")
+        output_content = output_router.route(decision, scenario, rules_result)
+
         # 隐私脱敏：写入前脱敏 driving_ctx 中的位置信息
         safe_ctx = sanitize_context(driving_ctx) if driving_ctx else None
         if safe_ctx is not None and stages is not None:
@@ -376,10 +386,12 @@ class AgentWorkflow:
                 "content": content,
                 "event_id": event_id,
                 "result": result,
+                "output": output_content.model_dump(),
             }
         return {
             "result": result,
             "event_id": event_id,
+            "output_content": output_content.model_dump(),
         }
 
     async def run_with_stages(
