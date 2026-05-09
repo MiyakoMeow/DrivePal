@@ -116,7 +116,6 @@ exclude = [".agents/**"]
     "ARG001",  # output_path 保留——GroupRunner 接口兼容
     "PLR2004",  # 模拟反馈概率 0.5 魔术数语义自明
     "D103",  # simulate_feedback/update_feedback_weight 由模块级 docstring 阐明语义
-    "ANN001",  # _compute_preference_metrics results 存为接口兼容，内部未用
 ]
 "app/memory/memory_bank/index_reader.py" = [
     "D102",  # Protocol 桩方法由类级 docstring 阐明语义

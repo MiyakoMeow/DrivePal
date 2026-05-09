@@ -53,6 +53,7 @@ def render_report(results: dict[str, GroupResult], output_dir: Path) -> None:
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 
     html_path = output_dir / "report.html"
+    # 报告是一次性离线生成，同步写合理。
     with html_path.open("w") as f:
         f.write(
             '<html><head><meta charset="utf-8"><title>消融实验报告</title></head><body>'

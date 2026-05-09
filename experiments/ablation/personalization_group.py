@@ -1,9 +1,12 @@
 """个性化组实验——反馈学习机制的个性化效果."""
 
+import json
 import random
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Literal
+
+import aiofiles
 
 from app.config import user_data_dir
 from app.memory.singleton import get_memory_module
@@ -52,6 +55,17 @@ async def run_personalization_group(
             )
 
     metrics = _compute_preference_metrics(all_results, weight_history, stages)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(output_path, "w") as f:
+        await f.write(
+            json.dumps(
+                {"weight_history": weight_history, "metrics": metrics},
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+
     return GroupResult(
         group="personalization",
         variant_results=all_results,

@@ -139,7 +139,10 @@ def _is_safety_relevant(driving_context: dict) -> bool:
 
 
 def _load_existing_ids(path: Path) -> set[str]:
-    """读取JSONL中已有的场景id集合，用于幂等跳过。"""
+    """读取JSONL中已有的场景id集合，用于幂等跳过。
+
+    场景文件通常很小（≤360 行），同步读取无性能影响。
+    """
     existing: set[str] = set()
     if not path.exists():
         return existing
@@ -168,11 +171,11 @@ async def _write_scenario(scenario: Scenario, path: Path) -> None:
 async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
     """合成场景并缓存到JSONL文件。幂等——已缓存的场景跳过。返回本次新增数量。"""
     seed = int(os.environ.get("ABLATION_SEED", "42"))
-    random.seed(seed)
+    rng = random.Random(seed)
 
     existing = _load_existing_ids(output_path)
     combos = _build_dimension_combinations()
-    random.shuffle(combos)
+    rng.shuffle(combos)
 
     chat_model = get_chat_model(temperature=0.7)
     batch_size = 10
@@ -225,7 +228,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
 
 
 def load_scenarios(path: Path) -> list[Scenario]:
-    """从JSONL加载场景。"""
+    """从JSONL加载场景。场景文件通常很小，同步读取无性能影响。"""
     scenarios: list[Scenario] = []
     if not path.exists():
         return scenarios
