@@ -124,3 +124,19 @@ async def test_write_interaction_with_user_name():
         meta = s._index.get_metadata()
         assert len(meta) >= 1
         assert any("Gary" in entry.get("speakers", []) for entry in meta)
+
+
+@pytest.mark.asyncio
+async def test_format_search_results_basic(store):
+    """format_search_results 返回分组格式化文本。"""
+    await store.write_interaction("hello world", "hi there")
+    result = await store.format_search_results("hello", top_k=5)
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+@pytest.mark.asyncio
+async def test_format_search_results_empty(store):
+    """空 store 返回空字符串。"""
+    result = await store.format_search_results("anything")
+    assert result == ""

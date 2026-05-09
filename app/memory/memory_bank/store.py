@@ -183,6 +183,7 @@ class MemoryBankStore:
         """返回人类可读的检索结果文本，用于 LLM prompt 注入。
 
         按 source 分组，标注 memory_strength 和日期。
+        触发完整检索管道（索引加载、遗忘判断、metrics 记录）。
         """
         results = await self.search(query, top_k)
         if not results:

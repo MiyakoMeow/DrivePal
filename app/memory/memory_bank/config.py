@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -103,6 +103,17 @@ class MemoryBankConfig(BaseSettings):
     # ── 参考日期 ──
     reference_date: str | None = None
     reference_date_auto: bool = False
+
+    @field_validator("reference_date")
+    @classmethod
+    def _guard_reference_date_format(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            date.fromisoformat(v)
+        except ValueError, TypeError:
+            return datetime.now(UTC).strftime("%Y-%m-%d")
+        return v
 
     # ── 关闭 ──
     shutdown_timeout_seconds: float = 30.0
