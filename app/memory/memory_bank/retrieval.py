@@ -468,7 +468,7 @@ class RetrievalPipeline:
             rs = {s.lower() for s in (r.get("speakers") or [])}
             if not rs.intersection(speakers_in_query):
                 score = r.get("score", 0.0)
+                # 说话人不匹配降权 25%：正分压低，负分推低（降序排列更靠后）。
+                # 0.75/1.25 为经验值，与原始 MemoryBank 论文一致。
                 r["score"] = score * 0.75 if score >= 0 else score * 1.25
-                # 正分 ×0.75 → 向零靠近（降权）；负分 ×1.25 → 远离零（更大负数，
-                # 在降序排列中排名更靠后）
         return results

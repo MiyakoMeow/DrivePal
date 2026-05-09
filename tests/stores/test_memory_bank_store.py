@@ -72,7 +72,11 @@ async def test_purge_forgotten_removes_from_index():
     with tempfile.TemporaryDirectory() as tmp:
         emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        emb.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
+
+        async def _batch(texts):
+            return [[0.1] * 1536 for _ in texts]
+
+        emb.batch_encode = AsyncMock(side_effect=_batch)
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         await s.write_interaction("hello", "world")
         await s.write_interaction("test2", "data2")
@@ -95,7 +99,11 @@ async def test_write_parses_multi_speaker_content():
     with tempfile.TemporaryDirectory() as tmp:
         emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        emb.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
+
+        async def _batch(texts):
+            return [[0.1] * 1536 for _ in texts]
+
+        emb.batch_encode = AsyncMock(side_effect=_batch)
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         content = "Gary: set seat to 45\nPatricia: set AC to 22"
         event = MemoryEvent(content=content, type="reminder")
@@ -113,7 +121,11 @@ async def test_write_interaction_with_user_name():
     with tempfile.TemporaryDirectory() as tmp:
         emb = AsyncMock(spec=["encode", "batch_encode"])
         emb.encode = AsyncMock(return_value=[0.1] * 1536)
-        emb.batch_encode = AsyncMock(return_value=[[0.1] * 1536])
+
+        async def _batch(texts):
+            return [[0.1] * 1536 for _ in texts]
+
+        emb.batch_encode = AsyncMock(side_effect=_batch)
         s = MemoryBankStore(Path(tmp), embedding_model=emb)
         result = await s.write_interaction(
             "set seat to 45",

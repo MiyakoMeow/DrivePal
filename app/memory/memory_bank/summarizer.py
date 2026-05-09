@@ -29,6 +29,22 @@ class Summarizer:
         self._index = index
         self._config = config
 
+    @property
+    def _effective_temperature(self) -> float:
+        return (
+            self._config.llm_temperature
+            if self._config.llm_temperature is not None
+            else _SUMMARY_DEFAULT_TEMPERATURE
+        )
+
+    @property
+    def _effective_max_tokens(self) -> int:
+        return (
+            self._config.llm_max_tokens
+            if self._config.llm_max_tokens is not None
+            else _SUMMARY_DEFAULT_MAX_TOKENS
+        )
+
     async def get_daily_summary(self, date_key: str) -> str | None:
         """生成某天的对话摘要（已存在则不覆盖）。
 
@@ -50,16 +66,8 @@ class Summarizer:
             result = await self._llm.call(
                 self._summarize_prompt("\n".join(texts)),
                 system_prompt=self._config.summary_system_prompt,
-                temperature=(
-                    self._config.llm_temperature
-                    if self._config.llm_temperature is not None
-                    else _SUMMARY_DEFAULT_TEMPERATURE
-                ),
-                max_tokens=(
-                    self._config.llm_max_tokens
-                    if self._config.llm_max_tokens is not None
-                    else _SUMMARY_DEFAULT_MAX_TOKENS
-                ),
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
             )
             return f"The summary of the conversation on {date_key} is: {result}"
         except SummarizationEmpty:
@@ -90,16 +98,8 @@ class Summarizer:
             result = await self._llm.call(
                 "".join(parts),
                 system_prompt=self._config.summary_system_prompt,
-                temperature=(
-                    self._config.llm_temperature
-                    if self._config.llm_temperature is not None
-                    else _SUMMARY_DEFAULT_TEMPERATURE
-                ),
-                max_tokens=(
-                    self._config.llm_max_tokens
-                    if self._config.llm_max_tokens is not None
-                    else _SUMMARY_DEFAULT_MAX_TOKENS
-                ),
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
             )
             extra["overall_summary"] = result
             return result
@@ -132,16 +132,8 @@ class Summarizer:
             result = await self._llm.call(
                 self._personality_prompt("\n".join(texts)),
                 system_prompt=self._config.summary_system_prompt,
-                temperature=(
-                    self._config.llm_temperature
-                    if self._config.llm_temperature is not None
-                    else _SUMMARY_DEFAULT_TEMPERATURE
-                ),
-                max_tokens=(
-                    self._config.llm_max_tokens
-                    if self._config.llm_max_tokens is not None
-                    else _SUMMARY_DEFAULT_MAX_TOKENS
-                ),
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
             )
             existing[date_key] = result
             return result
@@ -179,16 +171,8 @@ class Summarizer:
             result = await self._llm.call(
                 "".join(parts),
                 system_prompt=self._config.summary_system_prompt,
-                temperature=(
-                    self._config.llm_temperature
-                    if self._config.llm_temperature is not None
-                    else _SUMMARY_DEFAULT_TEMPERATURE
-                ),
-                max_tokens=(
-                    self._config.llm_max_tokens
-                    if self._config.llm_max_tokens is not None
-                    else _SUMMARY_DEFAULT_MAX_TOKENS
-                ),
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
             )
             extra["overall_personality"] = result
             return result
