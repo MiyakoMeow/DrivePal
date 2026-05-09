@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -111,6 +111,12 @@ def _map_pending_trigger(
             },
             "到达目的地或到时间时",
         )
+    if timing == "delay":
+        seconds = decision.get("delay_seconds", 300)
+        target_dt = datetime.now(UTC) + timedelta(seconds=seconds)
+        target_str = target_dt.isoformat()
+        return "time", {"time": target_str}, f"延迟 {seconds} 秒后"
+
     target_time = decision.get("target_time", "")
     if target_time:
         return "time", {"time": target_time}, f"{target_time} 时"
@@ -120,7 +126,8 @@ def _map_pending_trigger(
             {"previous_scenario": driving_ctx.get("scenario", "")},
             "驾驶状态恢复时",
         )
-    return "time", {"time": ""}, ""
+    # 兜底：无 driving_ctx 且无时间信息时，不做 pending，直接返回正常触发标记
+    return "time", {"time": datetime.now(UTC).isoformat()}, ""
 
 
 class AgentWorkflow:
@@ -642,7 +649,7 @@ class AgentWorkflow:
                 done_data["status"] = "suppressed"
                 done_data["reason"] = state.get("result")
             else:
-                done_data["result"] = state.get("output_content") or state.get("result")
+                done_data["result"] = state.get("output_content")
             events.append({"event": "done", "data": done_data})
             if session_id:
                 self._conversations.add_turn(
@@ -694,7 +701,7 @@ class AgentWorkflow:
             done_data["reason"] = state.get("result")
         else:
             done_data["status"] = "delivered"
-            done_data["result"] = state.get("output_content") or state.get("result")
+            done_data["result"] = state.get("output_content")
         events.append({"event": "done", "data": done_data})
 
         if session_id:

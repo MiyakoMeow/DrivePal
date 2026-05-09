@@ -25,16 +25,16 @@ class PendingReminder:
 
     id: str
     event_id: str
-    content: dict  # MultiFormatContent.model_dump()
+    content: dict[str, object]  # MultiFormatContent.model_dump()
     trigger_type: str  # "location" | "time" | "context"
-    trigger_target: dict
+    trigger_target: dict[str, object]
     trigger_text: str  # 人类可读触发条件
     status: str  # "pending" | "triggered" | "cancelled"
     created_at: str
     ttl_seconds: int
 
     @classmethod
-    def new(  # noqa: PLR0913
+    def new(
         cls,
         *,
         content: MultiFormatContent,
@@ -80,7 +80,7 @@ class PendingReminderManager:
     async def _write_all(self, reminders: list[dict]) -> None:
         await self._store.write(reminders)
 
-    async def add(  # noqa: PLR0913
+    async def add(
         self,
         content: MultiFormatContent,
         trigger_type: str,
@@ -266,6 +266,9 @@ def parse_time(s: str) -> str | None:
     afternoon_threshold = 8  # 缺省上/下午时，< 8 点视为下午
     am_pm = m.group(1)
     hour = int(m.group(2))
+    max_hour = 23
+    if hour < 0 or hour > max_hour:
+        return None
     if am_pm == "上午" and hour == noon:
         hour = 0
     elif (am_pm == "下午" and hour != noon) or (

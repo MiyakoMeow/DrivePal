@@ -320,7 +320,7 @@ class Mutation:
     async def close_session(
         self,
         session_id: str,
-        current_user: str = "default",  # noqa: ARG002
+        current_user: str = "default",  # 保留——Strawberry mutation 签名一致性
     ) -> bool:
         """关闭指定会话。"""
         _conversation_manager.close(session_id)

@@ -34,6 +34,7 @@ exclude = [".agents/**"]
 ]
 "app/api/resolvers/mutation.py" = [
     "C901",  # submit_feedback 含多个异常处理器，各分支简单（McCabe 误报）
+    "ARG002",  # close_session current_user 参数保留——Strawberry mutation 签名一致性
 ]
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 data_dir.mkdir()/ 操作，ruff 误判
@@ -59,6 +60,12 @@ exclude = [".agents/**"]
 ]
 "app/agents/shortcuts.py" = [
     "PERF401",  # 嵌套循环 + 条件过滤，无法用 list.extend 替代
+]
+"app/agents/outputs.py" = [
+    "ARG002",  # OutputRouter.route scenario 参数预留，后续 scenario-aware 路由使用
+]
+"app/agents/pending.py" = [
+    "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
 ]
 "app/agents/probabilistic.py" = [
     "ANN401",  # infer_intent memory_store 为 duck-typing Any

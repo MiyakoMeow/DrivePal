@@ -80,7 +80,7 @@ class OutputRouter:
     def route(
         self,
         decision: dict,
-        scenario: str,  # noqa: ARG002 — 预留，后续 scenario-aware 路由使用
+        scenario: str,  # 预留，后续 scenario-aware 路由使用
         rules_result: dict,
     ) -> MultiFormatContent:
         """将 LLM 决策路由为 MultiFormatContent。
