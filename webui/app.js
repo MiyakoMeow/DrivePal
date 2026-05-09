@@ -200,6 +200,15 @@ async function loadExperimentData() {
         });
     } catch (e) {
         console.error('Failed to load experiment data:', e);
+        const canvas = document.getElementById('experimentChart');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = '14px sans-serif';
+            ctx.fillStyle = '#999';
+            ctx.textAlign = 'center';
+            ctx.fillText('实验数据加载失败，请检查 experiment_benchmark.toml', canvas.width / 2, canvas.height / 2);
+        }
     }
 }
 

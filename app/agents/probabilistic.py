@@ -31,6 +31,23 @@ def is_enabled() -> bool:
     return os.environ.get("PROBABILISTIC_INFERENCE_ENABLED", "1") != "0"
 
 
+def aggregate_type_confidences(results: list) -> list[tuple[str, float]]:
+    """按事件 type 聚合相似度得分，返回降序 (type, confidence) 列表。"""
+    type_scores: dict[str, float] = defaultdict(float)
+    for r in results:
+        event = r.event if hasattr(r, "event") else {}
+        etype = (
+            event.get("type", "general")
+            if isinstance(event, dict)
+            else getattr(event, "type", "general")
+        )
+        type_scores[etype] += max(r.score, 0.0)
+
+    total = sum(type_scores.values()) or 1.0
+    confidences = {t: s / total for t, s in type_scores.items()}
+    return sorted(confidences.items(), key=lambda x: x[1], reverse=True)
+
+
 async def infer_intent(
     query_text: str,
     memory_store: Any,
@@ -60,19 +77,7 @@ async def infer_intent(
     if not results:
         return {"intent_confidence": 0.2, "alternative": None, "alt_confidence": 0.0}
 
-    type_scores: dict[str, float] = defaultdict(float)
-    for r in results:
-        event = r.event if hasattr(r, "event") else {}
-        etype = (
-            event.get("type", "general")
-            if isinstance(event, dict)
-            else getattr(event, "type", "general")
-        )
-        type_scores[etype] += max(r.score, 0.0)
-
-    total = sum(type_scores.values()) or 1.0
-    confidences = {t: s / total for t, s in type_scores.items()}
-    sorted_types = sorted(confidences.items(), key=lambda x: x[1], reverse=True)
+    sorted_types = aggregate_type_confidences(results)
 
     return {
         "intent_confidence": sorted_types[0][1],

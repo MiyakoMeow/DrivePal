@@ -256,10 +256,7 @@ class TestPostprocessDecision:
 # ---- 新增：数据驱动规则测试 ----
 
 
-@pytest.fixture
-def rules_toml_7(tmp_path):
-    """创建包含 7 条规则临时 TOML 文件."""
-    content = """[[rules]]
+RULES_TOML_7_CONTENT = """[[rules]]
 name = "highway_audio_only"
 scenario = "highway"
 allowed_channels = ["audio"]
@@ -306,8 +303,13 @@ not_scenario = "highway"
 extra_channels = ["visual"]
 priority = 3
 """
+
+
+@pytest.fixture
+def rules_toml_7(tmp_path):
+    """创建包含 7 条规则临时 TOML 文件."""
     path = tmp_path / "rules.toml"
-    path.write_text(content, encoding="utf-8")
+    path.write_text(RULES_TOML_7_CONTENT, encoding="utf-8")
     return path
 
 

@@ -1,5 +1,7 @@
 """Query 解析器."""
 
+import logging
+
 import strawberry
 
 from app.api.graphql_schema import (
@@ -15,6 +17,16 @@ from app.api.resolvers.converters import preset_store, to_gql_preset
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.storage.experiment_store import read_benchmark
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_float(metrics: dict, key: str) -> float:
+    """安全获取 metric 值，无效时返回 0.0。"""
+    try:
+        return float(metrics.get(key, 0.0))
+    except ValueError, TypeError:
+        return 0.0
 
 
 @strawberry.type
@@ -56,15 +68,22 @@ class Query:
     @strawberry.field
     async def experiment_results(self) -> ExperimentResults:
         """查询五策略实验结果对比."""
-        data = read_benchmark()
+        try:
+            data = read_benchmark()
+        except (OSError, ValueError) as e:
+            logger.warning("Failed to read experiment benchmark: %s", e)
+            data = {}
         strategies = []
         for name, metrics in data.get("strategies", {}).items():
-            strategies.append(
-                ExperimentResultGQL(
-                    strategy=name,
-                    exact_match=float(metrics.get("exact_match", 0.0)),
-                    field_f1=float(metrics.get("field_f1", 0.0)),
-                    value_f1=float(metrics.get("value_f1", 0.0)),
+            try:
+                strategies.append(
+                    ExperimentResultGQL(
+                        strategy=name,
+                        exact_match=_safe_float(metrics, "exact_match"),
+                        field_f1=_safe_float(metrics, "field_f1"),
+                        value_f1=_safe_float(metrics, "value_f1"),
+                    )
                 )
-            )
+            except (ValueError, TypeError) as e:
+                logger.warning("Skipping invalid strategy %s: %s", name, e)
         return ExperimentResults(strategies=strategies)

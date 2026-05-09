@@ -24,8 +24,8 @@ def sanitize_context(context: dict) -> dict:
         loc = spatial.get("current_location")
         if isinstance(loc, dict):
             lat, lon, addr = sanitize_location(
-                float(loc.get("latitude", 0)),
-                float(loc.get("longitude", 0)),
+                float(loc.get("latitude") or 0),
+                float(loc.get("longitude") or 0),
                 str(loc.get("address", "")),
             )
             loc["latitude"] = lat
@@ -34,8 +34,8 @@ def sanitize_context(context: dict) -> dict:
         dest = spatial.get("destination")
         if isinstance(dest, dict):
             dlat, dlon, daddr = sanitize_location(
-                float(dest.get("latitude", 0)),
-                float(dest.get("longitude", 0)),
+                float(dest.get("latitude") or 0),
+                float(dest.get("longitude") or 0),
                 str(dest.get("address", "")),
             )
             dest["latitude"] = dlat

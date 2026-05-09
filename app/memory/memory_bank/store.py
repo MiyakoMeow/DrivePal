@@ -3,6 +3,7 @@
 import logging
 import time
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.memory.embedding_client import EmbeddingClient
@@ -12,6 +13,7 @@ from app.memory.schemas import (
     MemoryEvent,
     SearchResult,
 )
+from app.storage.jsonl_store import JSONLinesStore
 
 from .bg_tasks import BackgroundTaskRunner
 from .config import MemoryBankConfig, resolve_reference_date
@@ -57,6 +59,7 @@ class MemoryBankStore:
         user_dir = data_dir / "memorybank"  # FAISS 存储在 memorybank 子目录
         self._user_root = data_dir  # per-user 根目录
         self._user_dir = user_dir
+        self._feedback_store: JSONLinesStore | None = None
         self._index = FaissIndex(user_dir, self._config.embedding_dim)
         self._metrics = MemoryBankMetrics()
         self._bg = BackgroundTaskRunner(self._config)
@@ -240,10 +243,11 @@ class MemoryBankStore:
         feedback: FeedbackData,
     ) -> None:
         """记录用户反馈到 feedback.jsonl。"""
-        from datetime import UTC, datetime
-
-        from app.storage.jsonl_store import JSONLinesStore
-
+        if self._feedback_store is None:
+            self._feedback_store = JSONLinesStore(
+                user_dir=self._user_root,
+                filename="feedback.jsonl",
+            )
         record = {
             "event_id": event_id,
             "action": feedback.action,
@@ -251,8 +255,7 @@ class MemoryBankStore:
             "modified_content": feedback.modified_content,
             "timestamp": datetime.now(UTC).isoformat(),
         }
-        fb_store = JSONLinesStore(user_dir=self._user_root, filename="feedback.jsonl")
-        await fb_store.append(record)
+        await self._feedback_store.append(record)
         logger.info(
             "Feedback recorded: event_id=%s action=%s",
             event_id,
