@@ -49,6 +49,7 @@ async def run_safety_group(
                         "scenario_id": r.scenario_id,
                         "variant": r.variant.value,
                         "decision": r.decision,
+                        "stages": r.stages,
                         "modifications": r.modifications,
                         "latency_ms": r.latency_ms,
                     },

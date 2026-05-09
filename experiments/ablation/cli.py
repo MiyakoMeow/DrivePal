@@ -110,7 +110,7 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                     decision=d.get("decision", {}),
                     result_text="",
                     event_id=None,
-                    stages={},
+                    stages=d.get("stages", {}),
                     latency_ms=d.get("latency_ms", 0),
                     modifications=d.get("modifications", []),
                 )

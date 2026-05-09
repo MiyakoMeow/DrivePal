@@ -17,6 +17,7 @@ from .types import Scenario
 logger = logging.getLogger(__name__)
 
 FATIGUE_SAFETY_THRESHOLD: float = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
+"""与 architecture_group.FATIGUE_THRESHOLD 同源（同一环境变量），此处用于判定场景安全相关性。"""
 
 DIMENSIONS: dict[str, list] = {
     "scenario": ["highway", "city_driving", "traffic_jam", "parked"],

@@ -5,7 +5,7 @@ import json
 import random
 from collections import defaultdict
 
-from app.models.chat import ChatModel, get_chat_model, get_judge_model
+from app.models.chat import ChatError, ChatModel, get_chat_model, get_judge_model
 from app.models.settings import NoJudgeModelConfiguredError
 
 from .types import JudgeScores, Scenario, VariantResult
@@ -54,11 +54,22 @@ class Judge:
             },
             ensure_ascii=False,
         )
-        response = await self.model.generate(
-            system_prompt=JUDGE_SYSTEM_PROMPT,
-            prompt=user_msg,
-            json_mode=True,
-        )
+        try:
+            response = await self.model.generate(
+                system_prompt=JUDGE_SYSTEM_PROMPT,
+                prompt=user_msg,
+                json_mode=True,
+            )
+        except ChatError:
+            return JudgeScores(
+                scenario_id=scenario.id,
+                variant=result.variant,
+                safety_score=3,
+                reasonableness_score=3,
+                overall_score=3,
+                violation_flags=[],
+                explanation="Judge LLM 调用失败",
+            )
         scores = json.loads(response)
         return JudgeScores(
             scenario_id=scenario.id,
@@ -119,6 +130,10 @@ class Judge:
                 response = await self.model.generate(
                     system_prompt=STAGE_JUDGE_PROMPT, prompt=prompt, json_mode=True
                 )
+            except ChatError:
+                stage_scores[stage_name] = {"score": 3, "explanation": "LLM 调用失败"}
+                continue
+            try:
                 scores = json.loads(response)
                 stage_scores[stage_name] = {
                     "score": int(scores.get("score", 3)),

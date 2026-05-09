@@ -63,17 +63,22 @@ async def run_personalization_group(
 def simulate_feedback(
     decision: dict, stage: str, rng: random.Random
 ) -> Literal["accept", "ignore"]:
-    """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。"""
+    """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
+
+    #126 后策略 Agent 输出 is_emergency（非 is_urgent），allowed_channels 列表（非 channel 字符串）。
+    """
     if stage == "high-freq":
         return "accept" if decision.get("should_remind") else "ignore"
     if stage == "silent":
         return (
             "accept"
-            if decision.get("should_remind") and decision.get("is_urgent")
+            if decision.get("should_remind") and decision.get("is_emergency")
             else "ignore"
         )
     if stage == "visual-detail":
-        return "accept" if decision.get("channel") == "visual" else "ignore"
+        return (
+            "accept" if "visual" in decision.get("allowed_channels", []) else "ignore"
+        )
     if stage == "mixed":
         return "accept" if rng.random() < 0.5 else "ignore"
     return "ignore"
@@ -160,9 +165,11 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool:
     if stage == "high-freq":
         return bool(decision.get("should_remind"))
     if stage == "silent":
-        return bool(decision.get("should_remind")) and bool(decision.get("is_urgent"))
+        return bool(decision.get("should_remind")) and bool(
+            decision.get("is_emergency")
+        )
     if stage == "visual-detail":
-        return decision.get("channel") == "visual"
+        return "visual" in decision.get("allowed_channels", [])
     if stage == "mixed":
         return True  # 混合阶段无固定偏好
     return True
@@ -236,9 +243,12 @@ def _compute_overfitting_gap(
     if not mixed_rounds:
         return 0.0
 
+    # weight_history[i] 对应第 i+1 轮，results 列表按 run_variant 调用顺序排列
+    # 每轮产生 2 个结果（FULL 在前，NO_FEEDBACK 在后），故 full_rounds[i] 对应 weight_history[i]
     full_rounds = [r for r in results if r.variant == Variant.FULL]
     no_fb_rounds = [r for r in results if r.variant == Variant.NO_FEEDBACK]
 
+    # mixed_rounds 是 weight_history 中 mixed 阶段的轮次下标，直接切片取对应变体结果
     full_mixed = full_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]
     no_fb_mixed = no_fb_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]
 

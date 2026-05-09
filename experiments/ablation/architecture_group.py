@@ -17,6 +17,7 @@ from .types import (
 )
 
 FATIGUE_THRESHOLD: float = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
+"""与 scenario_synthesizer.FATIGUE_SAFETY_THRESHOLD 同源（同一环境变量），此处用于架构组场景过滤。"""
 
 
 async def run_architecture_group(
@@ -50,6 +51,7 @@ async def run_architecture_group(
                         "scenario_id": r.scenario_id,
                         "variant": r.variant.value,
                         "decision": r.decision,
+                        "stages": r.stages,
                         "latency_ms": r.latency_ms,
                     },
                     ensure_ascii=False,
