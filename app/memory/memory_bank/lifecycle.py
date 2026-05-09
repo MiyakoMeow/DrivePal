@@ -305,10 +305,13 @@ class MemoryLifecycle:
             except SummarizationEmpty:
                 continue
             except LLMCallFailed:
-                logger.warning("finalize: LLM failed for date=%s", src)
+                logger.warning("finalize: LLM failed for daily summary for date=%s", src)
 
-        await self._summarizer.get_overall_summary()
-        await self._summarizer.get_overall_personality()
+        try:
+            await self._summarizer.get_overall_summary()
+            await self._summarizer.get_overall_personality()
+        except LLMCallFailed:
+            logger.warning("finalize: LLM failed for overall summary/personality")
 
         # 摄入遗忘
         await self._forget_at_ingestion()
@@ -323,6 +326,7 @@ class MemoryLifecycle:
         ]
         return [
             MemoryEvent(
+                id=str(m.get("faiss_id", "")),
                 content=m.get("raw_content") or m.get("text", ""),
                 type=m.get("event_type", "reminder"),
                 memory_strength=int(m.get("memory_strength", 1)),

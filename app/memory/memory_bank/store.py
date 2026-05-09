@@ -305,9 +305,5 @@ class MemoryBankStore:
             await self.finalize_ingestion()
         except Exception:
             logger.warning("Failed to finalize ingestion during close", exc_info=True)
-        try:
-            await self._index.save()
-        except Exception:
-            logger.warning("Failed to save index during close", exc_info=True)
         finally:
             await self._bg.shutdown()
