@@ -16,7 +16,6 @@ class UnknownModeError(ValueError):
     MSG = "Unknown mode: {mode}"
 
     def __init__(self, mode: MemoryMode) -> None:
-        """初始化异常，使用类常量消息格式化 mode."""
         super().__init__(self.MSG.format(mode=mode))
 
 
@@ -48,6 +47,10 @@ def register_store(name: MemoryMode, store_cls: type[MemoryStore]) -> None:
 register_store(MemoryMode.MEMORY_BANK, MemoryBankStore)
 
 
+def _make_store_key(mode: MemoryMode, user_id: str) -> str:
+    return f"{mode.value}:{user_id}"
+
+
 class MemoryModule:
     """统一记忆管理接口，Facade 模式."""
 
@@ -57,8 +60,7 @@ class MemoryModule:
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
     ) -> None:
-        """初始化记忆模块."""
-        self._stores: dict[MemoryMode, MemoryStore] = {}
+        self._stores: dict[str, MemoryStore] = {}
         self._stores_lock = asyncio.Lock()
         self._data_dir = data_dir
         self._embedding_model = embedding_model
@@ -71,18 +73,21 @@ class MemoryModule:
             self._chat_model = get_chat_model()
         return self._chat_model
 
-    async def _get_store(self, mode: MemoryMode) -> MemoryStore:
-        if mode not in self._stores:
+    async def _get_store(
+        self, mode: MemoryMode, user_id: str = "default"
+    ) -> MemoryStore:
+        key = _make_store_key(mode, user_id)
+        if key not in self._stores:
             async with self._stores_lock:
-                if mode not in self._stores:
-                    self._stores[mode] = self._create_store(mode)
-        return self._stores[mode]
+                if key not in self._stores:
+                    self._stores[key] = self._create_store(mode, user_id)
+        return self._stores[key]
 
-    def _resolve_mode(self, mode: MemoryMode | None) -> MemoryMode:
-        """解析 mode 参数，默认 MEMORY_BANK."""
+    @staticmethod
+    def _resolve_mode(mode: MemoryMode | None) -> MemoryMode:
         return mode or MemoryMode.MEMORY_BANK
 
-    def _create_store(self, mode: MemoryMode) -> MemoryStore:
+    def _create_store(self, mode: MemoryMode, user_id: str) -> MemoryStore:
         if mode not in _STORES_REGISTRY:
             raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
@@ -95,11 +100,31 @@ class MemoryModule:
             if self._chat_model is None:
                 self._chat_model = get_chat_model()
             kwargs["chat_model"] = self._chat_model
+        kwargs["user_id"] = user_id
         return store_cls(**kwargs)
 
-    async def write(self, event: MemoryEvent, *, mode: MemoryMode | None = None) -> str:
-        """写入记忆事件."""
-        store = await self._get_store(self._resolve_mode(mode))
+    def get_metrics(
+        self, user_id: str = "default", mode: MemoryMode | None = None
+    ) -> dict[str, Any] | None:
+        """获取指定用户的指标快照。store 未初始化则返回 None。"""
+        resolved = self._resolve_mode(mode)
+        key = _make_store_key(resolved, user_id)
+        store = self._stores.get(key)
+        if store is None:
+            return None
+        m = getattr(store, "metrics", None)
+        if m is None:
+            return None
+        return m.snapshot()
+
+    async def write(
+        self,
+        event: MemoryEvent,
+        *,
+        mode: MemoryMode | None = None,
+        user_id: str = "default",
+    ) -> str:
+        store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.write(event)
 
     async def write_interaction(
@@ -109,19 +134,10 @@ class MemoryModule:
         event_type: str = "reminder",
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
         **kwargs: object,
     ) -> InteractionResult:
-        """写入交互记录。
-
-        Args:
-            query: 用户输入。
-            response: AI 回复。
-            event_type: 事件类型。
-            mode: 记忆模式。
-            **kwargs: 传递给存储实现的额外参数（如 user_name、ai_name）。
-
-        """
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._get_store(self._resolve_mode(mode), user_id)
         if not getattr(store, "supports_interaction", False):
             msg = f"Store '{store.store_name}' does not support write_interaction"
             raise NotImplementedError(msg)
@@ -133,9 +149,9 @@ class MemoryModule:
         top_k: int = 5,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> list[SearchResult]:
-        """搜索记忆内容."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.search(query, top_k=top_k)
 
     async def get_history(
@@ -143,9 +159,9 @@ class MemoryModule:
         limit: int = 10,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> list[MemoryEvent]:
-        """获取历史记忆事件."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.get_history(limit)
 
     async def get_event_type(
@@ -153,9 +169,9 @@ class MemoryModule:
         event_id: str,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> str | None:
-        """按 event_id 查找事件类型."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.get_event_type(event_id)
 
     async def update_feedback(
@@ -164,14 +180,32 @@ class MemoryModule:
         feedback: FeedbackData,
         *,
         mode: MemoryMode | None = None,
+        user_id: str = "default",
     ) -> None:
-        """更新记忆反馈."""
-        store = await self._get_store(self._resolve_mode(mode))
+        store = await self._get_store(self._resolve_mode(mode), user_id)
         await store.update_feedback(event_id, feedback)
 
     async def close(self) -> None:
-        """关闭所有 store 的后台任务。"""
-        for store in self._stores.values():
+        """关闭所有 store，清理资源。
+
+        成功关闭的 store 立即释放引用；失败的保留以便调试，
+        但不会阻止其他 store 的清理。
+        """
+        failed: list[str] = []
+        for key, store in list(self._stores.items()):
             closer = getattr(store, "close", None)
-            if closer is not None:
+            if closer is None:
+                continue
+            try:
                 await closer()
+            except Exception:
+                logger.exception("Failed to close store %s", key)
+                failed.append(key)
+            else:
+                del self._stores[key]
+        if failed:
+            logger.warning(
+                "%d store(s) failed to close, references retained: %s",
+                len(failed),
+                failed,
+            )

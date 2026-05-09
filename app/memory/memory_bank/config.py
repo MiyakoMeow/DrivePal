@@ -1,9 +1,16 @@
 """MemoryBank 集中配置模型。"""
 
-from typing import Literal
+from __future__ import annotations
+
+import logging
+from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from .index import FaissIndex
 
 
 class MemoryBankConfig(BaseSettings):
@@ -14,14 +21,14 @@ class MemoryBankConfig(BaseSettings):
     # ── 遗忘 ──
     enable_forgetting: bool = False
     forget_mode: Literal["deterministic", "probabilistic"] = "deterministic"
-    soft_forget_threshold: float = 0.15
+    soft_forget_threshold: float = 0.3
     forget_interval_seconds: int = 300
     forgetting_time_scale: float = 1.0
     seed: int | None = None
 
     # ── 检索 ──
-    chunk_size: int | None = None  # None → 自适应 P90×3
-    default_chunk_size: int = 1500  # 自适应回退值
+    chunk_size: int | None = None
+    default_chunk_size: int = 1500
     chunk_size_min: int = 200
     chunk_size_max: int = 8192
     coarse_search_factor: int = 4
@@ -41,6 +48,32 @@ class MemoryBankConfig(BaseSettings):
             return 1.0
         return v
 
+    # ── LLM ──
+    llm_max_retries: int = 3
+    llm_trim_start: int = 1800
+    llm_trim_step: int = 200
+    llm_trim_min: int = 500
+    llm_anchor_user: str = (
+        "Hello! Please help me summarize the content of the conversation."
+    )
+    llm_anchor_assistant: str = "Sure, I will do my best to assist you."
+    llm_temperature: float | None = None
+    llm_max_tokens: int | None = None
+
+    @field_validator("llm_max_retries")
+    @classmethod
+    def _guard_llm_retries_positive(cls, v: int) -> int:
+        if v < 1:
+            return 3
+        return v
+
+    @field_validator("llm_trim_min")
+    @classmethod
+    def _guard_trim_min_positive(cls, v: int) -> int:
+        if v < 1:
+            return 500
+        return v
+
     # ── 摘要 ──
     summary_system_prompt: str = (
         "You are an in-car AI assistant with expertise in remembering "
@@ -48,10 +81,55 @@ class MemoryBankConfig(BaseSettings):
     )
 
     # ── 嵌入 ──
-    embedding_dim: int = 1536  # 首次 add_vector 后由实际向量维度覆盖；BGE-M3 为 1024
+    embedding_dim: int = 1536
+    embedding_batch_size: int = 100
+
+    @field_validator("embedding_batch_size")
+    @classmethod
+    def _guard_embedding_batch_positive(cls, v: int) -> int:
+        if v < 1:
+            return 100
+        return v
+
+    # ── 持久化 ──
+    save_interval_seconds: float = 30.0
+
+    @field_validator("save_interval_seconds")
+    @classmethod
+    def _guard_save_interval_positive(cls, v: float) -> float:
+        if v <= 0:
+            return 30.0
+        return v
+
+    # ── 参考日期 ──
+    reference_date: str | None = None
+    reference_date_auto: bool = False
+
+    @field_validator("reference_date")
+    @classmethod
+    def _guard_reference_date_format(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            date.fromisoformat(v)
+        except ValueError, TypeError:
+            logging.getLogger(__name__).warning(
+                "Invalid reference_date=%r, falling back to today", v
+            )
+            return datetime.now(UTC).strftime("%Y-%m-%d")
+        return v
 
     # ── 关闭 ──
     shutdown_timeout_seconds: float = 30.0
 
-    # ── 外部注入（非环境变量） ──
-    reference_date: str | None = None
+
+def resolve_reference_date(
+    config: MemoryBankConfig,
+    index: FaissIndex,
+) -> str:
+    """参考日期解析。优先级：config.reference_date > auto 推算 > UTC 当天。"""
+    if config.reference_date:
+        return config.reference_date
+    if config.reference_date_auto:
+        return index.compute_reference_date()
+    return datetime.now(UTC).strftime("%Y-%m-%d")

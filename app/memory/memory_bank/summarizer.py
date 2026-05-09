@@ -3,6 +3,8 @@
 import logging
 from typing import TYPE_CHECKING
 
+from app.memory.exceptions import SummarizationEmpty
+
 if TYPE_CHECKING:
     from .config import MemoryBankConfig
     from .index_reader import IndexReader
@@ -10,6 +12,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 GENERATION_EMPTY = "GENERATION_EMPTY"
+_SUMMARY_DEFAULT_TEMPERATURE = 0.3
+_SUMMARY_DEFAULT_MAX_TOKENS = 400
 
 
 class Summarizer:
@@ -21,26 +25,31 @@ class Summarizer:
         index: IndexReader,
         config: MemoryBankConfig,
     ) -> None:
-        """初始化 Summarizer。
-
-        Args:
-            llm: LLM 客户端。
-            index: FAISS 索引（只读视图）。
-            config: MemoryBank 配置。
-
-        """
         self._llm = llm
         self._index = index
         self._config = config
 
+    @property
+    def _effective_temperature(self) -> float:
+        return (
+            self._config.llm_temperature
+            if self._config.llm_temperature is not None
+            else _SUMMARY_DEFAULT_TEMPERATURE
+        )
+
+    @property
+    def _effective_max_tokens(self) -> int:
+        return (
+            self._config.llm_max_tokens
+            if self._config.llm_max_tokens is not None
+            else _SUMMARY_DEFAULT_MAX_TOKENS
+        )
+
     async def get_daily_summary(self, date_key: str) -> str | None:
         """生成某天的对话摘要（已存在则不覆盖）。
 
-        Args:
-            date_key: 日期键。
-
-        Returns:
-            摘要文本或 None。
+        Raises:
+            LLMCallFailed: LLM API 调用失败（调用方决定降级）。
 
         """
         meta = self._index.get_metadata()
@@ -53,19 +62,22 @@ class Summarizer:
         ]
         if not texts:
             return None
-        result = await self._llm.call(
-            self._summarize_prompt("\n".join(texts)),
-            system_prompt=self._config.summary_system_prompt,
-        )
-        if result:
+        try:
+            result = await self._llm.call(
+                self._summarize_prompt("\n".join(texts)),
+                system_prompt=self._config.summary_system_prompt,
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
+            )
             return f"The summary of the conversation on {date_key} is: {result}"
-        return None
+        except SummarizationEmpty:
+            return None
 
     async def get_overall_summary(self) -> str | None:
         """基于所有日常摘要生成总体摘要（已存在则不覆盖）。
 
-        Returns:
-            总体摘要文本或 None。
+        Raises:
+            LLMCallFailed: LLM API 调用失败。
 
         """
         extra = self._index.get_extra()
@@ -82,23 +94,24 @@ class Summarizer:
         ]
         parts.extend(f"\n{m.get('text', '')}" for m in daily_sums)
         parts.append("\nSummarization: ")
-        result = await self._llm.call(
-            "".join(parts), system_prompt=self._config.summary_system_prompt
-        )
-        if result:
+        try:
+            result = await self._llm.call(
+                "".join(parts),
+                system_prompt=self._config.summary_system_prompt,
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
+            )
             extra["overall_summary"] = result
             return result
-        extra["overall_summary"] = GENERATION_EMPTY
-        return None
+        except SummarizationEmpty:
+            extra["overall_summary"] = GENERATION_EMPTY
+            return None
 
     async def get_daily_personality(self, date_key: str) -> str | None:
         """生成某天的人格画像（已存在则不覆盖）。
 
-        Args:
-            date_key: 日期键。
-
-        Returns:
-            人格分析文本或 None。
+        Raises:
+            LLMCallFailed: LLM API 调用失败。
 
         """
         extra = self._index.get_extra()
@@ -115,20 +128,23 @@ class Summarizer:
         ]
         if not texts:
             return None
-        result = await self._llm.call(
-            self._personality_prompt("\n".join(texts)),
-            system_prompt=self._config.summary_system_prompt,
-        )
-        if result:
+        try:
+            result = await self._llm.call(
+                self._personality_prompt("\n".join(texts)),
+                system_prompt=self._config.summary_system_prompt,
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
+            )
             existing[date_key] = result
             return result
-        return None
+        except SummarizationEmpty:
+            return None
 
     async def get_overall_personality(self) -> str | None:
         """基于所有日常人格画像生成总体人格（已存在则不覆盖）。
 
-        Returns:
-            总体人格文本或 None。
+        Raises:
+            LLMCallFailed: LLM API 调用失败。
 
         """
         extra = self._index.get_extra()
@@ -151,14 +167,18 @@ class Summarizer:
             "appropriate in-car response strategy for the AI assistant, "
             "summarized as:"
         )
-        result = await self._llm.call(
-            "".join(parts), system_prompt=self._config.summary_system_prompt
-        )
-        if result:
+        try:
+            result = await self._llm.call(
+                "".join(parts),
+                system_prompt=self._config.summary_system_prompt,
+                temperature=self._effective_temperature,
+                max_tokens=self._effective_max_tokens,
+            )
             extra["overall_personality"] = result
             return result
-        extra["overall_personality"] = GENERATION_EMPTY
-        return None
+        except SummarizationEmpty:
+            extra["overall_personality"] = GENERATION_EMPTY
+            return None
 
     @staticmethod
     def _summarize_prompt(text: str) -> str:

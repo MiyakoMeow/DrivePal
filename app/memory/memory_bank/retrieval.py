@@ -352,6 +352,30 @@ class RetrievalPipeline:
         self._index = index
         self._embedding_client = embedding_client
         self._config = config
+        self._cached_chunk_size: int | None = None
+        self._cached_metadata_len: int = 0
+        self._cached_first_text: str = ""
+        self._cached_last_text: str = ""
+
+    def _get_chunk_size(self, metadata: list[dict]) -> int:
+        """缓存版 chunk_size：metadata 长度 + 首尾文本哈希不变则直接返回。"""
+        if (
+            self._cached_chunk_size is not None
+            and len(metadata) == self._cached_metadata_len
+        ):
+            # 快速碰撞检测：首尾条目文本未变则假设所有条目未变
+            first_text = metadata[0].get("text", "") if metadata else ""
+            last_text = metadata[-1].get("text", "") if metadata else ""
+            if (
+                first_text == self._cached_first_text
+                and last_text == self._cached_last_text
+            ):
+                return self._cached_chunk_size
+        self._cached_chunk_size = _get_effective_chunk_size(metadata, self._config)
+        self._cached_metadata_len = len(metadata)
+        self._cached_first_text = metadata[0].get("text", "") if metadata else ""
+        self._cached_last_text = metadata[-1].get("text", "") if metadata else ""
+        return self._cached_chunk_size
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
@@ -401,7 +425,7 @@ class RetrievalPipeline:
         if not results or not metadata:
             return results
 
-        effective_chunk = _get_effective_chunk_size(metadata, self._config)
+        effective_chunk = self._get_chunk_size(metadata)
         indexed = [
             (r, r["_meta_idx"]) for r in results if r.get("_meta_idx") is not None
         ]
@@ -444,5 +468,7 @@ class RetrievalPipeline:
             rs = {s.lower() for s in (r.get("speakers") or [])}
             if not rs.intersection(speakers_in_query):
                 score = r.get("score", 0.0)
+                # 说话人不匹配降权 25%：正分压低，负分推低（降序排列更靠后）。
+                # 0.75/1.25 为经验值，与原始 MemoryBank 论文一致。
                 r["score"] = score * 0.75 if score >= 0 else score * 1.25
         return results

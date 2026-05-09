@@ -48,3 +48,7 @@ class MemoryStore(Protocol):
     ) -> InteractionResult:
         """写入交互记录."""
         ...
+
+    async def close(self) -> None:
+        """优雅关闭：释放连接、取消后台任务、持久化。"""
+        ...
