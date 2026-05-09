@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
 from app.memory.schemas import InteractionResult, MemoryEvent
 
+from .config import resolve_reference_date
 from .forget import ForgettingCurve, compute_ingestion_forget_ids
 from .index import FaissIndex
 
@@ -69,12 +70,7 @@ class MemoryLifecycle:
         return False
 
     def _resolve_reference_date(self) -> str:
-        """按优先级解析参考日期：config > auto compute > UTC today。"""
-        if self._config.reference_date:
-            return self._config.reference_date
-        if self._config.reference_date_auto:
-            return self._index.compute_reference_date()
-        return datetime.now(UTC).strftime("%Y-%m-%d")
+        return resolve_reference_date(self._config, self._index)
 
     async def _forget_at_ingestion(self) -> None:
         """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）。"""
@@ -152,8 +148,6 @@ class MemoryLifecycle:
             )
 
         # 批量编码
-        if not pair_texts:
-            return ""
         embeddings = await self._embedding_client.encode_batch(pair_texts)
         fid: int | None = None
         for text_item, emb, meta in zip(

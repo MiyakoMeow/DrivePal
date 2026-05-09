@@ -3,7 +3,6 @@
 import logging
 import time
 from collections import defaultdict
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.memory.embedding_client import EmbeddingClient
@@ -15,7 +14,7 @@ from app.memory.schemas import (
 )
 
 from .bg_tasks import BackgroundTaskRunner
-from .config import MemoryBankConfig
+from .config import MemoryBankConfig, resolve_reference_date
 from .forget import ForgettingCurve
 from .index import FaissIndex
 from .lifecycle import MemoryLifecycle
@@ -92,15 +91,7 @@ class MemoryBankStore:
                 logger.info("FaissIndex recovery: %s", a)
 
     def _get_reference_date(self) -> str:
-        """统一参考日期解析，与 forget 路径对齐。
-
-        优先级：显式配置 > auto（从 metadata 推） > UTC 当天。
-        """
-        if self._config.reference_date:
-            return self._config.reference_date
-        if self._config.reference_date_auto:
-            return self._index.compute_reference_date()
-        return datetime.now(UTC).strftime("%Y-%m-%d")
+        return resolve_reference_date(self._config, self._index)
 
     async def _maybe_save(self) -> None:
         """持久化节流：距上次保存 < save_interval_seconds 则跳过。"""

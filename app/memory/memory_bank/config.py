@@ -1,6 +1,12 @@
 """MemoryBank 集中配置模型。"""
 
-from typing import Literal
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from .index import FaissIndex
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -100,3 +106,15 @@ class MemoryBankConfig(BaseSettings):
 
     # ── 关闭 ──
     shutdown_timeout_seconds: float = 30.0
+
+
+def resolve_reference_date(
+    config: MemoryBankConfig,
+    index: FaissIndex,
+) -> str:
+    """参考日期解析。优先级：config.reference_date > auto 推算 > UTC 当天。"""
+    if config.reference_date:
+        return config.reference_date
+    if config.reference_date_auto:
+        return index.compute_reference_date()
+    return datetime.now(UTC).strftime("%Y-%m-%d")

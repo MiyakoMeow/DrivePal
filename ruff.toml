@@ -42,10 +42,10 @@ exclude = [".agents/**"]
 ]
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
 "app/memory/memory_bank/store.py" = [
-    "PLR0913",
-    "S311",
-    "D102",
-    "D107",
+    "PLR0913",  # __init__ 参数多（依赖注入）
+    "S311",  # 伪随机种子用于退避 jitter，非安全场景
+    "D102",  # Facade 委托方法由类级 docstring 阐明语义
+    "D107",  # __init__ 由类级 docstring 阐明语义
     "PLC0415",
     "BLE001",  # close() 中宽捕获 Exception 合理——持久化失败不应阻止 shutdown
 ]

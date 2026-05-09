@@ -81,8 +81,6 @@ class LlmClient:
                 if not resp or not resp.strip():
                     raise SummarizationEmpty("LLM returned empty content")
                 return resp.strip()
-            except SummarizationEmpty:
-                raise
             except AllProviderFailedError as exc:
                 err = str(exc).lower()
                 if (
