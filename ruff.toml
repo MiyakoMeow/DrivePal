@@ -51,7 +51,10 @@ exclude = [".agents/**"]
     "ARG002",  # user_id 保留——MemoryStore Protocol 接口兼容
 ]
 "app/agents/workflow.py" = [
-    "C901",  # _execution_node 含多条安全规则分支（postpone/only_urgent/frequency guard），复杂度可接受
+    "C901",  # _execution_node 含多条安全规则分支，复杂度可接受
+]
+"app/agents/probabilistic.py" = [
+    "ANN401",  # infer_intent memory_store 为 duck-typing Any
 ]
 "app/memory/memory_bank/index_reader.py" = [
     "D102",  # Protocol 桩方法由类级 docstring 阐明语义

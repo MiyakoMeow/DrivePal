@@ -33,7 +33,7 @@ def is_enabled() -> bool:
 
 async def infer_intent(
     query_text: str,
-    memory_store: Any,  # noqa: ANN401
+    memory_store: Any,
     user_id: str | None = None,
 ) -> dict:
     """从 MemoryBank 检索相似事件，聚合 type 得分推断意图。

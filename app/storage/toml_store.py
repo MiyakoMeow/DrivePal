@@ -58,7 +58,7 @@ class TOMLStore:
         """初始化TOML存储，指定用户目录和文件名。"""
         self.filepath = user_dir / filename
         if default_factory is None:
-            default_factory = cast("Callable[[], T]", dict)  # type: ignore[type-arg]
+            default_factory = cast("Callable[[], T]", dict)
         self.default_factory: Callable[[], T] = default_factory
         self._lock = _get_file_lock(self.filepath)
 
