@@ -4,9 +4,12 @@
 方法无 await 点，故在协程间原子执行。若将来迁移至多线程事件循环，需加 asyncio.Lock。
 """
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 _MAX_TURNS = 10
 
@@ -88,7 +91,10 @@ class ConversationManager:
                 del self._sessions[session_id]
                 return []
         except ValueError, TypeError:
-            pass
+            logger.debug(
+                "Cannot parse last_activity for session %s, treating as valid",
+                session_id,
+            )
         return list(session["turns"])
 
     def close(self, session_id: str) -> None:

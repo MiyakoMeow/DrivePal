@@ -137,7 +137,8 @@ def _map_pending_trigger(
             {"previous_scenario": driving_ctx.get("scenario", "")},
             "驾驶状态恢复时",
         )
-    # 兜底：无 driving_ctx 且无时间信息时，不做 pending，直接返回正常触发标记
+    # 兜底：无 driving_ctx 且无时间信息时，创建即刻触发的时间提醒
+    # 注意：此时轮询调用 poll() 后会立即触发（now >= target_time）
     return "time", {"time": datetime.now(UTC).isoformat()}, ""
 
 
@@ -710,7 +711,10 @@ class AgentWorkflow:
         state.update(updates)
 
         # done 事件
-        done_data: dict[str, object] = {"event_id": state.get("event_id"), "session_id": session_id}
+        done_data: dict[str, object] = {
+            "event_id": state.get("event_id"),
+            "session_id": session_id,
+        }
         pending_id = state.get("pending_reminder_id")
         if pending_id:
             done_data["status"] = "pending"

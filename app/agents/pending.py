@@ -80,8 +80,8 @@ class PendingReminderManager:
         )
         if user_dir not in _PER_USER_LOCKS:
             _PER_USER_LOCKS[user_dir] = asyncio.Lock()
+        # 保护 read-modify-write 操作原子性，防止并发 add/poll/cancel 丢数据
         self._lock = _PER_USER_LOCKS[user_dir]
-        """保护 read-modify-write 操作原子性，防止并发 add/poll/cancel 丢数据。"""
 
     async def _read_all(self) -> list[dict]:
         return await self._store.read()
