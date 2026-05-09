@@ -147,7 +147,7 @@ class FaissIndex:
                 try:
                     id_array = faiss.vector_to_array(idx.id_map)
                     actual_ids: list[int] = id_array.astype(int).tolist()
-                except (AttributeError, TypeError, ValueError):
+                except AttributeError, TypeError, ValueError:
                     # 降级：无法提取实际 ID，从 0 连续分配
                     actual_ids = list(range(idx.ntotal))
                     meta_warnings.append(
@@ -182,7 +182,7 @@ class FaissIndex:
             try:
                 id_array = faiss.vector_to_array(idx.id_map)
                 actual_ids: list[int] = id_array.astype(int).tolist()
-            except (AttributeError, TypeError, ValueError):
+            except AttributeError, TypeError, ValueError:
                 actual_ids = list(range(idx.ntotal))
             meta = [
                 {

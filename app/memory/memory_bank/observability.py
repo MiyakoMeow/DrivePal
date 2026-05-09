@@ -31,9 +31,7 @@ class MemoryBankMetrics:
     forget_count: int = 0
     forget_removed_count: int = 0
     background_task_failures: int = 0
-    index_load_warnings: deque[str] = field(
-        default_factory=lambda: deque(maxlen=100)
-    )
+    index_load_warnings: deque[str] = field(default_factory=lambda: deque(maxlen=100))
 
     def snapshot(self) -> dict[str, Any]:
         return {

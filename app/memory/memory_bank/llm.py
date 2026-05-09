@@ -111,3 +111,6 @@ class LlmClient:
                 raise LLMCallFailed(
                     f"LLM call failed after {attempt + 1} attempts: {exc}"
                 ) from exc
+        raise LLMCallFailed(
+            "LLM call failed — unexpected: loop exhausted without raising"
+        )
