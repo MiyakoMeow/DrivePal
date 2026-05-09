@@ -44,13 +44,6 @@ from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)
 
-_INVALID_USER_ID_MSG = "Invalid user ID"
-
-
-def _validate_user_id(current_user: str) -> None:
-    if ".." in current_user or current_user.startswith("/"):
-        raise GraphQLError(_INVALID_USER_ID_MSG)
-
 
 async def _safe_memory_call[T](
     coro: Awaitable[T],
@@ -225,7 +218,6 @@ class Mutation:
     @strawberry.mutation
     async def export_data(self, current_user: str) -> ExportDataResult:
         """导出当前用户全量文本数据."""
-        _validate_user_id(current_user)
         u_dir = user_data_dir(current_user)
         files: dict[str, str] = {}
         if u_dir.exists():
@@ -242,7 +234,6 @@ class Mutation:
     @strawberry.mutation
     async def delete_all_data(self, current_user: str) -> bool:
         """删除当前用户全量数据."""
-        _validate_user_id(current_user)
         u_dir = user_data_dir(current_user)
         if not u_dir.exists():
             return False

@@ -9,5 +9,8 @@ DATA_DIR = DATA_ROOT
 
 
 def user_data_dir(user_id: str = "default") -> Path:
-    """返回指定用户的 per-user 数据目录路径。"""
+    """返回指定用户的 per-user 数据目录路径。校验 user_id 防止路径遍历。"""
+    if ".." in user_id or user_id.startswith("/"):
+        msg = f"Invalid user ID: {user_id!r}"
+        raise ValueError(msg)
     return DATA_DIR / "users" / user_id

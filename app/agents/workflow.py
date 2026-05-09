@@ -233,6 +233,7 @@ class AgentWorkflow:
                 intent = await infer_intent(
                     state.get("original_query", ""),
                     self.memory_module,
+                    user_id=self.current_user,
                 )
                 risk = compute_interrupt_risk(driving_context or {})
                 intent["interrupt_risk"] = round(risk, 2)

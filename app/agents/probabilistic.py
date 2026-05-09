@@ -12,8 +12,8 @@ _SCENARIO_MAP = {"parked": 0.0, "city_driving": 0.4, "traffic_jam": 0.3, "highwa
 
 _SPEED_THRESHOLD_40 = 40
 _SPEED_THRESHOLD_80 = 80
-_OVERLOADED_SCORE = 0.9
 OVERLOADED_WARNING_THRESHOLD = 0.36  # 公开常量，workflow.py 等共享
+# 打断风险警告阈值（疲劳临界 ~0.7×0.4 + normal×0.3 + city×0.2 ≈ 0.45）
 
 
 def _speed_factor(speed_kmh: float) -> float:
@@ -31,12 +31,17 @@ def is_enabled() -> bool:
     return os.environ.get("PROBABILISTIC_INFERENCE_ENABLED", "1") != "0"
 
 
-async def infer_intent(query_text: str, memory_store: Any) -> dict:  # noqa: ANN401
+async def infer_intent(
+    query_text: str,
+    memory_store: Any,  # noqa: ANN401
+    user_id: str | None = None,
+) -> dict:
     """从 MemoryBank 检索相似事件，聚合 type 得分推断意图。
 
     Args:
         query_text: 用户查询文本。
         memory_store: MemoryBankStore 实例（需实现 search(query, top_k) → list[SearchResult]）。
+        user_id: 可选，传给 search() 的多用户隔离标识。
 
     Returns:
         {"intent_confidence": float, "alternative": str|None, "alt_confidence": float}
@@ -44,7 +49,10 @@ async def infer_intent(query_text: str, memory_store: Any) -> dict:  # noqa: ANN
 
     """
     try:
-        results = await memory_store.search(query_text, top_k=20)
+        kwargs: dict[str, object] = {"top_k": 20}
+        if user_id is not None:
+            kwargs["user_id"] = user_id
+        results = await memory_store.search(query_text, **kwargs)
     except (OSError, RuntimeError, ValueError, TypeError) as e:
         logger.warning("Intent inference search failed: %s", e)
         results = []
