@@ -3,6 +3,7 @@
 import logging
 import time
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.memory.embedding_client import EmbeddingClient
@@ -90,6 +91,17 @@ class MemoryBankStore:
             for a in result.recovery_actions:
                 logger.info("FaissIndex recovery: %s", a)
 
+    def _get_reference_date(self) -> str:
+        """统一参考日期解析，与 forget 路径对齐。
+
+        优先级：显式配置 > auto（从 metadata 推） > UTC 当天。
+        """
+        if self._config.reference_date:
+            return self._config.reference_date
+        if self._config.reference_date_auto:
+            return self._index.compute_reference_date()
+        return datetime.now(UTC).strftime("%Y-%m-%d")
+
     async def _maybe_save(self) -> None:
         """持久化节流：距上次保存 < save_interval_seconds 则跳过。"""
         now = time.monotonic()
@@ -133,7 +145,7 @@ class MemoryBankStore:
         results, updated = await self._retrieval.search(
             query,
             top_k,
-            reference_date=self._config.reference_date,
+            reference_date=self._get_reference_date(),
         )
         elapsed = (time.perf_counter() - t0) * 1000
         self._metrics.search_latency_ms.append(elapsed)

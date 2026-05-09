@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
 from app.memory.schemas import InteractionResult, MemoryEvent
 
-from .forget import ForgetMode, ForgettingCurve, compute_ingestion_forget_ids
+from .forget import ForgettingCurve, compute_ingestion_forget_ids
 from .index import FaissIndex
 
 if TYPE_CHECKING:
@@ -79,16 +79,11 @@ class MemoryLifecycle:
     async def _forget_at_ingestion(self) -> None:
         """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）。"""
         today = self._resolve_reference_date()
-        mode = (
-            ForgetMode.PROBABILISTIC
-            if self._config.forget_mode == "probabilistic"
-            else ForgetMode.DETERMINISTIC
-        )
         ids = compute_ingestion_forget_ids(
             self._index.get_metadata(),
             today,
             config=self._config,
-            rng=self._forget.rng if mode == ForgetMode.PROBABILISTIC else None,
+            rng=None,  # 使用独立 RNG，不与 purge_forgotten 共享状态
         )
         if ids:
             if self._metrics:

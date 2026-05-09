@@ -154,8 +154,14 @@ class FaissIndex:
                 ],
             )
 
+        # 防御：加载路径不变量——idx 到达此处必定非 None
+        # （非 IndexIDMap 或异常已在前面提前返回）
         if idx is None:
-            return LoadResult(ok=True)
+            msg = (
+                "FaissIndex.load: internal invariant violated — "
+                "idx is None after successful read_index"
+            )
+            raise RuntimeError(msg)
 
         # 2. 尝试加载 metadata
         meta: list[dict] | None = None
