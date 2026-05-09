@@ -65,6 +65,13 @@ class TestPrefixMatch:
         assert result is not None
         assert result["delay_seconds"] == 1800
 
+    def test_snooze_invalid_params_defaults_300(self):
+        """Given 无法解析的延迟参数, When prefix match, Then 默认 300s."""
+        sr = ShortcutResolver()
+        result = sr.resolve("延迟abc")
+        assert result is not None
+        assert result["delay_seconds"] == 300
+
 
 class TestNoMatchFallback:
     def test_complex_query_returns_none(self):

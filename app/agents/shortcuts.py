@@ -72,7 +72,8 @@ class ShortcutResolver:
                     "action": "cancel_last",
                 }
             if action == "snooze":
-                secs = parse_duration(params) if params else 300
+                parsed = parse_duration(params) if params else None
+                secs = parsed if parsed is not None else 300
                 return {
                     "should_remind": True,
                     "timing": "delay",
