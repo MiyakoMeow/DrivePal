@@ -283,10 +283,7 @@ def parse_time(s: str) -> str | None:
         return None
     if am_pm == "上午" and hour == 12:
         hour = 0
-    elif am_pm == "下午" and hour != 12:
+    elif (am_pm == "下午" and hour != 12) or (am_pm is None and hour < 8):
         hour += 12
-    elif am_pm is None:
-        if hour < 8:
-            hour += 12
     today = datetime.now(UTC).date().isoformat()
     return f"{today}T{hour:02d}:00:00"

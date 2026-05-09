@@ -88,7 +88,7 @@ def _format_time_for_display(time_str: str) -> str:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
         return dt.strftime("%H:%M")
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return time_str
 
 
@@ -487,7 +487,11 @@ class AgentWorkflow:
                 pending_ids = [pr.id]
 
             reason = decision.get("reason", "")
-            result = f"提醒已延后：{reason}。将在条件满足时提醒" if reason else "提醒已延后，将在条件满足时提醒"
+            result = (
+                f"提醒已延后：{reason}。将在条件满足时提醒"
+                if reason
+                else "提醒已延后，将在条件满足时提醒"
+            )
             if stages is not None:
                 stages.execution = {
                     "content": None,
@@ -651,7 +655,7 @@ class AgentWorkflow:
             state["decision"] = shortcut_decision
             exec_result = await self._execution_node(state)
             state.update(exec_result)
-            done_data = {
+            done_data: dict[str, object] = {
                 "event_id": state.get("event_id"),
                 "session_id": session_id,
                 "status": "delivered",
@@ -706,7 +710,7 @@ class AgentWorkflow:
         state.update(updates)
 
         # done 事件
-        done_data: dict = {"event_id": state.get("event_id"), "session_id": session_id}
+        done_data: dict[str, object] = {"event_id": state.get("event_id"), "session_id": session_id}
         pending_id = state.get("pending_reminder_id")
         if pending_id:
             done_data["status"] = "pending"
