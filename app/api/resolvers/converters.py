@@ -2,7 +2,6 @@
 
 import dataclasses
 from enum import Enum
-from pathlib import Path
 from typing import Any, cast
 
 from app.api.graphql_schema import (
@@ -10,11 +9,9 @@ from app.api.graphql_schema import (
     DrivingContextInput,
     ScenarioPresetGQL,
 )
-from app.config import DATA_DIR
+from app.config import user_data_dir
 from app.schemas.context import DrivingContext
 from app.storage.toml_store import TOMLStore
-
-_PRESETS_FILENAME = "scenario_presets.toml"
 
 
 def strawberry_to_plain(obj: object) -> object:
@@ -52,9 +49,13 @@ def dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
     return DrivingContextGQL.from_pydantic(ctx)
 
 
-def preset_store() -> TOMLStore:
-    """获取场景预设存储实例。"""
-    return TOMLStore(DATA_DIR, Path(_PRESETS_FILENAME), list)
+def preset_store(current_user: str = "default") -> TOMLStore:
+    """获取场景预设存储实例（per-user）。"""
+    return TOMLStore(
+        user_dir=user_data_dir(current_user),
+        filename="scenario_presets.toml",
+        default_factory=list,
+    )
 
 
 def to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:

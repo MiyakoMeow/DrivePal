@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.main import app
+from app.config import user_data_dir
 from app.memory.singleton import get_memory_module
 from app.storage.toml_store import TOMLStore
 from tests.fixtures import reset_all_singletons
@@ -24,6 +25,10 @@ _MODULES_WITH_DATA_DIR = [
     "app.memory.singleton",
 ]
 
+_MODULES_WITH_DATA_ROOT = [
+    "app.config",
+]
+
 
 @pytest.fixture
 def isolated_app(tmp_path: Path) -> Generator[TestClient]:
@@ -34,6 +39,8 @@ def isolated_app(tmp_path: Path) -> Generator[TestClient]:
     with ExitStack() as stack:
         for mod in _MODULES_WITH_DATA_DIR:
             stack.enter_context(patch(f"{mod}.DATA_DIR", target))
+        for mod in _MODULES_WITH_DATA_ROOT:
+            stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
         reset_all_singletons()
         yield TestClient(app)
         reset_all_singletons()
@@ -163,9 +170,9 @@ async def test_feedback_success_updates_strategy_weight(
     assert result["data"]["submitFeedback"]["status"] == "success"
 
     strategies = await TOMLStore(
-        Path(os.environ["DATA_DIR"]),
-        Path("strategies.toml"),
-        dict,
+        user_dir=user_data_dir("default"),
+        filename="strategies.toml",
+        default_factory=dict,
     ).read()
     assert "meeting" in strategies.get("reminder_weights", {})
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)

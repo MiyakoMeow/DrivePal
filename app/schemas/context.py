@@ -48,6 +48,7 @@ class DrivingContext(BaseModel):
     spatial: SpatioTemporalContext = Field(default_factory=SpatioTemporalContext)
     traffic: TrafficCondition = Field(default_factory=TrafficCondition)
     scenario: Literal["parked", "city_driving", "highway", "traffic_jam"] = "parked"
+    passengers: list[str] = Field(default_factory=list)
 
 
 class ScenarioPreset(BaseModel):

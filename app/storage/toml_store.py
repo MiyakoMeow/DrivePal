@@ -51,12 +51,12 @@ class TOMLStore:
 
     def __init__(
         self,
-        data_dir: Path,
-        filename: Path,
+        user_dir: Path,
+        filename: str,
         default_factory: Callable[[], T] | None = None,
     ) -> None:
-        """初始化TOML存储，指定数据目录和文件名."""
-        self.filepath = filename if filename.is_absolute() else data_dir / filename
+        """初始化TOML存储，指定用户目录和文件名。"""
+        self.filepath = user_dir / filename
         if default_factory is None:
             default_factory = cast("Callable[[], T]", dict)
         self.default_factory: Callable[[], T] = default_factory

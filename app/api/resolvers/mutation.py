@@ -1,6 +1,7 @@
 """Mutation 解析器."""
 
 import logging
+import shutil
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import strawberry
@@ -9,8 +10,11 @@ from graphql.error import GraphQLError
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-from app.agents.workflow import AgentWorkflow
+    from strawberry.scalars import JSON
+
+from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
 from app.api.graphql_schema import (
+    ExportDataResult,
     FeedbackInput,
     FeedbackResult,
     ProcessQueryInput,
@@ -29,13 +33,14 @@ from app.api.resolvers.errors import (
     GraphQLInvalidActionError,
     InternalServerError,
 )
-from app.config import DATA_DIR
+from app.config import DATA_DIR, user_data_dir
 from app.memory.schemas import FeedbackData
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.schemas.context import (
     ScenarioPreset,
 )
+from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +99,7 @@ class Mutation:
                 data_dir=DATA_DIR,
                 memory_mode=MemoryMode(query_input.memory_mode.value),
                 memory_module=mm,
+                current_user=query_input.current_user,
             )
 
             driving_context = None
@@ -116,6 +122,14 @@ class Mutation:
             )
         except GraphQLError:
             raise
+        # ChatModelUnavailableError 也可能不经 _safe_memory_call
+        # 直接由 workflow._call_llm_json 抛出，此处兜底。
+        except ChatModelUnavailableError as e:
+            msg = "AI 模型未就绪"
+            raise GraphQLError(
+                msg,
+                extensions={"code": "CHAT_MODEL_UNAVAILABLE"},
+            ) from e
         except Exception as e:
             logger.exception("processQuery failed")
             raise InternalServerError from e
@@ -146,15 +160,37 @@ class Mutation:
         if actual_type is None:
             raise GraphQLEventNotFoundError(feedback_input.event_id)
 
+        current_user = feedback_input.current_user
+
         feedback = FeedbackData(
             action=safe_action,
             type=actual_type,
             modified_content=feedback_input.modified_content,
         )
         await _safe_memory_call(
-            mm.update_feedback(feedback_input.event_id, feedback, mode=mode),
+            mm.update_feedback(
+                feedback_input.event_id,
+                feedback,
+                mode=mode,
+                user_id=current_user,
+            ),
             "submitFeedback(update_feedback)",
         )
+
+        # 权重更新：读→改→写 strategies.toml
+        user_dir = user_data_dir(current_user)
+        strategy_store = TOMLStore(
+            user_dir=user_dir,
+            filename="strategies.toml",
+            default_factory=dict,
+        )
+        current_strategy = await strategy_store.read()
+        weights = current_strategy.get("reminder_weights", {})
+        delta = 0.1 if safe_action == "accept" else -0.1
+        new_weight = weights.get(actual_type, 0.5) + delta
+        weights[actual_type] = max(0.1, min(1.0, new_weight))
+        await strategy_store.update("reminder_weights", weights)
+
         return FeedbackResult(status="success")
 
     @strawberry.mutation
@@ -163,7 +199,7 @@ class Mutation:
         preset_input: Annotated[ScenarioPresetInput, strawberry.argument(name="input")],
     ) -> ScenarioPresetGQL:
         """保存场景预设."""
-        store = preset_store()
+        store = preset_store(preset_input.current_user)
         preset = ScenarioPreset(name=preset_input.name)
         if preset_input.context:
             preset.context = input_to_context(preset_input.context)
@@ -171,12 +207,47 @@ class Mutation:
         return to_gql_preset(preset.model_dump())
 
     @strawberry.mutation
-    async def delete_scenario_preset(self, preset_id: str) -> bool:
+    async def delete_scenario_preset(
+        self,
+        preset_id: str,
+        current_user: str = "default",
+    ) -> bool:
         """删除场景预设."""
-        store = preset_store()
+        store = preset_store(current_user)
         presets = await store.read()
         new_presets = [p for p in presets if p.get("id") != preset_id]
         if len(new_presets) == len(presets):
             return False
         await store.write(new_presets)
+        return True
+
+    @strawberry.mutation
+    async def export_data(self, current_user: str) -> ExportDataResult:
+        """导出当前用户全量文本数据."""
+        u_dir = user_data_dir(current_user)
+        files: dict[str, str] = {}
+        if u_dir.exists():
+            for fpath in u_dir.rglob("*"):
+                if "memorybank" in fpath.parts:
+                    continue  # 跳过 FAISS 二进制和内部元数据
+                if fpath.is_file() and fpath.suffix in (".jsonl", ".toml", ".json"):
+                    try:
+                        content = fpath.read_text(encoding="utf-8")
+                    except UnicodeDecodeError:
+                        continue
+                    rel = str(fpath.relative_to(u_dir))
+                    files[rel] = content
+        return ExportDataResult(files=cast("JSON", files))
+
+    @strawberry.mutation
+    async def delete_all_data(self, current_user: str) -> bool:
+        """删除当前用户全量数据."""
+        u_dir = user_data_dir(current_user)
+        if not u_dir.exists():
+            return False
+        try:
+            shutil.rmtree(u_dir)
+        except OSError as e:
+            logger.warning("Failed to delete user data: %s", e)
+            return False
         return True

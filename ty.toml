@@ -10,3 +10,7 @@ all = "error"
 [[overrides]]
 include = ["app/api/resolvers/converters.py"]
 rules = { "unresolved-attribute" = "ignore" }  # strawberry pydantic 装饰器动态添加 from_pydantic 方法
+
+[[overrides]]
+include = ["app/storage/toml_store.py"]
+rules = { "invalid-argument-type" = "ignore" }  # cast(Callable[[], T], dict) — dict 为合法 default_factory

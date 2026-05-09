@@ -91,7 +91,7 @@ class MemoryModule:
         if mode not in _STORES_REGISTRY:
             raise UnknownModeError(mode)
         store_cls = _STORES_REGISTRY[mode]
-        kwargs: dict[str, Any] = {"data_dir": self._data_dir}
+        kwargs: dict[str, Any] = {"data_dir": self._data_dir / "users" / user_id}
         if getattr(store_cls, "requires_embedding", False):
             if self._embedding_model is None:
                 self._embedding_model = get_cached_embedding_model()
