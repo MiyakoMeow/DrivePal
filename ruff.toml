@@ -52,6 +52,7 @@ exclude = [".agents/**"]
 ]
 "app/agents/workflow.py" = [
     "C901",  # _execution_node 含多条安全规则分支，复杂度可接受
+    "PLR0911",  # _check_frequency_guard 多个 early return，可读性优先
 ]
 "app/agents/probabilistic.py" = [
     "ANN401",  # infer_intent memory_store 为 duck-typing Any

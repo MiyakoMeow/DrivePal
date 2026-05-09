@@ -297,6 +297,26 @@ class AgentWorkflow:
                 evt_time = datetime.fromisoformat(evt_time_str)
             except ValueError, TypeError:
                 continue
+            if evt_time.tzinfo is None:
+                evt_time = evt_time.replace(tzinfo=UTC)
+            delta_minutes = (now - evt_time).total_seconds() / 60.0
+            if delta_minutes < max_freq:
+                return f"提醒已抑制：距上次提醒不足 {max_freq} 分钟"
+        return None
+        constraints = apply_rules(driving_ctx)
+        max_freq = constraints.get("max_frequency_minutes")
+        if max_freq is None:
+            return None
+        recent_events = await self._safe_memory_history()
+        now = datetime.now(UTC)
+        for evt in recent_events:
+            evt_time_str = evt.get("created_at", "")
+            if not evt_time_str:
+                continue
+            try:
+                evt_time = datetime.fromisoformat(evt_time_str)
+            except ValueError, TypeError:
+                continue
             delta_minutes = (now - evt_time).total_seconds() / 60.0
             if delta_minutes < max_freq:
                 return f"提醒已抑制：距上次提醒不足 {max_freq} 分钟"
