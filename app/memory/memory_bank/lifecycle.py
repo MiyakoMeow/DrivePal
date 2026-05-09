@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
-from app.memory.schemas import InteractionResult, MemoryEvent
+from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 
 from .config import resolve_reference_date
 from .forget import ForgettingCurve, compute_ingestion_forget_ids
@@ -289,6 +289,40 @@ class MemoryLifecycle:
         finally:
             async with self._inflight_lock:
                 self._inflight_summaries.discard(date_key)
+
+    async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
+        """根据用户反馈修改记忆强度。
+        
+        accept → memory_strength += 2（主动确认高于被动回忆 +1）
+        ignore → memory_strength = max(1, strength - 1)
+        两者均更新 last_recall_date 为当天。
+        """
+        try:
+            fid = int(event_id)
+        except ValueError, TypeError:
+            logger.warning("update_feedback: invalid event_id=%r", event_id)
+            return
+
+        metadata = self._index.get_metadata()
+        modified = False
+        for m in metadata:
+            if m.get("faiss_id") == fid:
+                old_strength = float(m.get("memory_strength", 1))
+                if feedback.action == "accept":
+                    m["memory_strength"] = old_strength + 2.0
+                elif feedback.action == "ignore":
+                    m["memory_strength"] = max(1.0, old_strength - 1.0)
+                else:
+                    logger.warning(
+                        "update_feedback: unknown action=%r", feedback.action
+                    )
+                    return
+                m["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
+                modified = True
+                break
+
+        if modified:
+            await self._index.save()
 
     async def finalize(self) -> None:
         """遍历所有日期，串行生成缺失摘要/人格，执行摄入遗忘，保存。

@@ -246,7 +246,7 @@ class MemoryBankStore:
         event_id: str,
         feedback: FeedbackData,
     ) -> None:
-        """记录用户反馈到 feedback.jsonl。"""
+        """记录用户反馈并更新记忆强度。"""
         if self._feedback_store is None:
             self._feedback_store = JSONLinesStore(
                 user_dir=self._user_root,
@@ -265,6 +265,7 @@ class MemoryBankStore:
             event_id,
             feedback.action,
         )
+        await self._lifecycle.update_feedback(event_id, feedback)
 
     async def finalize_ingestion(self) -> None:
         """摘要 + 遗忘 + 持久化。应在批量写入完成后调用。"""
