@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Literal
 
-if TYPE_CHECKING:
-    from .index import FaissIndex
-
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from .index import FaissIndex
 
 
 class MemoryBankConfig(BaseSettings):
@@ -112,6 +113,9 @@ class MemoryBankConfig(BaseSettings):
         try:
             date.fromisoformat(v)
         except ValueError, TypeError:
+            logging.getLogger(__name__).warning(
+                "Invalid reference_date=%r, falling back to today", v
+            )
             return datetime.now(UTC).strftime("%Y-%m-%d")
         return v
 

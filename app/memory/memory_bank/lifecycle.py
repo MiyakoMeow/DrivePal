@@ -156,7 +156,7 @@ class MemoryLifecycle:
             fid = await self._index.add_vector(text_item, emb, ts, meta)
 
         await self._post_write_forget_and_summarize(date_key)
-        return str(fid)
+        return str(fid) if fid is not None else ""
 
     async def _post_write_forget_and_summarize(self, date_key: str) -> None:
         """写入后遗忘 + 持久化 + 后台摘要触发（write/write_interaction 公共）。"""
