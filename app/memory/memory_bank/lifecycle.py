@@ -88,24 +88,16 @@ class MemoryLifecycle:
                 self._metrics.forget_removed_count += len(ids)
             await self._index.remove_vectors(ids)
 
-    async def write(self, event: MemoryEvent) -> str:
-        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
-
-        多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
-        嵌入编码使用批量 API 以降低往返延迟。
-
-        索引加载由 store 层 _ensure_loaded() 负责，此处不再重复加载。
-        """
-        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        ts = datetime.now(UTC).isoformat()
-
+    @staticmethod
+    def _build_pair_texts(
+        event: MemoryEvent, date_key: str
+    ) -> tuple[list[str], list[dict]]:
+        """解析事件内容，返回 (pair_texts, pair_metas)。"""
         lines = [line.strip() for line in event.content.split("\n") if line.strip()]
         parsed_pairs: list[tuple[str | None, str]] = [
             FaissIndex.parse_speaker_line(ln) for ln in lines
         ]
         has_speakers = any(spk is not None for spk, _ in parsed_pairs)
-
-        # 收集阶段：先构建所有 pair texts，再批量编码
         pair_texts: list[str] = []
         pair_metas: list[dict] = []
 
@@ -147,6 +139,19 @@ class MemoryLifecycle:
                     "event_type": event.type,
                 }
             )
+        return pair_texts, pair_metas
+
+    async def write(self, event: MemoryEvent) -> str:
+        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
+
+        多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
+        嵌入编码使用批量 API 以降低往返延迟。
+
+        索引加载由 store 层 _ensure_loaded() 负责，此处不再重复加载。
+        """
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        ts = datetime.now(UTC).isoformat()
+        pair_texts, pair_metas = self._build_pair_texts(event, date_key)
 
         # 批量编码
         t0 = time.perf_counter()
@@ -167,6 +172,40 @@ class MemoryLifecycle:
         # 写入后仅持久化，不触发摘要/遗忘（遗忘归 finalize/purge_forgotten）
         await self._index.save()
         return str(fid) if fid is not None else ""
+
+    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+        """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
+        date_key = datetime.now(UTC).strftime("%Y-%m-%d")
+        ts = datetime.now(UTC).isoformat()
+        pair_texts: list[str] = []
+        pair_metas: list[dict] = []
+        for event in events:
+            pts, pms = self._build_pair_texts(event, date_key)
+            pair_texts.extend(pts)
+            pair_metas.extend(pms)
+
+        # 一次批量编码
+        t0 = time.perf_counter()
+        embeddings = await self._embedding_client.encode_batch(pair_texts)
+        if self._metrics:
+            self._metrics.embedding_latency_ms.append(
+                (time.perf_counter() - t0) * 1000
+            )
+
+        # 逐条 add_vector
+        fids: list[str] = []
+        for text_item, emb, meta in zip(
+            pair_texts, embeddings, pair_metas, strict=True
+        ):
+            fid = await self._index.add_vector(text_item, emb, ts, meta)
+            fids.append(str(fid))
+
+        if self._metrics:
+            self._metrics.write_count += 1
+
+        # 持久化（不触发摘要/遗忘）
+        await self._index.save()
+        return fids
 
     async def write_interaction(
         self,

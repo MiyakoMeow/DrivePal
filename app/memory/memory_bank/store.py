@@ -111,6 +111,11 @@ class MemoryBankStore:
         await self._ensure_loaded()
         return await self._lifecycle.write(event)
 
+    async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
+        """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
+        await self._ensure_loaded()
+        return await self._lifecycle.write_batch(events)
+
     async def write_interaction(
         self,
         query: str,
