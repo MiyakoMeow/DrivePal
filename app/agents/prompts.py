@@ -70,7 +70,7 @@ SINGLE_LLM_SYSTEM_PROMPT = """你是一个车载AI智能体，负责情境建模
 3. 策略决策（decision）：
    - 是否提醒（should_remind）
    - 提醒时机（now/delay/skip）
-   - 提醒方式（visual/voice/vibration）
+   - 提醒方式（visual/audio/detailed）
    - 提醒内容
    - 决策理由
 

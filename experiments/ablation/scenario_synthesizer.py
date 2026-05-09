@@ -12,7 +12,7 @@ from experiments.ablation.types import Scenario
 
 logger = logging.getLogger(__name__)
 
-FATIGUE_SAFETY_THRESHOLD: float = 0.7
+FATIGUE_SAFETY_THRESHOLD: float = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
 
 DIMENSIONS: dict[str, list] = {
     "scenario": ["highway", "city_driving", "traffic_jam", "parked"],

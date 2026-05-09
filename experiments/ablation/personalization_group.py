@@ -50,7 +50,7 @@ async def run_personalization_group(
                 {"round": i + 1, "stage": stage_name, "weights": snapshot}
             )
 
-    metrics = _compute_preference_metrics(all_results, weight_history)
+    metrics = _compute_preference_metrics(all_results, weight_history, stages)
     return GroupResult(
         group="personalization",
         variant_results=all_results,
@@ -109,12 +109,12 @@ async def _read_weights(user_id: str) -> dict:
     )
 
 
-def _compute_preference_metrics(results, weight_history) -> dict:
+def _compute_preference_metrics(results, weight_history, stages) -> dict:
     """计算个性化组四个量化指标。"""
     rounds = len(weight_history)
     preference_matching_rate = _compute_matching_rate(results, weight_history)
     convergence_speed = _compute_convergence_speed(weight_history)
-    stability = _compute_stability(weight_history)
+    stability = _compute_stability(weight_history, stages)
     overfitting_gap = _compute_overfitting_gap(results, weight_history)
 
     return {
@@ -187,12 +187,12 @@ def _compute_convergence_speed(weight_history) -> float:
     return first_stable_round / len(weight_history)
 
 
-def _compute_stability(weight_history) -> float:
+def _compute_stability(weight_history, stages) -> float:
     """稳定性：偏好切换后连续 5 轮权重的平均标准差。"""
     if not weight_history:
         return 0.0
 
-    switch_points = [5, 10, 15]
+    switch_points = [end for _, _, end in stages[:-1]]
     stds: list[float] = []
 
     for sp in switch_points:

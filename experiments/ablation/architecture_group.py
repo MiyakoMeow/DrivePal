@@ -25,10 +25,10 @@ async def run_architecture_group(
     """架构组实验。
 
     变体: FULL, SINGLE_LLM
-    场景: 非安全关键场景 (safety_relevant=False)
+    场景: 非安全关键场景（排除 highway 及高疲劳/过载的 city_driving）
     """
     variants = [Variant.FULL, Variant.SINGLE_LLM]
-    arch_scenarios = [s for s in scenarios if not s.safety_relevant]
+    arch_scenarios = [s for s in scenarios if _is_arch_scenario(s)]
 
     results = await runner.run_batch(arch_scenarios, variants)
 
@@ -55,6 +55,38 @@ async def run_architecture_group(
             )
 
     metrics = _compute_quality_metrics(scores, results)
+
+    full_results = [r for r in results if r.variant == Variant.FULL]
+    stage_scores_by_scenario: dict[str, dict] = {}
+    for fr in full_results:
+        stage_scores = await judge.score_stages(fr)
+        stage_scores_by_scenario[fr.scenario_id] = stage_scores
+    if stage_scores_by_scenario:
+        context_scores = [
+            v["context"]["score"]
+            for v in stage_scores_by_scenario.values()
+            if "context" in v and isinstance(v["context"].get("score"), (int, float))
+        ]
+        task_scores = [
+            v["task"]["score"]
+            for v in stage_scores_by_scenario.values()
+            if "task" in v and isinstance(v["task"].get("score"), (int, float))
+        ]
+        decision_scores = [
+            v["decision"]["score"]
+            for v in stage_scores_by_scenario.values()
+            if "decision" in v and isinstance(v["decision"].get("score"), (int, float))
+        ]
+        metrics["stage_scores"] = {
+            "context": sum(context_scores) / len(context_scores)
+            if context_scores
+            else 0,
+            "task": sum(task_scores) / len(task_scores) if task_scores else 0,
+            "decision": sum(decision_scores) / len(decision_scores)
+            if decision_scores
+            else 0,
+        }
+
     return GroupResult(
         group="architecture",
         variant_results=results,
@@ -95,3 +127,12 @@ def _compute_quality_metrics(
             "latency_p90_ms": p90,
         }
     return metrics
+
+
+def _is_arch_scenario(s: Scenario) -> bool:
+    """判定场景是否属于架构组（排除安全关键场景）。"""
+    scenario = s.driving_context.get("scenario", "")
+    driver = s.driving_context.get("driver", {})
+    fatigue = driver.get("fatigue_level", 0)
+    workload = driver.get("workload", "")
+    return scenario != "highway" and fatigue <= 0.7 and workload != "overloaded"

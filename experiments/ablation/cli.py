@@ -1,19 +1,32 @@
 """消融实验命令行接口."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 
+import aiofiles
+
 from experiments.ablation.ablation_runner import AblationRunner
-from experiments.ablation.architecture_group import run_architecture_group
+from experiments.ablation.architecture_group import (
+    _compute_quality_metrics,
+    run_architecture_group,
+)
 from experiments.ablation.judge import Judge
 from experiments.ablation.personalization_group import run_personalization_group
 from experiments.ablation.report import render_report
-from experiments.ablation.safety_group import run_safety_group
+from experiments.ablation.safety_group import _compute_safety_metrics, run_safety_group
 from experiments.ablation.scenario_synthesizer import (
     load_scenarios,
     sample_scenarios,
     synthesize_scenarios,
+)
+from experiments.ablation.types import (
+    GroupResult,
+    JudgeScores,
+    Scenario,
+    Variant,
+    VariantResult,
 )
 
 
@@ -33,6 +46,78 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
+    """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出。"""
+    all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
+    if not all_scenarios:
+        print("无场景数据，请先运行 --synthesize-only")
+        return
+
+    scenario_by_id: dict[str, Scenario] = {s.id: s for s in all_scenarios}
+    results_dir = data_dir / "results"
+    judge = Judge()
+    all_group_results: dict[str, GroupResult] = {}
+
+    for group_name in groups:
+        result_path = results_dir / f"{group_name}.jsonl"
+        if not result_path.exists():
+            continue
+
+        variant_results = await _load_variant_results(result_path)
+        scenarios_for_results: dict[str, list[VariantResult]] = {}
+        for vr in variant_results:
+            scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
+
+        scores: list[JudgeScores] = []
+        for sid, vrs in scenarios_for_results.items():
+            scenario = scenario_by_id.get(sid)
+            if scenario is None:
+                continue
+            batch_scores = await judge.score_batch(scenario, vrs)
+            scores.extend(batch_scores)
+
+        if group_name == "safety":
+            metrics = _compute_safety_metrics(scores, variant_results)
+        elif group_name == "architecture":
+            metrics = _compute_quality_metrics(scores, variant_results)
+        else:
+            metrics = {}
+
+        all_group_results[group_name] = GroupResult(
+            group=group_name,
+            variant_results=variant_results,
+            judge_scores=scores,
+            metrics=metrics,
+        )
+        print(f"{group_name} 组重新评分完成: {len(scores)} 评分")
+
+    render_report(all_group_results, results_dir)
+
+
+async def _load_variant_results(path: Path) -> list[VariantResult]:
+    """从 JSONL 重建 VariantResult 列表。"""
+    results: list[VariantResult] = []
+    async with aiofiles.open(path) as f:
+        async for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            d = json.loads(stripped)
+            results.append(
+                VariantResult(
+                    scenario_id=d["scenario_id"],
+                    variant=Variant(d["variant"]),
+                    decision=d.get("decision", {}),
+                    result_text="",
+                    event_id=None,
+                    stages={},
+                    latency_ms=d.get("latency_ms", 0),
+                    modifications=d.get("modifications", []),
+                )
+            )
+    return results
+
+
 async def main(argv: list[str] | None = None) -> None:
     """消融实验主入口。"""
     parser = build_parser()
@@ -40,21 +125,25 @@ async def main(argv: list[str] | None = None) -> None:
     data_dir = Path(args.data_dir)
     os.environ["ABLATION_SEED"] = str(args.seed)
 
-    if args.synthesize_only:
-        n = await synthesize_scenarios(data_dir / "scenarios.jsonl")
-        print(f"合成完成: {n} 场景")  # noqa: T201
-        return
-
-    all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
-    if not all_scenarios:
-        print("无场景数据，请先运行 --synthesize-only")  # noqa: T201
-        return
-
     groups_to_run = (
         ["safety", "architecture", "personalization"]
         if args.group == "all"
         else [args.group]
     )
+
+    if args.synthesize_only:
+        n = await synthesize_scenarios(data_dir / "scenarios.jsonl")
+        print(f"合成完成: {n} 场景")
+        return
+
+    if args.judge_only:
+        await _judge_only(data_dir, groups=groups_to_run)
+        return
+
+    all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
+    if not all_scenarios:
+        print("无场景数据，请先运行 --synthesize-only")
+        return
 
     results_dir = data_dir / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +151,7 @@ async def main(argv: list[str] | None = None) -> None:
     all_group_results: dict = {}
 
     for group in groups_to_run:
-        print(f"\n=== 运行 {group} 组 ===\n")  # noqa: T201
+        print(f"\n=== 运行 {group} 组 ===\n")
 
         if group == "safety":
             runner = AblationRunner(user_id="experiment-safety")
@@ -74,7 +163,7 @@ async def main(argv: list[str] | None = None) -> None:
                 runner, judge, safety_scenarios, results_dir / "safety.jsonl"
             )
             all_group_results["safety"] = result
-            print(f"安全性组完成: {len(result.variant_results)} 结果")  # noqa: T201
+            print(f"安全性组完成: {len(result.variant_results)} 结果")
 
         elif group == "architecture":
             runner = AblationRunner(user_id="experiment-arch")
@@ -86,7 +175,7 @@ async def main(argv: list[str] | None = None) -> None:
                 runner, judge, arch_scenarios, results_dir / "architecture.jsonl"
             )
             all_group_results["architecture"] = result
-            print(f"架构组完成: {len(result.variant_results)} 结果")  # noqa: T201
+            print(f"架构组完成: {len(result.variant_results)} 结果")
 
         elif group == "personalization":
             runner = AblationRunner(user_id="experiment-personalization")
@@ -100,6 +189,6 @@ async def main(argv: list[str] | None = None) -> None:
                 seed=args.seed,
             )
             all_group_results["personalization"] = result
-            print(f"个性化组完成: {len(result.variant_results)} 结果")  # noqa: T201
+            print(f"个性化组完成: {len(result.variant_results)} 结果")
 
     render_report(all_group_results, results_dir)

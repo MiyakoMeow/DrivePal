@@ -51,4 +51,24 @@ def render_report(results: dict[str, GroupResult], output_dir: Path) -> None:
     summary_path = output_dir / "report.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 
+    html_path = output_dir / "report.html"
+    with html_path.open("w") as f:
+        f.write(
+            '<html><head><meta charset="utf-8"><title>消融实验报告</title></head><body>'
+        )
+        f.write("<h1>DrivePal-2 消融实验报告</h1>")
+        for group_name, gr in results.items():
+            f.write(f"<h2>{group_name} 组</h2>")
+            f.write("<table border='1'>")
+            for metric_name, metric_value in gr.metrics.items():
+                if isinstance(metric_value, dict):
+                    f.write(f"<tr><td colspan='2'><b>{metric_name}</b></td></tr>")
+                    for k, v in metric_value.items():
+                        if isinstance(v, (int, float, str)):
+                            f.write(f"<tr><td>{k}</td><td>{v}</td></tr>")
+                elif isinstance(metric_value, (int, float, str)):
+                    f.write(f"<tr><td>{metric_name}</td><td>{metric_value}</td></tr>")
+            f.write("</table>")
+        f.write("</body></html>")
+
     logger.info("报告已生成: %s", output_dir)

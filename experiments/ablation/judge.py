@@ -71,7 +71,7 @@ class Judge:
         results: list[VariantResult],
     ) -> list[JudgeScores]:
         """盲评多个变体——shuffle 顺序后逐个评分。每场景评 3 次取中位数。"""
-        rng = random.Random(hash(scenario.id) % 2**32)  # noqa: S311
+        rng = random.Random(hash(scenario.id) % 2**32)
         all_scores: list[JudgeScores] = []
         for _ in range(3):
             shuffled = list(results)
