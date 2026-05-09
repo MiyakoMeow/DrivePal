@@ -55,6 +55,8 @@ class MemoryBankStore:
             raise RuntimeError(msg)
 
         user_dir = data_dir / f"user_{user_id}"
+        self._user_root = data_dir  # per-user root (data/users/{id}/ after Task 7)
+        self._user_dir = user_dir  # MemoryBank subdirectory
         self._index = FaissIndex(user_dir, self._config.embedding_dim)
         self._metrics = MemoryBankMetrics()
         self._bg = BackgroundTaskRunner(self._config)
@@ -237,8 +239,22 @@ class MemoryBankStore:
         event_id: str,
         feedback: FeedbackData,
     ) -> None:
-        logger.debug(
-            "update_feedback not implemented: event_id=%s action=%s",
+        """记录用户反馈到 feedback.jsonl。"""
+        from datetime import UTC, datetime
+
+        from app.storage.jsonl_store import JSONLinesStore
+
+        record = {
+            "event_id": event_id,
+            "action": feedback.action,
+            "type": feedback.type,
+            "modified_content": feedback.modified_content,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        fb_store = JSONLinesStore(user_dir=self._user_root, filename="feedback.jsonl")
+        await fb_store.append(record)
+        logger.info(
+            "Feedback recorded: event_id=%s action=%s",
             event_id,
             feedback.action,
         )

@@ -29,13 +29,14 @@ from app.api.resolvers.errors import (
     GraphQLInvalidActionError,
     InternalServerError,
 )
-from app.config import DATA_DIR
+from app.config import DATA_DIR, user_data_dir
 from app.memory.schemas import FeedbackData
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.schemas.context import (
     ScenarioPreset,
 )
+from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,23 @@ class Mutation:
             mm.update_feedback(feedback_input.event_id, feedback, mode=mode),
             "submitFeedback(update_feedback)",
         )
+
+        # 更新 reminder_weights（反馈学习）
+        current_user = getattr(feedback_input, "current_user", None) or "default"
+        user_dir = user_data_dir(current_user)
+        strategy_store = TOMLStore(
+            user_dir=user_dir,
+            filename="strategies.toml",
+            default_factory=dict,
+        )
+        await strategy_store.read()  # 确保文件存在
+        current_strategy = await strategy_store.read()
+        weights = current_strategy.get("reminder_weights", {})
+        delta = 0.1 if safe_action == "accept" else -0.1
+        new_weight = weights.get(actual_type, 0.5) + delta
+        weights[actual_type] = max(0.1, min(1.0, new_weight))
+        await strategy_store.update("reminder_weights", weights)
+
         return FeedbackResult(status="success")
 
     @strawberry.mutation
