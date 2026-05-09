@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -148,12 +149,20 @@ class MemoryLifecycle:
             )
 
         # 批量编码
+        t0 = time.perf_counter()
         embeddings = await self._embedding_client.encode_batch(pair_texts)
+        embed_elapsed = (time.perf_counter() - t0) * 1000
         fid: int | None = None
         for text_item, emb, meta in zip(
             pair_texts, embeddings, pair_metas, strict=True
         ):
             fid = await self._index.add_vector(text_item, emb, ts, meta)
+
+        write_elapsed = (time.perf_counter() - t0) * 1000
+        if self._metrics:
+            self._metrics.write_count += 1
+            self._metrics.write_latency_ms.append(write_elapsed)
+            self._metrics.embedding_latency_ms.append(embed_elapsed)
 
         await self._post_write_forget_and_summarize(date_key)
         return str(fid) if fid is not None else ""
