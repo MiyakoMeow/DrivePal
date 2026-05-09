@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import os
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -338,7 +339,16 @@ class AgentWorkflow:
                 logger.warning("Probabilistic inference failed: %s", e)
 
         # 反馈权重注入
-        weights = strategies.get("reminder_weights", {})
+        if os.getenv("ABLATION_DISABLE_FEEDBACK") == "1":
+            weights = {
+                "meeting": 0.5,
+                "travel": 0.5,
+                "shopping": 0.5,
+                "contact": 0.5,
+                "other": 0.5,
+            }
+        else:
+            weights = strategies.get("reminder_weights", {})
         weights_block = ""
         if weights:
             weights_block = (
