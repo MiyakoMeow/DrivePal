@@ -9,8 +9,9 @@ from app.config import user_data_dir
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
-from experiments.ablation.ablation_runner import AblationRunner
-from experiments.ablation.types import GroupResult, Scenario, Variant, VariantResult
+
+from .ablation_runner import AblationRunner
+from .types import GroupResult, Scenario, Variant, VariantResult
 
 
 async def run_personalization_group(
@@ -109,7 +110,11 @@ async def _read_weights(user_id: str) -> dict:
     )
 
 
-def _compute_preference_metrics(results, weight_history, stages) -> dict:
+def _compute_preference_metrics(
+    results: list[VariantResult],
+    weight_history: list[dict],
+    stages: list[tuple],
+) -> dict:
     """计算个性化组四个量化指标。"""
     rounds = len(weight_history)
     preference_matching_rate = _compute_matching_rate(results, weight_history)
@@ -127,7 +132,10 @@ def _compute_preference_metrics(results, weight_history, stages) -> dict:
     }
 
 
-def _compute_matching_rate(results, weight_history) -> dict[str, float]:
+def _compute_matching_rate(
+    results: list[VariantResult],
+    weight_history: list[dict],
+) -> dict[str, float]:
     """偏好匹配率：每阶段 FULL 变体决策与阶段偏好的吻合度。"""
     full_results = [r for r in results if r.variant == Variant.FULL]
     stage_matches: dict[str, list[bool]] = {}
@@ -159,7 +167,7 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool:
     return True
 
 
-def _compute_convergence_speed(weight_history) -> float:
+def _compute_convergence_speed(weight_history: list[dict]) -> float:
     """收敛速度：最高权重类型首次距终值 ±0.05 内且持续 ≥3 轮的轮次号（归一化）。"""
     if not weight_history or len(weight_history) < 2:
         return 1.0
@@ -187,7 +195,7 @@ def _compute_convergence_speed(weight_history) -> float:
     return first_stable_round / len(weight_history)
 
 
-def _compute_stability(weight_history, stages) -> float:
+def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float:
     """稳定性：偏好切换后连续 5 轮权重的平均标准差。"""
     if not weight_history:
         return 0.0
@@ -216,7 +224,10 @@ def _compute_stability(weight_history, stages) -> float:
     return sum(stds) / len(stds) if stds else 0.0
 
 
-def _compute_overfitting_gap(results, weight_history) -> float:
+def _compute_overfitting_gap(
+    results: list[VariantResult],
+    weight_history: list[dict],
+) -> float:
     """过拟合检测：mixed 阶段 FULL vs NO_FEEDBACK 的偏好匹配率差（绝对值）。"""
     mixed_rounds = [
         i for i, wh in enumerate(weight_history) if wh.get("stage") == "mixed"

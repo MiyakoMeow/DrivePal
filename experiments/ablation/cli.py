@@ -7,21 +7,21 @@ from pathlib import Path
 
 import aiofiles
 
-from experiments.ablation.ablation_runner import AblationRunner
-from experiments.ablation.architecture_group import (
+from .ablation_runner import AblationRunner
+from .architecture_group import (
     compute_quality_metrics,
     run_architecture_group,
 )
-from experiments.ablation.judge import Judge
-from experiments.ablation.personalization_group import run_personalization_group
-from experiments.ablation.report import render_report
-from experiments.ablation.safety_group import compute_safety_metrics, run_safety_group
-from experiments.ablation.scenario_synthesizer import (
+from .judge import Judge
+from .personalization_group import run_personalization_group
+from .report import render_report
+from .safety_group import compute_safety_metrics, run_safety_group
+from .scenario_synthesizer import (
     load_scenarios,
     sample_scenarios,
     synthesize_scenarios,
 )
-from experiments.ablation.types import (
+from .types import (
     GroupResult,
     JudgeScores,
     Scenario,

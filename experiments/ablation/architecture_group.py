@@ -1,19 +1,22 @@
 """架构组实验——四 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
 
 import json
+import os
 from pathlib import Path
 
 import aiofiles
 
-from experiments.ablation.ablation_runner import AblationRunner
-from experiments.ablation.judge import Judge
-from experiments.ablation.types import (
+from .ablation_runner import AblationRunner
+from .judge import Judge
+from .types import (
     GroupResult,
     JudgeScores,
     Scenario,
     Variant,
     VariantResult,
 )
+
+FATIGUE_THRESHOLD: float = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
 
 
 async def run_architecture_group(
@@ -135,4 +138,8 @@ def _is_arch_scenario(s: Scenario) -> bool:
     driver = s.driving_context.get("driver", {})
     fatigue = driver.get("fatigue_level", 0)
     workload = driver.get("workload", "")
-    return scenario != "highway" and fatigue <= 0.7 and workload != "overloaded"
+    return (
+        scenario != "highway"
+        and fatigue <= FATIGUE_THRESHOLD
+        and workload != "overloaded"
+    )

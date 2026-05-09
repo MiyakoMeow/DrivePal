@@ -1,10 +1,11 @@
 """实验报告生成."""
 
+import html
 import json
 import logging
 from pathlib import Path
 
-from experiments.ablation.types import GroupResult
+from .types import GroupResult
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +59,22 @@ def render_report(results: dict[str, GroupResult], output_dir: Path) -> None:
         )
         f.write("<h1>DrivePal-2 消融实验报告</h1>")
         for group_name, gr in results.items():
-            f.write(f"<h2>{group_name} 组</h2>")
+            f.write(f"<h2>{html.escape(group_name)} 组</h2>")
             f.write("<table border='1'>")
             for metric_name, metric_value in gr.metrics.items():
                 if isinstance(metric_value, dict):
-                    f.write(f"<tr><td colspan='2'><b>{metric_name}</b></td></tr>")
+                    f.write(
+                        f"<tr><td colspan='2'><b>{html.escape(metric_name)}</b></td></tr>"
+                    )
                     for k, v in metric_value.items():
                         if isinstance(v, (int, float, str)):
-                            f.write(f"<tr><td>{k}</td><td>{v}</td></tr>")
+                            f.write(
+                                f"<tr><td>{html.escape(str(k))}</td><td>{html.escape(str(v))}</td></tr>"
+                            )
                 elif isinstance(metric_value, (int, float, str)):
-                    f.write(f"<tr><td>{metric_name}</td><td>{metric_value}</td></tr>")
+                    f.write(
+                        f"<tr><td>{html.escape(metric_name)}</td><td>{html.escape(str(metric_value))}</td></tr>"
+                    )
             f.write("</table>")
         f.write("</body></html>")
 

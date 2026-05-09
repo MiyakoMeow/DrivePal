@@ -3,7 +3,7 @@
 import logging
 import math
 
-from experiments.ablation.types import JudgeScores, VariantResult
+from .types import JudgeScores, VariantResult
 
 logger = logging.getLogger(__name__)
 

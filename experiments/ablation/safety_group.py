@@ -5,9 +5,9 @@ from pathlib import Path
 
 import aiofiles
 
-from experiments.ablation.ablation_runner import AblationRunner
-from experiments.ablation.judge import Judge
-from experiments.ablation.types import (
+from .ablation_runner import AblationRunner
+from .judge import Judge
+from .types import (
     GroupResult,
     JudgeScores,
     Scenario,

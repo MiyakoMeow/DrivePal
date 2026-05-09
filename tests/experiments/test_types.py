@@ -17,7 +17,7 @@ def test_variant_enum_values():
     assert Variant.NO_FEEDBACK == "no-feedback"
 
 
-def test_test_scenario_creation():
+def test_scenario_creation():
     s = Scenario(
         id="test-1",
         driving_context={"scenario": "highway"},

@@ -5,13 +5,14 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
+from typing import cast
 
 from app.agents.prompts import SINGLE_LLM_SYSTEM_PROMPT
 from app.agents.workflow import AgentWorkflow
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
-from app.models.chat import get_chat_model
+from app.models.chat import ChatError, get_chat_model
 
 from .types import Scenario, Variant, VariantResult
 
@@ -100,25 +101,32 @@ class AblationRunner:
             {"query": scenario.user_query, "context": scenario.driving_context},
             ensure_ascii=False,
         )
-        response = await chat.generate(
-            system_prompt=prompt, prompt=user_msg, json_mode=True
-        )
         try:
-            output = json.loads(response)
-        except json.JSONDecodeError:
-            logger.warning("Single-LLM returned invalid JSON for %s", scenario.id)
+            response = await chat.generate(
+                system_prompt=prompt, prompt=user_msg, json_mode=True
+            )
+            try:
+                output = json.loads(response)
+            except json.JSONDecodeError:
+                logger.warning("Single-LLM returned invalid JSON for %s", scenario.id)
+                output = {}
+        except ChatError:
+            logger.warning("Single-LLM chat failed for %s", scenario.id, exc_info=True)
+            output = {"error": "LLM调用失败"}
+        if not isinstance(output, dict):
             output = {}
+        output_dict: dict = cast(dict, output)
         latency_ms = (time.perf_counter() - t0) * 1000
         return VariantResult(
             scenario_id=scenario.id,
             variant=Variant.SINGLE_LLM,
-            decision=output.get("decision", {}),
+            decision=output_dict.get("decision", {}),
             result_text="",
             event_id=None,
             stages={
-                "context": output.get("context", {}),
-                "task": output.get("task", {}),
-                "decision": output.get("decision", {}),
+                "context": output_dict.get("context", {}),
+                "task": output_dict.get("task", {}),
+                "decision": output_dict.get("decision", {}),
                 "execution": {},
             },
             latency_ms=latency_ms,

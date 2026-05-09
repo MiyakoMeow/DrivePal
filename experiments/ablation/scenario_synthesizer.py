@@ -8,7 +8,8 @@ import random
 from pathlib import Path
 
 from app.models.chat import ChatError, get_chat_model
-from experiments.ablation.types import Scenario
+
+from .types import Scenario
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ SCENARIO_PROMPT_TEMPLATE = """请生成一个车载AI测试场景，维度条件
 - 驾驶员疲劳度：{fatigue_level}
 - 认知负荷：{workload}
 - 任务类型：{task_type}
-- {"有" if has_passengers else "无"}乘客在场
+- {passenger_text}乘客在场
 
 返回一个 JSON 对象，格式如下：
 {{
@@ -109,12 +110,13 @@ def _build_prompt(dim: dict) -> str:
     channel_hint = CHANNEL_HINT_MAP.get(scenario, "audio")
     scenario_desc = SCENARIO_DESC_MAP.get(scenario, scenario)
     has_passengers_bool = dim["has_passengers"] == "true"
+    passenger_text = "有" if has_passengers_bool else "无"
     return SCENARIO_PROMPT_TEMPLATE.format(
         scenario_desc=scenario_desc,
         fatigue_level=dim["fatigue_level"],
         workload=dim["workload"],
         task_type=dim["task_type"],
-        has_passengers=has_passengers_bool,
+        passenger_text=passenger_text,
         scenario=scenario,
         channel_hint=channel_hint,
     )
