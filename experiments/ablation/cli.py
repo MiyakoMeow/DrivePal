@@ -9,13 +9,13 @@ import aiofiles
 
 from experiments.ablation.ablation_runner import AblationRunner
 from experiments.ablation.architecture_group import (
-    _compute_quality_metrics,
+    compute_quality_metrics,
     run_architecture_group,
 )
 from experiments.ablation.judge import Judge
 from experiments.ablation.personalization_group import run_personalization_group
 from experiments.ablation.report import render_report
-from experiments.ablation.safety_group import _compute_safety_metrics, run_safety_group
+from experiments.ablation.safety_group import compute_safety_metrics, run_safety_group
 from experiments.ablation.scenario_synthesizer import (
     load_scenarios,
     sample_scenarios,
@@ -77,9 +77,9 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
             scores.extend(batch_scores)
 
         if group_name == "safety":
-            metrics = _compute_safety_metrics(scores, variant_results)
+            metrics = compute_safety_metrics(scores, variant_results)
         elif group_name == "architecture":
-            metrics = _compute_quality_metrics(scores, variant_results)
+            metrics = compute_quality_metrics(scores, variant_results)
         else:
             metrics = {}
 
@@ -148,7 +148,7 @@ async def main(argv: list[str] | None = None) -> None:
     results_dir = data_dir / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    all_group_results: dict = {}
+    all_group_results: dict[str, GroupResult] = {}
 
     for group in groups_to_run:
         print(f"\n=== 运行 {group} 组 ===\n")

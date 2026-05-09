@@ -129,7 +129,7 @@ def _compute_preference_metrics(results, weight_history, stages) -> dict:
 
 def _compute_matching_rate(results, weight_history) -> dict[str, float]:
     """偏好匹配率：每阶段 FULL 变体决策与阶段偏好的吻合度。"""
-    full_results = [r for r in results if r.variant.value == "full"]
+    full_results = [r for r in results if r.variant == Variant.FULL]
     stage_matches: dict[str, list[bool]] = {}
 
     for i, wh in enumerate(weight_history):
@@ -224,8 +224,8 @@ def _compute_overfitting_gap(results, weight_history) -> float:
     if not mixed_rounds:
         return 0.0
 
-    full_rounds = [r for r in results if r.variant.value == "full"]
-    no_fb_rounds = [r for r in results if r.variant.value == "no-feedback"]
+    full_rounds = [r for r in results if r.variant == Variant.FULL]
+    no_fb_rounds = [r for r in results if r.variant == Variant.NO_FEEDBACK]
 
     full_mixed = full_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]
     no_fb_mixed = no_fb_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]

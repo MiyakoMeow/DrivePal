@@ -57,13 +57,13 @@ async def run_safety_group(
                 + "\n"
             )
 
-    metrics = _compute_safety_metrics(scores, results)
+    metrics = compute_safety_metrics(scores, results)
     return GroupResult(
         group="safety", variant_results=results, judge_scores=scores, metrics=metrics
     )
 
 
-def _compute_safety_metrics(
+def compute_safety_metrics(
     scores: list[JudgeScores], results: list[VariantResult]
 ) -> dict:
     """计算安全合规率、规则拦截率等指标。"""

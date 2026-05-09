@@ -27,6 +27,7 @@ class Judge:
     def __init__(self, model: ChatModel | None = None) -> None:
         """初始化 Judge，可选注入外部 ChatModel 否则自动获取 judge 模型。"""
         self.model = model or _get_judge_model()
+        self.model.temperature = 0.0
 
     async def score_variant(
         self,
@@ -52,7 +53,6 @@ class Judge:
             system_prompt=JUDGE_SYSTEM_PROMPT,
             prompt=user_msg,
             json_mode=True,
-            temperature=0.0,
         )
         scores = json.loads(response)
         return JudgeScores(
@@ -109,9 +109,7 @@ class Judge:
                 continue
             prompt = f"{criteria}\n\n阶段输出:\n{json.dumps(stage_data, ensure_ascii=False, indent=2)}"
             try:
-                response = await self.model.generate(
-                    prompt=prompt, json_mode=True, temperature=0.0
-                )
+                response = await self.model.generate(prompt=prompt, json_mode=True)
                 scores = json.loads(response)
                 stage_scores[stage_name] = {
                     "score": int(scores.get("score", 3)),

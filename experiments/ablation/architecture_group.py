@@ -54,7 +54,7 @@ async def run_architecture_group(
                 + "\n"
             )
 
-    metrics = _compute_quality_metrics(scores, results)
+    metrics = compute_quality_metrics(scores, results)
 
     full_results = [r for r in results if r.variant == Variant.FULL]
     stage_scores_by_scenario: dict[str, dict] = {}
@@ -95,7 +95,7 @@ async def run_architecture_group(
     )
 
 
-def _compute_quality_metrics(
+def compute_quality_metrics(
     scores: list[JudgeScores], results: list[VariantResult]
 ) -> dict:
     """计算决策质量指标（评分均值、P50/P90 延迟）。"""

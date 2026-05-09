@@ -1,6 +1,7 @@
 """消融实验运行器——设置环境变量、分发变体调用、收集结果."""
 
 import json
+import logging
 import os
 import time
 from datetime import UTC, datetime
@@ -13,6 +14,8 @@ from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 
 from .types import Scenario, Variant, VariantResult
+
+logger = logging.getLogger(__name__)
 
 ABLATION_DISABLE_RULES = "ABLATION_DISABLE_RULES"
 ABLATION_DISABLE_FEEDBACK = "ABLATION_DISABLE_FEEDBACK"
@@ -100,7 +103,11 @@ class AblationRunner:
         response = await chat.generate(
             system_prompt=prompt, prompt=user_msg, json_mode=True
         )
-        output = json.loads(response)
+        try:
+            output = json.loads(response)
+        except json.JSONDecodeError:
+            logger.warning("Single-LLM returned invalid JSON for %s", scenario.id)
+            output = {}
         latency_ms = (time.perf_counter() - t0) * 1000
         return VariantResult(
             scenario_id=scenario.id,
