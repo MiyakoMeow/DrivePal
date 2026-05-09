@@ -259,14 +259,14 @@ def _compute_overfitting_gap(
 
     # weight_history[i] 对应第 i+1 轮，results 列表按 run_variant 调用顺序排列
     # 每轮产生 2 个结果（FULL 在前，NO_FEEDBACK 在后）
-    # 故 full_rounds[i] ≡ 第 i+1 轮 FULL，no_fb_rounds[i] ≡ 第 i+1 轮 NO_FEEDBACK
-    # 此切片依赖上述执行顺序保证；若 run_personalization_group 调整顺序，此处需同步修改
-    # mixed 阶段轮次连续（rounds 15-19），否则 mixed_rounds 切片会错误
     full_rounds = [r for r in results if r.variant == Variant.FULL]
     no_fb_rounds = [r for r in results if r.variant == Variant.NO_FEEDBACK]
 
-    full_mixed = full_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]
-    no_fb_mixed = no_fb_rounds[mixed_rounds[0] : mixed_rounds[-1] + 1]
+    # 用筛选取 mixed 阶段轮次，避免切片依赖连续索引假设
+    full_mixed = [full_rounds[i] for i in range(len(full_rounds)) if i in mixed_rounds]
+    no_fb_mixed = [
+        no_fb_rounds[i] for i in range(len(no_fb_rounds)) if i in mixed_rounds
+    ]
 
     full_matches = sum(1 for r in full_mixed if bool(r.decision.get("should_remind")))
     no_fb_matches = sum(1 for r in no_fb_mixed if bool(r.decision.get("should_remind")))
