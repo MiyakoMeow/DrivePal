@@ -1,7 +1,7 @@
 """Agent状态定义模块."""
 
 from dataclasses import dataclass, field
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class AgentState(TypedDict):
@@ -15,6 +15,10 @@ class AgentState(TypedDict):
     event_id: str | None
     driving_context: dict | None
     stages: WorkflowStages | None
+    output_content: NotRequired[dict | None]
+    session_id: NotRequired[str | None]
+    pending_reminder_id: NotRequired[str | None]
+    action_result: NotRequired[dict | None]
 
 
 @dataclass

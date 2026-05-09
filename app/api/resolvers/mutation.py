@@ -2,6 +2,7 @@
 
 import logging
 import shutil
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import strawberry
@@ -12,15 +13,21 @@ if TYPE_CHECKING:
 
     from strawberry.scalars import JSON
 
+from app.agents.conversation import _conversation_manager
+from app.agents.pending import PendingReminderManager
 from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
 from app.api.graphql_schema import (
+    DrivingContextInput,
     ExportDataResult,
     FeedbackInput,
     FeedbackResult,
+    PendingReminderGQL,
+    PollResult,
     ProcessQueryInput,
     ProcessQueryResult,
     ScenarioPresetGQL,
     ScenarioPresetInput,
+    TriggeredReminderGQL,
     WorkflowStagesGQL,
 )
 from app.api.resolvers.converters import (
@@ -109,6 +116,7 @@ class Mutation:
             result, event_id, stages = await workflow.run_with_stages(
                 query_input.query,
                 driving_context,
+                session_id=query_input.session_id,
             )
             return ProcessQueryResult(
                 result=result,
@@ -250,4 +258,71 @@ class Mutation:
         except OSError as e:
             logger.warning("Failed to delete user data: %s", e)
             return False
+        return True
+
+    # --- PendingReminder mutations（模块 2.3） ---
+
+    @strawberry.mutation
+    async def poll_pending_reminders(
+        self,
+        current_user: str = "default",
+        context_input: DrivingContextInput | None = None,
+    ) -> PollResult:
+        """车机端轮询待触发提醒."""
+        pm = PendingReminderManager(user_data_dir(current_user))
+        ctx = input_to_context(context_input).model_dump() if context_input else {}
+        triggered = await pm.poll(ctx)
+        return PollResult(
+            triggered=[
+                TriggeredReminderGQL(
+                    id=r["id"],
+                    event_id=r.get("event_id", ""),
+                    content=cast("JSON", r.get("content", {})),
+                    triggered_at=datetime.now(UTC).isoformat(),
+                )
+                for r in triggered
+            ]
+        )
+
+    @strawberry.mutation
+    async def cancel_pending_reminder(
+        self,
+        reminder_id: str,
+        current_user: str = "default",
+    ) -> bool:
+        """取消指定 ID 的待触发提醒."""
+        pm = PendingReminderManager(user_data_dir(current_user))
+        await pm.cancel(reminder_id)
+        return True
+
+    @strawberry.mutation
+    async def get_pending_reminders(
+        self,
+        current_user: str = "default",
+    ) -> list[PendingReminderGQL]:
+        """获取当前用户所有待触发提醒列表."""
+        pm = PendingReminderManager(user_data_dir(current_user))
+        pending = await pm.list_pending()
+        return [
+            PendingReminderGQL(
+                id=r["id"],
+                event_id=r.get("event_id", ""),
+                trigger_type=r.get("trigger_type", ""),
+                trigger_text=r.get("trigger_text", ""),
+                status=r.get("status", ""),
+                created_at=r.get("created_at", ""),
+            )
+            for r in pending
+        ]
+
+    # --- 多轮对话（模块 4.3） ---
+
+    @strawberry.mutation
+    async def close_session(
+        self,
+        session_id: str,
+        current_user: str = "default",  # 保留——Strawberry mutation 签名一致性
+    ) -> bool:
+        """关闭指定会话。"""
+        _conversation_manager.close(session_id)
         return True

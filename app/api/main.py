@@ -1,8 +1,9 @@
 """FastAPI 应用主入口."""
 
+import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,9 +19,11 @@ from fastapi.staticfiles import StaticFiles
 from strawberry.scalars import JSON
 from strawberry.schema.config import StrawberryConfig
 
+from app.agents.conversation import _conversation_manager
 from app.api.graphql_schema import JSONScalar
 from app.api.resolvers.mutation import Mutation as MutationImpl
 from app.api.resolvers.query import Query as QueryImpl
+from app.api.stream import router as stream_router
 from app.config import DATA_DIR
 from app.memory.singleton import _memory_module_state
 from app.storage.init_data import init_storage
@@ -40,7 +43,20 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Data directory initialized: %s", DATA_DIR)
     if not Path.exists(WEBUI_DIR):
         logger.warning("WebUI directory not found: %s", WEBUI_DIR)
+
+    async def _periodic_cleanup() -> None:
+        while True:
+            await asyncio.sleep(300)
+            try:
+                _conversation_manager.cleanup_expired()
+            except Exception:
+                logger.exception("Periodic conversation cleanup failed")
+
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
+    cleanup_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await cleanup_task
     mm = _memory_module_state[0]
     if mm is not None:
         await mm.close()
@@ -69,6 +85,7 @@ def _mount_graphql() -> None:
 
 
 _mount_graphql()
+app.include_router(stream_router)
 
 
 @app.get("/")

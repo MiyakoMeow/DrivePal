@@ -22,6 +22,7 @@ exclude = [".agents/**"]
 [lint.per-file-ignores]
 "adapters/runner.py" = ["E402"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
+"app/api/stream.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
 "app/memory/interfaces.py" = ["ANN401"]  # Protocol 接口故意返回 Any（调用方自行处理类型）
 "app/memory/memory_bank/llm.py" = [
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
@@ -34,6 +35,7 @@ exclude = [".agents/**"]
 ]
 "app/api/resolvers/mutation.py" = [
     "C901",  # submit_feedback 含多个异常处理器，各分支简单（McCabe 误报）
+    "ARG002",  # close_session current_user 参数保留——Strawberry mutation 签名一致性
 ]
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 data_dir.mkdir()/ 操作，ruff 误判
@@ -53,6 +55,19 @@ exclude = [".agents/**"]
 "app/agents/workflow.py" = [
     "C901",  # _execution_node 含多条安全规则分支，复杂度可接受
     "PLR0911",  # _check_frequency_guard 多个 early return，可读性优先
+    "PLR0912",  # _execution_node 多条件分支——快捷指令/后处理/延迟/频次/正常路径
+    "PLR0915",  # _execution_node + run_stream 语句多——安全关键路径不宜强行拆分
+    "ARG001",  # _extract_location_target 保留 decision 参数以与 _map_pending_trigger 签名一致
+]
+"app/agents/shortcuts.py" = [
+    "PERF401",  # 嵌套循环 + 条件过滤，无法用 list.extend 替代
+]
+"app/agents/outputs.py" = [
+    "ARG002",  # OutputRouter.route scenario 参数预留，后续 scenario-aware 路由使用
+]
+"app/agents/pending.py" = [
+    "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
+    "PLR2004",  # parse_time 中 23/12/8 为时间解析域常量，定义命名常量反降低可读性
 ]
 "app/agents/probabilistic.py" = [
     "ANN401",  # infer_intent memory_store 为 duck-typing Any

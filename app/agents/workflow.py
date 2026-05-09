@@ -4,11 +4,14 @@ import hashlib
 import json
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from app.agents.conversation import _conversation_manager
+from app.agents.outputs import OutputRouter
+from app.agents.pending import PendingReminderManager
 from app.agents.probabilistic import (
     OVERLOADED_WARNING_THRESHOLD,
     compute_interrupt_risk,
@@ -17,6 +20,7 @@ from app.agents.probabilistic import (
 )
 from app.agents.prompts import SYSTEM_PROMPTS
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
+from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
 from app.memory.memory import MemoryModule
@@ -77,6 +81,67 @@ class ReminderContent(BaseModel):
         return "无提醒内容"
 
 
+def _format_time_for_display(time_str: str) -> str:
+    """从 ISO 时间字符串提取 HH:MM 用于显示."""
+    try:
+        dt = datetime.fromisoformat(time_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.strftime("%H:%M")
+    except ValueError, TypeError:
+        return time_str
+
+
+def _extract_location_target(_decision: dict, driving_ctx: dict | None) -> dict:
+    """从 driving_context 中提取目标位置经纬度。_decision 参数预留，当前未使用。"""
+    if driving_ctx:
+        spatial = driving_ctx.get("spatial", {}) or {}
+        dest = spatial.get("destination", {}) or {}
+        if dest.get("latitude") is not None:
+            return {"latitude": dest["latitude"], "longitude": dest["longitude"]}
+    return {}
+
+
+def _map_pending_trigger(
+    decision: dict, driving_ctx: dict | None
+) -> tuple[str, dict, str]:
+    """从 decision 映射 trigger_type、trigger_target、trigger_text."""
+    timing = decision.get("timing", "")
+    if timing == "location":
+        return (
+            "location",
+            _extract_location_target(decision, driving_ctx),
+            "到达目的地时",
+        )
+    if timing == "location_time":
+        return (
+            "location_time",
+            {
+                "location": _extract_location_target(decision, driving_ctx),
+                "time": decision.get("target_time", ""),
+            },
+            "到达目的地或到时间时",
+        )
+    if timing == "delay":
+        seconds = decision.get("delay_seconds", 300)
+        target_dt = datetime.now(UTC) + timedelta(seconds=seconds)
+        target_str = target_dt.isoformat()
+        return "time", {"time": target_str}, f"延迟 {seconds} 秒后"
+
+    target_time = decision.get("target_time", "")
+    if target_time:
+        return "time", {"time": target_time}, f"{target_time} 时"
+    if driving_ctx:
+        return (
+            "context",
+            {"previous_scenario": driving_ctx.get("scenario", "")},
+            "驾驶状态恢复时",
+        )
+    # 兜底：无 driving_ctx 且无时间信息时，创建即刻触发的时间提醒
+    # 注意：此时轮询调用 poll() 后会立即触发（now >= target_time）
+    return "time", {"time": datetime.now(UTC).isoformat()}, ""
+
+
 class AgentWorkflow:
     """多Agent协作工作流."""
 
@@ -97,6 +162,8 @@ class AgentWorkflow:
         else:
             chat_model = get_chat_model()
             self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
+        self._conversations = _conversation_manager
+        self._shortcuts = ShortcutResolver()
 
         self._nodes = [
             self._context_node,
@@ -159,8 +226,23 @@ class AgentWorkflow:
     async def _context_node(self, state: AgentState) -> dict:
         user_input = state.get("original_query", "")
         stages = state.get("stages")
+        session_id = state.get("session_id")
 
         relevant_memories = await self._search_memories(user_input)
+
+        # --- 多轮对话：注入对话历史 ---
+        conversation_history = []
+        if session_id:
+            turns = self._conversations.get_history(session_id)
+            conversation_history = [
+                {
+                    "turn": t.turn_id,
+                    "user": t.query,
+                    "assistant_summary": t.response_summary,
+                    "intent": t.decision_snapshot,
+                }
+                for t in turns
+            ]
 
         current_datetime = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         driving_context = state.get("driving_context")
@@ -169,15 +251,24 @@ class AgentWorkflow:
             context = dict(driving_context)
             context["current_datetime"] = current_datetime
             context["related_events"] = relevant_memories
+            if conversation_history:
+                context["conversation_history"] = conversation_history
         else:
             system_prompt = SYSTEM_PROMPTS["context"].format(
                 current_datetime=current_datetime,
             )
+            history_block = ""
+            if conversation_history:
+                history_block = (
+                    "\n对话历史: "
+                    + json.dumps(conversation_history, ensure_ascii=False)
+                    + "\n请结合对话历史理解指代（如'刚才那个'指上一轮的 entities）。"
+                )
 
             prompt = f"""{system_prompt}
 
 用户输入: {user_input}
-历史记录: {json.dumps(relevant_memories, ensure_ascii=False)}
+历史记录: {json.dumps(relevant_memories, ensure_ascii=False)}{history_block}
 
 请输出JSON格式的上下文对象. """
 
@@ -308,6 +399,25 @@ class AgentWorkflow:
         decision = state.get("decision") or {}
         stages = state.get("stages")
 
+        # --- 快捷指令 action 处理 ---
+        action = decision.get("action", "")
+        if action == "cancel_last":
+            pm = PendingReminderManager(user_data_dir(self.current_user))
+            cancelled = await pm.cancel_last()
+            result = "提醒已取消" if cancelled else "暂无待取消的提醒"
+            if stages is not None:
+                stages.execution = {
+                    "content": None,
+                    "event_id": None,
+                    "result": result,
+                    "cancelled": cancelled,
+                }
+            return {
+                "result": result,
+                "event_id": None,
+                "action_result": {"cancelled": cancelled},
+            }
+
         # 规则硬约束：LLM 决策后强制覆盖，不可绕过
         driving_ctx = state.get("driving_context")
         if driving_ctx:
@@ -325,17 +435,76 @@ class AgentWorkflow:
             return {"result": result, "event_id": None}
 
         postpone = decision.get("postpone", False)
-        if postpone:
-            result = "提醒已延后：当前驾驶状态不适合发送提醒"
+        timing = decision.get("timing", "")
+
+        # 延迟 / 位置触发 → 创建 PendingReminder
+        if postpone or timing in ("delay", "location", "location_time"):
+            output_router = OutputRouter()
+            scenario = ""
+            rules_result = {}
+            if driving_ctx:
+                rules_result = apply_rules(driving_ctx)
+                scenario = driving_ctx.get("scenario", "")
+            output_content = output_router.route(decision, scenario, rules_result)
+
+            pm = PendingReminderManager(user_data_dir(self.current_user))
+            trigger_type, trigger_target, trigger_text = _map_pending_trigger(
+                decision, driving_ctx
+            )
+            pending_ids: list[str] = []
+
+            if trigger_type == "location_time":
+                loc_target = trigger_target.get("location", {})
+                time_target = trigger_target.get("time", "")
+                if (
+                    loc_target.get("latitude") is not None
+                    and loc_target.get("longitude") is not None
+                ):
+                    pr1 = await pm.add(
+                        content=output_content,
+                        trigger_type="location",
+                        trigger_target=loc_target,
+                        event_id="",
+                        trigger_text="到达目的地时",
+                    )
+                    pending_ids.append(pr1.id)
+                if time_target:
+                    pr2 = await pm.add(
+                        content=output_content,
+                        trigger_type="time",
+                        trigger_target={"time": time_target},
+                        event_id="",
+                        trigger_text=f"{_format_time_for_display(time_target)} 时",
+                    )
+                    pending_ids.append(pr2.id)
+            else:
+                pr = await pm.add(
+                    content=output_content,
+                    trigger_type=trigger_type,
+                    trigger_target=trigger_target,
+                    event_id="",
+                    trigger_text=trigger_text,
+                )
+                pending_ids = [pr.id]
+
+            reason = decision.get("reason", "")
+            result = (
+                f"提醒已延后：{reason}。将在条件满足时提醒"
+                if reason
+                else "提醒已延后，将在条件满足时提醒"
+            )
             if stages is not None:
                 stages.execution = {
                     "content": None,
                     "event_id": None,
                     "result": result,
+                    "pending_reminder_ids": pending_ids,
                 }
             return {
                 "result": result,
                 "event_id": None,
+                "output_content": output_content.model_dump(),
+                "pending_reminder_id": pending_ids[0] if pending_ids else None,
             }
 
         # 频次约束检查
@@ -351,6 +520,15 @@ class AgentWorkflow:
 
         content = self._extract_content(decision)
         original_query = state.get("original_query", "")
+
+        # --- 多格式输出路由 ---
+        output_router = OutputRouter()
+        scenario = ""
+        rules_result = {}
+        if driving_ctx:
+            rules_result = apply_rules(driving_ctx)
+            scenario = driving_ctx.get("scenario", "")
+        output_content = output_router.route(decision, scenario, rules_result)
 
         # 隐私脱敏：写入前脱敏 driving_ctx 中的位置信息
         safe_ctx = sanitize_context(driving_ctx) if driving_ctx else None
@@ -376,16 +554,19 @@ class AgentWorkflow:
                 "content": content,
                 "event_id": event_id,
                 "result": result,
+                "output": output_content.model_dump(),
             }
         return {
             "result": result,
             "event_id": event_id,
+            "output_content": output_content.model_dump(),
         }
 
     async def run_with_stages(
         self,
         user_input: str,
         driving_context: dict | None = None,
+        session_id: str | None = None,
     ) -> tuple[str, str | None, WorkflowStages]:
         """运行完整工作流并返回结果、事件ID和各阶段输出."""
         stages = WorkflowStages()
@@ -398,7 +579,29 @@ class AgentWorkflow:
             "event_id": None,
             "driving_context": driving_context,
             "stages": stages,
+            "session_id": session_id,
         }
+
+        # --- 快捷指令检查 ---
+        shortcut_decision = self._shortcuts.resolve(user_input)
+        if shortcut_decision:
+            if driving_context:
+                shortcut_decision = postprocess_decision(
+                    shortcut_decision, driving_context
+                )
+            state["decision"] = shortcut_decision
+            exec_result = await self._execution_node(state)
+            state.update(exec_result)
+            result = state.get("result") or "处理完成"
+            event_id = state.get("event_id")
+            if session_id:
+                self._conversations.add_turn(
+                    session_id,
+                    user_input,
+                    shortcut_decision,
+                    result,
+                )
+            return result, event_id, stages
 
         for node_fn in self._nodes:
             updates = await node_fn(state)
@@ -406,4 +609,130 @@ class AgentWorkflow:
 
         result = state.get("result") or "处理完成"
         event_id = state.get("event_id")
+
+        if session_id:
+            self._conversations.add_turn(
+                session_id,
+                user_input,
+                state.get("decision") or {},
+                result,
+            )
+
         return result, event_id, stages
+
+    async def run_stream(
+        self,
+        user_input: str,
+        driving_context: dict | None = None,
+        session_id: str | None = None,
+    ) -> list[dict]:
+        """SSE 流式方法。返回阶段事件列表，SSE 端点遍历发送。
+
+        设计说明：返回 list[dict]（非 async generator）。
+        当前实现先完成全部阶段计算再批量返回事件列表——非真正逐阶段流式。
+        若需逐阶段推送（减少首字节延迟），改为 AsyncGenerator，每阶段完成后 yield。
+        """
+        events: list[dict] = []
+        stages = WorkflowStages()
+        state: AgentState = {
+            "original_query": user_input,
+            "context": {},
+            "task": None,
+            "decision": None,
+            "result": None,
+            "event_id": None,
+            "driving_context": driving_context,
+            "stages": stages,
+            "session_id": session_id,
+        }
+
+        # --- 快捷指令检查 ---
+        shortcut_decision = self._shortcuts.resolve(user_input)
+        if shortcut_decision:
+            if driving_context:
+                shortcut_decision = postprocess_decision(
+                    shortcut_decision, driving_context
+                )
+            state["decision"] = shortcut_decision
+            exec_result = await self._execution_node(state)
+            state.update(exec_result)
+            done_data: dict[str, object] = {
+                "event_id": state.get("event_id"),
+                "session_id": session_id,
+                "status": "delivered",
+            }
+            pending_id = state.get("pending_reminder_id")
+            if pending_id:
+                done_data["status"] = "pending"
+                done_data["pending_reminder_id"] = pending_id
+            elif state.get("result") and "取消" in str(state.get("result")):
+                done_data["status"] = "suppressed"
+                done_data["reason"] = state.get("result")
+            else:
+                done_data["result"] = state.get("output_content")
+            events.append({"event": "done", "data": done_data})
+            if session_id:
+                self._conversations.add_turn(
+                    session_id,
+                    user_input,
+                    shortcut_decision,
+                    state.get("result") or "",
+                )
+            return events
+
+        events.append({"event": "stage_start", "data": {"stage": "context"}})
+        updates = await self._context_node(state)
+        state.update(updates)
+        events.append({"event": "context_done", "data": {"context": state["context"]}})
+
+        # Stage 2: Task
+        events.append({"event": "stage_start", "data": {"stage": "task"}})
+        updates = await self._task_node(state)
+        state.update(updates)
+        events.append(
+            {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
+        )
+
+        # Stage 3: Strategy
+        events.append({"event": "stage_start", "data": {"stage": "strategy"}})
+        updates = await self._strategy_node(state)
+        state.update(updates)
+        decision = state.get("decision") or {}
+        events.append(
+            {
+                "event": "decision",
+                "data": {"should_remind": decision.get("should_remind")},
+            }
+        )
+
+        # Stage 4: Execution
+        events.append({"event": "stage_start", "data": {"stage": "execution"}})
+        updates = await self._execution_node(state)
+        state.update(updates)
+
+        # done 事件
+        done_data: dict[str, object] = {
+            "event_id": state.get("event_id"),
+            "session_id": session_id,
+        }
+        pending_id = state.get("pending_reminder_id")
+        if pending_id:
+            done_data["status"] = "pending"
+            done_data["pending_reminder_id"] = pending_id
+        elif state.get("result") and "取消" in str(state.get("result")):
+            done_data["status"] = "suppressed"
+            done_data["reason"] = state.get("result")
+        else:
+            done_data["status"] = "delivered"
+            done_data["result"] = state.get("output_content")
+        events.append({"event": "done", "data": done_data})
+
+        if session_id:
+            self._conversations.add_turn(
+                session_id,
+                user_input,
+                state.get("decision") or {},
+                state.get("result") or "",
+            )
+
+        return events

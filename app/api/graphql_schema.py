@@ -129,6 +129,7 @@ class ProcessQueryInput:
     memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
     context: DrivingContextInput | None = None
     current_user: str = "default"
+    session_id: str | None = None  # 多轮对话 session，None=单轮模式
 
 
 @strawberry.input
@@ -276,3 +277,35 @@ class ExperimentResults:
     """五策略对比实验结果."""
 
     strategies: list[ExperimentResult]
+
+
+# --- PendingReminder 类型（模块 2.3） ---
+
+
+@strawberry.type
+class PendingReminderGQL:
+    """待触发提醒 GraphQL 类型."""
+
+    id: str
+    event_id: str
+    trigger_type: str
+    trigger_text: str
+    status: str
+    created_at: str
+
+
+@strawberry.type
+class TriggeredReminderGQL:
+    """已触发提醒 GraphQL 类型."""
+
+    id: str
+    event_id: str
+    content: JSON
+    triggered_at: str
+
+
+@strawberry.type
+class PollResult:
+    """轮询触发结果 GraphQL 类型."""
+
+    triggered: list[TriggeredReminderGQL]
