@@ -186,16 +186,24 @@ class MemoryModule:
         await store.update_feedback(event_id, feedback)
 
     async def close(self) -> None:
+        """关闭所有 store，清理资源。
+
+        成功关闭的 store 立即释放引用；失败的保留以便调试，
+        但不会阻止其他 store 的清理。
+        """
         failed: list[str] = []
         for key, store in list(self._stores.items()):
             closer = getattr(store, "close", None)
-            if closer is not None:
-                try:
-                    await closer()
-                except Exception:
-                    logger.exception("Failed to close store %s", key)
-                    failed.append(key)
-        if not failed:
-            self._stores.clear()
-        else:
-            logger.warning("Stores not cleared due to close failures: %s", failed)
+            if closer is None:
+                continue
+            try:
+                await closer()
+            except Exception:
+                logger.exception("Failed to close store %s", key)
+                failed.append(key)
+            else:
+                del self._stores[key]
+        if failed:
+            logger.warning(
+                "%d store(s) failed to close, references retained: %s", len(failed), failed
+            )

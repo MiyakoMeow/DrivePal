@@ -235,7 +235,6 @@ class MemoryLifecycle:
                     f"{date_key}T00:00:00",
                     {"type": "daily_summary", "source": f"summary_{date_key}"},
                 )
-                await self._index.save()
             await self._summarizer.get_overall_summary()
             await self._summarizer.get_daily_personality(date_key)
             await self._summarizer.get_overall_personality()

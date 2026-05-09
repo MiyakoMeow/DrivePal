@@ -129,13 +129,13 @@ class MemoryBankStore:
             self._index.get_metadata()
         ):
             await self._index.save()
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
         results, updated = await self._retrieval.search(
             query,
             top_k,
             reference_date=self._config.reference_date,
         )
-        elapsed = (time.monotonic() - t0) * 1000
+        elapsed = (time.perf_counter() - t0) * 1000
         self._metrics.search_latency_ms.append(elapsed)
         if not results:
             self._metrics.search_empty_count += 1
