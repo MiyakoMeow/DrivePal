@@ -24,7 +24,6 @@ def _migrate_text_files(default_dir: Path, old_root: Path) -> bool:
         "events.jsonl",
         "interactions.jsonl",
         "feedback.jsonl",
-        "experiment_results.jsonl",
     ]
     toml_files = [
         "contexts.toml",

@@ -353,7 +353,7 @@ def test_passenger_extra_channels(rules_toml_7):
 def test_passenger_not_on_highway(rules_toml_7):
     """highway 场景排除乘客规则（not_scenario）。"""
     rules = load_rules(rules_toml_7)
-    ctx: dict[str, object] = {"scenario": "highway"}
+    ctx: dict[str, object] = {"scenario": "highway", "passengers": ["张三"]}
     matched = [r for r in rules if r.condition(ctx)]
     assert not any("passenger" in r.name for r in matched)
 

@@ -101,7 +101,9 @@ def _build_condition(rule_cfg: dict) -> Callable[[dict], bool]:
         )
 
     if "has_passengers" in rule_cfg:
-        checks.append(lambda ctx: bool(ctx.get("passengers")))
+        checks.append(
+            lambda ctx: bool(ctx.get("passengers"))
+        )  # TOML has_passengers=true 时生效（key 存在且非 false 即可触发）
 
     def condition(ctx: dict) -> bool:
         return all(check(ctx) for check in checks) if checks else False

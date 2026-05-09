@@ -243,5 +243,9 @@ class Mutation:
         u_dir = user_data_dir(current_user)
         if not u_dir.exists():
             return False
-        shutil.rmtree(u_dir)
+        try:
+            shutil.rmtree(u_dir)
+        except OSError as e:
+            logger.warning("Failed to delete user data: %s", e)
+            return False
         return True
