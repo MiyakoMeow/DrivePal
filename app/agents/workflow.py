@@ -523,3 +523,67 @@ class AgentWorkflow:
         result = state.get("result") or "处理完成"
         event_id = state.get("event_id")
         return result, event_id, stages
+
+    async def run_stream(
+        self,
+        user_input: str,
+        driving_context: dict | None = None,
+        session_id: str | None = None,
+    ) -> list[dict]:
+        """SSE 流式方法。返回阶段事件列表，SSE 端点遍历发送。
+
+        设计说明：返回 list[dict]（非 async generator）。
+        阶段间推送（context_done → task_done → decision → done）提供进度可见性，
+        用户无需等全部 LLM 调用完成即可看到部分结果。
+        """
+        events: list[dict] = []
+        stages = WorkflowStages()
+        state: AgentState = {
+            "original_query": user_input,
+            "context": {},
+            "task": None,
+            "decision": None,
+            "result": None,
+            "event_id": None,
+            "driving_context": driving_context,
+            "stages": stages,
+        }
+
+        # Stage 1: Context
+        events.append({"event": "stage_start", "data": {"stage": "context"}})
+        updates = await self._context_node(state)
+        state.update(updates)
+        events.append({"event": "context_done", "data": {"context": state["context"]}})
+
+        # Stage 2: Task
+        events.append({"event": "stage_start", "data": {"stage": "task"}})
+        updates = await self._task_node(state)
+        state.update(updates)
+        events.append({"event": "task_done", "data": {"tasks": state.get("task") or {}}})
+
+        # Stage 3: Strategy
+        events.append({"event": "stage_start", "data": {"stage": "strategy"}})
+        updates = await self._strategy_node(state)
+        state.update(updates)
+        decision = state.get("decision") or {}
+        events.append({"event": "decision", "data": {"should_remind": decision.get("should_remind")}})
+
+        # Stage 4: Execution
+        events.append({"event": "stage_start", "data": {"stage": "execution"}})
+        updates = await self._execution_node(state)
+        state.update(updates)
+
+        # done 事件
+        done_data: dict = {"event_id": state.get("event_id"), "session_id": session_id}
+        pending_id = state.get("pending_reminder_id")
+        if pending_id:
+            done_data["status"] = "pending"
+            done_data["pending_reminder_id"] = pending_id
+        elif state.get("result") and "取消" in str(state.get("result")):
+            done_data["status"] = "suppressed"
+            done_data["reason"] = state.get("result")
+        else:
+            done_data["status"] = "delivered"
+            done_data["result"] = state.get("output_content") or state.get("result")
+        events.append({"event": "done", "data": done_data})
+        return events

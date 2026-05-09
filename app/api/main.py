@@ -21,6 +21,7 @@ from strawberry.schema.config import StrawberryConfig
 from app.api.graphql_schema import JSONScalar
 from app.api.resolvers.mutation import Mutation as MutationImpl
 from app.api.resolvers.query import Query as QueryImpl
+from app.api.stream import router as stream_router
 from app.config import DATA_DIR
 from app.memory.singleton import _memory_module_state
 from app.storage.init_data import init_storage
@@ -69,6 +70,7 @@ def _mount_graphql() -> None:
 
 
 _mount_graphql()
+app.include_router(stream_router)
 
 
 @app.get("/")
