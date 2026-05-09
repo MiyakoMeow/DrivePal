@@ -2,6 +2,7 @@
 
 import logging
 import shutil
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import strawberry
@@ -12,6 +13,8 @@ if TYPE_CHECKING:
 
     from strawberry.scalars import JSON
 
+from app.agents.conversation import _conversation_manager
+from app.agents.pending import PendingReminderManager
 from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
 from app.api.graphql_schema import (
     DrivingContextInput,
@@ -265,10 +268,6 @@ class Mutation:
         context_input: DrivingContextInput | None = None,
     ) -> PollResult:
         """车机端轮询待触发提醒."""
-        from datetime import UTC, datetime
-
-        from app.agents.pending import PendingReminderManager
-
         pm = PendingReminderManager(user_data_dir(current_user))
         ctx = input_to_context(context_input).model_dump() if context_input else {}
         triggered = await pm.poll(ctx)
@@ -290,8 +289,7 @@ class Mutation:
         reminder_id: str,
         current_user: str = "default",
     ) -> bool:
-        from app.agents.pending import PendingReminderManager
-
+        """取消指定 ID 的待触发提醒."""
         pm = PendingReminderManager(user_data_dir(current_user))
         await pm.cancel(reminder_id)
         return True
@@ -301,8 +299,7 @@ class Mutation:
         self,
         current_user: str = "default",
     ) -> list[PendingReminderGQL]:
-        from app.agents.pending import PendingReminderManager
-
+        """获取当前用户所有待触发提醒列表."""
         pm = PendingReminderManager(user_data_dir(current_user))
         pending = await pm.list_pending()
         return [
@@ -325,7 +322,6 @@ class Mutation:
         session_id: str,
         current_user: str = "default",  # noqa: ARG002
     ) -> bool:
-        from app.agents.conversation import _conversation_manager
-
+        """关闭指定会话。"""
         _conversation_manager.close(session_id)
         return True

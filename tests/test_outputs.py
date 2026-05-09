@@ -115,6 +115,7 @@ class TestOutputRouterInterruptLevel:
         assert result.interrupt_level == InterruptLevel.URGENT_NORMAL
 
     def test_normal_is_zero(self):
+        """Given 无特殊标记, When OutputRouter, Then interrupt_level=NORMAL."""
         decision = {
             "should_remind": True,
             "reminder_content": {"detailed": "xx"},

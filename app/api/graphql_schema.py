@@ -283,6 +283,8 @@ class ExperimentResults:
 
 @strawberry.type
 class PendingReminderGQL:
+    """待触发提醒 GraphQL 类型."""
+
     id: str
     event_id: str
     trigger_type: str
@@ -293,6 +295,8 @@ class PendingReminderGQL:
 
 @strawberry.type
 class TriggeredReminderGQL:
+    """已触发提醒 GraphQL 类型."""
+
     id: str
     event_id: str
     content: JSON
@@ -301,4 +305,6 @@ class TriggeredReminderGQL:
 
 @strawberry.type
 class PollResult:
+    """轮询触发结果 GraphQL 类型."""
+
     triggered: list[TriggeredReminderGQL]

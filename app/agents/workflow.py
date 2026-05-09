@@ -81,8 +81,8 @@ class ReminderContent(BaseModel):
         return "无提醒内容"
 
 
-def _extract_location_target(decision: dict, driving_ctx: dict | None) -> dict:
-    """从 driving_context 中提取目标位置经纬度."""
+def _extract_location_target(_decision: dict, driving_ctx: dict | None) -> dict:
+    """从 driving_context 中提取目标位置经纬度。_decision 保留以与 _map_pending_trigger 签名一致。"""
     if driving_ctx:
         spatial = driving_ctx.get("spatial", {}) or {}
         dest = spatial.get("destination", {}) or {}

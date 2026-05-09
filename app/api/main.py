@@ -1,8 +1,9 @@
 """FastAPI 应用主入口."""
 
+import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from strawberry.scalars import JSON
 from strawberry.schema.config import StrawberryConfig
 
+from app.agents.conversation import _conversation_manager
 from app.api.graphql_schema import JSONScalar
 from app.api.resolvers.mutation import Mutation as MutationImpl
 from app.api.resolvers.query import Query as QueryImpl
@@ -37,10 +39,6 @@ if not WEBUI_DIR.exists():
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    import asyncio
-
-    from app.agents.conversation import _conversation_manager
-
     init_storage()
     logger.info("Data directory initialized: %s", DATA_DIR)
     if not Path.exists(WEBUI_DIR):
@@ -54,10 +52,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
     cleanup_task.cancel()
-    try:
+    with suppress(asyncio.CancelledError):
         await cleanup_task
-    except asyncio.CancelledError:
-        pass
     mm = _memory_module_state[0]
     if mm is not None:
         await mm.close()

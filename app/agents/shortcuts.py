@@ -12,12 +12,13 @@ class ShortcutResolver:
     """加载 shortcuts.toml 并匹配用户输入."""
 
     def __init__(self) -> None:
+        """加载 shortcuts.toml 并初始化匹配器。"""
         self._shortcuts: list[dict] = []
         self._load()
 
     def _load(self) -> None:
         try:
-            with open(_SHORTCUTS_PATH, "rb") as f:
+            with _SHORTCUTS_PATH.open("rb") as f:
                 data = tomllib.load(f)
             self._shortcuts = data.get("shortcuts", [])
         except OSError, tomllib.TOMLDecodeError:
@@ -25,7 +26,7 @@ class ShortcutResolver:
 
     def resolve(self, query: str) -> dict | None:
         """匹配查询返回预构建 decision dict，未命中返回 None."""
-        candidates = []
+        candidates: list[tuple[int, int, dict, str]] = []
         for sc in self._shortcuts:
             for pat in sc.get("patterns", []):
                 if query == pat or query.startswith(pat):

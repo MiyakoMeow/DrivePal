@@ -3,7 +3,7 @@
 import math
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from app.agents.outputs import MultiFormatContent
+
+_PROXIMITY_RADIUS_M = 500
+_DEFAULT_TTL_SECONDS = 3600
+_TTL_EXTRA_FOR_TIME = 1800
 
 
 @dataclass
@@ -30,7 +34,7 @@ class PendingReminder:
     ttl_seconds: int
 
     @classmethod
-    def new(
+    def new(  # noqa: PLR0913
         cls,
         *,
         content: MultiFormatContent,
@@ -40,6 +44,7 @@ class PendingReminder:
         trigger_text: str = "",
         ttl_seconds: int = 3600,
     ) -> PendingReminder:
+        """创建新的 PendingReminder 实例。"""
         return cls(
             id=f"pr_{uuid.uuid4().hex[:12]}",
             event_id=event_id,
@@ -57,6 +62,12 @@ class PendingReminderManager:
     """管理待触发提醒的增删查与轮询触发."""
 
     def __init__(self, user_dir: Path) -> None:
+        """初始化待触发提醒管理器。
+
+        Args:
+            user_dir: 用户数据目录路径。
+
+        """
         self._store = TOMLStore(
             user_dir=user_dir,
             filename="pending_reminders.toml",
@@ -69,7 +80,7 @@ class PendingReminderManager:
     async def _write_all(self, reminders: list[dict]) -> None:
         await self._store.write(reminders)
 
-    async def add(
+    async def add(  # noqa: PLR0913
         self,
         content: MultiFormatContent,
         trigger_type: str,
@@ -78,7 +89,7 @@ class PendingReminderManager:
         trigger_text: str = "",
         ttl_seconds: int | None = None,
     ) -> PendingReminder:
-        """添加一条待触发提醒."""
+        """添加一条待触发提醒。"""
         if ttl_seconds is None:
             if trigger_type == "time":
                 target_str = str(trigger_target.get("time", ""))
@@ -87,11 +98,11 @@ class PendingReminderManager:
                     if target_dt.tzinfo is None:
                         target_dt = target_dt.replace(tzinfo=UTC)
                     delta = (target_dt - datetime.now(UTC)).total_seconds()
-                    ttl_seconds = int(max(delta, 0)) + 1800
+                    ttl_seconds = int(max(delta, 0)) + _TTL_EXTRA_FOR_TIME
                 except ValueError, TypeError:
-                    ttl_seconds = 3600
+                    ttl_seconds = _DEFAULT_TTL_SECONDS
             else:
-                ttl_seconds = 3600
+                ttl_seconds = _DEFAULT_TTL_SECONDS
 
         pr = PendingReminder.new(
             content=content,
@@ -102,15 +113,17 @@ class PendingReminderManager:
             ttl_seconds=ttl_seconds,
         )
         all_rem = await self._read_all()
-        all_rem.append(pr.__dict__)
+        all_rem.append(asdict(pr))
         await self._write_all(all_rem)
         return pr
 
     async def list_pending(self) -> list[dict]:
+        """返回所有 status=pending 的提醒列表。"""
         all_rem = await self._read_all()
         return [r for r in all_rem if r.get("status") == "pending"]
 
     async def cancel(self, reminder_id: str) -> None:
+        """取消指定 ID 的待触发提醒。"""
         all_rem = await self._read_all()
         for r in all_rem:
             if r.get("id") == reminder_id:
@@ -170,7 +183,7 @@ class PendingReminderManager:
     @staticmethod
     def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """返回两点间距离（米）。"""
-        R = 6371000
+        earth_radius_m = 6371000
         phi1, phi2 = math.radians(lat1), math.radians(lat2)
         dphi = math.radians(lat2 - lat1)
         dlam = math.radians(lon2 - lon1)
@@ -178,7 +191,7 @@ class PendingReminderManager:
             math.sin(dphi / 2) ** 2
             + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
         )
-        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return earth_radius_m * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     @staticmethod
     def _check_location(reminder: dict, ctx: dict) -> bool:
@@ -199,7 +212,7 @@ class PendingReminderManager:
             float(target_lat),
             float(target_lon),
         )
-        return dist < 500
+        return dist < _PROXIMITY_RADIUS_M
 
     @staticmethod
     def _check_time(reminder: dict) -> bool:
@@ -241,6 +254,7 @@ def parse_duration(s: str) -> int | None:
 
 def parse_time(s: str) -> str | None:
     """解析中文时间字符串为 ISO 时间 HH:MM:SS。
+
     支持 '3点'→'15:00', '下午3点'→'15:00', '上午9点'→'09:00'。
     上/下午缺省时 < 8 算下午。
     """
@@ -248,10 +262,12 @@ def parse_time(s: str) -> str | None:
     m = re.match(r"(上午|下午)?(\d+)点", s)
     if not m:
         return None
+    noon = 12
+    afternoon_threshold = 8  # 缺省上/下午时，< 8 点视为下午
     am_pm = m.group(1)
     hour = int(m.group(2))
-    if am_pm == "上午" and hour == 12:
+    if am_pm == "上午" and hour == noon:
         hour = 0
-    elif (am_pm == "下午" and hour != 12) or (am_pm is None and hour < 8):
-        hour += 12
+    elif (am_pm == "下午" and hour != noon) or (am_pm is None and hour < afternoon_threshold):
+        hour += noon
     return f"{hour:02d}:00:00"

@@ -1,5 +1,7 @@
 """SSE 流式查询端点."""
 
+from __future__ import annotations
+
 import json
 import logging
 from typing import TYPE_CHECKING
@@ -13,6 +15,8 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from app.schemas.query import ProcessQueryRequest
 
 logger = logging.getLogger(__name__)
@@ -20,7 +24,7 @@ router = APIRouter()
 
 
 @router.post("/query/stream")
-async def query_stream(req: ProcessQueryRequest):
+async def query_stream(req: ProcessQueryRequest) -> StreamingResponse:
     """处理用户查询并以 SSE 流式返回各阶段结果."""
     mm = get_memory_module()
     workflow = AgentWorkflow(
@@ -37,7 +41,7 @@ async def query_stream(req: ProcessQueryRequest):
         session_id=req.session_id,
     )
 
-    async def event_generator():
+    async def event_generator() -> AsyncGenerator[str]:
         try:
             for event in events:
                 data_str = json.dumps(event["data"], ensure_ascii=False)
