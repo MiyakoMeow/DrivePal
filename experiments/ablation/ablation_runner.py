@@ -115,18 +115,17 @@ class AblationRunner:
             output = {"error": "LLM调用失败"}
         if not isinstance(output, dict):
             output = {}
-        output_dict: dict = cast("dict", output)
         latency_ms = (time.perf_counter() - t0) * 1000
         return VariantResult(
             scenario_id=scenario.id,
             variant=Variant.SINGLE_LLM,
-            decision=output_dict.get("decision", {}),
+            decision=cast("dict", output.get("decision", {})),
             result_text="",
             event_id=None,
             stages={
-                "context": output_dict.get("context", {}),
-                "task": output_dict.get("task", {}),
-                "decision": output_dict.get("decision", {}),
+                "context": cast("dict", output.get("context", {})),
+                "task": cast("dict", output.get("task", {})),
+                "decision": cast("dict", output.get("decision", {})),
                 "execution": {},
             },
             latency_ms=latency_ms,

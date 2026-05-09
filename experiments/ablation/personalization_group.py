@@ -43,6 +43,7 @@ async def run_personalization_group(
 
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
                 vr = await runner.run_variant(scenario, variant)
+                vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
                 all_results.append(vr)
 
                 if variant == Variant.FULL and vr.event_id:
@@ -250,23 +251,20 @@ def _compute_overfitting_gap(
     results: list[VariantResult],
     weight_history: list[dict],
 ) -> float:
-    """过拟合检测：mixed 阶段 FULL vs NO_FEEDBACK 的偏好匹配率差（绝对值）。"""
+    """过拟合检测：mixed 阶段 FULL vs NO_FEEDBACK 的偏好匹配率差（绝对值）。
+
+    使用 VariantResult.round_index 筛选，不依赖列表顺序。
+    """
     mixed_rounds = [
         i for i, wh in enumerate(weight_history) if wh.get("stage") == "mixed"
     ]
     if not mixed_rounds:
         return 0.0
 
-    # weight_history[i] 对应第 i+1 轮，results 列表按 run_variant 调用顺序排列
-    # 每轮产生 2 个结果（FULL 在前，NO_FEEDBACK 在后）
-    full_rounds = [r for r in results if r.variant == Variant.FULL]
-    no_fb_rounds = [r for r in results if r.variant == Variant.NO_FEEDBACK]
-
-    # 用筛选取 mixed 阶段轮次，避免切片依赖连续索引假设
-    full_mixed = [full_rounds[i] for i in range(len(full_rounds)) if i in mixed_rounds]
-    no_fb_mixed = [
-        no_fb_rounds[i] for i in range(len(no_fb_rounds)) if i in mixed_rounds
-    ]
+    # 用 round_index 筛选 mixed 阶段结果（1-based）
+    mixed_indices = {i + 1 for i in mixed_rounds}
+    full_mixed = [r for r in results if r.variant == Variant.FULL and r.round_index in mixed_indices]
+    no_fb_mixed = [r for r in results if r.variant == Variant.NO_FEEDBACK and r.round_index in mixed_indices]
 
     full_matches = sum(1 for r in full_mixed if bool(r.decision.get("should_remind")))
     no_fb_matches = sum(1 for r in no_fb_mixed if bool(r.decision.get("should_remind")))

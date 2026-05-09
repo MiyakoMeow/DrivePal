@@ -1,6 +1,7 @@
 """架构组实验——四 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
 
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -16,7 +17,19 @@ from .types import (
     VariantResult,
 )
 
-FATIGUE_THRESHOLD: float = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
+logger = logging.getLogger(__name__)
+
+def _get_fatigue_threshold() -> float:
+    """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。"""
+    raw = os.getenv("FATIGUE_THRESHOLD", "0.7").strip()
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("FATIGUE_THRESHOLD=%r 无效，使用默认值 0.7", raw)
+        return 0.7
+
+
+FATIGUE_THRESHOLD: float = _get_fatigue_threshold()
 """与 scenario_synthesizer.FATIGUE_SAFETY_THRESHOLD 同源（同一环境变量），此处用于架构组场景过滤。"""
 
 

@@ -39,6 +39,7 @@ class VariantResult:
     stages: dict
     latency_ms: float
     modifications: list[str] = field(default_factory=list)
+    round_index: int = 0
 
 
 @dataclass

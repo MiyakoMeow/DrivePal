@@ -8,8 +8,8 @@ def test_cohens_d_large_effect():
     a = [5.0, 5.0, 5.0, 5.0, 5.0]
     b = [1.0, 1.0, 1.0, 1.0, 1.0]
     d = cohens_d(a, b)
-    # 两组合并方差为零 → pooled_std=1.0 → d = (5-1)/1 = 4.0
-    assert d == 4.0
+    # 两组合并方差为零但均值不等 → 返回 inf（无组内变异，效应无限大）
+    assert d == float("inf")
 
 
 def test_cohens_d_no_difference():

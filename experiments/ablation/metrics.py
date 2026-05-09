@@ -6,7 +6,12 @@ from .types import JudgeScores
 
 
 def cohens_d(group_a: list[float], group_b: list[float]) -> float:
-    """Cohen's d 效应量。"""
+    """Cohen's d 效应量。
+
+    当两组方差均为 0（所有值相同）时：
+    - 均值相等 → 返回 0.0（无效应）
+    - 均值不等 → 返回 math.inf（按均值差符号取 ±inf）
+    """
     if not group_a or not group_b:
         return 0.0
     mean_a = sum(group_a) / len(group_a)
@@ -21,7 +26,11 @@ def cohens_d(group_a: list[float], group_b: list[float]) -> float:
         if len(group_b) > 1
         else 0
     )
-    pooled_std = math.sqrt((var_a + var_b) / 2) if (var_a + var_b) > 0 else 1.0
+    if var_a + var_b == 0:
+        if mean_a == mean_b:
+            return 0.0
+        return math.copysign(math.inf, mean_a - mean_b)
+    pooled_std = math.sqrt((var_a + var_b) / 2)
     return (mean_a - mean_b) / pooled_std
 
 
