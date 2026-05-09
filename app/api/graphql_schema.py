@@ -118,6 +118,7 @@ class DrivingContextInput:
     spatial: SpatioTemporalContextInput | None = None
     traffic: TrafficConditionInput | None = None
     scenario: ScenarioEnum = ScenarioEnum.PARKED
+    passengers: list[str] = strawberry.field(default_factory=list)
 
 
 @strawberry.input
@@ -127,6 +128,7 @@ class ProcessQueryInput:
     query: str
     memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
     context: DrivingContextInput | None = None
+    current_user: str = "default"
 
 
 @strawberry.input
@@ -137,6 +139,7 @@ class FeedbackInput:
     action: str
     memory_mode: MemoryModeEnum = MemoryModeEnum.MEMORY_BANK
     modified_content: str | None = None
+    current_user: str = "default"
 
 
 @strawberry.input
@@ -145,6 +148,14 @@ class ScenarioPresetInput:
 
     name: str
     context: DrivingContextInput
+    current_user: str = "default"
+
+
+@strawberry.input
+class DeleteDataInput:
+    """删除数据输入."""
+
+    current_user: str
 
 
 JSONScalar = strawberry.scalar(
@@ -200,6 +211,7 @@ class DrivingContextGQL:
     spatial: auto
     traffic: auto
     scenario: str
+    passengers: auto
 
 
 @strawberry.type
@@ -247,3 +259,27 @@ class FeedbackResult:
     """反馈结果."""
 
     status: str
+
+
+@strawberry.type
+class ExportDataResult:
+    """导出数据结果."""
+
+    files: JSON
+
+
+@strawberry.type
+class ExperimentResult:
+    """单策略实验结果."""
+
+    strategy: str
+    exact_match: float
+    field_f1: float
+    value_f1: float
+
+
+@strawberry.type
+class ExperimentResults:
+    """五策略对比实验结果."""
+
+    strategies: list[ExperimentResult]

@@ -1,6 +1,8 @@
 """Mutation 解析器."""
 
+import json
 import logging
+import shutil
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 import strawberry
@@ -11,6 +13,7 @@ if TYPE_CHECKING:
 
 from app.agents.workflow import AgentWorkflow
 from app.api.graphql_schema import (
+    ExportDataResult,
     FeedbackInput,
     FeedbackResult,
     ProcessQueryInput,
@@ -95,6 +98,7 @@ class Mutation:
                 data_dir=DATA_DIR,
                 memory_mode=MemoryMode(query_input.memory_mode.value),
                 memory_module=mm,
+                current_user=query_input.current_user,
             )
 
             driving_context = None
@@ -158,7 +162,7 @@ class Mutation:
         )
 
         # 更新 reminder_weights（反馈学习）
-        current_user = getattr(feedback_input, "current_user", None) or "default"
+        current_user = feedback_input.current_user
         user_dir = user_data_dir(current_user)
         strategy_store = TOMLStore(
             user_dir=user_dir,
@@ -181,7 +185,7 @@ class Mutation:
         preset_input: Annotated[ScenarioPresetInput, strawberry.argument(name="input")],
     ) -> ScenarioPresetGQL:
         """保存场景预设."""
-        store = preset_store()
+        store = preset_store(preset_input.current_user)
         preset = ScenarioPreset(name=preset_input.name)
         if preset_input.context:
             preset.context = input_to_context(preset_input.context)
@@ -189,12 +193,40 @@ class Mutation:
         return to_gql_preset(preset.model_dump())
 
     @strawberry.mutation
-    async def delete_scenario_preset(self, preset_id: str) -> bool:
+    async def delete_scenario_preset(
+        self,
+        preset_id: str,
+        current_user: str = "default",
+    ) -> bool:
         """删除场景预设."""
-        store = preset_store()
+        store = preset_store(current_user)
         presets = await store.read()
         new_presets = [p for p in presets if p.get("id") != preset_id]
         if len(new_presets) == len(presets):
             return False
         await store.write(new_presets)
+        return True
+
+    @strawberry.mutation
+    async def export_data(self, current_user: str) -> ExportDataResult:
+        """导出当前用户全量文本数据."""
+        u_dir = user_data_dir(current_user)
+        files: dict[str, str] = {}
+        if u_dir.exists():
+            for fpath in u_dir.rglob("*"):
+                if fpath.is_file() and fpath.suffix in (".jsonl", ".toml", ".json"):
+                    try:
+                        content = fpath.read_text(encoding="utf-8")
+                    except UnicodeDecodeError:
+                        continue
+                    rel = str(fpath.relative_to(u_dir))
+                    files[rel] = content
+        return ExportDataResult(files=json.dumps(files, ensure_ascii=False))
+
+    @strawberry.mutation
+    async def delete_all_data(self, current_user: str) -> bool:
+        """删除当前用户全量数据."""
+        u_dir = user_data_dir(current_user)
+        if u_dir.exists():
+            shutil.rmtree(u_dir)
         return True

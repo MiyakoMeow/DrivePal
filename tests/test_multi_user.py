@@ -1,79 +1,65 @@
-"""多用户隔离测试。"""
-
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock
+"""多用户隔离测试."""
 
 import pytest
 
-from app.memory.memory_bank.store import MemoryBankStore
-
-
-def _make_embedding_mock():
-    emb = AsyncMock(spec=["encode", "batch_encode"])
-    emb.encode = AsyncMock(return_value=[0.1] * 1536)
-
-    async def _batch(texts):
-        return [[0.1] * 1536 for _ in texts]
-
-    emb.batch_encode = AsyncMock(side_effect=_batch)
-    return emb
+from app.config import user_data_dir
+from app.storage.init_data import init_user_dir
+from app.storage.jsonl_store import JSONLinesStore
 
 
 @pytest.mark.asyncio
-async def test_two_users_data_isolated():
-    """两个用户各写数据，互相不可见。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        base = Path(tmp)
+async def test_users_data_isolated(tmp_path, monkeypatch):
+    """两个用户各自写入，读取互不干扰。"""
+    monkeypatch.setattr("app.config.DATA_ROOT", tmp_path)
+    monkeypatch.setattr("app.storage.init_data.DATA_ROOT", tmp_path)
 
-        s_a = MemoryBankStore(
-            base, embedding_model=_make_embedding_mock(), user_id="alice"
-        )
-        s_b = MemoryBankStore(
-            base, embedding_model=_make_embedding_mock(), user_id="bob"
-        )
+    init_user_dir("alice")
+    init_user_dir("bob")
 
-        try:
-            await s_a.write_interaction("alice's preference: seat 30", "noted")
-            await s_b.write_interaction("bob's preference: AC 22", "noted")
+    store_a = JSONLinesStore(user_dir=user_data_dir("alice"), filename="events.jsonl")
+    await store_a.append({"event": "alice_test"})
 
-            # Alice 搜自己的数据
-            r_a = await s_a.search("seat")
-            assert len(r_a) >= 1
-            assert any("alice" in r.event.get("content", "").lower() for r in r_a)
+    store_b = JSONLinesStore(user_dir=user_data_dir("bob"), filename="events.jsonl")
+    await store_b.append({"event": "bob_test"})
 
-            # Bob 搜自己的数据
-            r_b = await s_b.search("AC")
-            assert len(r_b) >= 1
-
-            # Alice 不应看到 Bob 的数据
-            r_a_bob = await s_a.search("AC")
-            for r in r_a_bob:
-                content = r.event.get("content", "")
-                assert "bob" not in content.lower()
-        finally:
-            await s_a.close()
-            await s_b.close()
+    events_a = await store_a.read_all()
+    events_b = await store_b.read_all()
+    assert len(events_a) == 1
+    assert events_a[0]["event"] == "alice_test"
+    assert len(events_b) == 1
+    assert events_b[0]["event"] == "bob_test"
 
 
 @pytest.mark.asyncio
-async def test_store_close_persists_then_shuts_down():
-    """close() 关闭后台任务。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        s = MemoryBankStore(Path(tmp), embedding_model=_make_embedding_mock())
-        await s.write_interaction("test", "ok")
-        await s.close()
-        # close 不应抛异常，且后台任务已清理
-        assert s._bg.pending_count == 0
+async def test_init_user_dir_creates_all_files(tmp_path, monkeypatch):
+    """init_user_dir 创建完整目录结构。"""
+    monkeypatch.setattr("app.config.DATA_ROOT", tmp_path)
+    monkeypatch.setattr("app.storage.init_data.DATA_ROOT", tmp_path)
+
+    u_dir = init_user_dir("testuser")
+    assert u_dir.exists()
+    assert (u_dir / "events.jsonl").exists()
+    assert (u_dir / "strategies.toml").exists()
+    assert (u_dir / "scenario_presets.toml").exists()
 
 
-@pytest.mark.asyncio
-async def test_single_user_store_write_and_close():
-    """单用户 store 写入后正确关闭。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        s1 = MemoryBankStore(
-            Path(tmp), embedding_model=_make_embedding_mock(), user_id="same"
-        )
-        await s1.write_interaction("x", "y")
-        assert s1._index.total == 1
-        await s1.close()
+def test_migrate_legacy_moves_files(tmp_path, monkeypatch):
+    """_migrate_legacy 将平铺文件迁至 data/users/default/。"""
+    from app.storage.init_data import _migrate_legacy
+
+    monkeypatch.setattr("app.config.DATA_ROOT", tmp_path)
+    monkeypatch.setattr("app.storage.init_data.DATA_ROOT", tmp_path)
+
+    (tmp_path / "events.jsonl").write_text("")
+    (tmp_path / "strategies.toml").write_text("")
+    assert _migrate_legacy() is True
+    assert (tmp_path / "users" / "default" / "events.jsonl").exists()
+    assert not (tmp_path / "events.jsonl").exists()
+
+
+def test_user_data_dir_path(tmp_path, monkeypatch):
+    """user_data_dir 返回正确的 per-user 路径。"""
+    monkeypatch.setattr("app.config.DATA_ROOT", tmp_path / "data")
+    u_dir = user_data_dir("alice")
+    assert u_dir.name == "alice"
+    assert "users" in str(u_dir)
