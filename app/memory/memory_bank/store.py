@@ -158,6 +158,7 @@ class MemoryBankStore:
                     source="overall",
                 )
             )
+        actual_limit = max(0, top_k - len(prepend))
         out.extend(
             SearchResult(
                 event={
@@ -168,22 +169,7 @@ class MemoryBankStore:
                 score=float(r.get("score", 0.0)),
                 source=r.get("source", "event"),
             )
-            for r in results
-            if not r.get("corrupted")
-        )
-        # 整体上下文不占用 top_k 配额（prepend 始终在结果前）
-        actual_limit = top_k - len(prepend)
-        out.extend(
-            SearchResult(
-                event={
-                    "content": r.get("text", ""),
-                    "source": r.get("source", ""),
-                    "memory_strength": int(r.get("memory_strength", 1)),
-                },
-                score=float(r.get("score", 0.0)),
-                source=r.get("source", "event"),
-            )
-            for r in results[: max(0, actual_limit)]
+            for r in results[:actual_limit]
             if not r.get("corrupted")
         )
         return out
@@ -256,5 +242,7 @@ class MemoryBankStore:
     async def close(self) -> None:
         try:
             await self._index.save()
+        except Exception:
+            logger.warning("Failed to save index during close", exc_info=True)
         finally:
             await self._bg.shutdown()

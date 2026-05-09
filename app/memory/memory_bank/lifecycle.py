@@ -54,7 +54,7 @@ class MemoryLifecycle:
         """
         forgotten_ids = self._forget.maybe_forget(
             metadata,
-            reference_date=self._config.reference_date,
+            reference_date=self._resolve_reference_date(),
         )
         if forgotten_ids is None:
             return False  # 节流跳过
@@ -156,6 +156,8 @@ class MemoryLifecycle:
             )
 
         # 批量编码
+        if not pair_texts:
+            return ""
         embeddings = await self._embedding_client.encode_batch(pair_texts)
         fid: int | None = None
         for text_item, emb, meta in zip(

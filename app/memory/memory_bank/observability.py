@@ -39,7 +39,7 @@ class MemoryBankMetrics:
             "search_empty_ratio": (
                 self.search_empty_count / self.search_count
                 if self.search_count > 0
-                else 0
+                else 0.0
             ),
             "search_latency_p50_ms": _p50(self.search_latency_ms),
             "search_latency_p90_ms": _p90(self.search_latency_ms),

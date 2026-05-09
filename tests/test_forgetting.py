@@ -146,8 +146,20 @@ class TestIngestionForget:
             for i in range(5)
         ]
         ids = compute_ingestion_forget_ids(meta, "2020-02-01", config)
-        # 无异常即可——概率模式结果不确定
+        # 固定 seed 应产生确定性结果
+        ids2 = compute_ingestion_forget_ids(meta, "2020-02-01", config)
+        assert ids == ids2, "same seed should produce deterministic results"
+        # 不同 seed 应产生不同结果（极高概率）
+        config2 = MemoryBankConfig(
+            forget_mode="probabilistic",
+            forget_interval_seconds=300,
+            enable_forgetting=True,
+            seed=99,
+        )
+        ids3 = compute_ingestion_forget_ids(meta, "2020-02-01", config2)
+        # 不同 seed 结果不同（概率极高但非绝对——仅作合理性检查）
         assert isinstance(ids, list)
+        assert isinstance(ids3, list)
 
     def test_daily_summary_skipped_in_ingestion(self):
         config = MemoryBankConfig(forget_mode="deterministic", seed=42)

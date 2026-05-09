@@ -173,6 +173,7 @@ class FaissIndex:
                 )
                 # 以 index 为权威——为缺失 ID 补骨架。
                 # 从 FAISS IndexIDMap.id_map 提取实际标签（而非假设连续 ID）。
+                orig_meta_len = len(meta)
                 existing_ids = {m["faiss_id"] for m in meta}
                 try:
                     id_array = faiss.vector_to_array(idx.id_map)
@@ -198,7 +199,7 @@ class FaissIndex:
                         )
                 meta.sort(key=lambda m: m["faiss_id"])
                 meta_warnings.append(
-                    f"count mismatch ({idx.ntotal} vs {len(meta)}). "
+                    f"count mismatch ({orig_meta_len} vs {idx.ntotal}). "
                     "Added skeleton entries for missing metadata."
                 )
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
