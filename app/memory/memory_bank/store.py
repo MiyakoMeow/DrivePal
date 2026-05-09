@@ -136,7 +136,7 @@ class MemoryBankStore:
         if self._config.enable_forgetting and await self._lifecycle.purge_forgotten(
             self._index.get_metadata()
         ):
-            await self._maybe_save()
+            pass  # purge 后有修改，末尾无条件 _maybe_save 兜底
         t0 = time.perf_counter()
         results, updated = await self._retrieval.search(
             query,
@@ -148,8 +148,7 @@ class MemoryBankStore:
         if not results:
             self._metrics.search_empty_count += 1
 
-        if updated:
-            await self._maybe_save()
+        await self._maybe_save()
         extra = self._index.get_extra()
         prepend = []
         for key, label in [
