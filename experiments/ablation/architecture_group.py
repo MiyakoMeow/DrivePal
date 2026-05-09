@@ -1,12 +1,11 @@
 """架构组实验——四 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
 
-import json
 import logging
 import os
+import statistics
 from pathlib import Path
 
-import aiofiles
-
+from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
 from .judge import Judge
 from .types import (
@@ -18,6 +17,7 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 def _get_fatigue_threshold() -> float:
     """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。"""
@@ -55,55 +55,12 @@ async def run_architecture_group(
         batch_scores = await judge.score_batch(scenario, scenario_results)
         scores.extend(batch_scores)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(output_path, "w") as f:
-        for r in results:
-            await f.write(
-                json.dumps(
-                    {
-                        "scenario_id": r.scenario_id,
-                        "variant": r.variant.value,
-                        "decision": r.decision,
-                        "stages": r.stages,
-                        "latency_ms": r.latency_ms,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+    await dump_variant_results_jsonl(output_path, results)
 
     metrics = compute_quality_metrics(scores, results)
 
     full_results = [r for r in results if r.variant == Variant.FULL]
-    stage_scores_by_scenario: dict[str, dict] = {}
-    for fr in full_results:
-        stage_scores = await judge.score_stages(fr)
-        stage_scores_by_scenario[fr.scenario_id] = stage_scores
-    if stage_scores_by_scenario:
-        context_scores = [
-            v["context"]["score"]
-            for v in stage_scores_by_scenario.values()
-            if "context" in v and isinstance(v["context"].get("score"), (int, float))
-        ]
-        task_scores = [
-            v["task"]["score"]
-            for v in stage_scores_by_scenario.values()
-            if "task" in v and isinstance(v["task"].get("score"), (int, float))
-        ]
-        decision_scores = [
-            v["decision"]["score"]
-            for v in stage_scores_by_scenario.values()
-            if "decision" in v and isinstance(v["decision"].get("score"), (int, float))
-        ]
-        metrics["stage_scores"] = {
-            "context": sum(context_scores) / len(context_scores)
-            if context_scores
-            else 0,
-            "task": sum(task_scores) / len(task_scores) if task_scores else 0,
-            "decision": sum(decision_scores) / len(decision_scores)
-            if decision_scores
-            else 0,
-        }
+    metrics["stage_scores"] = await _aggregate_full_stage_scores(judge, full_results)
 
     return GroupResult(
         group="architecture",
@@ -126,9 +83,12 @@ def compute_quality_metrics(
         n = len(variant_scores)
         variant_results = [r for r in results if r.variant.value == variant]
         latencies = sorted([r.latency_ms for r in variant_results])
-        p50 = latencies[len(latencies) // 2] if latencies else 0
-        p90_idx = int(len(latencies) * 0.9)
-        p90 = latencies[min(p90_idx, len(latencies) - 1)] if latencies else 0
+        if latencies:
+            percentiles = statistics.quantiles(latencies, n=100, method="inclusive")
+            p50 = percentiles[49]
+            p90 = percentiles[89]
+        else:
+            p50 = p90 = 0.0
 
         metrics[variant] = {
             "n": n,
@@ -145,6 +105,28 @@ def compute_quality_metrics(
             "latency_p90_ms": p90,
         }
     return metrics
+
+
+async def _aggregate_full_stage_scores(
+    judge: Judge, full_results: list[VariantResult]
+) -> dict[str, float]:
+    """聚合所有 Full 变体的中间阶段平均评分。"""
+    ctx_scores: list[float] = []
+    task_scores: list[float] = []
+    dec_scores: list[float] = []
+    for fr in full_results:
+        stage_scores = await judge.score_stages(fr)
+        if stage_scores.get("context", {}).get("score", 0) > 0:
+            ctx_scores.append(stage_scores["context"]["score"])
+        if stage_scores.get("task", {}).get("score", 0) > 0:
+            task_scores.append(stage_scores["task"]["score"])
+        if stage_scores.get("decision", {}).get("score", 0) > 0:
+            dec_scores.append(stage_scores["decision"]["score"])
+    return {
+        "context": sum(ctx_scores) / len(ctx_scores) if ctx_scores else 0.0,
+        "task": sum(task_scores) / len(task_scores) if task_scores else 0.0,
+        "decision": sum(dec_scores) / len(dec_scores) if dec_scores else 0.0,
+    }
 
 
 def _is_arch_scenario(s: Scenario) -> bool:

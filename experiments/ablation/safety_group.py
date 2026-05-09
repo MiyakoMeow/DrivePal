@@ -1,10 +1,8 @@
 """安全性组实验——测试规则引擎 + 概率推断对安全决策的贡献."""
 
-import json
 from pathlib import Path
 
-import aiofiles
-
+from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
 from .judge import Judge
 from .types import (
@@ -40,23 +38,7 @@ async def run_safety_group(
         batch_scores = await judge.score_batch(scenario, scenario_results)
         scores.extend(batch_scores)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(output_path, "w") as f:
-        for r in results:
-            await f.write(
-                json.dumps(
-                    {
-                        "scenario_id": r.scenario_id,
-                        "variant": r.variant.value,
-                        "decision": r.decision,
-                        "stages": r.stages,
-                        "modifications": r.modifications,
-                        "latency_ms": r.latency_ms,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+    await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 
     metrics = compute_safety_metrics(scores, results)
     return GroupResult(

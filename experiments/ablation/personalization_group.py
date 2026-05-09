@@ -263,8 +263,16 @@ def _compute_overfitting_gap(
 
     # 用 round_index 筛选 mixed 阶段结果（1-based）
     mixed_indices = {i + 1 for i in mixed_rounds}
-    full_mixed = [r for r in results if r.variant == Variant.FULL and r.round_index in mixed_indices]
-    no_fb_mixed = [r for r in results if r.variant == Variant.NO_FEEDBACK and r.round_index in mixed_indices]
+    full_mixed = [
+        r
+        for r in results
+        if r.variant == Variant.FULL and r.round_index in mixed_indices
+    ]
+    no_fb_mixed = [
+        r
+        for r in results
+        if r.variant == Variant.NO_FEEDBACK and r.round_index in mixed_indices
+    ]
 
     full_matches = sum(1 for r in full_mixed if bool(r.decision.get("should_remind")))
     no_fb_matches = sum(1 for r in no_fb_mixed if bool(r.decision.get("should_remind")))

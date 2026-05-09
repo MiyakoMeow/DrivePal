@@ -118,6 +118,48 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
     return results
 
 
+async def _run_safety_experiment(
+    data_dir: Path, all_scenarios: list[Scenario], seed: int
+) -> GroupResult:
+    """运行安全性组实验。"""
+    runner = AblationRunner(user_id="experiment-safety")
+    judge = Judge()
+    safety_scenarios = sample_scenarios(all_scenarios, 50, safety_only=True, seed=seed)
+    return await run_safety_group(
+        runner, judge, safety_scenarios, data_dir / "results" / "safety.jsonl"
+    )
+
+
+async def _run_architecture_experiment(
+    data_dir: Path, all_scenarios: list[Scenario], seed: int
+) -> GroupResult:
+    """运行架构组实验。"""
+    runner = AblationRunner(user_id="experiment-arch")
+    judge = Judge()
+    arch_scenarios = sample_scenarios(
+        all_scenarios, 50, safety_only=False, seed=seed + 1
+    )
+    return await run_architecture_group(
+        runner, judge, arch_scenarios, data_dir / "results" / "architecture.jsonl"
+    )
+
+
+async def _run_personalization_experiment(
+    data_dir: Path, all_scenarios: list[Scenario], seed: int
+) -> GroupResult:
+    """运行个性化组实验。"""
+    runner = AblationRunner(user_id="experiment-personalization")
+    personalization_scenarios = sample_scenarios(
+        all_scenarios, 20, safety_only=False, seed=seed + 2
+    )
+    return await run_personalization_group(
+        runner,
+        personalization_scenarios,
+        data_dir / "results" / "personalization.jsonl",
+        seed=seed,
+    )
+
+
 async def main(argv: list[str] | None = None) -> None:
     """消融实验主入口。"""
     parser = build_parser()
@@ -154,41 +196,22 @@ async def main(argv: list[str] | None = None) -> None:
         print(f"\n=== 运行 {group} 组 ===\n")
 
         if group == "safety":
-            runner = AblationRunner(user_id="experiment-safety")
-            judge = Judge()
-            safety_scenarios = sample_scenarios(
-                all_scenarios, 50, safety_only=True, seed=args.seed
-            )
-            result = await run_safety_group(
-                runner, judge, safety_scenarios, results_dir / "safety.jsonl"
-            )
-            all_group_results["safety"] = result
+            result = await _run_safety_experiment(data_dir, all_scenarios, args.seed)
+            all_group_results[group] = result
             print(f"安全性组完成: {len(result.variant_results)} 结果")
 
         elif group == "architecture":
-            runner = AblationRunner(user_id="experiment-arch")
-            judge = Judge()
-            arch_scenarios = sample_scenarios(
-                all_scenarios, 50, safety_only=False, seed=args.seed + 1
+            result = await _run_architecture_experiment(
+                data_dir, all_scenarios, args.seed
             )
-            result = await run_architecture_group(
-                runner, judge, arch_scenarios, results_dir / "architecture.jsonl"
-            )
-            all_group_results["architecture"] = result
+            all_group_results[group] = result
             print(f"架构组完成: {len(result.variant_results)} 结果")
 
         elif group == "personalization":
-            runner = AblationRunner(user_id="experiment-personalization")
-            personalization_scenarios = sample_scenarios(
-                all_scenarios, 20, safety_only=False, seed=args.seed + 2
+            result = await _run_personalization_experiment(
+                data_dir, all_scenarios, args.seed
             )
-            result = await run_personalization_group(
-                runner,
-                personalization_scenarios,
-                results_dir / "personalization.jsonl",
-                seed=args.seed,
-            )
-            all_group_results["personalization"] = result
+            all_group_results[group] = result
             print(f"个性化组完成: {len(result.variant_results)} 结果")
 
     render_report(all_group_results, results_dir)
