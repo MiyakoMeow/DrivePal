@@ -37,11 +37,27 @@ if not WEBUI_DIR.exists():
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    import asyncio
+
+    from app.agents.conversation import _conversation_manager
+
     init_storage()
     logger.info("Data directory initialized: %s", DATA_DIR)
     if not Path.exists(WEBUI_DIR):
         logger.warning("WebUI directory not found: %s", WEBUI_DIR)
+
+    async def _periodic_cleanup() -> None:
+        while True:
+            await asyncio.sleep(300)
+            _conversation_manager.cleanup_expired()
+
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     mm = _memory_module_state[0]
     if mm is not None:
         await mm.close()

@@ -16,6 +16,7 @@ from app.agents.probabilistic import (
     is_enabled,
 )
 from app.agents.prompts import SYSTEM_PROMPTS
+from app.agents.conversation import _conversation_manager
 from app.agents.outputs import OutputRouter
 from app.agents.pending import PendingReminderManager
 from app.agents.rules import apply_rules, format_constraints, postprocess_decision
@@ -129,6 +130,7 @@ class AgentWorkflow:
         else:
             chat_model = get_chat_model()
             self.memory_module = MemoryModule(data_dir, chat_model=chat_model)
+        self._conversations = _conversation_manager
 
         self._nodes = [
             self._context_node,
@@ -191,8 +193,23 @@ class AgentWorkflow:
     async def _context_node(self, state: AgentState) -> dict:
         user_input = state.get("original_query", "")
         stages = state.get("stages")
+        session_id = state.get("session_id")
 
         relevant_memories = await self._search_memories(user_input)
+
+        # --- 多轮对话：注入对话历史 ---
+        conversation_history = []
+        if session_id:
+            turns = self._conversations.get_history(session_id)
+            conversation_history = [
+                {
+                    "turn": t.turn_id,
+                    "user": t.query,
+                    "assistant_summary": t.response_summary,
+                    "intent": t.decision_snapshot,
+                }
+                for t in turns
+            ]
 
         current_datetime = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         driving_context = state.get("driving_context")
@@ -201,15 +218,24 @@ class AgentWorkflow:
             context = dict(driving_context)
             context["current_datetime"] = current_datetime
             context["related_events"] = relevant_memories
+            if conversation_history:
+                context["conversation_history"] = conversation_history
         else:
             system_prompt = SYSTEM_PROMPTS["context"].format(
                 current_datetime=current_datetime,
             )
+            history_block = ""
+            if conversation_history:
+                history_block = (
+                    "\n对话历史: "
+                    + json.dumps(conversation_history, ensure_ascii=False)
+                    + "\n请结合对话历史理解指代（如'刚才那个'指上一轮的 entities）。"
+                )
 
             prompt = f"""{system_prompt}
 
 用户输入: {user_input}
-历史记录: {json.dumps(relevant_memories, ensure_ascii=False)}
+历史记录: {json.dumps(relevant_memories, ensure_ascii=False)}{history_block}
 
 请输出JSON格式的上下文对象. """
 
@@ -502,6 +528,7 @@ class AgentWorkflow:
         self,
         user_input: str,
         driving_context: dict | None = None,
+        session_id: str | None = None,
     ) -> tuple[str, str | None, WorkflowStages]:
         """运行完整工作流并返回结果、事件ID和各阶段输出."""
         stages = WorkflowStages()
@@ -514,6 +541,7 @@ class AgentWorkflow:
             "event_id": None,
             "driving_context": driving_context,
             "stages": stages,
+            "session_id": session_id,
         }
 
         for node_fn in self._nodes:
@@ -522,6 +550,15 @@ class AgentWorkflow:
 
         result = state.get("result") or "处理完成"
         event_id = state.get("event_id")
+
+        if session_id:
+            self._conversations.add_turn(
+                session_id,
+                user_input,
+                state.get("decision") or {},
+                result,
+            )
+
         return result, event_id, stages
 
     async def run_stream(
@@ -547,9 +584,8 @@ class AgentWorkflow:
             "event_id": None,
             "driving_context": driving_context,
             "stages": stages,
+            "session_id": session_id,
         }
-
-        # Stage 1: Context
         events.append({"event": "stage_start", "data": {"stage": "context"}})
         updates = await self._context_node(state)
         state.update(updates)
@@ -586,4 +622,13 @@ class AgentWorkflow:
             done_data["status"] = "delivered"
             done_data["result"] = state.get("output_content") or state.get("result")
         events.append({"event": "done", "data": done_data})
+
+        if session_id:
+            self._conversations.add_turn(
+                session_id,
+                user_input,
+                state.get("decision") or {},
+                state.get("result") or "",
+            )
+
         return events

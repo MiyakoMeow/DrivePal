@@ -314,5 +314,18 @@ class Mutation:
                 status=r.get("status", ""),
                 created_at=r.get("created_at", ""),
             )
-            for r in pending
-        ]
+                for r in pending
+            ]
+
+    # --- 多轮对话（模块 4.3） ---
+
+    @strawberry.mutation
+    async def close_session(
+        self,
+        session_id: str,
+        current_user: str = "default",  # noqa: ARG002
+    ) -> bool:
+        from app.agents.conversation import _conversation_manager
+
+        _conversation_manager.close(session_id)
+        return True
