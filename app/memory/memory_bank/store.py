@@ -64,7 +64,6 @@ class MemoryBankStore:
         self._interaction_map: dict[
             str, list[str]
         ] = {}  # event_faiss_id → [interaction_faiss_id, ...]
-        self._event_faiss_map: dict[str, str] = {}  # MemoryEvent.id → faiss_id(str)
         self._source_event_index: dict[
             str, list[str]
         ] = {}  # date_key → [event_faiss_id, ...]
@@ -114,8 +113,6 @@ class MemoryBankStore:
     async def write(self, event: MemoryEvent) -> str:
         await self._ensure_loaded()
         fid = await self._lifecycle.write(event)
-        if event.id:
-            self._event_faiss_map[event.id] = fid
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         self._source_event_index.setdefault(date_key, []).append(fid)
         return fid
@@ -124,9 +121,6 @@ class MemoryBankStore:
         """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
         await self._ensure_loaded()
         fids = await self._lifecycle.write_batch(events)
-        for ev, fid in zip(events, fids, strict=True):
-            if ev.id:
-                self._event_faiss_map[ev.id] = fid
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         self._source_event_index.setdefault(date_key, []).extend(fids)
         return fids

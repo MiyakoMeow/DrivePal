@@ -91,3 +91,30 @@ async def test_finalize_without_summarizer_just_saves():
     await lifecycle.finalize()
 
     assert index.save.called
+
+
+@pytest.mark.asyncio
+async def test_finalize_with_forgetting():
+    """enable_forgetting=True 时 finalize 执行遗忘。"""
+    index = _make_index()
+    index.get_metadata.return_value = [
+        {
+            "faiss_id": 0,
+            "memory_strength": 1,
+            "timestamp": "2024-01-01T00:00:00",
+            "last_recall_date": "2024-01-01",
+        },
+    ]
+    embed = AsyncMock()
+    forget = MagicMock()
+    forget.rng = None
+    # purge_forgotten 会调 maybe_forget 并可能调 remove_vectors
+    forget.maybe_forget.return_value = None  # 节流跳过
+
+    config = MemoryBankConfig(enable_forgetting=True)
+    lifecycle = MemoryLifecycle(index, embed, forget, None, config)
+    await lifecycle.finalize()
+
+    # purge_forgotten 被调用（maybe_forget 因节流返回 None，不调 remove_vectors）
+    assert forget.maybe_forget.called
+    assert index.save.called

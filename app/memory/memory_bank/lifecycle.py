@@ -351,8 +351,9 @@ class MemoryLifecycle:
                     exc_info=True,
                 )
 
-        # 摄入遗忘（独立于 summarizer，无条件执行）
+        # 摄入遗忘 + 清理已标记条目（独立于 summarizer，无条件执行）
         if self._config.enable_forgetting:
+            await self.purge_forgotten(self._index.get_metadata())
             await self._forget_at_ingestion()
 
         # 持久化
