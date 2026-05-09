@@ -1,9 +1,12 @@
 """快捷指令解析器——高频场景不走 LLM 流水线."""
 
+import logging
 import tomllib
 from pathlib import Path
 
 from app.agents.pending import parse_duration, parse_time
+
+logger = logging.getLogger(__name__)
 
 _SHORTCUTS_PATH = Path(__file__).resolve().parents[2] / "config" / "shortcuts.toml"
 
@@ -82,4 +85,5 @@ class ShortcutResolver:
                         "detailed": f"已延迟{secs // 60}分钟",
                     },
                 }
+        logger.warning("Unknown shortcut type '%s', falling back to now", sc_type)
         return {"should_remind": True, "timing": "now"}

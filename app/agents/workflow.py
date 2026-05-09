@@ -610,8 +610,8 @@ class AgentWorkflow:
         """SSE 流式方法。返回阶段事件列表，SSE 端点遍历发送。
 
         设计说明：返回 list[dict]（非 async generator）。
-        阶段间推送（context_done → task_done → decision → done）提供进度可见性，
-        用户无需等全部 LLM 调用完成即可看到部分结果。
+        当前实现先完成全部阶段计算再批量返回事件列表——非真正逐阶段流式。
+        若需逐阶段推送（减少首字节延迟），改为 AsyncGenerator，每阶段完成后 yield。
         """
         events: list[dict] = []
         stages = WorkflowStages()

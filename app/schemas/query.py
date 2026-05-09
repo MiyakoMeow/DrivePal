@@ -16,7 +16,11 @@ class ProcessQueryRequest(BaseModel):
 
 
 class ProcessQueryResult(BaseModel):
-    """SSE 'done' 事件 data schema."""
+    """SSE 'done' 事件 data schema。
+
+    注意：当前 SSE 端点（stream.py）使用 run_stream() 返回的 list[dict]
+    直接构造事件，未用此 schema 校验。此 schema 作为文档化的契约参考。
+    """
 
     status: str = "delivered"  # "delivered" | "pending" | "suppressed"
     event_id: str | None = None
