@@ -1,0 +1,28 @@
+"""SSE 查询端点输入/输出 schema."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+
+class ProcessQueryRequest(BaseModel):
+    """POST /query/stream 请求体."""
+
+    query: str
+    memory_mode: str = "memory_bank"
+    context: dict | None = None
+    current_user: str = "default"
+    session_id: str | None = None
+
+
+class ProcessQueryResult(BaseModel):
+    """SSE 'done' 事件 data schema."""
+
+    status: str = "delivered"  # "delivered" | "pending" | "suppressed"
+    event_id: str | None = None
+    session_id: str | None = None
+    result: dict | None = None  # MultiFormatContent.model_dump()
+    pending_reminder_id: str | None = None
+    trigger_text: str | None = None
+    reason: str | None = None
+    cancelled: bool | None = None  # cancel_last action result
