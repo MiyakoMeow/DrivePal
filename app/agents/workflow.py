@@ -81,6 +81,17 @@ class ReminderContent(BaseModel):
         return "无提醒内容"
 
 
+def _format_time_for_display(time_str: str) -> str:
+    """从 ISO 时间字符串提取 HH:MM 用于显示."""
+    try:
+        dt = datetime.fromisoformat(time_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.strftime("%H:%M")
+    except (ValueError, TypeError):
+        return time_str
+
+
 def _extract_location_target(_decision: dict, driving_ctx: dict | None) -> dict:
     """从 driving_context 中提取目标位置经纬度。_decision 保留以与 _map_pending_trigger 签名一致。"""
     if driving_ctx:
@@ -457,7 +468,7 @@ class AgentWorkflow:
                         trigger_type="time",
                         trigger_target={"time": time_target},
                         event_id="",
-                        trigger_text=f"到达 {time_target} 时",
+                        trigger_text=f"{_format_time_for_display(time_target)} 时",
                     )
                     pending_ids = [pr1.id, pr2.id]
                 else:
