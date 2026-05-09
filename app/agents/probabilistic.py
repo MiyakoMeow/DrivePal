@@ -13,7 +13,7 @@ _SCENARIO_MAP = {"parked": 0.0, "city_driving": 0.4, "traffic_jam": 0.3, "highwa
 _SPEED_THRESHOLD_40 = 40
 _SPEED_THRESHOLD_80 = 80
 OVERLOADED_WARNING_THRESHOLD = 0.36  # 公开常量，workflow.py 等共享
-# 打断风险警告阈值（疲劳临界 ~0.7×0.4 + normal×0.3 + city×0.2 ≈ 0.45）
+# 阈值低于疲劳临界典型场景（~0.45），采用保守策略提前警告
 
 
 def _speed_factor(speed_kmh: float) -> float:
@@ -105,7 +105,7 @@ def compute_interrupt_risk(driving_context: dict) -> float:
 
     spatial = driving_context.get("spatial", {})
     loc = spatial.get("current_location", {}) if isinstance(spatial, dict) else {}
-    speed = float(loc.get("speed_kmh", 0.0) or 0.0)
+    speed = float(loc.get("speed_kmh", 0.0) or 0)
     sf = _speed_factor(speed)
 
     risk = 0.4 * fatigue + 0.3 * w_score + 0.2 * s_risk + 0.1 * sf

@@ -151,7 +151,7 @@ def load_rules(path: Path) -> list[Rule]:
     return rules
 
 
-_RULES_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "rules.toml"
+_RULES_PATH = Path(__file__).resolve().parents[2] / "config" / "rules.toml"
 SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
 
 
