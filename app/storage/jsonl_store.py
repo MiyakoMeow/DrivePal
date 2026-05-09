@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 class JSONLinesStore:
     """JSON Lines 文件存储，追加写 O(1)，进程安全（O_APPEND）。"""
 
-    def __init__(self, filepath: Path) -> None:
-        """初始化存储实例."""
-        self.filepath = filepath
+    def __init__(self, user_dir: Path, filename: str) -> None:
+        """初始化存储实例，指定用户目录和文件名."""
+        self.filepath = user_dir / filename
 
     async def append(self, obj: dict[str, Any]) -> None:
         """追加写入一条 JSON 对象（新行）。"""

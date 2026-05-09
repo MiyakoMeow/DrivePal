@@ -3,4 +3,11 @@
 import os
 from pathlib import Path
 
-DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
+DATA_ROOT = Path(os.getenv("DATA_DIR", "data"))
+# 保留 DATA_DIR 别名，兼容现有模块引用
+DATA_DIR = DATA_ROOT
+
+
+def user_data_dir(user_id: str = "default") -> Path:
+    """返回指定用户的 per-user 数据目录路径。"""
+    return DATA_ROOT / "users" / user_id

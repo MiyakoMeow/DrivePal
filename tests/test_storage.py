@@ -1,8 +1,11 @@
 """存储层测试."""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from app.memory.memory import MemoryModule
 from app.memory.schemas import FeedbackData, MemoryEvent
@@ -38,7 +41,11 @@ async def test_ignore_feedback_decreases_weight(tmp_path: Path) -> None:
         event_id,
         FeedbackData(action="ignore", type="general"),
     )
-    strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
+    strategies = await TOMLStore(
+        user_dir=tmp_path,
+        filename="strategies.toml",
+        default_factory=dict,
+    ).read()
     assert strategies["reminder_weights"]["general"] < GENERAL_WEIGHT_AFTER_IGNORE_MAX
 
 
@@ -54,7 +61,11 @@ async def test_feedback_history_appended(tmp_path: Path) -> None:
     eid2 = await memory.write(MemoryEvent(content="会议B", type="meeting"))
     await memory.update_feedback(eid1, FeedbackData(action="accept", type="meeting"))
     await memory.update_feedback(eid2, FeedbackData(action="ignore", type="meeting"))
-    feedback = await TOMLStore(tmp_path, Path("feedback.toml"), list).read()
+    feedback = await TOMLStore(
+        user_dir=tmp_path,
+        filename="feedback.toml",
+        default_factory=list,
+    ).read()
     assert len(feedback) == FEEDBACK_HISTORY_COUNT
 
 
@@ -84,7 +95,11 @@ async def test_feedback_via_event_type_lookup(tmp_path: Path) -> None:
         result.event_id,
         FeedbackData(action="accept", type=event_type or "default"),
     )
-    strategies = await TOMLStore(tmp_path, Path("strategies.toml"), dict).read()
+    strategies = await TOMLStore(
+        user_dir=tmp_path,
+        filename="strategies.toml",
+        default_factory=dict,
+    ).read()
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
 

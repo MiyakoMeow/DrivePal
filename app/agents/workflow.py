@@ -94,7 +94,11 @@ class AgentWorkflow:
             self._strategy_node,
             self._execution_node,
         ]
-        self._strategies_store = TOMLStore(data_dir, Path("strategies.toml"), dict)
+        self._strategies_store = TOMLStore(
+            user_dir=data_dir,
+            filename="strategies.toml",
+            default_factory=dict,
+        )
 
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
