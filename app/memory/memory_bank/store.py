@@ -131,7 +131,7 @@ class MemoryBankStore:
         if self._config.enable_forgetting and await self._lifecycle.purge_forgotten(
             self._index.get_metadata()
         ):
-            await self._index.save()
+            await self._maybe_save()
         t0 = time.perf_counter()
         results, updated = await self._retrieval.search(
             query,

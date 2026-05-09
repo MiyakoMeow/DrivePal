@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 GENERATION_EMPTY = "GENERATION_EMPTY"
+_SUMMARY_DEFAULT_TEMPERATURE = 0.3
+_SUMMARY_DEFAULT_MAX_TOKENS = 400
 
 
 class Summarizer:
@@ -51,12 +53,12 @@ class Summarizer:
                 temperature=(
                     self._config.llm_temperature
                     if self._config.llm_temperature is not None
-                    else 0.3
+                    else _SUMMARY_DEFAULT_TEMPERATURE
                 ),
                 max_tokens=(
                     self._config.llm_max_tokens
                     if self._config.llm_max_tokens is not None
-                    else 400
+                    else _SUMMARY_DEFAULT_MAX_TOKENS
                 ),
             )
             return f"The summary of the conversation on {date_key} is: {result}"
@@ -91,12 +93,12 @@ class Summarizer:
                 temperature=(
                     self._config.llm_temperature
                     if self._config.llm_temperature is not None
-                    else 0.3
+                    else _SUMMARY_DEFAULT_TEMPERATURE
                 ),
                 max_tokens=(
                     self._config.llm_max_tokens
                     if self._config.llm_max_tokens is not None
-                    else 400
+                    else _SUMMARY_DEFAULT_MAX_TOKENS
                 ),
             )
             extra["overall_summary"] = result
@@ -133,12 +135,12 @@ class Summarizer:
                 temperature=(
                     self._config.llm_temperature
                     if self._config.llm_temperature is not None
-                    else 0.3
+                    else _SUMMARY_DEFAULT_TEMPERATURE
                 ),
                 max_tokens=(
                     self._config.llm_max_tokens
                     if self._config.llm_max_tokens is not None
-                    else 400
+                    else _SUMMARY_DEFAULT_MAX_TOKENS
                 ),
             )
             existing[date_key] = result
@@ -180,12 +182,12 @@ class Summarizer:
                 temperature=(
                     self._config.llm_temperature
                     if self._config.llm_temperature is not None
-                    else 0.3
+                    else _SUMMARY_DEFAULT_TEMPERATURE
                 ),
                 max_tokens=(
                     self._config.llm_max_tokens
                     if self._config.llm_max_tokens is not None
-                    else 400
+                    else _SUMMARY_DEFAULT_MAX_TOKENS
                 ),
             )
             extra["overall_personality"] = result

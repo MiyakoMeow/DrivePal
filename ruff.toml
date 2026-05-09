@@ -46,7 +46,7 @@ exclude = [".agents/**"]
     "S311",  # 伪随机种子用于退避 jitter，非安全场景
     "D102",  # Facade 委托方法由类级 docstring 阐明语义
     "D107",  # __init__ 由类级 docstring 阐明语义
-    "PLC0415",
+    "PLC0415",  # 局部导入由 try/except 防御模式驱动
     "BLE001",  # close() 中宽捕获 Exception 合理——持久化失败不应阻止 shutdown
 ]
 "app/memory/memory_bank/index_reader.py" = [

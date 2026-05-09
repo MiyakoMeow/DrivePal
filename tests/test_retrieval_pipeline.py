@@ -112,9 +112,8 @@ async def test_merge_neighbors_same_source(pipeline, mock_index, mock_embedding)
     )
     results, updated = await pipeline.search("query")
     assert len(results) >= 1
-    assert "; " in results[0].get(
-        "text", ""
-    )  # \x00 在 _clean_search_result 中转为 "; "
+    # 验证邻接条目正确合并：键值分割符剥离后相邻文本以分号连接
+    assert "; " in results[0].get("text", "")
 
 
 @pytest.mark.asyncio
