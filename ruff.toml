@@ -94,6 +94,14 @@ exclude = [".agents/**"]
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
 ]
+"experiments/ablation/metrics.py" = [
+    "TC001",  # JudgeScores/VariantResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "ARG001",  # results 保留——GroupRunner 接口兼容
+]
+"experiments/ablation/report.py" = [
+    "TC001",  # GroupResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "TC003",  # Path 用于类型注解及运行时 mkdir()/Path.open() 操作，ruff 误判
+]
 "experiments/ablation/personalization_group.py" = [
     "S311",  # random.Random 用于实验可复现种子，非安全场景
     "TC001",  # AblationRunner 仅用于类型注解
