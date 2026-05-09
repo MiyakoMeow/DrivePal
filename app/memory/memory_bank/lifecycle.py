@@ -172,6 +172,8 @@ class MemoryLifecycle:
 
         多说话人事件可能产生多条 pair_text，仅返回最后一条的 faiss_id（对齐 write() 行为）。
         """
+        if not events:
+            return []
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         ts = datetime.now(UTC).isoformat()
         all_pair_texts: list[str] = []
@@ -317,40 +319,39 @@ class MemoryLifecycle:
 
         应在批量写入完成后调用（对应 VMB 一次性串行调用模式）。
         """
-        if not self._summarizer:
-            await self._index.save()
-            return
-        metadata = self._index.get_metadata()
+        if self._summarizer:
+            metadata = self._index.get_metadata()
 
-        # 收集所有唯一 source（即 date_key）
-        sources: set[str] = set()
-        for m in metadata:
-            src = m.get("source", "")
-            if src and not src.startswith("summary_"):
-                sources.add(src)
+            # 收集所有唯一 source（即 date_key）
+            sources: set[str] = set()
+            for m in metadata:
+                src = m.get("source", "")
+                if src and not src.startswith("summary_"):
+                    sources.add(src)
 
-        # 串行调用摘要/人格生成（不经过后台任务，与 VMB 行为一致）
-        for src in sorted(sources):
-            await self._finalize_date_summary(src)
+            # 串行调用摘要/人格生成（不经过后台任务，与 VMB 行为一致）
+            for src in sorted(sources):
+                await self._finalize_date_summary(src)
 
-        try:
-            await self._summarizer.get_overall_summary()
-            await self._summarizer.get_overall_personality()
-        except LLMCallFailed:
-            if self._metrics:
-                self._metrics.background_task_failures += 1
-            logger.warning(
-                "finalize: LLM failed for overall summary/personality", exc_info=True
-            )
-        except Exception:
-            if self._metrics:
-                self._metrics.background_task_failures += 1
-            logger.warning(
-                "finalize: unexpected error for overall summary/personality",
-                exc_info=True,
-            )
+            try:
+                await self._summarizer.get_overall_summary()
+                await self._summarizer.get_overall_personality()
+            except LLMCallFailed:
+                if self._metrics:
+                    self._metrics.background_task_failures += 1
+                logger.warning(
+                    "finalize: LLM failed for overall summary/personality",
+                    exc_info=True,
+                )
+            except Exception:
+                if self._metrics:
+                    self._metrics.background_task_failures += 1
+                logger.warning(
+                    "finalize: unexpected error for overall summary/personality",
+                    exc_info=True,
+                )
 
-        # 摄入遗忘
+        # 摄入遗忘（独立于 summarizer，无条件执行）
         if self._config.enable_forgetting:
             await self._forget_at_ingestion()
 

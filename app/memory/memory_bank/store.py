@@ -153,7 +153,9 @@ class MemoryBankStore:
             event_ids = []
             for m in self._index.get_metadata():
                 if m.get("source") == date_key and m.get("type") != "daily_summary":
-                    event_ids.append(str(m.get("faiss_id")))
+                    fid = m.get("faiss_id")
+                    if fid is not None:
+                        event_ids.append(str(fid))
             self._source_event_index[date_key] = event_ids
         for eid in event_ids:
             if eid not in self._interaction_map:
