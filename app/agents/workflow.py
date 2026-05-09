@@ -455,13 +455,18 @@ class AgentWorkflow:
             if trigger_type == "location_time":
                 loc_target = trigger_target.get("location", {})
                 time_target = trigger_target.get("time", "")
-                pr1 = await pm.add(
-                    content=output_content,
-                    trigger_type="location",
-                    trigger_target=loc_target,
-                    event_id="",
-                    trigger_text="到达目的地时",
-                )
+                if (
+                    loc_target.get("latitude") is not None
+                    and loc_target.get("longitude") is not None
+                ):
+                    pr1 = await pm.add(
+                        content=output_content,
+                        trigger_type="location",
+                        trigger_target=loc_target,
+                        event_id="",
+                        trigger_text="到达目的地时",
+                    )
+                    pending_ids.append(pr1.id)
                 if time_target:
                     pr2 = await pm.add(
                         content=output_content,
@@ -470,9 +475,7 @@ class AgentWorkflow:
                         event_id="",
                         trigger_text=f"{_format_time_for_display(time_target)} 时",
                     )
-                    pending_ids = [pr1.id, pr2.id]
-                else:
-                    pending_ids = [pr1.id]
+                    pending_ids.append(pr2.id)
             else:
                 pr = await pm.add(
                     content=output_content,
