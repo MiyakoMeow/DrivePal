@@ -276,3 +276,29 @@ class ExperimentResults:
     """五策略对比实验结果."""
 
     strategies: list[ExperimentResult]
+
+
+# --- PendingReminder 类型（模块 2.3） ---
+
+
+@strawberry.type
+class PendingReminderGQL:
+    id: str
+    event_id: str
+    trigger_type: str
+    trigger_text: str
+    status: str
+    created_at: str
+
+
+@strawberry.type
+class TriggeredReminderGQL:
+    id: str
+    event_id: str
+    content: JSON
+    triggered_at: str
+
+
+@strawberry.type
+class PollResult:
+    triggered: list[TriggeredReminderGQL]

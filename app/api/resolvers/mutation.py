@@ -14,13 +14,17 @@ if TYPE_CHECKING:
 
 from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
 from app.api.graphql_schema import (
+    DrivingContextInput,
     ExportDataResult,
     FeedbackInput,
     FeedbackResult,
+    PendingReminderGQL,
+    PollResult,
     ProcessQueryInput,
     ProcessQueryResult,
     ScenarioPresetGQL,
     ScenarioPresetInput,
+    TriggeredReminderGQL,
     WorkflowStagesGQL,
 )
 from app.api.resolvers.converters import (
@@ -251,3 +255,64 @@ class Mutation:
             logger.warning("Failed to delete user data: %s", e)
             return False
         return True
+
+    # --- PendingReminder mutations（模块 2.3） ---
+
+    @strawberry.mutation
+    async def poll_pending_reminders(
+        self,
+        current_user: str = "default",
+        context_input: DrivingContextInput | None = None,
+    ) -> PollResult:
+        """车机端轮询待触发提醒."""
+        from datetime import UTC, datetime
+
+        from app.agents.pending import PendingReminderManager
+
+        pm = PendingReminderManager(user_data_dir(current_user))
+        ctx = input_to_context(context_input).model_dump() if context_input else {}
+        triggered = await pm.poll(ctx)
+        return PollResult(
+            triggered=[
+                TriggeredReminderGQL(
+                    id=r["id"],
+                    event_id=r.get("event_id", ""),
+                    content=cast("JSON", r.get("content", {})),
+                    triggered_at=datetime.now(UTC).isoformat(),
+                )
+                for r in triggered
+            ]
+        )
+
+    @strawberry.mutation
+    async def cancel_pending_reminder(
+        self,
+        reminder_id: str,
+        current_user: str = "default",
+    ) -> bool:
+        from app.agents.pending import PendingReminderManager
+
+        pm = PendingReminderManager(user_data_dir(current_user))
+        await pm.cancel(reminder_id)
+        return True
+
+    @strawberry.mutation
+    async def get_pending_reminders(
+        self,
+        current_user: str = "default",
+    ) -> list[PendingReminderGQL]:
+        from app.agents.pending import PendingReminderManager
+
+        pm = PendingReminderManager(user_data_dir(current_user))
+        pending = await pm.list_pending()
+        return [
+            PendingReminderGQL(
+                id=r["id"],
+                event_id=r.get("event_id", ""),
+                trigger_type=r.get("trigger_type", ""),
+                trigger_text=r.get("trigger_text", ""),
+                status=r.get("status", ""),
+                created_at=r.get("created_at", ""),
+            )
+            for r in pending
+        ]
