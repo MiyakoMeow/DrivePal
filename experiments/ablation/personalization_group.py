@@ -14,7 +14,8 @@ from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
 
 from .ablation_runner import AblationRunner
-from .types import GroupResult, Scenario, Variant, VariantResult
+from .judge import Judge
+from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
 
 _SIMULATED_ACCEPT_PROB = 0.5
 _MIN_HISTORY_LEN = 2
@@ -27,6 +28,8 @@ async def run_personalization_group(
     scenarios: list[Scenario],
     output_path: Path,
     seed: int = 42,
+    *,
+    judge: Judge,
 ) -> GroupResult:
     """个性化组实验。20 轮，4 阶段偏好切换。"""
     rng = random.Random(seed)
@@ -60,6 +63,15 @@ async def run_personalization_group(
                 {"round": i + 1, "stage": stage_name, "weights": snapshot}
             )
 
+    scenario_map = {s.id: s for s in personalization_scenarios}
+    scores: list[JudgeScores] = []
+    grouped: dict[str, list[VariantResult]] = {}
+    for vr in all_results:
+        grouped.setdefault(vr.scenario_id, []).append(vr)
+    for scenario_id, scenario_vrs in grouped.items():
+        batch_scores = await judge.score_batch(scenario_map[scenario_id], scenario_vrs)
+        scores.extend(batch_scores)
+
     metrics = _compute_preference_metrics(all_results, weight_history, stages)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +87,7 @@ async def run_personalization_group(
     return GroupResult(
         group="personalization",
         variant_results=all_results,
-        judge_scores=[],
+        judge_scores=scores,
         metrics=metrics,
     )
 

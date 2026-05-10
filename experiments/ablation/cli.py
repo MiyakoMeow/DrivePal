@@ -49,6 +49,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+async def _score_group(
+    judge: Judge,
+    scenarios_for_results: dict[str, list[VariantResult]],
+    scenario_by_id: dict[str, Scenario],
+) -> list[JudgeScores]:
+    """对一组结果的各场景评分并汇总。"""
+    scores: list[JudgeScores] = []
+    for sid, vrs in scenarios_for_results.items():
+        scenario = scenario_by_id.get(sid)
+        if scenario is None:
+            continue
+        batch_scores = await judge.score_batch(scenario, vrs)
+        scores.extend(batch_scores)
+    return scores
+
+
 async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
     """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出。"""
     all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
@@ -71,19 +87,13 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
         for vr in variant_results:
             scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
 
-        scores: list[JudgeScores] = []
-        for sid, vrs in scenarios_for_results.items():
-            scenario = scenario_by_id.get(sid)
-            if scenario is None:
-                continue
-            batch_scores = await judge.score_batch(scenario, vrs)
-            scores.extend(batch_scores)
+        scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
 
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
         elif group_name == "architecture":
             metrics = compute_quality_metrics(scores, variant_results)
-        else:
+        else:  # personalization
             metrics = {}
 
         all_group_results[group_name] = GroupResult(
@@ -158,6 +168,7 @@ async def _run_personalization_experiment(
 ) -> GroupResult:
     """运行个性化组实验。"""
     runner = AblationRunner(user_id="experiment-personalization")
+    judge = Judge()
     personalization_scenarios = sample_scenarios(
         all_scenarios, 20, safety_only=False, seed=seed + 2
     )
@@ -166,6 +177,7 @@ async def _run_personalization_experiment(
         personalization_scenarios,
         data_dir / "results" / "personalization.jsonl",
         seed=seed,
+        judge=judge,
     )
 
 
