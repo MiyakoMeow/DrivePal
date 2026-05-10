@@ -71,25 +71,12 @@ class EmbeddingProviderConfig:
 
 
 @dataclass
-class JudgeProviderConfig:
-    """Judge 评估模型配置."""
-
-    provider: ProviderConfig
-    temperature: float = 0.1
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> JudgeProviderConfig:
-        """从字典创建配置实例."""
-        return _make_provider_config(cls, d, {"temperature": 0.1})
-
-
-@dataclass
 class LLMSettings:
     """模型配置集合，包含 LLM 和 Embedding 提供商列表."""
 
     llm_providers: list[LLMProviderConfig] = field(default_factory=list)
     embedding_model: str | None = None
-    judge_provider: JudgeProviderConfig | None = None
+    judge_model_group: str = "judge"
     model_groups: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     model_providers: dict[str, dict] = field(default_factory=dict)
 
@@ -120,7 +107,7 @@ class LLMSettings:
             else None
         )
 
-        judge_provider = _build_judge_provider(config_data)
+        judge_model_group = str(config_data.get("judge_model_group", "judge"))
 
         default_providers: list[LLMProviderConfig] = []
         if "default" in model_groups:
@@ -132,7 +119,7 @@ class LLMSettings:
         return cls(
             llm_providers=default_providers,
             embedding_model=embedding_model,
-            judge_provider=judge_provider,
+            judge_model_group=judge_model_group,
             model_groups=model_groups,
             model_providers=model_providers,
         )
@@ -170,11 +157,7 @@ class LLMSettings:
         if resolved.provider_name not in self.model_providers:
             raise ProviderNotFoundError(resolved.provider_name)
         provider_config = self.model_providers[resolved.provider_name]
-        api_key_env = provider_config.get("api_key_env")
-        if api_key_env:
-            api_key: str | None = os.environ.get(api_key_env, "")
-        else:
-            api_key = provider_config.get("api_key")
+        api_key = _resolve_api_key(provider_config)
         return EmbeddingProviderConfig(
             provider=ProviderConfig(
                 model=resolved.model_name,
@@ -182,6 +165,26 @@ class LLMSettings:
                 api_key=api_key,
             ),
         )
+
+
+def _resolve_api_key(provider_config: dict) -> str | None:
+    """从 provider 配置中解析 api_key。
+
+    优先读取 api_key_env 指向的环境变量；环境变量缺失或为空时抛 ValueError。
+    无 api_key_env 时回退到直接读取 api_key 字段（可为 None）。
+
+    Raises:
+        ValueError: api_key_env 指定了但对应环境变量不存在或为空。
+
+    """
+    key_env = provider_config.get("api_key_env")
+    if key_env:
+        key = os.environ.get(key_env)
+        if not key:
+            msg = f"Environment variable '{key_env}' is not set or empty"
+            raise ValueError(msg)
+        return key
+    return provider_config.get("api_key")
 
 
 def _build_provider_config_from_dict(
@@ -204,10 +207,11 @@ def _build_provider_config_from_dict(
     model = d.get("model")
     if model is None:
         raise MissingModelFieldError
+    api_key = _resolve_api_key(d)
     provider = ProviderConfig(
         model=model,
         base_url=d.get("base_url"),
-        api_key=d.get("api_key"),
+        api_key=api_key,
     )
     result = {}
     for key, default in extra_fields.items():
@@ -256,11 +260,7 @@ def _build_provider_config_from_ref(
     if resolved.provider_name not in model_providers:
         raise ProviderNotFoundError(resolved.provider_name)
     provider_config = model_providers[resolved.provider_name]
-    api_key_env = provider_config.get("api_key_env")
-    if api_key_env:
-        api_key: str | None = os.environ.get(api_key_env, "")
-    else:
-        api_key = provider_config.get("api_key")
+    api_key = _resolve_api_key(provider_config)
     concurrency = provider_config.get("concurrency", 4)
     return LLMProviderConfig(
         provider=ProviderConfig(
@@ -271,21 +271,3 @@ def _build_provider_config_from_ref(
         temperature=resolved.params.get("temperature", 0.7),
         concurrency=concurrency,
     )
-
-
-def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
-    """从配置文件或环境变量构建 judge provider."""
-    judge_model = os.getenv("JUDGE_MODEL")
-    judge_dict = config_data.get("judge")
-    if judge_model:
-        return JudgeProviderConfig(
-            provider=ProviderConfig(
-                model=judge_model,
-                base_url=os.getenv("JUDGE_BASE_URL"),
-                api_key=os.getenv("JUDGE_API_KEY"),
-            ),
-            temperature=float(os.getenv("JUDGE_TEMPERATURE", "0.1")),
-        )
-    if judge_dict:
-        return JudgeProviderConfig.from_dict(judge_dict)
-    return None
