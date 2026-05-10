@@ -160,7 +160,7 @@ def _compute_preference_metrics(
     preference_matching_rate = _compute_matching_rate(results, weight_history)
     convergence_speed = _compute_convergence_speed(weight_history)
     stability = _compute_stability(weight_history, stages)
-    overfitting_gap = _compute_overfitting_gap(results, weight_history)
+    decision_divergence = _compute_decision_divergence(results, weight_history)
 
     return {
         "rounds": rounds,
@@ -168,7 +168,7 @@ def _compute_preference_metrics(
         "preference_matching_rate": preference_matching_rate,
         "convergence_speed": convergence_speed,
         "stability": stability,
-        "overfitting_gap": overfitting_gap,
+        "decision_divergence": decision_divergence,
     }
 
 
@@ -189,6 +189,8 @@ def _compute_matching_rate(
             break
         decision = full_results[i].decision
         matched = _decision_matches_stage(decision, stage)
+        if matched is None:
+            continue  # mixed 阶段不参与匹配率计算
         stage_matches.setdefault(stage, []).append(matched)
 
     return {
@@ -197,8 +199,10 @@ def _compute_matching_rate(
     }
 
 
-def _decision_matches_stage(decision: dict, stage: str) -> bool:
-    """单条决策是否匹配阶段偏好。"""
+def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
+    """单条决策是否匹配阶段偏好。mixed 阶段返回 None 表示不适用。"""
+    if stage == "mixed":
+        return None
     if stage == "high-freq":
         return bool(decision.get("should_remind"))
     if stage == "silent":
@@ -207,8 +211,6 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool:
         )
     if stage == "visual-detail":
         return "visual" in decision.get("allowed_channels", [])
-    if stage == "mixed":
-        return True  # 混合阶段无固定偏好
     return True
 
 
@@ -289,13 +291,14 @@ def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float
     return sum(stds) / len(stds) if stds else 0.0
 
 
-def _compute_overfitting_gap(
+def _compute_decision_divergence(
     results: list[VariantResult],
     weight_history: list[dict],
 ) -> float:
-    """过拟合检测：mixed 阶段 FULL vs NO_FEEDBACK 的偏好匹配率差（绝对值）。
+    """FULL vs NO_FEEDBACK 在 mixed 阶段的决策分歧度。
 
-    使用 VariantResult.round_index 筛选，不依赖列表顺序。
+    对每个 mixed 轮次，比较两个变体的 decision dict 差异字段比例，
+    取所有轮次的平均。越高说明 FULL 学偏了。
     """
     mixed_rounds = [
         i for i, wh in enumerate(weight_history) if wh.get("stage") == "mixed"
@@ -303,7 +306,6 @@ def _compute_overfitting_gap(
     if not mixed_rounds:
         return 0.0
 
-    # 用 round_index 筛选 mixed 阶段结果（1-based）
     mixed_indices = {i + 1 for i in mixed_rounds}
     full_mixed = [
         r
@@ -316,10 +318,18 @@ def _compute_overfitting_gap(
         if r.variant == Variant.NO_FEEDBACK and r.round_index in mixed_indices
     ]
 
-    full_matches = sum(1 for r in full_mixed if bool(r.decision.get("should_remind")))
-    no_fb_matches = sum(1 for r in no_fb_mixed if bool(r.decision.get("should_remind")))
+    full_by_round = {r.round_index: r for r in full_mixed}
+    no_fb_by_round = {r.round_index: r for r in no_fb_mixed}
+    common_rounds = set(full_by_round) & set(no_fb_by_round)
+    if not common_rounds:
+        return 0.0
 
-    full_rate = full_matches / len(full_mixed) if full_mixed else 0.0
-    no_fb_rate = no_fb_matches / len(no_fb_mixed) if no_fb_mixed else 0.0
+    divergences: list[float] = []
+    for ri in common_rounds:
+        d1 = full_by_round[ri].decision
+        d2 = no_fb_by_round[ri].decision
+        all_keys = set(d1) | set(d2)
+        diff_count = sum(1 for k in all_keys if d1.get(k) != d2.get(k))
+        divergences.append(diff_count / max(1, len(all_keys)))
 
-    return abs(full_rate - no_fb_rate)
+    return sum(divergences) / len(divergences)
