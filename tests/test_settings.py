@@ -10,7 +10,6 @@ from app.models.chat import ChatModel, clear_semaphore_cache
 from app.models.embedding import EmbeddingModel
 from app.models.settings import (
     EmbeddingProviderConfig,
-    JudgeProviderConfig,
     LLMProviderConfig,
     LLMSettings,
 )
@@ -364,34 +363,11 @@ class TestEmbeddingModelFallback:
         assert result == [0.1, 0.2, 0.3]
 
 
-def test_judge_provider_config_from_dict() -> None:
-    """测试 JudgeProviderConfig.from_dict 创建正确的配置."""
-    d = {
-        "model": "deepseek-chat",
-        "base_url": "https://api.deepseek.com/v1",
-        "api_key": "sk-xxx",
-        "temperature": 0.1,
-    }
-    cfg = JudgeProviderConfig.from_dict(d)
-    assert cfg.provider.model == "deepseek-chat"
-    assert cfg.provider.base_url == "https://api.deepseek.com/v1"
-    assert cfg.provider.api_key == "sk-xxx"
-    assert cfg.temperature == TEMPERATURE_0_1
-
-
-def test_judge_provider_config_defaults() -> None:
-    """测试 JudgeProviderConfig 默认值被正确应用."""
-    cfg = JudgeProviderConfig.from_dict({"model": "test"})
-    assert cfg.provider.base_url is None
-    assert cfg.provider.api_key is None
-    assert cfg.temperature == TEMPERATURE_0_1
-
-
-def test_llm_settings_loads_judge(
+def test_llm_settings_judge_model_group_default(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """测试 LLMSettings 从配置加载 judge 提供者."""
+    """测试 judge_model_group 默认值."""
     config = {
         "model_groups": {
             "default": {"models": ["local/qwen"]},
@@ -399,7 +375,6 @@ def test_llm_settings_loads_judge(
         "model_providers": {
             "local": {"base_url": "http://localhost:8000", "api_key": "none"},
         },
-        "judge": {"model": "deepseek-chat", "base_url": "https://api.deepseek.com/v1"},
     }
     config_file = tmp_path / "llm.toml"
     config_file.write_text(tomli_w.dumps(config))
@@ -408,5 +383,56 @@ def test_llm_settings_loads_judge(
     LLMSettings.load.cache_clear()
     settings = LLMSettings.load()
     LLMSettings.load.cache_clear()
-    assert settings.judge_provider is not None
-    assert settings.judge_provider.provider.model == "deepseek-chat"
+    assert settings.judge_model_group == "judge"
+
+
+def test_llm_settings_loads_judge_model_group(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """测试 LLMSettings 从配置加载 judge 模型组."""
+    config = {
+        "model_groups": {
+            "default": {"models": ["local/qwen"]},
+            "judge": {"models": ["local/qwen"]},
+        },
+        "model_providers": {
+            "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+        },
+    }
+    config_file = tmp_path / "llm.toml"
+    config_file.write_text(tomli_w.dumps(config))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
+
+    LLMSettings.load.cache_clear()
+    settings = LLMSettings.load()
+    LLMSettings.load.cache_clear()
+    assert settings.judge_model_group == "judge"
+    providers = settings.get_model_group_providers("judge")
+    assert len(providers) == 1
+    assert providers[0].provider.model == "qwen"
+
+
+def test_llm_settings_judge_model_group_custom_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """测试自定义 judge_model_group 名称."""
+    config = {
+        "model_groups": {
+            "default": {"models": ["local/qwen"]},
+            "eval": {"models": ["local/qwen"]},
+        },
+        "model_providers": {
+            "local": {"base_url": "http://localhost:8000", "api_key": "none"},
+        },
+        "judge_model_group": "eval",
+    }
+    config_file = tmp_path / "llm.toml"
+    config_file.write_text(tomli_w.dumps(config))
+    monkeypatch.setenv("CONFIG_PATH", str(config_file))
+
+    LLMSettings.load.cache_clear()
+    settings = LLMSettings.load()
+    LLMSettings.load.cache_clear()
+    assert settings.judge_model_group == "eval"

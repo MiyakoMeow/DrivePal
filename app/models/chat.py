@@ -4,18 +4,18 @@ import asyncio
 import contextlib
 import hashlib
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import openai
 
 from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
+from app.models.exceptions import ModelGroupNotFoundError
 from app.models.settings import (
     LLMProviderConfig,
     LLMSettings,
     NoDefaultModelGroupError,
     NoJudgeModelConfiguredError,
 )
-from app.models.types import ProviderConfig
 
 _semaphore_cache: dict[str, asyncio.Semaphore] = {}
 _client_cache: dict[tuple[str, str], openai.AsyncOpenAI] = {}
@@ -122,7 +122,7 @@ async def _get_provider_semaphore(
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from openai.types.chat import ChatCompletionMessageParam
+    from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageParam
 
 
 class ChatModel:
@@ -141,6 +141,8 @@ class ChatModel:
             raise NoProviderError
         self.providers = providers
         self.temperature = temperature
+        # 最后一次调用的完整响应消息（含 reasoning_content 等 DeepSeek 扩展字段）
+        self.last_message: ChatCompletionMessage | dict[str, Any] | None = None
 
     def _build_messages(
         self,
@@ -165,6 +167,41 @@ class ChatModel:
         provider_key = provider.provider.base_url or "default"
         return await _get_provider_semaphore(provider_key, provider.concurrency)
 
+    @staticmethod
+    def _accumulate_stream_delta(
+        delta: object,
+        *,
+        reasoning_parts: list[str],
+        content_parts: list[str],
+        tool_calls_acc: dict[int, dict],
+    ) -> None:
+        """累积流式块中的 reasoning_content、content、tool_calls 到各累加器。"""
+        reasoning = getattr(delta, "reasoning_content", None)
+        if reasoning:
+            reasoning_parts.append(reasoning)
+        content = getattr(delta, "content", None)
+        if content:
+            content_parts.append(content)
+        tool_calls = getattr(delta, "tool_calls", None)
+        if not tool_calls:
+            return
+        for tc in tool_calls:
+            idx = tc.index
+            if idx in tool_calls_acc:
+                if tc.function and tc.function.arguments:
+                    tool_calls_acc[idx]["function"]["arguments"] += (
+                        tc.function.arguments
+                    )
+            else:
+                tool_calls_acc[idx] = {
+                    "id": tc.id or "",
+                    "type": tc.type or "function",
+                    "function": {
+                        "name": tc.function.name if tc.function else "",
+                        "arguments": tc.function.arguments if tc.function else "",
+                    },
+                }
+
     async def generate(
         self,
         prompt: str = "",
@@ -172,7 +209,10 @@ class ChatModel:
         messages: list[ChatCompletionMessageParam] | None = None,
         **kwargs: object,
     ) -> str:
-        """异步生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode。"""
+        """异步生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode。
+
+        响应详情（含 reasoning_content、tool_calls）通过 self.last_message 访问（仅最后一次调用有效）。
+        """
         if messages is None:
             messages = self._build_messages(prompt, system_prompt)
         json_mode = kwargs.pop("json_mode", False)
@@ -189,8 +229,11 @@ class ChatModel:
                     }
                     if json_mode:
                         create_kwargs["response_format"] = {"type": "json_object"}
+                    # 透传剩余 kwargs（extra_body, reasoning_effort, max_tokens 等）
+                    create_kwargs.update(kwargs)
                     response = await client.chat.completions.create(**create_kwargs)
-                    return response.choices[0].message.content or ""
+                    self.last_message = response.choices[0].message
+                    return self.last_message.content or ""
             except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
                 continue
@@ -201,11 +244,15 @@ class ChatModel:
         prompt: str = "",
         system_prompt: str | None = None,
         messages: list[ChatCompletionMessageParam] | None = None,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> AsyncIterator[str]:
-        """流式生成回复."""
+        """流式生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode。
+
+        支持 DeepSeek 思考模式（reasoning_content 存于 self.last_message）和工具调用分块累积.
+        """
         if messages is None:
             messages = self._build_messages(prompt, system_prompt)
+        json_mode = kwargs.pop("json_mode", False)
 
         errors = []
         for provider in self.providers:
@@ -213,16 +260,41 @@ class ChatModel:
             try:
                 async with sem:
                     client = await _get_cached_client(provider)
-                    stream = await client.chat.completions.create(
-                        model=provider.provider.model,
-                        messages=messages,
-                        temperature=self._get_temperature(provider),
-                        stream=True,
-                    )
+                    create_kwargs: dict = {
+                        "model": provider.provider.model,
+                        "messages": messages,
+                        "temperature": self._get_temperature(provider),
+                        "stream": True,
+                    }
+                    if json_mode:
+                        create_kwargs["response_format"] = {"type": "json_object"}
+                    create_kwargs.update(kwargs)
+                    stream = await client.chat.completions.create(**create_kwargs)
+                    reasoning_parts: list[str] = []
+                    content_parts: list[str] = []
+                    tool_calls_acc: dict[int, dict] = {}
                     async for chunk in stream:
                         delta = chunk.choices[0].delta
+                        self._accumulate_stream_delta(
+                            delta,
+                            reasoning_parts=reasoning_parts,
+                            content_parts=content_parts,
+                            tool_calls_acc=tool_calls_acc,
+                        )
                         if delta.content:
                             yield delta.content
+                    # 流结束后构建 last_message（含 reasoning_content + tool_calls 供多轮拼接）
+                    full_reasoning = (
+                        "".join(reasoning_parts) if reasoning_parts else None
+                    )
+                    msg: dict = {"role": "assistant", "content": "".join(content_parts)}
+                    if full_reasoning:
+                        msg["reasoning_content"] = full_reasoning
+                    if tool_calls_acc:
+                        msg["tool_calls"] = [
+                            tool_calls_acc[i] for i in sorted(tool_calls_acc)
+                        ]
+                    self.last_message = msg
                     return
             except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
                 errors.append(f"{provider.provider.model}: {e}")
@@ -259,14 +331,10 @@ def get_chat_model(temperature: float | None = None) -> ChatModel:
 def get_judge_model() -> ChatModel:
     """从配置创建 judge ChatModel 实例（使用缓存避免重复加载）."""
     settings = LLMSettings.load()
-    if settings.judge_provider is None:
+    try:
+        providers = settings.get_model_group_providers(settings.judge_model_group)
+    except ModelGroupNotFoundError:
+        raise NoJudgeModelConfiguredError from None
+    if not providers:
         raise NoJudgeModelConfiguredError
-    provider = LLMProviderConfig(
-        provider=ProviderConfig(
-            model=settings.judge_provider.provider.model,
-            base_url=settings.judge_provider.provider.base_url,
-            api_key=settings.judge_provider.provider.api_key,
-        ),
-        temperature=settings.judge_provider.temperature,
-    )
-    return ChatModel(providers=[provider])
+    return ChatModel(providers=providers)
