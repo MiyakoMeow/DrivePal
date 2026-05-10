@@ -1,5 +1,6 @@
 """轻量规则引擎 — 安全约束规则定义与合并."""
 
+import contextvars
 import logging
 import math
 import os
@@ -61,15 +62,14 @@ def reset_fatigue_threshold_cache() -> None:
     _cached_fatigue_threshold = None
 
 
-# 消融实验与正常 API 请求分离运行，无并发竞争。
-# 若未来需并发，改用 threading.local() 或 contextvars。
-_ablation_disable_rules: bool = bool(int(os.getenv("ABLATION_DISABLE_RULES", "0")))
+_ablation_disable_rules: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_ablation_disable_rules", default=False
+)
 
 
 def set_ablation_disable_rules(v: bool) -> None:
-    """设置消融实验标记：禁用规则引擎后处理。"""
-    global _ablation_disable_rules
-    _ablation_disable_rules = v
+    """设置消融实验标记：禁用规则引擎后处理。ContextVar 自动任务隔离。"""
+    _ablation_disable_rules.set(v)
 
 
 _FALLBACK_RULES: list[Rule] = [
@@ -257,7 +257,7 @@ def postprocess_decision(
         (修改后的决策, 被修改的字段列表)
 
     """
-    if _ablation_disable_rules:
+    if _ablation_disable_rules.get():
         return decision, []
 
     result = dict(decision)
