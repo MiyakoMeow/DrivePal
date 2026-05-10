@@ -191,6 +191,11 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
         if dim_id in existing:
             return 0
 
+        # 早退：已达目标数量则跳过，避免浪费 LLM 调用
+        # generated_count 只增不减，无锁读取可能滞后但最多多调 1 次 LLM
+        if generated_count >= count:
+            return 0
+
         async with sem:
             prompt = _build_prompt(combo)
             try:
