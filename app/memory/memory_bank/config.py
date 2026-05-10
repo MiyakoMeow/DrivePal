@@ -34,6 +34,48 @@ class MemoryBankConfig(BaseSettings):
     coarse_search_factor: int = 4
     embedding_min_similarity: float = 0.3
 
+    # ── Fix 4: 记忆强度上限 ──
+    max_memory_strength: int = 10
+
+    @field_validator("max_memory_strength")
+    @classmethod
+    def _guard_max_memory_strength_positive(cls, v: int) -> int:
+        if v < 1:
+            return 10
+        return v
+
+    # ── Fix 5: 检索加权 alpha ──
+    retrieval_alpha: float = 0.7
+
+    @field_validator("retrieval_alpha")
+    @classmethod
+    def _guard_retrieval_alpha_range(cls, v: float) -> float:
+        if not (0.0 < v <= 1.0):
+            return 0.7
+        return v
+
+    # ── Fix 6: BM25 回退 ──
+    bm25_fallback_enabled: bool = True
+    bm25_fallback_threshold: float = 0.5
+
+    @field_validator("bm25_fallback_threshold")
+    @classmethod
+    def _guard_bm25_threshold_range(cls, v: float) -> float:
+        if not (0.0 < v <= 1.0):
+            return 0.5
+        return v
+
+    # ── Fix 7: FAISS 索引类型 ──
+    index_type: Literal["flat", "ivf_flat"] = "flat"
+    ivf_nlist: int = 128
+
+    @field_validator("ivf_nlist")
+    @classmethod
+    def _guard_ivf_nlist_positive(cls, v: int) -> int:
+        if v < 1:
+            return 128
+        return v
+
     @field_validator("coarse_search_factor")
     @classmethod
     def _guard_coarse_factor(cls, v: int) -> int:

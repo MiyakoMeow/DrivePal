@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.store import MemoryBankStore
 from app.memory.schemas import MemoryEvent
 
@@ -80,3 +81,45 @@ async def test_write_paired_vectorization(store):
     # 验证单行独立
     lone_count = sum(1 for m in meta if "lone message" in m.get("text", ""))
     assert lone_count >= 1, f"expected >=1 lone entry, got {lone_count}"
+
+
+def test_max_memory_strength_default():
+    config = MemoryBankConfig()
+    assert config.max_memory_strength == 10
+
+
+def test_max_memory_strength_env(monkeypatch):
+    monkeypatch.setenv("MEMORYBANK_MAX_MEMORY_STRENGTH", "5")
+    config = MemoryBankConfig()
+    assert config.max_memory_strength == 5
+
+
+def test_max_memory_strength_negative_guarded():
+    config = MemoryBankConfig(max_memory_strength=0)
+    assert config.max_memory_strength == 10
+
+
+def test_retrieval_alpha_default():
+    config = MemoryBankConfig()
+    assert config.retrieval_alpha == 0.7
+
+
+def test_retrieval_alpha_out_of_range_guarded():
+    config = MemoryBankConfig(retrieval_alpha=1.5)
+    assert config.retrieval_alpha == 0.7
+
+
+def test_bm25_fallback_defaults():
+    config = MemoryBankConfig()
+    assert config.bm25_fallback_enabled is True
+    assert config.bm25_fallback_threshold == 0.5
+
+
+def test_index_type_default():
+    config = MemoryBankConfig()
+    assert config.index_type == "flat"
+
+
+def test_ivf_nlist_default():
+    config = MemoryBankConfig()
+    assert config.ivf_nlist == 128
