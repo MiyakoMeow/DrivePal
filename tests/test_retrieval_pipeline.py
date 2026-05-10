@@ -167,10 +167,12 @@ async def test_speaker_filter_downweights_positive(
     )
     results, updated = await pipeline.search("Alice's setting")
     assert len(results) >= 2
-    # Bob 的 score 应被降权
+    # Bob 的 score 应被降权，低于 Alice
+    alice_result = next((r for r in results if "Alice" in r.get("text", "")), None)
     bob_result = next((r for r in results if "Bob" in r.get("text", "")), None)
+    assert alice_result is not None
     assert bob_result is not None
-    assert bob_result.get("score", 0.0) <= 0.76
+    assert bob_result.get("score", 0.0) < alice_result.get("score", 0.0)
 
 
 @pytest.mark.asyncio
@@ -207,3 +209,92 @@ async def test_updated_flag_on_memory_strength_change(
     results, updated = await pipeline.search("query")
     assert updated
     assert meta[0]["memory_strength"] == 2
+
+
+@pytest.mark.asyncio
+async def test_strength_capped_at_max(mock_index, mock_embedding):
+    """memory_strength 不超过 max_memory_strength。"""
+    config = MemoryBankConfig(max_memory_strength=5)
+    pipeline = RetrievalPipeline(mock_index, mock_embedding, config)
+    mock_index.total = 10
+    metadata = [
+        {
+            "faiss_id": 0,
+            "text": "t",
+            "source": "d",
+            "speakers": ["A"],
+            "memory_strength": 5,
+            "forgotten": False,
+        }
+    ]
+    mock_index.get_metadata.return_value = metadata
+    mock_index.search = AsyncMock(
+        return_value=[
+            {
+                "faiss_id": 0,
+                "text": "t",
+                "source": "d",
+                "score": 0.9,
+                "_meta_idx": 0,
+                "speakers": ["A"],
+                "forgotten": False,
+            }
+        ]
+    )
+    _, updated = await pipeline.search("query")
+    assert metadata[0]["memory_strength"] == 5  # 已达上限，不增长
+
+
+@pytest.mark.asyncio
+async def test_retention_weighting_reranks(mock_index, mock_embedding):
+    """保留率加权后新鲜条目排到前面。"""
+    config = MemoryBankConfig(retrieval_alpha=0.7)
+    pipeline = RetrievalPipeline(mock_index, mock_embedding, config)
+    mock_index.total = 10
+    metadata = [
+        {
+            "faiss_id": 0,
+            "text": "new",
+            "source": "d1",
+            "speakers": ["A"],
+            "memory_strength": 5,
+            "last_recall_date": "2026-05-10",
+            "forgotten": False,
+        },
+        {
+            "faiss_id": 1,
+            "text": "old",
+            "source": "d2",
+            "speakers": ["A"],
+            "memory_strength": 1,
+            "last_recall_date": "2020-01-01",
+            "forgotten": False,
+        },
+    ]
+    mock_index.get_metadata.return_value = metadata
+    mock_index.search = AsyncMock(
+        return_value=[
+            {
+                "faiss_id": 0,
+                "text": "new",
+                "source": "d1",
+                "score": 0.8,
+                "_meta_idx": 0,
+                "speakers": ["A"],
+                "forgotten": False,
+            },
+            {
+                "faiss_id": 1,
+                "text": "old",
+                "source": "d2",
+                "score": 0.85,
+                "_meta_idx": 1,
+                "speakers": ["A"],
+                "forgotten": False,
+            },
+        ]
+    )
+    results, _ = await pipeline.search("query", top_k=2, reference_date="2026-05-10")
+    assert len(results) >= 2
+    # 新鲜条目加权后排第一
+    assert results[0].get("text", "") == "new"

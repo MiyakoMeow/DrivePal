@@ -15,14 +15,16 @@ class EmbeddingClient:
     此处不再冗余重试。
     """
 
-    def __init__(self, embedding_model: EmbeddingModel) -> None:
+    def __init__(self, embedding_model: EmbeddingModel, batch_size: int = 32) -> None:
         """初始化 EmbeddingClient。
 
         Args:
             embedding_model: 嵌入模型实例。
+            batch_size: 批量编码大小，设置到 EmbeddingModel 上。
 
         """
         self._model = embedding_model
+        self._model.batch_size = batch_size
 
     async def encode(self, text: str) -> list[float]:
         """编码单条文本。"""

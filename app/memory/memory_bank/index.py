@@ -1,6 +1,8 @@
 """FAISS 索引管理模块。
 
-提供 FaissIndex 类，封装 FAISS IndexIDMap(IndexFlatIP) 实现余弦相似度检索。
+FaissIndex 封装 FAISS 索引检索与元数据管理。
+Flat（IndexFlatIP）适用于 <100K 向量精确检索；
+IVF（IndexIVFFlat）适用于大规模向量近似检索（预留接口）。
 """
 
 from __future__ import annotations
@@ -64,16 +66,22 @@ def _validate_index_count(idx: faiss.Index, meta_len: int) -> None:
 
 
 class FaissIndex:
-    """FAISS 索引包装器，基于 IndexIDMap(IndexFlatIP) 实现向量检索与元数据管理。"""
+    """FAISS 索引包装器，支持 Flat/IPV 双模式向量检索与元数据管理。"""
 
     def __init__(
-        self, data_dir: Path, embedding_dim: int = DEFAULT_EMBEDDING_DIM
+        self,
+        data_dir: Path,
+        embedding_dim: int = DEFAULT_EMBEDDING_DIM,
+        index_type: str = "flat",
+        ivf_nlist: int = 128,
     ) -> None:
         """初始化 FaissIndex。
 
         Args:
             data_dir: 持久化目录（含 index.faiss / metadata.json）。
             embedding_dim: 向量维度，默认 1536。
+            index_type: 索引类型，"flat"（精确检索）或 "ivf_flat"（近似检索，预留）。
+            ivf_nlist: IVF 聚类中心数（仅 index_type="ivf_flat" 时生效）。
 
         """
         self._data_dir = data_dir
@@ -85,6 +93,24 @@ class FaissIndex:
         self._id_to_meta: dict[int, int] = {}
         self._all_speakers: set[str] = set()
         self._save_lock = asyncio.Lock()
+
+        self._index_type = index_type
+        self._ivf_nlist = ivf_nlist
+        self._needs_train = False
+
+    def _build_index(self) -> None:
+        """按 index_type 构建 FAISS 索引。"""
+        if self._index_type == "ivf_flat":
+            quantizer = faiss.IndexFlatIP(self._dim)
+            self._index = faiss.IndexIDMap(
+                faiss.IndexIVFFlat(
+                    quantizer, self._dim, self._ivf_nlist, faiss.METRIC_INNER_PRODUCT
+                )
+            )
+            self._needs_train = True
+        else:
+            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
+            self._needs_train = False
 
     async def load(self) -> LoadResult:
         """从磁盘加载索引与元数据；损坏时降级恢复，不直接丢弃向量。
@@ -351,7 +377,7 @@ class FaissIndex:
         emb_dim = len(embedding)
         if self._index is None:
             self._dim = emb_dim
-            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(emb_dim))
+            self._build_index()
         elif self._index.d != emb_dim:
             logger.warning(
                 "FaissIndex dimension mismatch: index=%d, vector=%d. "

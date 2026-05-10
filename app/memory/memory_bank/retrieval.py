@@ -13,8 +13,10 @@ import logging
 import math
 import re
 from collections import defaultdict, deque
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, cast
+
+from rank_bm25 import BM25Okapi
 
 if TYPE_CHECKING:
     from app.memory.embedding_client import EmbeddingClient
@@ -210,12 +212,14 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
 
 
 def _update_memory_strengths(
-    results: list[dict], metadata: list[dict], reference_date: str | None = None
+    results: list[dict],
+    metadata: list[dict],
+    config: MemoryBankConfig,
+    reference_date: str | None = None,
 ) -> bool:
     """更新命中条目的记忆强度，返回是否有修改。
 
-    注意：记忆强度不再设上限（原 cap=10），每次检索命中 +1。
-    同一天重复检索同一条目，memory_strength 会持续增长，使之更难被遗忘。
+    记忆强度受 max_memory_strength 上限约束，防止无限回忆强化。
     """
     updated = False
     for r in results:
@@ -229,11 +233,12 @@ def _update_memory_strengths(
                 all_mi.append(mi)
         for mi in all_mi:
             if 0 <= mi < len(metadata):
-                new_strength = (
+                new_strength = min(
                     _safe_memory_strength(
                         metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
                     )
-                    + 1.0
+                    + 1.0,
+                    float(config.max_memory_strength),
                 )
                 metadata[mi]["memory_strength"] = new_strength
                 today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
@@ -350,6 +355,9 @@ class RetrievalPipeline:
         self._index = index
         self._embedding_client = embedding_client
         self._config = config
+        self._bm25_corpus: list[str] = []
+        self._bm25_meta_indices: list[int] = []
+        self._bm25_index: Any = None
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
@@ -374,6 +382,11 @@ class RetrievalPipeline:
         results = await self._index.search(query_emb, coarse_k)
         if not results:
             return [], False
+
+        metadata = self._index.get_metadata()
+
+        results = self._apply_bm25_fallback(results, query, metadata, coarse_k)
+
         # 过滤已遗忘条目（maybe_forget 在 store.py/lifecycle.py 中已设 forgotten 标记）
         results = [r for r in results if not r.get("forgotten")]
         # 过滤低于相似度阈值的条目（低分不配获得邻居扩展）
@@ -385,21 +398,66 @@ class RetrievalPipeline:
         if not results:
             return [], False
 
-        metadata = self._index.get_metadata()
         merged = self._merge_neighbors(results, metadata)
         # 注意：_merge_neighbors 内部已调用 _merge_overlapping_results，
         # 此处不再重复调用。
 
         merged = self._apply_speaker_filter(merged, query)
+        merged = self._apply_retention_weighting(merged, metadata, reference_date)
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
         updated = _update_memory_strengths(
-            merged, metadata, reference_date=reference_date
+            merged, metadata, self._config, reference_date=reference_date
         )
         for r in merged:
             _clean_search_result(r)
         return merged, updated
+
+    def _apply_bm25_fallback(
+        self,
+        results: list[dict],
+        query: str,
+        metadata: list[dict],
+        coarse_k: int,
+    ) -> list[dict]:
+        """BM25 稀疏检索回退：FAISS 密集检索失效时的兜底。
+
+        当 FAISS 最高分低于阈值时，重建 BM25 索引并补充检索结果。
+        """
+        if not self._config.bm25_fallback_enabled:
+            return results
+        max_faiss_score = max(float(r.get("score", 0.0)) for r in results)
+        if max_faiss_score >= self._config.bm25_fallback_threshold:
+            return results
+        self._rebuild_bm25_index()
+        if self._bm25_index is None:
+            return results
+        tokenized_query = query.lower().split()
+        bm25_scores = self._bm25_index.get_scores(tokenized_query)
+        top_indices = sorted(
+            range(len(bm25_scores)),
+            key=lambda i: bm25_scores[i],
+            reverse=True,
+        )[:coarse_k]
+        for idx in top_indices:
+            meta_idx = self._bm25_meta_indices[idx]
+            meta = metadata[meta_idx]
+            results.append(
+                {
+                    "faiss_id": meta.get("faiss_id"),
+                    "text": meta.get("text", ""),
+                    "source": meta.get("source", ""),
+                    "score": float(bm25_scores[idx]),
+                    "_meta_idx": meta_idx,
+                    "speakers": meta.get("speakers", []),
+                    "memory_strength": meta.get(
+                        "memory_strength", INITIAL_MEMORY_STRENGTH
+                    ),
+                    "forgotten": meta.get("forgotten", False),
+                }
+            )
+        return results
 
     def _merge_neighbors(self, results: list[dict], metadata: list[dict]) -> list[dict]:
         if not results or not metadata:
@@ -452,3 +510,64 @@ class RetrievalPipeline:
                 # 0.75/1.25 为经验值，与原始 MemoryBank 论文一致。
                 r["score"] = score * 0.75 if score >= 0 else score * 1.25
         return results
+
+    def _apply_retention_weighting(
+        self,
+        results: list[dict],
+        metadata: list[dict],
+        reference_date: str | None = None,
+    ) -> list[dict]:
+        """对检索结果应用 Ebbinghaus 保留率加权。
+
+        公式: adjusted = α × max(score, 0.0) + (1-α) × retention
+        其中 retention = e^(-days / (time_scale × strength))
+        """
+        alpha = self._config.retrieval_alpha
+        ref = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
+        try:
+            ref_date = date.fromisoformat(ref)
+        except ValueError:
+            ref_date = datetime.now(UTC).date()
+
+        for r in results:
+            mi = r.get("_meta_idx")
+            if mi is None or mi >= len(metadata):
+                continue
+            meta = metadata[mi]
+            strength = max(float(meta.get("memory_strength", 1)), 0.001)
+            last_recall = meta.get("last_recall_date")
+            if last_recall:
+                try:
+                    lr_date = date.fromisoformat(str(last_recall)[:10])
+                except ValueError:
+                    days = 0.0
+                else:
+                    days = max(0.0, (ref_date - lr_date).days)
+            else:
+                days = 0.0
+            time_scale = self._config.forgetting_time_scale
+            retention = math.exp(-days / (time_scale * strength))
+            original_score = max(float(r.get("score", 0.0)), 0.0)
+            r["score"] = alpha * original_score + (1.0 - alpha) * retention
+
+        results.sort(key=lambda r: r.get("score", 0.0), reverse=True)
+        return results
+
+    def _rebuild_bm25_index(self) -> None:
+        """从 metadata 重建 BM25 索引（仅包含未被遗忘条目）。"""
+        metadata = self._index.get_metadata()
+        self._bm25_corpus = []
+        self._bm25_meta_indices = []
+        for idx, m in enumerate(metadata):
+            if not m.get("forgotten"):
+                self._bm25_corpus.append(m.get("text", ""))
+                self._bm25_meta_indices.append(idx)
+        tokenized = [text.lower().split() for text in self._bm25_corpus]
+        if tokenized:
+            self._bm25_index = BM25Okapi(tokenized)
+        else:
+            self._bm25_index = None
+
+    def invalidate_bm25(self) -> None:
+        """标记 BM25 索引失效，下次搜索时重建。"""
+        self._bm25_index = None
