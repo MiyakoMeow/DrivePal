@@ -202,9 +202,13 @@ def compute_cohens_kappa(
     for sid, hl in human_labels.items():
         if sid not in judge_median:
             continue
-        i = judge_median[sid] - 1
-        j = hl["overall_score"] - 1
-        obs[i][j] += 1
+        m = judge_median[sid]
+        s = hl.get("overall_score", 0)
+        if not (
+            isinstance(m, int) and isinstance(s, int) and 1 <= m <= k and 1 <= s <= k
+        ):
+            continue
+        obs[m - 1][s - 1] += 1
 
     total = sum(sum(row) for row in obs)
     if total == 0:

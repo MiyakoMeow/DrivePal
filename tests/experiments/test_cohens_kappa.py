@@ -4,8 +4,8 @@ from experiments.ablation.judge import compute_cohens_kappa
 from experiments.ablation.types import JudgeScores, Variant
 
 
-def test_perfect_agreement():
-    """Given Judge and human scores identical, κ should be 1.0."""
+def test_perfect_agreement_kappa_is_1():
+    """给定 Judge 与人工评分完全一致，当计算 κ，则应为 1.0。"""
     judge = [
         JudgeScores("s1", Variant.FULL, 5, 5, 5, [], ""),
         JudgeScores("s2", Variant.FULL, 3, 3, 3, [], ""),
@@ -15,8 +15,8 @@ def test_perfect_agreement():
     assert kappa == 1.0
 
 
-def test_large_disagreement():
-    """Given Judge always 5 but human always 1, κ should be negative or zero."""
+def test_max_disagreement_kappa_le_0():
+    """给定 Judge 评 5 但人工评 1，当计算 κ，则应为负或零。"""
     judge = [
         JudgeScores("s1", Variant.FULL, 5, 5, 5, [], ""),
         JudgeScores("s2", Variant.FULL, 5, 5, 5, [], ""),
@@ -26,7 +26,7 @@ def test_large_disagreement():
     assert kappa <= 0.0
 
 
-def test_empty_inputs():
-    """Given empty inputs, κ should be 1.0."""
+def test_empty_input_kappa_is_1():
+    """给定空输入，当计算 κ，则应返回 1.0（无样本无分歧）。"""
     kappa = compute_cohens_kappa([], {})
     assert kappa == 1.0

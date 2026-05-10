@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-async def test_round_index_roundtrip(tmp_path: Path):
-    """Given VariantResult with round_index=5, When dump then load, Then round_index preserved."""
+async def test_explicit_round_index_preserved_after_roundtrip(tmp_path: Path):
+    """给定 round_index=5 的 VariantResult，当 dump 再 load，则 round_index 应保持 5。"""
     vr = VariantResult(
         scenario_id="s1",
         variant=Variant.FULL,
@@ -33,8 +33,8 @@ async def test_round_index_roundtrip(tmp_path: Path):
     assert loaded["round_index"] == 5
 
 
-async def test_round_index_default_zero(tmp_path: Path):
-    """Given VariantResult with default round_index, When dump then load, Then round_index=0."""
+async def test_default_round_index_is_zero(tmp_path: Path):
+    """给定默认构造的 VariantResult，当 dump 再 load，则 round_index 应为 0。"""
     vr = VariantResult(
         scenario_id="s1",
         variant=Variant.FULL,
@@ -53,7 +53,7 @@ async def test_round_index_default_zero(tmp_path: Path):
 
 
 async def test_load_variant_results_restores_round_index(tmp_path: Path):
-    """Given JSONL with round_index=5, When _load_variant_results, Then VariantResult.round_index==5."""
+    """给定含 round_index=5 的 JSONL，当 _load_variant_results 重载，则 VariantResult.round_index 应为 5。"""
     path = tmp_path / "results.jsonl"
     async with aiofiles.open(path, "w") as f:
         await f.write(

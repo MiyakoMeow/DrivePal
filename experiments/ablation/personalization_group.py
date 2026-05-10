@@ -13,6 +13,7 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
 
+from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner, _append_checkpoint
 from .judge import Judge
 from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
@@ -38,6 +39,10 @@ async def run_personalization_group(
     """
     rng = random.Random(seed)
     personalization_scenarios = scenarios[:20]
+
+    if not personalization_scenarios:
+        msg = "no personalization scenarios available"
+        raise ValueError(msg)
 
     stages = [
         ("high-freq", 0, 5),
@@ -81,8 +86,13 @@ async def run_personalization_group(
 
     metrics = _compute_preference_metrics(all_results, weight_history, stages)
 
+    # 写 VariantResult JSONL 到 output_path（供 --judge-only 重载）
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(output_path, "w") as f:
+    await dump_variant_results_jsonl(output_path, all_results)
+
+    # 写 weight_history + metrics 到侧车文件
+    summary_path = output_path.with_suffix(".summary.json")
+    async with aiofiles.open(summary_path, "w") as f:
         await f.write(
             json.dumps(
                 {"weight_history": weight_history, "metrics": metrics},
