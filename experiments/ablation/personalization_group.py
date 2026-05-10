@@ -33,7 +33,9 @@ async def run_personalization_group(
     judge: Judge,
 ) -> GroupResult:
     """个性化组实验。20 轮，4 阶段偏好切换。
-    场景不足 20 时通过取模循环复用（i % len），保证每轮有场景可用。"""
+
+    场景不足 20 时通过取模循环复用（i % len），保证每轮有场景可用。
+    """
     rng = random.Random(seed)
     personalization_scenarios = scenarios[:20]
 
