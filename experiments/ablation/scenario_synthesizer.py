@@ -180,52 +180,60 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     chat_model = get_chat_model(temperature=0.7)
+    sem = asyncio.Semaphore(8)
+    write_lock = asyncio.Lock()
+    generated_count = 0
     log_interval = 10
-    generated = 0
 
-    for combo in combos:
-        if generated >= count:
-            break
-
+    async def _synthesize_one(combo: dict) -> int:
+        nonlocal generated_count
         dim_id = f"{combo['scenario']}_{combo['fatigue_level']}_{combo['workload']}_{combo['task_type']}_{combo['has_passengers']}"
         if dim_id in existing:
-            continue
+            return 0
 
-        prompt = _build_prompt(combo)
-        try:
-            raw = await chat_model.generate(
-                prompt=prompt, system_prompt=SYSTEM_PROMPT, json_mode=True
+        async with sem:
+            prompt = _build_prompt(combo)
+            try:
+                raw = await chat_model.generate(
+                    prompt=prompt, system_prompt=SYSTEM_PROMPT, json_mode=True
+                )
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse JSON for combo %s", dim_id)
+                return 0
+            except ChatError:
+                logger.warning("LLM call failed for combo %s", dim_id, exc_info=True)
+                return 0
+
+            driving_context = data.get("driving_context", {})
+            scenario_type_val = driving_context.get("scenario", combo["scenario"])
+            safety = _is_safety_relevant(driving_context)
+
+            scenario = Scenario(
+                id=dim_id,
+                driving_context=driving_context,
+                user_query=data.get("user_query", ""),
+                expected_decision=data.get("expected_decision", {}),
+                expected_task_type=data.get("expected_task_type", combo["task_type"]),
+                safety_relevant=safety,
+                scenario_type=scenario_type_val,
             )
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse JSON for combo %s", dim_id)
-            continue
-        except ChatError:
-            logger.warning("LLM call failed for combo %s", dim_id, exc_info=True)
-            continue
 
-        driving_context = data.get("driving_context", {})
-        scenario_type_val = driving_context.get("scenario", combo["scenario"])
-        safety = _is_safety_relevant(driving_context)
+            async with write_lock:
+                current_total = generated_count
+                if current_total >= count:
+                    return 0
+                await _write_scenario(scenario, output_path)
+                existing.add(dim_id)
+                generated_count += 1
 
-        scenario = Scenario(
-            id=dim_id,
-            driving_context=driving_context,
-            user_query=data.get("user_query", ""),
-            expected_decision=data.get("expected_decision", {}),
-            expected_task_type=data.get("expected_task_type", combo["task_type"]),
-            safety_relevant=safety,
-            scenario_type=scenario_type_val,
-        )
+        if generated_count % log_interval == 0:
+            logger.info("synthesized %d/%d scenarios", generated_count, count)
+        return 1
 
-        await _write_scenario(scenario, output_path)
-        existing.add(dim_id)
-        generated += 1
-
-        if generated % log_interval == 0:
-            logger.info("synthesized %d/%d scenarios", generated, count)
-
-    return generated
+    tasks = [_synthesize_one(c) for c in combos]
+    await asyncio.gather(*tasks)
+    return generated_count
 
 
 def load_scenarios(path: Path) -> list[Scenario]:
