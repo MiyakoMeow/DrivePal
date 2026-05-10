@@ -1,4 +1,8 @@
-"""共享 I/O 工具."""
+"""共享 I/O 工具.
+
+TYPE_CHECKING 仅用于类型注解导入——Python 3.14 PEP 649 默认延迟注解求值，
+故 Path 和 VariantResult 无需运行时导入。
+"""
 
 import json
 from typing import TYPE_CHECKING, Any

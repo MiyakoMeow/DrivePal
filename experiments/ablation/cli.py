@@ -108,7 +108,7 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
             d = json.loads(stripped)
             try:
                 variant = Variant(d["variant"])
-            except (KeyError, ValueError):
+            except KeyError, ValueError:
                 logger.warning("跳过无效变体: %s", d.get("variant", "缺失"))
                 continue
             results.append(

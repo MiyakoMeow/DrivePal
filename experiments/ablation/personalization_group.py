@@ -194,13 +194,16 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool:
 
 
 def _compute_convergence_speed(weight_history: list[dict]) -> float:
-    """收敛速度：最高权重类型首次距终值 ±0.05 内且持续 ≥3 轮的轮次号（归一化）。"""
+    """收敛速度：最高权重类型首次距终值 ±0.05 内且持续 ≥3 轮的轮次号（归一化）。
+
+    返回值 ∈ [0, 1] 表示收敛速度（越小越快），-1.0 表示未收敛。
+    """
     if not weight_history or len(weight_history) < 2:
-        return 1.0
+        return -1.0
 
     final_weights = weight_history[-1].get("weights", {})
     if not final_weights:
-        return 1.0
+        return -1.0
 
     target_type = max(final_weights, key=final_weights.get)
     target_final = final_weights[target_type]
@@ -217,7 +220,7 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
             consecutive = 0
 
     if first_stable_round < 0:
-        return 1.0
+        return -1.0  # 未收敛
     return first_stable_round / len(weight_history)
 
 
