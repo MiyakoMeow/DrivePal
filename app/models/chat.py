@@ -69,6 +69,7 @@ def clear_semaphore_cache() -> None:
     _semaphore_cache.clear()
     _client_cache.clear()
     _get_lock.cache_clear()
+    _get_client_cache_lock.cache_clear()
 
 
 class ChatError(RuntimeError):

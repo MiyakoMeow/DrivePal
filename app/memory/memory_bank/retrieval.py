@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import threading
 from collections import defaultdict, deque
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -358,6 +359,7 @@ class RetrievalPipeline:
         self._bm25_corpus: list[str] = []
         self._bm25_meta_indices: list[int] = []
         self._bm25_index: Any = None
+        self._bm25_lock = threading.Lock()
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
@@ -431,7 +433,9 @@ class RetrievalPipeline:
         if max_faiss_score >= self._config.bm25_fallback_threshold:
             return results
         if self._bm25_index is None:
-            self._rebuild_bm25_index()
+            with self._bm25_lock:
+                if self._bm25_index is None:
+                    self._rebuild_bm25_index()
         if self._bm25_index is None:
             return results
         tokenized_query = query.lower().split()

@@ -178,7 +178,7 @@ class MemoryBankStore:
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         async with self._source_index_lock:
             self._source_event_index.setdefault(date_key, []).append(fid)
-        self._source_index_dirty = True
+            self._source_index_dirty = True
         return fid
 
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
@@ -189,7 +189,7 @@ class MemoryBankStore:
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         async with self._source_index_lock:
             self._source_event_index.setdefault(date_key, []).extend(fids)
-        self._source_index_dirty = True
+            self._source_index_dirty = True
         return fids
 
     async def write_interaction(
