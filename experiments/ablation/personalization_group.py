@@ -19,6 +19,7 @@ from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
 
 _SIMULATED_ACCEPT_PROB = 0.5
 _MIN_HISTORY_LEN = 2
+_INITIAL_WEIGHT_TOLERANCE = 0.01
 _CONVERGENCE_TOLERANCE = 0.05
 _CONSECUTIVE_FOR_CONVERGENCE = 3
 
@@ -243,7 +244,15 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
 
 
 def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float:
-    """稳定性：偏好切换后连续 5 轮权重的平均标准差。"""
+    """偏好切换后目标类型权重的平均标准差。
+
+    对每个切换点（high-freq→silent, silent→visual-detail, visual-detail→mixed）：
+    1. 取上一阶段最后一轮最高权重类型（目标类型）
+    2. 若所有权重均为 0.5（初始态），跳过该切换点
+    3. 并列最高时取类型名字典序最小者
+    4. 跟踪该类型在新阶段连续 5 轮的权重，计算标准差
+    5. 返回所有切换点标准差的均值
+    """
     if not weight_history:
         return 0.0
 
@@ -251,20 +260,29 @@ def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float
     stds: list[float] = []
 
     for sp in switch_points:
-        if sp >= len(weight_history):
+        if sp < 1 or sp >= len(weight_history):
             continue
+
+        prev_weights = weight_history[sp - 1].get("weights", {})
+        if not prev_weights or all(
+            abs(w - 0.5) < _INITIAL_WEIGHT_TOLERANCE for w in prev_weights.values()
+        ):
+            continue
+
+        max_w = max(prev_weights.values())
+        target_types = [t for t, w in prev_weights.items() if w == max_w]
+        target_type = min(target_types)
+
         window = weight_history[sp : min(sp + 5, len(weight_history))]
-        if not window:
-            continue
-        weights_per_round = [
-            sum(wh.get("weights", {}).values()) / max(1, len(wh.get("weights", {})))
-            for wh in window
+        weights_in_window = [
+            wh.get("weights", {}).get(target_type, 0.5) for wh in window
         ]
-        if len(weights_per_round) < _MIN_HISTORY_LEN:
+        if len(weights_in_window) < _MIN_HISTORY_LEN:
             continue
-        mean = sum(weights_per_round) / len(weights_per_round)
-        variance = sum((w - mean) ** 2 for w in weights_per_round) / len(
-            weights_per_round
+
+        mean = sum(weights_in_window) / len(weights_in_window)
+        variance = sum((w - mean) ** 2 for w in weights_in_window) / len(
+            weights_in_window
         )
         stds.append(variance**0.5)
 
