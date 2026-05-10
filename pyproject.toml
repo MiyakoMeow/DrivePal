@@ -17,6 +17,7 @@ dependencies = [
     "tomli-w>=1.2.0",
     "strawberry-graphql[fastapi]>=0.312.2",
     "faiss-cpu>=1.10.0",
+    "rank-bm25>=0.2.2",
 ]
 
 [build-system]
