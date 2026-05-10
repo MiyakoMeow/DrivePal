@@ -64,11 +64,14 @@ async def run_personalization_group(
             scenario = personalization_scenarios[i % len(personalization_scenarios)]
 
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
-                vr = await runner.run_variant(
-                    scenario,
-                    variant,
-                    user_id=f"{runner.base_user_id}-{variant.value}",
+                # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
+                # NO_FEEDBACK 用独立 uid —— MemoryBank 隔离，不受 FULL 写入事件干扰
+                uid = (
+                    runner.base_user_id
+                    if variant == Variant.FULL
+                    else f"{runner.base_user_id}-{variant.value}"
                 )
+                vr = await runner.run_variant(scenario, variant, user_id=uid)
                 vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
                 all_results.append(vr)
                 await _append_checkpoint(
