@@ -26,7 +26,7 @@ def test_max_disagreement_kappa_le_0():
     assert kappa <= 0.0
 
 
-def test_empty_input_kappa_is_1():
-    """给定空输入，当计算 κ，则应返回 1.0（无样本无分歧）。"""
+def test_empty_input_kappa_is_0():
+    """给定空输入，当计算 κ，则应返回 0.0（无有效样本无法评估一致性）。"""
     kappa = compute_cohens_kappa([], {})
-    assert kappa == 1.0
+    assert kappa == 0.0

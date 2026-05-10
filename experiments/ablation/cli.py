@@ -14,7 +14,10 @@ from .architecture_group import (
     run_architecture_group,
 )
 from .judge import Judge
-from .personalization_group import run_personalization_group
+from .personalization_group import (
+    _compute_preference_metrics,
+    run_personalization_group,
+)
 from .report import render_report
 from .safety_group import compute_safety_metrics, run_safety_group
 from .scenario_synthesizer import (
@@ -94,7 +97,23 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
         elif group_name == "architecture":
             metrics = compute_quality_metrics(scores, variant_results)
         else:  # personalization
-            metrics = {}
+            summary_path = result_path.with_suffix(".summary.json")
+            try:
+                raw = json.loads(summary_path.read_text())
+            except FileNotFoundError, json.JSONDecodeError:
+                metrics = {}
+            else:
+                weight_history = raw.get("weight_history", [])
+                # 重新计算偏好指标（依赖 weight_history + variant_results）
+                stages = [
+                    ("high-freq", 0, 5),
+                    ("silent", 5, 10),
+                    ("visual-detail", 10, 15),
+                    ("mixed", 15, 20),
+                ]
+                metrics = _compute_preference_metrics(
+                    variant_results, weight_history, stages
+                )
 
         all_group_results[group_name] = GroupResult(
             group=group_name,

@@ -1,6 +1,7 @@
 """个性化组实验——反馈学习机制的个性化效果."""
 
 import json
+import logging
 import random
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -17,6 +18,8 @@ from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner, _append_checkpoint
 from .judge import Judge
 from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
+
+logger = logging.getLogger(__name__)
 
 _SIMULATED_ACCEPT_PROB = 0.5
 _MIN_HISTORY_LEN = 2
@@ -81,7 +84,13 @@ async def run_personalization_group(
     for vr in all_results:
         grouped.setdefault(vr.scenario_id, []).append(vr)
     for scenario_id, scenario_vrs in grouped.items():
-        batch_scores = await judge.score_batch(scenario_map[scenario_id], scenario_vrs)
+        scenario = scenario_map.get(scenario_id)
+        if scenario is None:
+            logger.warning(
+                "场景 %s 不在 personalization_scenarios 中，跳过评分", scenario_id
+            )
+            continue
+        batch_scores = await judge.score_batch(scenario, scenario_vrs)
         scores.extend(batch_scores)
 
     metrics = _compute_preference_metrics(all_results, weight_history, stages)
@@ -295,7 +304,7 @@ def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float
 
         max_w = max(prev_weights.values())
         target_types = [t for t, w in prev_weights.items() if w == max_w]
-        target_type = min(target_types)
+        target_type = sorted(target_types)[0]  # 并列取字典序最小，确定性消歧
 
         window = weight_history[sp : min(sp + 5, len(weight_history))]
         weights_in_window = [

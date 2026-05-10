@@ -154,26 +154,31 @@ class AblationRunner:
     ) -> list[VariantResult]:
         """批量运行场景×变体笛卡尔积。checkpoint_path 指定则增量写 JSONL。"""
         results: list[VariantResult] = []
+        existing_ids: set[tuple[str, str]] = (
+            await _load_checkpoint_ids(checkpoint_path) if checkpoint_path else set()
+        )
         for scenario in scenarios:
             for variant in variants:
-                if checkpoint_path:
-                    existing_ids = _load_checkpoint_ids(checkpoint_path)
-                    if (scenario.id, variant.value) in existing_ids:
-                        continue
+                if (scenario.id, variant.value) in existing_ids:
+                    continue
                 vr = await self.run_variant(scenario, variant)
                 results.append(vr)
                 if checkpoint_path:
+                    existing_ids.add((scenario.id, variant.value))
                     await _append_checkpoint(checkpoint_path, vr)
         return results
 
 
-def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
+async def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
     """读取 JSONL 中已完成的 (scenario_id, variant) 对。"""
     existing: set[tuple[str, str]] = set()
-    if not path.exists():
+    try:
+        async with aiofiles.open(path) as f:
+            pass
+    except FileNotFoundError:
         return existing
-    with path.open() as f:
-        for line in f:
+    async with aiofiles.open(path) as f:
+        async for line in f:
             stripped = line.strip()
             if not stripped:
                 continue
@@ -181,6 +186,7 @@ def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
                 d = json.loads(stripped)
                 existing.add((d["scenario_id"], d["variant"]))
             except json.JSONDecodeError, KeyError:
+                logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                 continue
     return existing
 

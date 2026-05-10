@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import random
 from collections import defaultdict
 
@@ -9,6 +10,8 @@ from app.models.chat import ChatError, ChatModel, get_chat_model, get_judge_mode
 from app.models.settings import NoJudgeModelConfiguredError
 
 from .types import JudgeScores, Scenario, VariantResult
+
+logger = logging.getLogger(__name__)
 
 JUDGE_SYSTEM_PROMPT = """你是一个车载AI决策质量评估专家。请对以下车载助手的决策进行评分。
 
@@ -207,12 +210,13 @@ def compute_cohens_kappa(
         if not (
             isinstance(m, int) and isinstance(s, int) and 1 <= m <= k and 1 <= s <= k
         ):
+            logger.warning("评分越界，跳过 sid=%s m=%s s=%s", sid, m, s)
             continue
         obs[m - 1][s - 1] += 1
 
     total = sum(sum(row) for row in obs)
     if total == 0:
-        return 1.0
+        return 0.0  # 无有效样本，无法评估一致性
 
     weights = [[((i - j) / (k - 1)) ** 2 for j in range(k)] for i in range(k)]
 
