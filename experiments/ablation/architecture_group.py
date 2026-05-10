@@ -47,7 +47,9 @@ async def run_architecture_group(
     variants = [Variant.FULL, Variant.SINGLE_LLM]
     arch_scenarios = [s for s in scenarios if _is_arch_scenario(s)]
 
-    results = await runner.run_batch(arch_scenarios, variants)
+    results = await runner.run_batch(
+        arch_scenarios, variants, checkpoint_path=output_path
+    )
 
     scores: list[JudgeScores] = []
     for scenario in arch_scenarios:

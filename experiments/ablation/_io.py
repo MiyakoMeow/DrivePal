@@ -21,17 +21,25 @@ async def dump_variant_results_jsonl(
     *,
     include_modifications: bool = False,
 ) -> None:
-    """将 VariantResult 列表写入 JSONL。"""
+    """将 VariantResult 列表写入 JSONL。先写临时文件，成功后再 rename 覆盖。"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        for r in results:
-            record: dict[str, Any] = {
-                "scenario_id": r.scenario_id,
-                "variant": r.variant.value,
-                "decision": r.decision,
-                "stages": r.stages,
-                "latency_ms": r.latency_ms,
-            }
-            if include_modifications:
-                record["modifications"] = r.modifications
-            await f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    try:
+        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
+            for r in results:
+                record: dict[str, Any] = {
+                    "scenario_id": r.scenario_id,
+                    "variant": r.variant.value,
+                    "decision": r.decision,
+                    "stages": r.stages,
+                    "latency_ms": r.latency_ms,
+                    "round_index": r.round_index,
+                }
+                if include_modifications:
+                    record["modifications"] = r.modifications
+                await f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        tmp_path.replace(path)
+    except OSError:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+        raise

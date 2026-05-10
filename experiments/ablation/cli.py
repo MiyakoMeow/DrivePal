@@ -14,7 +14,11 @@ from .architecture_group import (
     run_architecture_group,
 )
 from .judge import Judge
-from .personalization_group import run_personalization_group
+from .personalization_group import (
+    _STAGES,
+    _compute_preference_metrics,
+    run_personalization_group,
+)
 from .report import render_report
 from .safety_group import compute_safety_metrics, run_safety_group
 from .scenario_synthesizer import (
@@ -49,6 +53,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+async def _score_group(
+    judge: Judge,
+    scenarios_for_results: dict[str, list[VariantResult]],
+    scenario_by_id: dict[str, Scenario],
+) -> list[JudgeScores]:
+    """对一组结果的各场景评分并汇总。"""
+    scores: list[JudgeScores] = []
+    for sid, vrs in scenarios_for_results.items():
+        scenario = scenario_by_id.get(sid)
+        if scenario is None:
+            continue
+        batch_scores = await judge.score_batch(scenario, vrs)
+        scores.extend(batch_scores)
+    return scores
+
+
 async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
     """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出。"""
     all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
@@ -71,20 +91,24 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
         for vr in variant_results:
             scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
 
-        scores: list[JudgeScores] = []
-        for sid, vrs in scenarios_for_results.items():
-            scenario = scenario_by_id.get(sid)
-            if scenario is None:
-                continue
-            batch_scores = await judge.score_batch(scenario, vrs)
-            scores.extend(batch_scores)
+        scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
 
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
         elif group_name == "architecture":
             metrics = compute_quality_metrics(scores, variant_results)
-        else:
-            metrics = {}
+        else:  # personalization
+            summary_path = result_path.with_suffix(".summary.json")
+            try:
+                raw = json.loads(summary_path.read_text())
+            except FileNotFoundError, json.JSONDecodeError:
+                metrics = {}
+            else:
+                weight_history = raw.get("weight_history", [])
+                # 重新计算偏好指标（依赖 weight_history + variant_results）
+                metrics = _compute_preference_metrics(
+                    variant_results, weight_history, _STAGES
+                )
 
         all_group_results[group_name] = GroupResult(
             group=group_name,
@@ -121,6 +145,7 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                     stages=d.get("stages", {}),
                     latency_ms=d.get("latency_ms", 0),
                     modifications=d.get("modifications", []),
+                    round_index=d.get("round_index", 0),
                 )
             )
     return results
@@ -157,6 +182,7 @@ async def _run_personalization_experiment(
 ) -> GroupResult:
     """运行个性化组实验。"""
     runner = AblationRunner(user_id="experiment-personalization")
+    judge = Judge()
     personalization_scenarios = sample_scenarios(
         all_scenarios, 20, safety_only=False, seed=seed + 2
     )
@@ -165,6 +191,7 @@ async def _run_personalization_experiment(
         personalization_scenarios,
         data_dir / "results" / "personalization.jsonl",
         seed=seed,
+        judge=judge,
     )
 
 

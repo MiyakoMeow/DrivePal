@@ -1,6 +1,7 @@
 """个性化组实验——反馈学习机制的个性化效果."""
 
 import json
+import logging
 import random
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -13,13 +14,25 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
 
-from .ablation_runner import AblationRunner
-from .types import GroupResult, Scenario, Variant, VariantResult
+from ._io import dump_variant_results_jsonl
+from .ablation_runner import AblationRunner, _append_checkpoint
+from .judge import Judge
+from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
+
+logger = logging.getLogger(__name__)
 
 _SIMULATED_ACCEPT_PROB = 0.5
 _MIN_HISTORY_LEN = 2
+_INITIAL_WEIGHT_TOLERANCE = 0.01
 _CONVERGENCE_TOLERANCE = 0.05
 _CONSECUTIVE_FOR_CONVERGENCE = 3
+
+_STAGES: list[tuple[str, int, int]] = [
+    ("high-freq", 0, 5),
+    ("silent", 5, 10),
+    ("visual-detail", 10, 15),
+    ("mixed", 15, 20),
+]
 
 
 async def run_personalization_group(
@@ -27,17 +40,21 @@ async def run_personalization_group(
     scenarios: list[Scenario],
     output_path: Path,
     seed: int = 42,
+    *,
+    judge: Judge,
 ) -> GroupResult:
-    """个性化组实验。20 轮，4 阶段偏好切换。"""
+    """个性化组实验。20 轮，4 阶段偏好切换。
+
+    场景不足 20 时通过取模循环复用（i % len），保证每轮有场景可用。
+    """
     rng = random.Random(seed)
     personalization_scenarios = scenarios[:20]
 
-    stages = [
-        ("high-freq", 0, 5),
-        ("silent", 5, 10),
-        ("visual-detail", 10, 15),
-        ("mixed", 15, 20),
-    ]
+    if not personalization_scenarios:
+        msg = "no personalization scenarios available"
+        raise ValueError(msg)
+
+    stages = _STAGES[:]  # 浅拷贝防止调用方修改
 
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []
@@ -50,6 +67,9 @@ async def run_personalization_group(
                 vr = await runner.run_variant(scenario, variant)
                 vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
                 all_results.append(vr)
+                await _append_checkpoint(
+                    output_path.with_suffix(".checkpoint.jsonl"), vr
+                )
 
                 if variant == Variant.FULL and vr.event_id:
                     action = simulate_feedback(vr.decision, stage_name, rng)
@@ -60,10 +80,35 @@ async def run_personalization_group(
                 {"round": i + 1, "stage": stage_name, "weights": snapshot}
             )
 
+    scenario_map = {s.id: s for s in personalization_scenarios}
+    scores: list[JudgeScores] = []
+    grouped: dict[str, list[VariantResult]] = {}
+    for vr in all_results:
+        grouped.setdefault(vr.scenario_id, []).append(vr)
+    for scenario_id, scenario_vrs in grouped.items():
+        scenario = scenario_map.get(scenario_id)
+        if scenario is None:
+            logger.warning(
+                "场景 %s 不在 personalization_scenarios 中，跳过评分", scenario_id
+            )
+            continue
+        batch_scores = await judge.score_batch(scenario, scenario_vrs)
+        scores.extend(batch_scores)
+
     metrics = _compute_preference_metrics(all_results, weight_history, stages)
 
+    # 写 VariantResult JSONL 到 output_path（供 --judge-only 重载）
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(output_path, "w") as f:
+    await dump_variant_results_jsonl(output_path, all_results)
+
+    # 清理中间 checkpoint（实验完成后只需最终 results JSONL）
+    checkpoint_path = output_path.with_suffix(".checkpoint.jsonl")
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
+
+    # 写 weight_history + metrics 到侧车文件
+    summary_path = output_path.with_suffix(".summary.json")
+    async with aiofiles.open(summary_path, "w") as f:
         await f.write(
             json.dumps(
                 {"weight_history": weight_history, "metrics": metrics},
@@ -75,7 +120,7 @@ async def run_personalization_group(
     return GroupResult(
         group="personalization",
         variant_results=all_results,
-        judge_scores=[],
+        judge_scores=scores,
         metrics=metrics,
     )
 
@@ -84,6 +129,11 @@ def simulate_feedback(
     decision: dict, stage: str, rng: random.Random
 ) -> Literal["accept", "ignore"]:
     """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
+
+    实验简写版：直接操作 strategies.toml 的 reminder_weights，
+    不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
+
+    TODO: 可选集成正式 submitFeedback API。
 
     #126 后策略 Agent 输出 is_emergency（非 is_urgent），allowed_channels 列表（非 channel 字符串）。
     """
@@ -147,7 +197,7 @@ def _compute_preference_metrics(
     preference_matching_rate = _compute_matching_rate(results, weight_history)
     convergence_speed = _compute_convergence_speed(weight_history)
     stability = _compute_stability(weight_history, stages)
-    overfitting_gap = _compute_overfitting_gap(results, weight_history)
+    decision_divergence = _compute_decision_divergence(results, weight_history)
 
     return {
         "rounds": rounds,
@@ -155,7 +205,7 @@ def _compute_preference_metrics(
         "preference_matching_rate": preference_matching_rate,
         "convergence_speed": convergence_speed,
         "stability": stability,
-        "overfitting_gap": overfitting_gap,
+        "decision_divergence": decision_divergence,
     }
 
 
@@ -165,17 +215,20 @@ def _compute_matching_rate(
 ) -> dict[str, float]:
     """偏好匹配率：每阶段 FULL 变体决策与阶段偏好的吻合度。"""
     full_results = [r for r in results if r.variant == Variant.FULL]
+
+    # 以 round_index 建映射，消除对列表序的依赖
+    full_by_round = {r.round_index: r for r in full_results if r.round_index > 0}
     stage_matches: dict[str, list[bool]] = {}
 
-    # weight_history[i] 与 full_results[i] 按轮次严格一一对应——
-    # run_personalization_group 每轮先运行 FULL 变体再追加权重快照。
-    # 若调整循环顺序需同步修改此索引逻辑。
-    for i, wh in enumerate(weight_history):
+    for wh in weight_history:
+        ri = wh.get("round", 0)
         stage = wh["stage"]
-        if i >= len(full_results):
-            break
-        decision = full_results[i].decision
+        if ri not in full_by_round:
+            continue
+        decision = full_by_round[ri].decision
         matched = _decision_matches_stage(decision, stage)
+        if matched is None:
+            continue  # mixed 阶段不参与匹配率计算
         stage_matches.setdefault(stage, []).append(matched)
 
     return {
@@ -184,8 +237,10 @@ def _compute_matching_rate(
     }
 
 
-def _decision_matches_stage(decision: dict, stage: str) -> bool:
-    """单条决策是否匹配阶段偏好。"""
+def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
+    """单条决策是否匹配阶段偏好。mixed 阶段返回 None 表示不适用。"""
+    if stage == "mixed":
+        return None
     if stage == "high-freq":
         return bool(decision.get("should_remind"))
     if stage == "silent":
@@ -194,8 +249,6 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool:
         )
     if stage == "visual-detail":
         return "visual" in decision.get("allowed_channels", [])
-    if stage == "mixed":
-        return True  # 混合阶段无固定偏好
     return True
 
 
@@ -211,7 +264,10 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     if not final_weights:
         return -1.0
 
-    target_type = max(final_weights, key=final_weights.get)
+    # 取最终最高权重类型，并列时取字典序最小以确定性消歧
+    max_w = max(final_weights.values())
+    target_types = sorted(t for t, w in final_weights.items() if w == max_w)
+    target_type = target_types[0]
     target_final = final_weights[target_type]
 
     consecutive = 0
@@ -231,7 +287,15 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
 
 
 def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float:
-    """稳定性：偏好切换后连续 5 轮权重的平均标准差。"""
+    """偏好切换后目标类型权重的平均标准差。
+
+    对每个切换点（high-freq→silent, silent→visual-detail, visual-detail→mixed）：
+    1. 取上一阶段最后一轮最高权重类型（目标类型）
+    2. 若所有权重均为 0.5（初始态），跳过该切换点
+    3. 并列最高时取类型名字典序最小者
+    4. 跟踪该类型在新阶段连续 5 轮的权重，计算标准差
+    5. 返回所有切换点标准差的均值
+    """
     if not weight_history:
         return 0.0
 
@@ -239,33 +303,44 @@ def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float
     stds: list[float] = []
 
     for sp in switch_points:
-        if sp >= len(weight_history):
+        if sp < 1 or sp >= len(weight_history):
+            # 需要上一轮数据才能确定目标类型，不存在则跳过
             continue
+
+        prev_weights = weight_history[sp - 1].get("weights", {})
+        if not prev_weights or all(
+            abs(w - 0.5) < _INITIAL_WEIGHT_TOLERANCE for w in prev_weights.values()
+        ):
+            continue
+
+        max_w = max(prev_weights.values())
+        target_types = [t for t, w in prev_weights.items() if w == max_w]
+        target_type = sorted(target_types)[0]  # 并列取字典序最小，确定性消歧
+
         window = weight_history[sp : min(sp + 5, len(weight_history))]
-        if not window:
-            continue
-        weights_per_round = [
-            sum(wh.get("weights", {}).values()) / max(1, len(wh.get("weights", {})))
-            for wh in window
+        weights_in_window = [
+            wh.get("weights", {}).get(target_type, 0.5) for wh in window
         ]
-        if len(weights_per_round) < _MIN_HISTORY_LEN:
+        if len(weights_in_window) < _MIN_HISTORY_LEN:
             continue
-        mean = sum(weights_per_round) / len(weights_per_round)
-        variance = sum((w - mean) ** 2 for w in weights_per_round) / len(
-            weights_per_round
+
+        mean = sum(weights_in_window) / len(weights_in_window)
+        variance = sum((w - mean) ** 2 for w in weights_in_window) / len(
+            weights_in_window
         )
         stds.append(variance**0.5)
 
     return sum(stds) / len(stds) if stds else 0.0
 
 
-def _compute_overfitting_gap(
+def _compute_decision_divergence(
     results: list[VariantResult],
     weight_history: list[dict],
 ) -> float:
-    """过拟合检测：mixed 阶段 FULL vs NO_FEEDBACK 的偏好匹配率差（绝对值）。
+    """FULL vs NO_FEEDBACK 在 mixed 阶段的决策分歧度。
 
-    使用 VariantResult.round_index 筛选，不依赖列表顺序。
+    对每个 mixed 轮次，比较两个变体的 decision dict 差异字段比例，
+    取所有轮次的平均。越高说明 FULL 学偏了。
     """
     mixed_rounds = [
         i for i, wh in enumerate(weight_history) if wh.get("stage") == "mixed"
@@ -273,7 +348,6 @@ def _compute_overfitting_gap(
     if not mixed_rounds:
         return 0.0
 
-    # 用 round_index 筛选 mixed 阶段结果（1-based）
     mixed_indices = {i + 1 for i in mixed_rounds}
     full_mixed = [
         r
@@ -286,10 +360,18 @@ def _compute_overfitting_gap(
         if r.variant == Variant.NO_FEEDBACK and r.round_index in mixed_indices
     ]
 
-    full_matches = sum(1 for r in full_mixed if bool(r.decision.get("should_remind")))
-    no_fb_matches = sum(1 for r in no_fb_mixed if bool(r.decision.get("should_remind")))
+    full_by_round = {r.round_index: r for r in full_mixed}
+    no_fb_by_round = {r.round_index: r for r in no_fb_mixed}
+    common_rounds = set(full_by_round) & set(no_fb_by_round)
+    if not common_rounds:
+        return 0.0
 
-    full_rate = full_matches / len(full_mixed) if full_mixed else 0.0
-    no_fb_rate = no_fb_matches / len(no_fb_mixed) if no_fb_mixed else 0.0
+    divergences: list[float] = []
+    for ri in common_rounds:
+        d1 = full_by_round[ri].decision
+        d2 = no_fb_by_round[ri].decision
+        all_keys = set(d1) | set(d2)
+        diff_count = sum(1 for k in all_keys if d1.get(k) != d2.get(k))
+        divergences.append(diff_count / max(1, len(all_keys)))
 
-    return abs(full_rate - no_fb_rate)
+    return sum(divergences) / len(divergences)

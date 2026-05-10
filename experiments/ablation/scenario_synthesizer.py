@@ -61,17 +61,17 @@ SCENARIO_PROMPT_TEMPLATE = """请生成一个车载AI测试场景，维度条件
   "user_query": "用户说的中文句子，简短自然，如'帮我记一下3点开会'、'导航去最近的加油站'",
   "expected_decision": {{
     "should_remind": true或false,
-    "channel": "{channel_hint}",
+    "allowed_channels": {channel_hint},
     "content": "提醒内容中文",
-    "is_urgent": true或false
+    "is_emergency": true或false
   }},
   "expected_task_type": "{task_type}"
 }}
 
 注意：
 - 如果疲劳度≥0.9 或 workload==overloaded，expected_decision 的 should_remind 应倾向于 false（非紧急不打扰）
-- 如果 scenario!=parked，channel 应为 audio（驾驶中视觉通道被占用）
-- 如果 scenario==parked，channel 可用 visual 或 audio
+- 如果 scenario!=parked，allowed_channels 应为 ["audio"]（驾驶中视觉通道被占用）
+- 如果 scenario==parked，allowed_channels 可用 ["audio", "visual"] 等
 - user_query 必须与 task_type 匹配（meeting→会议提醒, travel→导航/路线, shopping→购物, contact→联系人, other→一般问题）
 - 生成的数据要尽量多样化，经纬度、地址、速度都应当随场景变化"""
 
@@ -83,10 +83,10 @@ SCENARIO_DESC_MAP: dict[str, str] = {
 }
 
 CHANNEL_HINT_MAP: dict[str, str] = {
-    "parked": "audio 或 visual",
-    "highway": "audio",
-    "city_driving": "audio",
-    "traffic_jam": "audio",
+    "parked": '["audio", "visual"]',
+    "highway": '["audio"]',
+    "city_driving": '["audio"]',
+    "traffic_jam": '["audio"]',
 }
 
 
@@ -180,52 +180,70 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     chat_model = get_chat_model(temperature=0.7)
+    sem = asyncio.Semaphore(8)
+    write_lock = asyncio.Lock()
+    generated_count = 0
     log_interval = 10
-    generated = 0
 
-    for combo in combos:
-        if generated >= count:
-            break
-
+    async def _synthesize_one(combo: dict) -> int:
+        nonlocal generated_count
         dim_id = f"{combo['scenario']}_{combo['fatigue_level']}_{combo['workload']}_{combo['task_type']}_{combo['has_passengers']}"
         if dim_id in existing:
-            continue
+            return 0
+        # 注：dim_id 来自 _build_dimension_combinations() 的 360 种唯一排列，
+        # 无两 task 共享同 dim_id，故此检查在锁外安全。
 
-        prompt = _build_prompt(combo)
-        try:
-            raw = await chat_model.generate(
-                prompt=prompt, system_prompt=SYSTEM_PROMPT, json_mode=True
+        # 早退：已达目标数量则跳过，避免浪费 LLM 调用
+        # generated_count 只增不减，无锁读取可能滞后，最多多调 sem 容量次 LLM
+        if generated_count >= count:
+            return 0
+
+        async with sem:
+            prompt = _build_prompt(combo)
+            try:
+                raw = await chat_model.generate(
+                    prompt=prompt, system_prompt=SYSTEM_PROMPT, json_mode=True
+                )
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse JSON for combo %s", dim_id)
+                return 0
+            except ChatError:
+                logger.warning("LLM call failed for combo %s", dim_id, exc_info=True)
+                return 0
+
+            driving_context = data.get("driving_context", {})
+            scenario_type_val = driving_context.get("scenario", combo["scenario"])
+            safety = _is_safety_relevant(driving_context)
+
+            scenario = Scenario(
+                id=dim_id,
+                driving_context=driving_context,
+                user_query=data.get("user_query", ""),
+                expected_decision=data.get("expected_decision", {}),
+                expected_task_type=data.get("expected_task_type", combo["task_type"]),
+                safety_relevant=safety,
+                scenario_type=scenario_type_val,
             )
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse JSON for combo %s", dim_id)
-            continue
-        except ChatError:
-            logger.warning("LLM call failed for combo %s", dim_id, exc_info=True)
-            continue
 
-        driving_context = data.get("driving_context", {})
-        scenario_type_val = driving_context.get("scenario", combo["scenario"])
-        safety = _is_safety_relevant(driving_context)
+            async with write_lock:
+                current_total = generated_count
+                if current_total >= count:
+                    return 0
+                await _write_scenario(scenario, output_path)
+                existing.add(dim_id)
+                generated_count += 1
 
-        scenario = Scenario(
-            id=dim_id,
-            driving_context=driving_context,
-            user_query=data.get("user_query", ""),
-            expected_decision=data.get("expected_decision", {}),
-            expected_task_type=data.get("expected_task_type", combo["task_type"]),
-            safety_relevant=safety,
-            scenario_type=scenario_type_val,
-        )
+        if generated_count % log_interval == 0:
+            logger.info("synthesized %d/%d scenarios", generated_count, count)
+        return 1
 
-        await _write_scenario(scenario, output_path)
-        existing.add(dim_id)
-        generated += 1
-
-        if generated % log_interval == 0:
-            logger.info("synthesized %d/%d scenarios", generated, count)
-
-    return generated
+    tasks = [_synthesize_one(c) for c in combos]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    failures = sum(1 for r in results if isinstance(r, Exception))
+    if failures:
+        logger.warning("%d synthesis tasks failed", failures)
+    return generated_count
 
 
 def load_scenarios(path: Path) -> list[Scenario]:
@@ -275,6 +293,18 @@ async def _verify() -> None:
     )
     print(f"dimension combos count: {len(_build_dimension_combinations())}")
     print("Import OK")
+
+
+def load_calibration_set(path: Path) -> dict[str, dict[str, int]]:
+    """加载人工校准集。尚未创建——需人工标注后提供路径。
+
+    Returns: {scenario_id: {"overall_score": int}}
+    """
+    msg = (
+        "校准数据文件尚未创建。需人工标注后，调用此函数并传入 JSONL 文件路径。"
+        "JSONL 格式：每行 {'scenario_id': str, 'human_label': {'overall_score': int}}"
+    )
+    raise NotImplementedError(msg)
 
 
 if __name__ == "__main__":
