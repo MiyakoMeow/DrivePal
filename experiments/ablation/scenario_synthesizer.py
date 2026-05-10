@@ -237,7 +237,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
         return 1
 
     tasks = [_synthesize_one(c) for c in combos]
-    await asyncio.gather(*tasks)
+    await asyncio.gather(*tasks, return_exceptions=True)
     return generated_count
 
 

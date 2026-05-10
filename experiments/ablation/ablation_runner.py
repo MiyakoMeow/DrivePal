@@ -174,20 +174,18 @@ async def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
     existing: set[tuple[str, str]] = set()
     try:
         async with aiofiles.open(path) as f:
-            pass
+            async for line in f:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    d = json.loads(stripped)
+                    existing.add((d["scenario_id"], d["variant"]))
+                except json.JSONDecodeError, KeyError:
+                    logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
+                    continue
     except FileNotFoundError:
         return existing
-    async with aiofiles.open(path) as f:
-        async for line in f:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                d = json.loads(stripped)
-                existing.add((d["scenario_id"], d["variant"]))
-            except json.JSONDecodeError, KeyError:
-                logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
-                continue
     return existing
 
 

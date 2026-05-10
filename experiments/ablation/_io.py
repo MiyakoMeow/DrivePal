@@ -39,7 +39,7 @@ async def dump_variant_results_jsonl(
                     record["modifications"] = r.modifications
                 await f.write(json.dumps(record, ensure_ascii=False) + "\n")
         tmp_path.replace(path)
-    except Exception:
+    except OSError:
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
         raise

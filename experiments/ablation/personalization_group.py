@@ -27,6 +27,13 @@ _INITIAL_WEIGHT_TOLERANCE = 0.01
 _CONVERGENCE_TOLERANCE = 0.05
 _CONSECUTIVE_FOR_CONVERGENCE = 3
 
+_STAGES: list[tuple[str, int, int]] = [
+    ("high-freq", 0, 5),
+    ("silent", 5, 10),
+    ("visual-detail", 10, 15),
+    ("mixed", 15, 20),
+]
+
 
 async def run_personalization_group(
     runner: AblationRunner,
@@ -47,12 +54,7 @@ async def run_personalization_group(
         msg = "no personalization scenarios available"
         raise ValueError(msg)
 
-    stages = [
-        ("high-freq", 0, 5),
-        ("silent", 5, 10),
-        ("visual-detail", 10, 15),
-        ("mixed", 15, 20),
-    ]
+    stages = _STAGES[:]  # 浅拷贝防止调用方修改
 
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []
@@ -98,6 +100,11 @@ async def run_personalization_group(
     # 写 VariantResult JSONL 到 output_path（供 --judge-only 重载）
     output_path.parent.mkdir(parents=True, exist_ok=True)
     await dump_variant_results_jsonl(output_path, all_results)
+
+    # 清理中间 checkpoint（实验完成后只需最终 results JSONL）
+    checkpoint_path = output_path.with_suffix(".checkpoint.jsonl")
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
 
     # 写 weight_history + metrics 到侧车文件
     summary_path = output_path.with_suffix(".summary.json")
@@ -208,16 +215,17 @@ def _compute_matching_rate(
 ) -> dict[str, float]:
     """偏好匹配率：每阶段 FULL 变体决策与阶段偏好的吻合度。"""
     full_results = [r for r in results if r.variant == Variant.FULL]
+
+    # 以 round_index 建映射，消除对列表序的依赖
+    full_by_round = {r.round_index: r for r in full_results if r.round_index > 0}
     stage_matches: dict[str, list[bool]] = {}
 
-    # weight_history[i] 与 full_results[i] 按轮次严格一一对应——
-    # run_personalization_group 每轮先运行 FULL 变体再追加权重快照。
-    # 若调整循环顺序需同步修改此索引逻辑。
-    for i, wh in enumerate(weight_history):
+    for wh in weight_history:
+        ri = wh.get("round", 0)
         stage = wh["stage"]
-        if i >= len(full_results):
-            break
-        decision = full_results[i].decision
+        if ri not in full_by_round:
+            continue
+        decision = full_by_round[ri].decision
         matched = _decision_matches_stage(decision, stage)
         if matched is None:
             continue  # mixed 阶段不参与匹配率计算
@@ -256,7 +264,11 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     if not final_weights:
         return -1.0
 
-    target_type = max(final_weights, key=final_weights.get)
+    # 取最终最高权重类型，并列时取字典序最小以确定性消歧
+    target_types = sorted(
+        (t for t in final_weights if final_weights[t] == max(final_weights.values())),
+    )
+    target_type = target_types[0]
     target_final = final_weights[target_type]
 
     consecutive = 0
