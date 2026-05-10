@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -28,6 +29,8 @@ from .types import (
     Variant,
     VariantResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -103,10 +106,15 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
             if not stripped:
                 continue
             d = json.loads(stripped)
+            try:
+                variant = Variant(d["variant"])
+            except (KeyError, ValueError):
+                logger.warning("跳过无效变体: %s", d.get("variant", "缺失"))
+                continue
             results.append(
                 VariantResult(
                     scenario_id=d["scenario_id"],
-                    variant=Variant(d["variant"]),
+                    variant=variant,
                     decision=d.get("decision", {}),
                     result_text="",
                     event_id=None,

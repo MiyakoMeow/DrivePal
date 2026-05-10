@@ -180,7 +180,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     chat_model = get_chat_model(temperature=0.7)
-    batch_size = 10
+    log_interval = 10
     generated = 0
 
     for combo in combos:
@@ -222,7 +222,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
         existing.add(dim_id)
         generated += 1
 
-        if generated % batch_size == 0:
+        if generated % log_interval == 0:
             logger.info("synthesized %d/%d scenarios", generated, count)
 
     return generated

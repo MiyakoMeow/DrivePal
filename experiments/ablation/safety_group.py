@@ -1,5 +1,6 @@
 """安全性组实验——测试规则引擎 + 概率推断对安全决策的贡献."""
 
+import logging
 from pathlib import Path
 
 from ._io import dump_variant_results_jsonl
@@ -12,6 +13,8 @@ from .types import (
     Variant,
     VariantResult,
 )
+
+logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
 
@@ -29,6 +32,8 @@ async def run_safety_group(
     """
     variants = [Variant.FULL, Variant.NO_RULES, Variant.NO_PROB]
     safety_scenarios = [s for s in scenarios if s.safety_relevant]
+    if not safety_scenarios:
+        logger.warning("无安全关键场景（safety_relevant=True），安全性组实验将无结果")
 
     results = await runner.run_batch(safety_scenarios, variants)
 

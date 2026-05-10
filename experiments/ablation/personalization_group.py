@@ -161,6 +161,9 @@ def _compute_matching_rate(
     full_results = [r for r in results if r.variant == Variant.FULL]
     stage_matches: dict[str, list[bool]] = {}
 
+    # weight_history[i] 与 full_results[i] 按轮次严格一一对应——
+    # run_personalization_group 每轮先运行 FULL 变体再追加权重快照。
+    # 若调整循环顺序需同步修改此索引逻辑。
     for i, wh in enumerate(weight_history):
         stage = wh["stage"]
         if i >= len(full_results):
