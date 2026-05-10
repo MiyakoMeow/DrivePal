@@ -32,6 +32,7 @@ def test_compute_comparison():
         JudgeScores("2", Variant.NO_RULES, 2, 2, 2, ["channel_violation"], ""),
     ]
     comparison = compute_comparison(scores)
-    assert "no-rules" in comparison
-    assert comparison["no-rules"]["mean_score"] == 2.5
-    assert comparison["no-rules"]["mean_diff"] == -2.0  # 2.5 - 4.5
+    no_rules_key = Variant.NO_RULES.value
+    assert no_rules_key in comparison
+    assert comparison[no_rules_key]["mean_score"] == 2.5
+    assert comparison[no_rules_key]["mean_diff"] == -2.0  # 2.5 - 4.5

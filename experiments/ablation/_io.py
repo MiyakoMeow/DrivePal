@@ -19,7 +19,7 @@ async def dump_variant_results_jsonl(
 ) -> None:
     """将 VariantResult 列表写入 JSONL。"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(path, "w") as f:
+    async with aiofiles.open(path, "w", encoding="utf-8") as f:
         for r in results:
             record: dict[str, Any] = {
                 "scenario_id": r.scenario_id,
