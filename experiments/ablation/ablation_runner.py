@@ -1,10 +1,10 @@
-"""消融实验运行器——设置环境变量、分发变体调用、收集结果."""
+"""消融实验运行器——分发变体调用、收集结果。"""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import os
 import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
@@ -14,6 +14,7 @@ import aiofiles
 if TYPE_CHECKING:
     from pathlib import Path
 
+from app.agents.probabilistic import set_probabilistic_enabled
 from app.agents.prompts import SINGLE_LLM_SYSTEM_PROMPT
 from app.agents.rules import set_ablation_disable_rules
 from app.agents.workflow import AgentWorkflow, set_ablation_disable_feedback
@@ -26,66 +27,49 @@ from .types import Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
 
-PROBABILISTIC_INFERENCE_ENABLED = "PROBABILISTIC_INFERENCE_ENABLED"
-
 
 class AblationRunner:
-    """消融实验运行器。管理环境变量、分发变体调用、收集结果。"""
+    """消融实验运行器。分发变体调用、收集结果。"""
 
-    def __init__(self, user_id: str = "ablation") -> None:
+    def __init__(self, base_user_id: str = "ablation") -> None:
         """初始化运行器。
 
         Args:
-            user_id: 实验用用户标识，默认 ablation。
+            base_user_id: 变体 uid 前缀。三组分别用 experiment-safety / experiment-arch / experiment-personalization。
 
         """
-        self.user_id = user_id
-        self._original_env: dict[str, str | None] = {}
+        self.base_user_id = base_user_id
 
-    def _set_env(self, **kwargs: str) -> None:
-        for k, v in kwargs.items():
-            self._original_env.setdefault(k, os.environ.get(k))
-            os.environ[k] = v
-
-    def _restore_env(self) -> None:
-        for k, v in self._original_env.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-        self._original_env.clear()
-
-    async def run_variant(self, scenario: Scenario, variant: Variant) -> VariantResult:
-        """运行单个变体实验。设置环境变量，分发到 workflow 或单 LLM 路径。"""
+    async def run_variant(
+        self,
+        scenario: Scenario,
+        variant: Variant,
+        user_id: str | None = None,
+    ) -> VariantResult:
+        """运行单个变体实验。user_id 传 None 则回退 base_user_id。"""
+        uid = user_id or self.base_user_id
         t0 = time.perf_counter()
 
         if variant == Variant.NO_RULES:
             set_ablation_disable_rules(True)
         elif variant == Variant.NO_PROB:
-            self._set_env(PROBABILISTIC_INFERENCE_ENABLED="0")
+            set_probabilistic_enabled(False)
         elif variant == Variant.NO_FEEDBACK:
             set_ablation_disable_feedback(True)
 
-        try:
-            if variant == Variant.SINGLE_LLM:
-                return await self._run_single_llm(scenario, t0)
-            return await self._run_agent_workflow(scenario, variant, t0)
-        finally:
-            if variant == Variant.NO_RULES:
-                set_ablation_disable_rules(False)
-            elif variant == Variant.NO_FEEDBACK:
-                set_ablation_disable_feedback(False)
-            self._restore_env()
+        if variant == Variant.SINGLE_LLM:
+            return await self._run_single_llm(scenario, uid, t0)
+        return await self._run_agent_workflow(scenario, variant, uid, t0)
 
     async def _run_agent_workflow(
-        self, scenario: Scenario, variant: Variant, t0: float
+        self, scenario: Scenario, variant: Variant, user_id: str, t0: float
     ) -> VariantResult:
         mm = get_memory_module()
         workflow = AgentWorkflow(
             data_dir=DATA_DIR,
             memory_mode=MemoryMode.MEMORY_BANK,
             memory_module=mm,
-            current_user=self.user_id,
+            current_user=user_id,
         )
         result, event_id, stages = await workflow.run_with_stages(
             scenario.user_query,
@@ -110,7 +94,9 @@ class AblationRunner:
             else [],
         )
 
-    async def _run_single_llm(self, scenario: Scenario, t0: float) -> VariantResult:
+    async def _run_single_llm(
+        self, scenario: Scenario, _user_id: str, t0: float
+    ) -> VariantResult:
         chat = get_chat_model()
         now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
         prompt = SINGLE_LLM_SYSTEM_PROMPT.format(current_datetime=now)
@@ -153,28 +139,49 @@ class AblationRunner:
         scenarios: list[Scenario],
         variants: list[Variant],
         *,
+        concurrency: int = 4,
         checkpoint_path: Path | None = None,
     ) -> list[VariantResult]:
-        """批量运行场景×变体笛卡尔积。checkpoint_path 指定则增量写 JSONL。
+        """批量运行场景×变体笛卡尔积（并发）。
 
-        续跑行为：先加载 checkpoint 中已有结果至返回列表，再运行未完成的变体。
-        避免中途中断后旧数据丢失。
+        concurrency 控制 LLM 并发度（默认 4，匹配 provider concurrency）。
+        每变体独立 user_id（{base_user_id}-{scenario.id}-{variant.value}），MemoryBank 无竞态。
+        续跑先加载 checkpoint 中已有结果，再并发跑未完成的变体。
         """
         results: list[VariantResult] = []
         existing_ids: set[tuple[str, str]] = set()
         if checkpoint_path:
             existing_ids, existing_results = await _load_checkpoint(checkpoint_path)
             results.extend(existing_results)
-        for scenario in scenarios:
-            for variant in variants:
-                if (scenario.id, variant.value) in existing_ids:
-                    continue
-                vr = await self.run_variant(scenario, variant)
-                results.append(vr)
+
+        pending = [
+            (s, v)
+            for s in scenarios
+            for v in variants
+            if (s.id, v.value) not in existing_ids
+        ]
+
+        sem = asyncio.Semaphore(concurrency)
+        ckpt_lock = asyncio.Lock()
+
+        async def run_one(scenario: Scenario, variant: Variant) -> VariantResult:
+            async with sem:
+                uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
+                vr = await self.run_variant(scenario, variant, user_id=uid)
                 if checkpoint_path:
-                    existing_ids.add((scenario.id, variant.value))
-                    await _append_checkpoint(checkpoint_path, vr)
-        return results
+                    async with ckpt_lock:
+                        await _append_checkpoint(
+                            checkpoint_path,
+                            vr,
+                            include_modifications=True,
+                        )
+                return vr
+
+        if not pending:
+            return results
+        tasks = [asyncio.create_task(run_one(s, v)) for s, v in pending]
+        new_results = await asyncio.gather(*tasks)
+        return results + list(new_results)
 
 
 async def _load_checkpoint(

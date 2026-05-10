@@ -165,7 +165,7 @@ async def _run_safety_experiment(
     data_dir: Path, all_scenarios: list[Scenario], seed: int
 ) -> GroupResult:
     """运行安全性组实验。"""
-    runner = AblationRunner(user_id="experiment-safety")
+    runner = AblationRunner(base_user_id="experiment-safety")
     judge = Judge()
     safety_scenarios = sample_scenarios(all_scenarios, 50, safety_only=True, seed=seed)
     return await run_safety_group(
@@ -177,7 +177,7 @@ async def _run_architecture_experiment(
     data_dir: Path, all_scenarios: list[Scenario], seed: int
 ) -> GroupResult:
     """运行架构组实验。"""
-    runner = AblationRunner(user_id="experiment-arch")
+    runner = AblationRunner(base_user_id="experiment-arch")
     judge = Judge()
     arch_scenarios = sample_scenarios(
         all_scenarios, 50, safety_only=False, seed=seed + 1
@@ -191,7 +191,7 @@ async def _run_personalization_experiment(
     data_dir: Path, all_scenarios: list[Scenario], seed: int
 ) -> GroupResult:
     """运行个性化组实验。"""
-    runner = AblationRunner(user_id="experiment-personalization")
+    runner = AblationRunner(base_user_id="experiment-personalization")
     judge = Judge()
     personalization_scenarios = sample_scenarios(
         all_scenarios, 20, safety_only=False, seed=seed + 2
