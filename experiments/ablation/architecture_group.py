@@ -127,25 +127,23 @@ async def _aggregate_full_stage_scores(
     async def _score_one(fr: VariantResult) -> dict:
         try:
             return await judge.score_stages(fr)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("Stage scoring failed: %s", exc)
             return {}
 
     tasks = [asyncio.create_task(_score_one(fr)) for fr in full_results]
     raw_scores = await asyncio.gather(*tasks, return_exceptions=True)
-    all_scores: list[dict[str, Any]] = [s for s in raw_scores if isinstance(s, dict)]
-    for exc in raw_scores:
-        if isinstance(exc, Exception):
-            logger.warning("Stage scoring task failed: %s", exc)
+    all_scores: list[dict[str, Any]] = []
+    for r in raw_scores:
+        if isinstance(r, Exception):
+            logger.warning("Stage scoring task failed: %s", r)
+        elif isinstance(r, dict):
+            all_scores.append(r)
 
     ctx_scores: list[float] = []
     task_scores: list[float] = []
     dec_scores: list[float] = []
-    for item in all_scores:
-        if isinstance(item, Exception):
-            logger.warning("Stage scoring task failed: %s", item)
-            continue
-        stage_scores: dict = item
+    for stage_scores in all_scores:
         if stage_scores.get("context", {}).get("score", 0) > 0:
             ctx_scores.append(stage_scores["context"]["score"])
         if stage_scores.get("task", {}).get("score", 0) > 0:
