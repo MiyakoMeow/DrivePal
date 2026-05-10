@@ -66,8 +66,8 @@ def _print_step_summary(result: GroupResult, elapsed: float) -> None:
                     metrics_parts.append(f"{k2}: {v2}")
         elif isinstance(v, (int, float)):
             metrics_parts.append(f"{k}: {v}")
-    metrics_str = "; ".join(metrics_parts[:8])  # 至多 8 项防过长
-    print(f"[{group}] {n} results, {m} scores, {elapsed:.1f}s | {metrics_str}")
+    suffix = f" | {'; '.join(metrics_parts[:8])}" if metrics_parts else ""
+    print(f"[{group}] {n} results, {m} scores, {elapsed:.1f}s{suffix}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -187,12 +187,6 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             variant_results=variant_results,
             judge_scores=scores,
             metrics=metrics,
-        )
-
-        # 更新 step-summary
-        step_path = run_dir / group_name / "step-summary.json"
-        await write_step_summary(
-            step_path, all_group_results[group_name], duration_seconds=0
         )
         print(f"{group_name} 组重新评分完成: {len(scores)} 评分")
 
@@ -320,6 +314,9 @@ async def main(argv: list[str] | None = None) -> None:
         run_dir: Path
         if args.run_id:
             run_dir = data_dir / "runs" / args.run_id
+            if not run_dir.is_dir():
+                print(f"运行目录不存在: {run_dir}")
+                return
         else:
             latest = _find_latest_run(data_dir / "runs")
             if latest is None:
@@ -335,7 +332,7 @@ async def main(argv: list[str] | None = None) -> None:
         return
 
     run_id = args.run_id or (
-        datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S") + f"_{args.seed}"
+        datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S_%f") + f"_{args.seed}"
     )
     run_dir = data_dir / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

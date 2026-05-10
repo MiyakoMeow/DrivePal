@@ -5,6 +5,7 @@ TYPE_CHECKING 仅用于类型注解导入——Python 3.14 PEP 649 默认延迟�
 """
 
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -17,15 +18,21 @@ if TYPE_CHECKING:
 
     from .types import GroupResult, VariantResult
 
+logger = logging.getLogger(__name__)
+
 
 async def _write_json_async(path: Path, data: dict[str, object]) -> None:
-    """异步写 JSON 到文件。"""
+    """异步写 JSON 到文件——含序列化降级容错。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+        try:
+            await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+        except (TypeError, ValueError) as e:
+            logger.warning("JSON 序列化失败（%s），降级写入", e)
+            await f.write(json.dumps(data, ensure_ascii=False, indent=2, default=str))
 
 
-async def write_summary(path: Path, data: dict) -> None:
+async def write_summary(path: Path, data: dict[str, object]) -> None:
     """写 JSON 总结文件。包含 timestamp + 状态。"""
     record: dict[str, object] = {
         "timestamp": datetime.now(tz=UTC).isoformat(),
@@ -46,12 +53,17 @@ async def write_config(path: Path, args: argparse.Namespace) -> None:
         "JUDGE_MODEL",
         "JUDGE_BASE_URL",
     ]
+    cli_keys = (
+        "data_dir",
+        "group",
+        "seed",
+        "synthesize_only",
+        "judge_only",
+        "run_id",
+    )
     config: dict[str, object] = {
         "timestamp": datetime.now(tz=UTC).isoformat(),
-        "cli_args": {
-            k: getattr(args, k, None)
-            for k in ("group", "seed", "synthesize_only", "judge_only", "run_id")
-        },
+        "cli_args": {k: getattr(args, k, None) for k in cli_keys},
         "environment": {k: os.environ.get(k, None) for k in env_keys},
     }
     await _write_json_async(path, config)
