@@ -70,7 +70,7 @@ def _validate_index_count(idx: faiss.Index, meta_len: int) -> None:
 
 
 class FaissIndex:
-    """FAISS 索引包装器，支持 Flat/IPV 双模式向量检索与元数据管理。"""
+    """FAISS 索引包装器，支持 Flat/IVF 双模式向量检索与元数据管理。"""
 
     def __init__(
         self,

@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from .index import FaissIndex
 
@@ -41,6 +43,7 @@ class MemoryBankConfig(BaseSettings):
     @classmethod
     def _guard_max_memory_strength_positive(cls, v: int) -> int:
         if v < 1:
+            logger.warning("max_memory_strength=%r < 1, falling back to 10", v)
             return 10
         return v
 
@@ -51,6 +54,9 @@ class MemoryBankConfig(BaseSettings):
     @classmethod
     def _guard_retrieval_alpha_range(cls, v: float) -> float:
         if not (0.0 < v <= 1.0):
+            logger.warning(
+                "retrieval_alpha=%r out of range (0,1], falling back to 0.7", v
+            )
             return 0.7
         return v
 
@@ -62,6 +68,10 @@ class MemoryBankConfig(BaseSettings):
     @classmethod
     def _guard_bm25_threshold_range(cls, v: float) -> float:
         if not (0.0 < v <= 1.0):
+            logger.warning(
+                "bm25_fallback_threshold=%r out of range (0,1], falling back to 0.5",
+                v,
+            )
             return 0.5
         return v
 
@@ -69,10 +79,19 @@ class MemoryBankConfig(BaseSettings):
     index_type: Literal["flat", "ivf_flat"] = "flat"
     ivf_nlist: int = 128
 
+    @field_validator("index_type")
+    @classmethod
+    def _guard_index_type_not_ivf(cls, v: str) -> str:
+        if v == "ivf_flat":
+            logger.warning("index_type=%r not yet supported, falling back to 'flat'", v)
+            return "flat"
+        return v
+
     @field_validator("ivf_nlist")
     @classmethod
     def _guard_ivf_nlist_positive(cls, v: int) -> int:
         if v < 1:
+            logger.warning("ivf_nlist=%r < 1, falling back to 128", v)
             return 128
         return v
 

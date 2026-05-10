@@ -1,5 +1,9 @@
 """ChatModel 客户端缓存测试."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
 from app.models.chat import (
@@ -10,14 +14,17 @@ from app.models.chat import (
 from app.models.settings import LLMProviderConfig
 from app.models.types import ProviderConfig as PCfg
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
 
 @pytest.fixture(autouse=True)
-async def _clean_cache():
+async def _clean_cache() -> AsyncIterator[None]:
     """每个测试前后清理客户端缓存"""
     clear_semaphore_cache()
     yield
-    clear_semaphore_cache()
     await close_client_cache()
+    clear_semaphore_cache()
 
 
 @pytest.mark.asyncio

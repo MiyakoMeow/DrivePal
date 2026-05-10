@@ -134,12 +134,13 @@ class MemoryBankStore:
         if not path.exists():
             return
         try:
-            data = json.loads(path.read_text())
+            async with aiofiles.open(path, encoding="utf-8") as f:
+                data = json.loads(await f.read())
             if isinstance(data, dict):
                 async with self._source_index_lock:
                     self._source_event_index = data
-        except json.JSONDecodeError, OSError:
-            pass
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Failed to load source_event_index from %s: %s", path, exc)
 
     async def _save_source_index(self) -> None:
         """持久化 source_event_index 到磁盘（tmp + os.replace 原子写入）。"""
@@ -157,8 +158,12 @@ class MemoryBankStore:
             async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
                 await f.write(payload)
             tmp_path.replace(self._user_dir / self._SOURCE_INDEX_FILENAME)
-        except OSError:
-            pass
+        except OSError as exc:
+            logger.warning(
+                "Failed to save source_event_index to %s: %s",
+                self._user_dir / self._SOURCE_INDEX_FILENAME,
+                exc,
+            )
 
     def _get_reference_date(self) -> str:
         return resolve_reference_date(self._config, self._index)
@@ -177,7 +182,7 @@ class MemoryBankStore:
         """写入事件元数据到索引。"""
         await self._ensure_loaded()
         fid = await self._lifecycle.write(event)
-        self._retrieval.invalidate_bm25()
+        await self._retrieval.invalidate_bm25()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         async with self._source_index_lock:
             self._source_event_index.setdefault(date_key, []).append(fid)
@@ -188,7 +193,7 @@ class MemoryBankStore:
         """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
         await self._ensure_loaded()
         fids = await self._lifecycle.write_batch(events)
-        self._retrieval.invalidate_bm25()
+        await self._retrieval.invalidate_bm25()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         async with self._source_index_lock:
             self._source_event_index.setdefault(date_key, []).extend(fids)
@@ -210,7 +215,7 @@ class MemoryBankStore:
             event_type,
             **kwargs,
         )
-        self._retrieval.invalidate_bm25()
+        await self._retrieval.invalidate_bm25()
         # 将 interaction 关联到同 source（同 date_key）的所有事件条目
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         async with self._source_index_lock:

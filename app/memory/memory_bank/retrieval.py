@@ -30,6 +30,21 @@ logger = logging.getLogger(__name__)
 _MERGED_TEXT_DELIMITER = "\x00"
 _ADAPTIVE_CHUNK_MIN_ENTRIES = 10
 INITIAL_MEMORY_STRENGTH = 1
+
+
+def _tokenize(text: str) -> list[str]:
+    """中英文分词：中文按字符切分，英文按空格切分。"""
+    tokens: list[str] = []
+    for chunk in re.split(r"([\u4e00-\u9fff]+)", text.lower()):
+        if not chunk:
+            continue
+        if re.search(r"[\u4e00-\u9fff]", chunk):
+            tokens.extend(chunk)
+        else:
+            tokens.extend(chunk.split())
+    return tokens
+
+
 _INTERNAL_KEYS: frozenset[str] = frozenset(
     {
         "_merged_indices",
@@ -438,7 +453,7 @@ class RetrievalPipeline:
                     self._rebuild_bm25_index()
         if self._bm25_index is None:
             return results
-        tokenized_query = query.lower().split()
+        tokenized_query = _tokenize(query)
         bm25_scores = self._bm25_index.get_scores(tokenized_query)
         max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 1.0
         if max_bm25 > 0:
@@ -448,8 +463,13 @@ class RetrievalPipeline:
             key=lambda i: bm25_scores[i],
             reverse=True,
         )[:coarse_k]
+        existing_meta = {
+            r["_meta_idx"] for r in results if r.get("_meta_idx") is not None
+        }
         for idx in top_indices:
             meta_idx = self._bm25_meta_indices[idx]
+            if meta_idx in existing_meta:
+                continue
             meta = metadata[meta_idx]
             results.append(
                 {
@@ -555,7 +575,7 @@ class RetrievalPipeline:
                 days = 0.0
             time_scale = self._config.forgetting_time_scale
             retention = math.exp(-days / (time_scale * strength))
-            original_score = max(float(r.get("score", 0.0)), 0.0)
+            original_score = float(r.get("score", 0.0))
             r["score"] = alpha * original_score + (1.0 - alpha) * retention
 
         return results
@@ -569,13 +589,15 @@ class RetrievalPipeline:
             if not m.get("forgotten"):
                 self._bm25_corpus.append(m.get("text", ""))
                 self._bm25_meta_indices.append(idx)
-        tokenized = [text.lower().split() for text in self._bm25_corpus]
+        tokenized = [_tokenize(text) for text in self._bm25_corpus]
         if tokenized:
             self._bm25_index = BM25Okapi(tokenized)
         else:
             self._bm25_index = None
 
-    def invalidate_bm25(self) -> None:
+    async def invalidate_bm25(self) -> None:
         """标记 BM25 索引失效，下次搜索时重建。"""
-        # Python GIL 保证引用赋值的原子性，无需锁
-        self._bm25_index = None
+        async with self._bm25_lock:
+            self._bm25_index = None
+            self._bm25_corpus = []
+            self._bm25_meta_indices = []
