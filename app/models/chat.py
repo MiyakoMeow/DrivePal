@@ -316,5 +316,6 @@ def get_judge_model() -> ChatModel:
             api_key=settings.judge_provider.provider.api_key,
         ),
         temperature=settings.judge_provider.temperature,
+        concurrency=settings.judge_provider.concurrency,
     )
     return ChatModel(providers=[provider])

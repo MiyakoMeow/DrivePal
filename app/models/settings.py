@@ -77,11 +77,12 @@ class JudgeProviderConfig:
 
     provider: ProviderConfig
     temperature: float = 0.1
+    concurrency: int = 4
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> JudgeProviderConfig:
         """从字典创建配置实例."""
-        return _make_provider_config(cls, d, {"temperature": 0.1})
+        return _make_provider_config(cls, d, {"temperature": 0.1, "concurrency": 4})
 
 
 @dataclass
@@ -293,5 +294,8 @@ def _build_judge_provider(config_data: dict) -> JudgeProviderConfig | None:
             temperature=float(os.getenv("JUDGE_TEMPERATURE", "0.1")),
         )
     if judge_dict:
+        judge_dict = dict(judge_dict)
+        if "api_key_env" in judge_dict and "api_key" not in judge_dict:
+            judge_dict["api_key"] = os.environ.get(judge_dict.pop("api_key_env"), "")
         return JudgeProviderConfig.from_dict(judge_dict)
     return None

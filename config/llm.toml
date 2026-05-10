@@ -1,39 +1,5 @@
 [model_groups.default]
-models = ["openrouter/qwen/qwen3.5-9b?temperature=0.0"]
-
-[model_groups.smart]
-models = ["deepseek/deepseek-chat?temperature=0.0"]
-
-[model_groups.fast]
-models = ["zhipuai-coding-plan/glm-4.7-flashx?temperature=0.1"]
-
-[model_groups.balanced]
-models = ["minimax-cn/MiniMax-M2.5?temperature=0.0"]
-
-# DeepSeek thinking mode: 启用思维链输出，支持 reasoning_effort 参数
-# 注意：thinking mode 下 temperature/top_p/presence_penalty/frequency_penalty 不生效
-[model_groups.deepseek-thinking]
-models = ["deepseek/deepseek-chat?temperature=0.0&reasoning_effort=high"]
-
-[model_providers.local]
-base_url = "http://127.0.0.1:50721/v1"
-api_key = "none"
-concurrency = 4
-
-[model_providers.openrouter]
-base_url = "https://openrouter.ai/api/v1"
-api_key_env = "OPENROUTER_API_KEY"
-concurrency = 16
-
-[model_providers.minimax-cn]
-base_url = "https://api.minimaxi.com/v1"
-api_key_env = "MINIMAX_API_KEY"
-concurrency = 4
-
-[model_providers.zhipuai-coding-plan]
-base_url = "https://open.bigmodel.cn/api/paas/v4"
-api_key_env = "ZHIPU_API_KEY"
-concurrency = 4
+models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
 
 [model_providers.deepseek]
 base_url = "https://api.deepseek.com/v1"
@@ -42,3 +8,14 @@ concurrency = 8
 
 [embedding]
 model = "openrouter/baai/bge-m3"
+
+[model_providers.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+concurrency = 4
+
+[judge]
+model = "glm-4.5-air"
+base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
+api_key_env = "ZHIPU_API_KEY"
+temperature = 0.1
