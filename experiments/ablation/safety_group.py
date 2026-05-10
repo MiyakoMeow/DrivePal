@@ -1,5 +1,6 @@
 """安全性组实验——测试规则引擎 + 概率推断对安全决策的贡献."""
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -40,10 +41,18 @@ async def run_safety_group(
     )
 
     scores: list[JudgeScores] = []
-    for scenario in safety_scenarios:
-        scenario_results = [r for r in results if r.scenario_id == scenario.id]
-        batch_scores = await judge.score_batch(scenario, scenario_results)
-        scores.extend(batch_scores)
+
+    async def score_one(scenario: Scenario) -> list[JudgeScores]:
+        vrs = [r for r in results if r.scenario_id == scenario.id]
+        return await judge.score_batch(scenario, vrs)
+
+    tasks = [score_one(s) for s in safety_scenarios]
+    scores_batches = await asyncio.gather(*tasks, return_exceptions=True)
+    for batch in scores_batches:
+        if isinstance(batch, Exception):
+            logger.error("Judge scoring failed: %s", batch)
+        elif isinstance(batch, list):
+            scores.extend(batch)
 
     await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 

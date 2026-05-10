@@ -1,9 +1,11 @@
 """架构组实验——四 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
 
+import asyncio
 import logging
 import os
 import statistics
 from pathlib import Path
+from typing import Any
 
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
@@ -52,10 +54,18 @@ async def run_architecture_group(
     )
 
     scores: list[JudgeScores] = []
-    for scenario in arch_scenarios:
-        scenario_results = [r for r in results if r.scenario_id == scenario.id]
-        batch_scores = await judge.score_batch(scenario, scenario_results)
-        scores.extend(batch_scores)
+
+    async def score_one(scenario: Scenario) -> list[JudgeScores]:
+        vrs = [r for r in results if r.scenario_id == scenario.id]
+        return await judge.score_batch(scenario, vrs)
+
+    tasks = [score_one(s) for s in arch_scenarios]
+    scores_batches = await asyncio.gather(*tasks, return_exceptions=True)
+    for batch in scores_batches:
+        if isinstance(batch, Exception):
+            logger.error("Judge scoring failed: %s", batch)
+        elif isinstance(batch, list):
+            scores.extend(batch)
 
     await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 
@@ -85,10 +95,12 @@ def compute_quality_metrics(
         n = len(variant_scores)
         variant_results = [r for r in results if r.variant.value == variant]
         latencies = sorted([r.latency_ms for r in variant_results])
-        if latencies:
+        if len(latencies) >= 2:
             percentiles = statistics.quantiles(latencies, n=100, method="inclusive")
             p50 = percentiles[49]
             p90 = percentiles[89]
+        elif len(latencies) == 1:
+            p50 = p90 = latencies[0]
         else:
             p50 = p90 = 0.0
 
@@ -112,12 +124,28 @@ def compute_quality_metrics(
 async def _aggregate_full_stage_scores(
     judge: Judge, full_results: list[VariantResult]
 ) -> dict[str, float]:
-    """聚合所有 Full 变体的中间阶段平均评分。"""
+    """聚合所有 Full 变体的中间阶段平均评分（并发）。"""
+
+    async def _score_one(fr: VariantResult) -> dict:
+        try:
+            return await judge.score_stages(fr)
+        except Exception as exc:
+            logger.warning("Stage scoring failed: %s", exc)
+            return {}
+
+    tasks = [asyncio.create_task(_score_one(fr)) for fr in full_results]
+    raw_scores = await asyncio.gather(*tasks, return_exceptions=True)
+    all_scores: list[dict[str, Any]] = []
+    for r in raw_scores:
+        if isinstance(r, Exception):
+            logger.warning("Stage scoring task failed: %s", r)
+        elif isinstance(r, dict):
+            all_scores.append(r)
+
     ctx_scores: list[float] = []
     task_scores: list[float] = []
     dec_scores: list[float] = []
-    for fr in full_results:
-        stage_scores = await judge.score_stages(fr)
+    for stage_scores in all_scores:
         if stage_scores.get("context", {}).get("score", 0) > 0:
             ctx_scores.append(stage_scores["context"]["score"])
         if stage_scores.get("task", {}).get("score", 0) > 0:

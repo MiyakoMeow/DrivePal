@@ -64,18 +64,35 @@ async def run_personalization_group(
             scenario = personalization_scenarios[i % len(personalization_scenarios)]
 
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
-                vr = await runner.run_variant(scenario, variant)
+                # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
+                # NO_FEEDBACK 用独立 uid —— MemoryBank 隔离，不受 FULL 写入事件干扰
+                uid = (
+                    runner.base_user_id
+                    if variant == Variant.FULL
+                    else f"{runner.base_user_id}-{variant.value}"
+                )
+                vr = await runner.run_variant(scenario, variant, user_id=uid)
                 vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
                 all_results.append(vr)
                 await _append_checkpoint(
-                    output_path.with_suffix(".checkpoint.jsonl"), vr
+                    output_path.with_suffix(".checkpoint.jsonl"),
+                    vr,
+                    include_modifications=True,
                 )
 
                 if variant == Variant.FULL and vr.event_id:
-                    action = simulate_feedback(vr.decision, stage_name, rng)
-                    await update_feedback_weight(runner.user_id, vr.event_id, action)
+                    try:
+                        action = simulate_feedback(vr.decision, stage_name, rng)
+                        await update_feedback_weight(
+                            runner.base_user_id, vr.event_id, action
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Feedback update failed for round %d, skipping",
+                            i + 1,
+                        )
 
-            snapshot = await _read_weights(runner.user_id)
+            snapshot = await _read_weights(runner.base_user_id)
             weight_history.append(
                 {"round": i + 1, "stage": stage_name, "weights": snapshot}
             )

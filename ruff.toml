@@ -41,7 +41,6 @@ exclude = [".agents/**"]
     "C901",  # _execution_node 含多条安全规则分支，复杂度可接受
     "PLR0912",  # _execution_node 多条件分支——快捷指令/后处理/延迟/频次/正常路径
     "PLR0915",  # _execution_node + run_stream 语句多——安全关键路径不宜强行拆分
-    "PLW0603",  # 模块级消融标记 _ablation_disable_feedback 需 global
     "FBT001",  # setter 接受 bool 参数（消融实验标记）
 ]
 
@@ -56,6 +55,7 @@ exclude = [".agents/**"]
 ]
 "app/agents/probabilistic.py" = [
     "ANN401",  # infer_intent memory_store 为 duck-typing Any
+    "FBT001",  # setter 接受 bool 参数（消融实验标记）
 ]
 "experiments/ablation/scenario_synthesizer.py" = [
     "S311",  # random.Random 用于分层抽样复现种子，非安全场景
@@ -64,6 +64,8 @@ exclude = [".agents/**"]
 ]
 "experiments/ablation/cli.py" = [
     "T201",  # CLI 入口用 print 输出进度，非生产日志
+    "C901",  # main() 入口编排多组实验，复杂度可接受
+    "PLR2004",  # 元组长度检查等魔法数字在编排逻辑中可接受
 ]
 "experiments/ablation/judge.py" = [
     "S311",  # 确定性种子用于可复现实验（盲评 shuffle）
@@ -76,6 +78,8 @@ exclude = [".agents/**"]
 "experiments/ablation/architecture_group.py" = [
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
+    "BLE001",  # _score_one 捕获所有异常记录并返回空 dict，不重抛
+    "PLR2004",  # len(latencies) 比较魔法数字（1/2），延迟分析常见模式
 ]
 "experiments/ablation/metrics.py" = [
     "TC001",  # JudgeScores/VariantResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
@@ -88,6 +92,8 @@ exclude = [".agents/**"]
     "S311",  # random.Random 用于实验可复现种子，非安全场景
     "TC001",  # AblationRunner 仅用于类型注解
     "TC003",  # Path 用于类型注解及运行时操作
+    "BLE001",  # update_feedback_weight 失败记录日志后跳过，不中断实验
+    "C901",  # run_personalization_group 含 4 阶段 × 20 轮 × 2 变体编排，复杂度可接受
 ]
 
 "app/memory/memory_bank/lifecycle.py" = [

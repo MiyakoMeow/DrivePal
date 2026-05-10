@@ -1,11 +1,33 @@
-"""概率推断模块：意图不确定性 + 打断风险评估。"""
+"""概率推断模块：意图不确定性 + 打断风险评估。
 
+PROBABILISTIC_INFERENCE_ENABLED 环境变量仅在模块导入时读取一次，
+用于初始化 _probabilistic_enabled ContextVar 的默认值。
+运行时如需切换状态必须通过 set_probabilistic_enabled() 显式调用。
+"""
+
+import contextvars
 import logging
 import os
 from collections import defaultdict
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_probabilistic_enabled: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_probabilistic_enabled",
+    default=os.environ.get("PROBABILISTIC_INFERENCE_ENABLED", "1") != "0",
+)
+
+
+def set_probabilistic_enabled(v: bool) -> None:
+    """消融实验用：在当前 task 的 Context 中设值。"""
+    _probabilistic_enabled.set(v)
+
+
+def get_probabilistic_enabled() -> bool:
+    """读取概率推断启用状态（当前 Context 的值）。"""
+    return _probabilistic_enabled.get()
+
 
 _WORKLOAD_MAP = {"low": 0.1, "normal": 0.3, "high": 0.6, "overloaded": 0.9}
 _SCENARIO_MAP = {"parked": 0.0, "city_driving": 0.4, "traffic_jam": 0.3, "highway": 0.7}
@@ -27,8 +49,8 @@ def _speed_factor(speed_kmh: float) -> float:
 
 
 def is_enabled() -> bool:
-    """检查概率推断是否启用（环境变量 PROBABILISTIC_INFERENCE_ENABLED，默认开启）。"""
-    return os.environ.get("PROBABILISTIC_INFERENCE_ENABLED", "1") != "0"
+    """检查概率推断是否启用。默认从环境变量 PROBABILISTIC_INFERENCE_ENABLED 读取，消融实验可通过 set_probabilistic_enabled() 覆盖。"""
+    return _probabilistic_enabled.get()
 
 
 def aggregate_type_confidences(results: list) -> list[tuple[str, float]]:
