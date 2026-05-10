@@ -281,9 +281,12 @@ async def _run_and_summarize(
 
     # 持久化 Judge 详细评分
     if result.judge_scores:
-        await write_scores_json(
-            run_dir / group / "scores.json", result.judge_scores
-        )
+        try:
+            await write_scores_json(
+                run_dir / group / "scores.json", result.judge_scores
+            )
+        except OSError:
+            logger.exception("Failed to write scores for group '%s'", group)
 
     step_path = run_dir / group / "step-summary.json"
     await write_step_summary(step_path, result, duration_seconds=elapsed)
@@ -296,92 +299,98 @@ async def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir)
+    old_seed = os.environ.get("ABLATION_SEED")
     os.environ["ABLATION_SEED"] = str(args.seed)
-
-    groups_to_run = (
-        ["safety", "architecture", "personalization"]
-        if args.group == "all"
-        else [args.group]
-    )
-
-    if args.synthesize_only:
-        n = await synthesize_scenarios(data_dir / "scenarios.jsonl")
-        print(f"合成完成: {n} 场景")
-        return
-
-    if args.judge_only:
-        run_dir: Path
-        if args.run_id:
-            run_dir = data_dir / "runs" / args.run_id
-            if not run_dir.is_dir():
-                print(f"运行目录不存在: {run_dir}")
-                return
-        else:
-            latest = _find_latest_run(data_dir / "runs")
-            if latest is None:
-                print("无已有运行，请先运行实验")
-                return
-            run_dir = latest
-        await _judge_only(run_dir, data_dir, groups=groups_to_run)
-        return
-
-    all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
-    if not all_scenarios:
-        print("无场景数据，请先运行 --synthesize-only")
-        return
-
-    run_id = args.run_id or (
-        datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S_%f") + f"_{args.seed}"
-    )
-    run_dir = data_dir / "runs" / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    await write_config(run_dir / "config.json", args)
-
-    all_group_results: dict[str, GroupResult] = {}
-    failures: list[str] = []
-
-    concurrent_groups = [g for g in groups_to_run if g != "personalization"]
-    serial_group = "personalization" if "personalization" in groups_to_run else None
-
-    if concurrent_groups:
-        tasks = [
-            asyncio.create_task(
-                _run_and_summarize(g, all_scenarios, args.seed, run_dir)
-            )
-            for g in concurrent_groups
-        ]
-        for r in await asyncio.gather(*tasks, return_exceptions=True):
-            if isinstance(r, Exception):
-                logger.error("Group experiment failed: %s", r)
-                failures.append(str(r))
-            elif isinstance(r, tuple):
-                all_group_results[r[0]] = r[1]
-
-        if failures:
-            logger.error(
-                "Incomplete results: %d concurrent group(s) failed — %s",
-                len(failures),
-                "; ".join(failures),
-            )
-
-    if serial_group:
-        try:
-            grp_name, grp_result = await _run_and_summarize(
-                serial_group, all_scenarios, args.seed, run_dir
-            )
-            all_group_results[grp_name] = grp_result
-        except Exception:
-            logger.exception("Serial group '%s' failed", serial_group)
-            failures.append(f"serial:{serial_group}")
-
-    await render_report(all_group_results, run_dir)
-
-    print(f"\n=== 全部完成 [{run_id}] ===")
-    for g, gr in all_group_results.items():
-        print(
-            f"  {g}: {len(gr.variant_results)} results, {len(gr.judge_scores)} scores"
+    try:
+        groups_to_run = (
+            ["safety", "architecture", "personalization"]
+            if args.group == "all"
+            else [args.group]
         )
 
-    if failures:
-        sys.exit(1)
+        if args.synthesize_only:
+            n = await synthesize_scenarios(data_dir / "scenarios.jsonl")
+            print(f"合成完成: {n} 场景")
+            return
+
+        if args.judge_only:
+            run_dir: Path
+            if args.run_id:
+                run_dir = data_dir / "runs" / args.run_id
+                if not run_dir.is_dir():
+                    print(f"运行目录不存在: {run_dir}")
+                    return
+            else:
+                latest = _find_latest_run(data_dir / "runs")
+                if latest is None:
+                    print("无已有运行，请先运行实验")
+                    return
+                run_dir = latest
+            await _judge_only(run_dir, data_dir, groups=groups_to_run)
+            return
+
+        all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
+        if not all_scenarios:
+            print("无场景数据，请先运行 --synthesize-only")
+            return
+
+        run_id = args.run_id or (
+            datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S_%f") + f"_{args.seed}"
+        )
+        run_dir = data_dir / "runs" / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        await write_config(run_dir / "config.json", args)
+
+        all_group_results: dict[str, GroupResult] = {}
+        failures: list[str] = []
+
+        concurrent_groups = [g for g in groups_to_run if g != "personalization"]
+        serial_group = "personalization" if "personalization" in groups_to_run else None
+
+        if concurrent_groups:
+            tasks = [
+                asyncio.create_task(
+                    _run_and_summarize(g, all_scenarios, args.seed, run_dir)
+                )
+                for g in concurrent_groups
+            ]
+            for r in await asyncio.gather(*tasks, return_exceptions=True):
+                if isinstance(r, Exception):
+                    logger.error("Group experiment failed: %s", r)
+                    failures.append(str(r))
+                elif isinstance(r, tuple):
+                    all_group_results[r[0]] = r[1]
+
+            if failures:
+                logger.error(
+                    "Incomplete results: %d concurrent group(s) failed — %s",
+                    len(failures),
+                    "; ".join(failures),
+                )
+
+        if serial_group:
+            try:
+                grp_name, grp_result = await _run_and_summarize(
+                    serial_group, all_scenarios, args.seed, run_dir
+                )
+                all_group_results[grp_name] = grp_result
+            except Exception:
+                logger.exception("Serial group '%s' failed", serial_group)
+                failures.append(f"serial:{serial_group}")
+
+        await render_report(all_group_results, run_dir)
+
+        print(f"\n=== 全部完成 [{run_id}] ===")
+        for g, gr in all_group_results.items():
+            print(
+                f"  {g}: {len(gr.variant_results)} results, {len(gr.judge_scores)} scores"
+            )
+
+        if failures:
+            sys.exit(1)
+    finally:
+        if old_seed is None:
+            os.environ.pop("ABLATION_SEED", None)
+        else:
+            os.environ["ABLATION_SEED"] = old_seed

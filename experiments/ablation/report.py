@@ -21,5 +21,8 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
             "score_count": len(gr.judge_scores),
         }
     out_path = run_dir / "summary.json"
-    await write_json_atomic(out_path, summary)
-    logger.info("全局总结已写入: %s", out_path)
+    try:
+        await write_json_atomic(out_path, summary)
+        logger.info("全局总结已写入: %s", out_path)
+    except OSError:
+        logger.exception("Failed to write summary: %s", out_path)

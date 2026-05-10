@@ -39,6 +39,7 @@ async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
                 )
         tmp_path.replace(path)
     except OSError:
+        logger.exception("原子写 JSON 失败: %s", path)
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
         raise
