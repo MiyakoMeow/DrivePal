@@ -69,8 +69,53 @@ exclude = [".agents/**"]
     "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
     "PLR2004",  # parse_time 中 23/12/8 为时间解析域常量，定义命名常量反降低可读性
 ]
+"app/agents/rules.py" = [
+    "C901",  # postprocess_decision 含三约束分支+修改追踪，复杂度可接受
+]
 "app/agents/probabilistic.py" = [
     "ANN401",  # infer_intent memory_store 为 duck-typing Any
+]
+"experiments/ablation/scenario_synthesizer.py" = [
+    "S311",  # random.Random 用于分层抽样复现种子，非安全场景
+    "T201",  # _verify() 调试入口 print 合理
+    "TC003",  # Path 用于类型注解但实际运行时 path.open()/exists() 操作，ruff 误判
+]
+"experiments/ablation/cli.py" = [
+    "T201",  # CLI 入口用 print 输出进度，非生产日志
+]
+"experiments/ablation/judge.py" = [
+    "S311",  # 确定性种子用于可复现实验（盲评 shuffle）
+]
+"experiments/ablation/ablation_runner.py" = [
+    "D102",  # Facade 委托方法由类级 docstring 阐明语义
+    "D107",  # __init__ 由类级 docstring 阐明语义
+    "PERF401",  # run_batch 笛卡尔积 for-loop 可读性优先
+]
+"experiments/ablation/safety_group.py" = [
+    "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
+    "PLR2004",  # safety_score >= 4 魔术数语义自明（安全合规阈值）
+]
+"experiments/ablation/architecture_group.py" = [
+    "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
+    "PLR2004",  # 疲劳阈值 0.7 与 FATIGUE_THRESHOLD 环境变量对齐，语义自明
+]
+"experiments/ablation/metrics.py" = [
+    "TC001",  # JudgeScores/VariantResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "ARG001",  # results 保留——GroupRunner 接口兼容
+]
+"experiments/ablation/report.py" = [
+    "TC001",  # GroupResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "TC003",  # Path 用于类型注解及运行时 mkdir()/Path.open() 操作，ruff 误判
+]
+"experiments/ablation/personalization_group.py" = [
+    "S311",  # random.Random 用于实验可复现种子，非安全场景
+    "TC001",  # AblationRunner 仅用于类型注解
+    "TC003",  # Path 用于类型注解及运行时操作
+    "ARG001",  # output_path 保留——GroupRunner 接口兼容
+    "PLR2004",  # 模拟反馈概率 0.5 魔术数语义自明
+    "D103",  # simulate_feedback/update_feedback_weight 由模块级 docstring 阐明语义
 ]
 "app/memory/memory_bank/index_reader.py" = [
     "D102",  # Protocol 桩方法由类级 docstring 阐明语义

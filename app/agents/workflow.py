@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import os
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -338,7 +339,16 @@ class AgentWorkflow:
                 logger.warning("Probabilistic inference failed: %s", e)
 
         # 反馈权重注入
-        weights = strategies.get("reminder_weights", {})
+        if os.getenv("ABLATION_DISABLE_FEEDBACK") == "1":
+            weights = {
+                "meeting": 0.5,
+                "travel": 0.5,
+                "shopping": 0.5,
+                "contact": 0.5,
+                "other": 0.5,
+            }
+        else:
+            weights = strategies.get("reminder_weights", {})
         weights_block = ""
         if weights:
             weights_block = (
@@ -420,8 +430,9 @@ class AgentWorkflow:
 
         # 规则硬约束：LLM 决策后强制覆盖，不可绕过
         driving_ctx = state.get("driving_context")
+        modifications: list[str] = []
         if driving_ctx:
-            decision = postprocess_decision(decision, driving_ctx)
+            decision, modifications = postprocess_decision(decision, driving_ctx)
 
         # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
         if not decision.get("should_remind", True):
@@ -431,6 +442,7 @@ class AgentWorkflow:
                     "content": None,
                     "event_id": None,
                     "result": result,
+                    "modifications": modifications,
                 }
             return {"result": result, "event_id": None}
 
@@ -499,6 +511,7 @@ class AgentWorkflow:
                     "event_id": None,
                     "result": result,
                     "pending_reminder_ids": pending_ids,
+                    "modifications": modifications,
                 }
             return {
                 "result": result,
@@ -515,6 +528,7 @@ class AgentWorkflow:
                     "content": None,
                     "event_id": None,
                     "result": freq_msg,
+                    "modifications": modifications,
                 }
             return {"result": freq_msg, "event_id": None}
 
@@ -555,6 +569,7 @@ class AgentWorkflow:
                 "event_id": event_id,
                 "result": result,
                 "output": output_content.model_dump(),
+                "modifications": modifications,
             }
         return {
             "result": result,
@@ -586,7 +601,7 @@ class AgentWorkflow:
         shortcut_decision = self._shortcuts.resolve(user_input)
         if shortcut_decision:
             if driving_context:
-                shortcut_decision = postprocess_decision(
+                shortcut_decision, _modifications = postprocess_decision(
                     shortcut_decision, driving_context
                 )
             state["decision"] = shortcut_decision
@@ -650,7 +665,7 @@ class AgentWorkflow:
         shortcut_decision = self._shortcuts.resolve(user_input)
         if shortcut_decision:
             if driving_context:
-                shortcut_decision = postprocess_decision(
+                shortcut_decision, _modifications = postprocess_decision(
                     shortcut_decision, driving_context
                 )
             state["decision"] = shortcut_decision

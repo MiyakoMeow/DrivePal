@@ -206,9 +206,10 @@ class TestPostprocessDecision:
             "reminder_content": "提醒事项",
             "allowed_channels": ["visual", "audio"],
         }
-        result = postprocess_decision(decision, ctx)
+        result, modifications = postprocess_decision(decision, ctx)
         assert result["should_remind"] is False
         assert result["reminder_content"] == ""
+        assert modifications
 
     def test_allowed_channels_filtered(self) -> None:
         """allowed_channels 被安全规则过滤."""
@@ -221,8 +222,9 @@ class TestPostprocessDecision:
             "reminder_content": "前方出口",
             "allowed_channels": ["visual", "audio", "detailed"],
         }
-        result = postprocess_decision(decision, ctx)
+        result, modifications = postprocess_decision(decision, ctx)
         assert result["allowed_channels"] == ["audio"]
+        assert modifications
 
     def test_only_urgent_blocks_non_urgent(self) -> None:
         """only_urgent=True 且 type=general → should_remind=false."""
@@ -235,8 +237,9 @@ class TestPostprocessDecision:
             "reminder_content": "普通提醒",
             "type": "general",
         }
-        result = postprocess_decision(decision, ctx)
+        result, modifications = postprocess_decision(decision, ctx)
         assert result["should_remind"] is False
+        assert modifications
 
     def test_only_urgent_allows_urgent_types(self) -> None:
         """only_urgent=True 但 type=warning → 正常通过."""
@@ -249,8 +252,9 @@ class TestPostprocessDecision:
             "reminder_content": "油量不足",
             "type": "warning",
         }
-        result = postprocess_decision(decision, ctx)
+        result, modifications = postprocess_decision(decision, ctx)
         assert result["should_remind"] is True
+        assert modifications == []
 
 
 # ---- 新增：数据驱动规则测试 ----
