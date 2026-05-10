@@ -155,7 +155,7 @@ class MemoryBankStore:
         if now - self._last_save_time >= self._config.save_interval_seconds:
             await self._index.save()
             self._last_save_time = now
-        self._save_source_index()
+            self._save_source_index()  # 仅 FAISS 落盘时同步持久化
 
     # ── 委托方法 ──
 

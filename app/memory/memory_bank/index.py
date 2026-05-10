@@ -107,6 +107,8 @@ class FaissIndex:
                     quantizer, self._dim, self._ivf_nlist, faiss.METRIC_INNER_PRODUCT
                 )
             )
+            # 注意：IVF 需训练后才能调用 add_with_ids。当前默认 index_type="flat"，
+            # IVF 为预留接口，完整训练逻辑待后续实现。
             self._needs_train = True
         else:
             self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
