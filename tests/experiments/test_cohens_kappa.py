@@ -30,3 +30,15 @@ def test_empty_input_kappa_is_0():
     """给定空输入，当计算 κ，则应返回 0.0（无有效样本无法评估一致性）。"""
     kappa = compute_cohens_kappa([], {})
     assert kappa == 0.0
+
+
+def test_median_aggregation_used_for_kappa():
+    """给定同场景多次评分（3,4,5），当取中位数后计算 κ，则应与人工标注 4 完全一致。"""
+    judge = [
+        JudgeScores("s1", Variant.FULL, 5, 5, 3, [], ""),
+        JudgeScores("s1", Variant.FULL, 5, 5, 4, [], ""),
+        JudgeScores("s1", Variant.FULL, 5, 5, 5, [], ""),
+    ]
+    human = {"s1": {"overall_score": 4}}
+    kappa = compute_cohens_kappa(judge, human)
+    assert kappa == 1.0

@@ -173,7 +173,7 @@ async def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
     """读取 JSONL 中已完成的 (scenario_id, variant) 对。"""
     existing: set[tuple[str, str]] = set()
     try:
-        async with aiofiles.open(path) as f:
+        async with aiofiles.open(path, encoding="utf-8") as f:
             async for line in f:
                 stripped = line.strip()
                 if not stripped:
@@ -203,5 +203,5 @@ async def _append_checkpoint(
     }
     if include_modifications:
         record["modifications"] = vr.modifications
-    async with aiofiles.open(path, "a") as f:
+    async with aiofiles.open(path, "a", encoding="utf-8") as f:
         await f.write(json.dumps(record, ensure_ascii=False) + "\n")
