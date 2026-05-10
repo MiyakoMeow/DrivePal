@@ -15,7 +15,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from app.agents.prompts import SINGLE_LLM_SYSTEM_PROMPT
-from app.agents.workflow import AgentWorkflow
+from app.agents.rules import set_ablation_disable_rules
+from app.agents.workflow import AgentWorkflow, set_ablation_disable_feedback
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
@@ -25,8 +26,6 @@ from .types import Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
 
-ABLATION_DISABLE_RULES = "ABLATION_DISABLE_RULES"
-ABLATION_DISABLE_FEEDBACK = "ABLATION_DISABLE_FEEDBACK"
 PROBABILISTIC_INFERENCE_ENABLED = "PROBABILISTIC_INFERENCE_ENABLED"
 
 
@@ -61,17 +60,21 @@ class AblationRunner:
         t0 = time.perf_counter()
 
         if variant == Variant.NO_RULES:
-            self._set_env(ABLATION_DISABLE_RULES="1")
+            set_ablation_disable_rules(True)
         elif variant == Variant.NO_PROB:
             self._set_env(PROBABILISTIC_INFERENCE_ENABLED="0")
         elif variant == Variant.NO_FEEDBACK:
-            self._set_env(ABLATION_DISABLE_FEEDBACK="1")
+            set_ablation_disable_feedback(True)
 
         try:
             if variant == Variant.SINGLE_LLM:
                 return await self._run_single_llm(scenario, t0)
             return await self._run_agent_workflow(scenario, variant, t0)
         finally:
+            if variant == Variant.NO_RULES:
+                set_ablation_disable_rules(False)
+            elif variant == Variant.NO_FEEDBACK:
+                set_ablation_disable_feedback(False)
             self._restore_env()
 
     async def _run_agent_workflow(

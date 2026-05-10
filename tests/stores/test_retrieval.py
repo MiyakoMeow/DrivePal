@@ -190,14 +190,14 @@ def test_update_memory_strength_refreshes_recall_date():
     results = [
         {"_meta_idx": 0, "_all_meta_indices": [0], "score": 0.9},
     ]
-    updated = _update_memory_strengths(results, meta)
+    updated = _update_memory_strengths(results, meta, config=MemoryBankConfig())
     assert updated
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     assert meta[0]["last_recall_date"] == today
 
 
-def test_memory_strength_no_cap():
-    """验证记忆强度可以超过 10（原版行为）。"""
+def test_memory_strength_capped():
+    """验证记忆强度受 max_memory_strength 上限约束。"""
     meta = [
         {
             "faiss_id": 0,
@@ -210,13 +210,14 @@ def test_memory_strength_no_cap():
     results = [
         {"_meta_idx": 0, "score": 1.0, "_merged_indices": [0]},
     ]
-    _update_memory_strengths(results, meta)
-    assert meta[0]["memory_strength"] == 10.5, (
-        f"expected 10.5, got {meta[0]['memory_strength']}"
+    config = MemoryBankConfig(max_memory_strength=10)
+    _update_memory_strengths(results, meta, config=config)
+    assert meta[0]["memory_strength"] == 10.0, (
+        f"expected 10.0 (capped), got {meta[0]['memory_strength']}"
     )
-    _update_memory_strengths(results, meta)
-    assert meta[0]["memory_strength"] == 11.5, (
-        f"expected 11.5, got {meta[0]['memory_strength']}"
+    _update_memory_strengths(results, meta, config=config)
+    assert meta[0]["memory_strength"] == 10.0, (
+        f"expected 10.0 (still capped), got {meta[0]['memory_strength']}"
     )
 
 

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import tomli_w
 
-from app.models.chat import ChatModel
+from app.models.chat import ChatModel, clear_semaphore_cache
 from app.models.embedding import EmbeddingModel
 from app.models.settings import (
     EmbeddingProviderConfig,
@@ -234,6 +234,13 @@ class TestLLMSettingsLoad:
 class TestChatModelFallback:
     """ChatModel 多提供者回退行为测试."""
 
+    @pytest.fixture(autouse=True)
+    def _clean_cache(self):
+        """每个测试前后清理客户端缓存."""
+        clear_semaphore_cache()
+        yield
+        clear_semaphore_cache()
+
     async def test_generate_with_single_provider(self) -> None:
         """验证单个提供者成功生成."""
         providers = [
@@ -249,10 +256,11 @@ class TestChatModelFallback:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "response"
-        with patch.object(chat, "_create_client") as mock_create:
-            mock_client = _mock_async_client()
-            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-            mock_create.return_value = mock_client
+        mock_client = _mock_async_client()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        with patch(
+            "app.models.chat._get_cached_client", AsyncMock(return_value=mock_client)
+        ):
             result = await chat.generate("hello")
         assert result == "response"
 
@@ -293,7 +301,7 @@ class TestChatModelFallback:
             client.chat.completions.create = AsyncMock(return_value=mock_response)
             return client
 
-        with patch.object(chat, "_create_client", side_effect=mock_create):
+        with patch("app.models.chat._get_cached_client", side_effect=mock_create):
             result = await chat.generate("hello")
         assert result == "fallback response"
         assert call_count == CALL_COUNT_2
@@ -323,7 +331,10 @@ class TestChatModelFallback:
         )
 
         with (
-            patch.object(chat, "_create_client", return_value=mock_client),
+            patch(
+                "app.models.chat._get_cached_client",
+                AsyncMock(return_value=mock_client),
+            ),
             pytest.raises(RuntimeError, match="All LLM providers failed"),
         ):
             await chat.generate("hello")

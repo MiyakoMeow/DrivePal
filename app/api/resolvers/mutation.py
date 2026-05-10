@@ -235,10 +235,12 @@ class Mutation:
         u_dir = user_data_dir(current_user)
         files: dict[str, str] = {}
         if u_dir.exists():
+            allowed_suffixes = (".jsonl", ".toml", ".json")
+            # 排除 memorybank/ 目录：FAISS 二进制索引文件不可作文本导入
             for fpath in u_dir.rglob("*"):
-                if "memorybank" in fpath.parts:
-                    continue  # 跳过 FAISS 二进制和内部元数据
-                if fpath.is_file() and fpath.suffix in (".jsonl", ".toml", ".json"):
+                if "memorybank" in fpath.parts or fpath.suffix not in allowed_suffixes:
+                    continue
+                if fpath.is_file():
                     try:
                         content = fpath.read_text(encoding="utf-8")
                     except UnicodeDecodeError:

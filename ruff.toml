@@ -41,6 +41,8 @@ exclude = [".agents/**"]
     "C901",  # _execution_node 含多条安全规则分支，复杂度可接受
     "PLR0912",  # _execution_node 多条件分支——快捷指令/后处理/延迟/频次/正常路径
     "PLR0915",  # _execution_node + run_stream 语句多——安全关键路径不宜强行拆分
+    "PLW0603",  # 模块级消融标记 _ablation_disable_feedback 需 global
+    "FBT001",  # setter 接受 bool 参数（消融实验标记）
 ]
 
 
@@ -49,6 +51,8 @@ exclude = [".agents/**"]
 ]
 "app/agents/rules.py" = [
     "C901",  # postprocess_decision 含三约束分支+修改追踪，复杂度可接受
+    "PLW0603",  # 模块级缓存（fatigue_threshold/ablation标志）需 global
+    "FBT001",  # setter 接受 bool 参数（消融实验标记）
 ]
 "app/agents/probabilistic.py" = [
     "ANN401",  # infer_intent memory_store 为 duck-typing Any

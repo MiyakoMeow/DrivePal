@@ -1,6 +1,8 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
 import asyncio
+import contextlib
+import hashlib
 from functools import cache
 from typing import TYPE_CHECKING
 
@@ -16,12 +18,61 @@ from app.models.settings import (
 from app.models.types import ProviderConfig
 
 _semaphore_cache: dict[str, asyncio.Semaphore] = {}
+_client_cache: dict[tuple[str, str], openai.AsyncOpenAI] = {}
+
+
+@cache
+def _get_client_cache_lock() -> asyncio.Lock:
+    """获取或创建客户端缓存锁."""
+    return asyncio.Lock()
+
+
+def _make_client(provider: LLMProviderConfig) -> openai.AsyncOpenAI:
+    """创建 openai 异步客户端（模块级工厂函数）。"""
+    kwargs: dict = {
+        "api_key": provider.provider.api_key or "not-needed",
+        "timeout": _CLIENT_TIMEOUT,
+    }
+    if provider.provider.base_url:
+        kwargs["base_url"] = provider.provider.base_url
+    return openai.AsyncOpenAI(**kwargs)
+
+
+async def _get_cached_client(
+    provider: LLMProviderConfig,
+) -> openai.AsyncOpenAI:
+    """获取或创建缓存的 AsyncOpenAI 客户端，按 (base_url, api_key) 去重。"""
+    cache_key = (
+        provider.provider.base_url or "",
+        hashlib.sha256((provider.provider.api_key or "").encode()).hexdigest(),
+    )
+    async with _get_client_cache_lock():
+        if cache_key not in _client_cache:
+            _client_cache[cache_key] = _make_client(provider)
+        return _client_cache[cache_key]
+
+
+async def close_client_cache() -> None:
+    """关闭所有缓存的客户端（lifespan 关闭时调用）。"""
+    async with _get_client_cache_lock():
+        clients = list(_client_cache.values())
+        _client_cache.clear()
+    for client in clients:
+        with contextlib.suppress(Exception):
+            await client.close()
 
 
 def clear_semaphore_cache() -> None:
-    """清理 provider semaphore 缓存和锁缓存（供测试使用）。"""
+    """清理 provider semaphore 缓存和客户端缓存（供测试使用）。
+
+    注意：此函数不关闭缓存的 AsyncOpenAI 客户端。
+    测试应在 teardown 中使用 close_client_cache() 清理连接，
+    然后调用此函数重置缓存状态。
+    """
     _semaphore_cache.clear()
+    _client_cache.clear()
     _get_lock.cache_clear()
+    _get_client_cache_lock.cache_clear()
 
 
 class ChatError(RuntimeError):
@@ -91,19 +142,6 @@ class ChatModel:
         self.providers = providers
         self.temperature = temperature
 
-    def _create_client(
-        self,
-        provider: LLMProviderConfig,
-    ) -> openai.AsyncOpenAI:
-        """创建openai异步客户端."""
-        kwargs: dict = {
-            "api_key": provider.provider.api_key or "not-needed",
-            "timeout": _CLIENT_TIMEOUT,
-        }
-        if provider.provider.base_url:
-            kwargs["base_url"] = provider.provider.base_url
-        return openai.AsyncOpenAI(**kwargs)
-
     def _build_messages(
         self,
         prompt: str,
@@ -142,7 +180,8 @@ class ChatModel:
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
             try:
-                async with sem, self._create_client(provider) as client:
+                async with sem:
+                    client = await _get_cached_client(provider)
                     create_kwargs: dict = {
                         "model": provider.provider.model,
                         "messages": messages,
@@ -172,7 +211,8 @@ class ChatModel:
         for provider in self.providers:
             sem = await self._acquire_slot(provider)
             try:
-                async with sem, self._create_client(provider) as client:
+                async with sem:
+                    client = await _get_cached_client(provider)
                     stream = await client.chat.completions.create(
                         model=provider.provider.model,
                         messages=messages,

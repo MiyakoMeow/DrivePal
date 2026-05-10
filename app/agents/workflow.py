@@ -30,6 +30,17 @@ from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
 
+_ablation_disable_feedback: bool = bool(
+    int(os.getenv("ABLATION_DISABLE_FEEDBACK", "0"))
+)
+
+
+def set_ablation_disable_feedback(v: bool) -> None:
+    """设置消融实验标记：禁用反馈权重。"""
+    global _ablation_disable_feedback
+    _ablation_disable_feedback = v
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -339,7 +350,7 @@ class AgentWorkflow:
                 logger.warning("Probabilistic inference failed: %s", e)
 
         # 反馈权重注入
-        if os.getenv("ABLATION_DISABLE_FEEDBACK") == "1":
+        if _ablation_disable_feedback:
             weights = {
                 "meeting": 0.5,
                 "travel": 0.5,

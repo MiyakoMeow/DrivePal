@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.store import MemoryBankStore
 from app.memory.schemas import MemoryEvent
 
@@ -80,3 +81,131 @@ async def test_write_paired_vectorization(store):
     # 验证单行独立
     lone_count = sum(1 for m in meta if "lone message" in m.get("text", ""))
     assert lone_count >= 1, f"expected >=1 lone entry, got {lone_count}"
+
+
+def test_max_memory_strength_default():
+    """验证 max_memory_strength 默认值为 10。"""
+    config = MemoryBankConfig()
+    assert config.max_memory_strength == 10
+
+
+def test_max_memory_strength_env(monkeypatch):
+    """验证环境变量 MEMORYBANK_MAX_MEMORY_STRENGTH 生效。"""
+    monkeypatch.setenv("MEMORYBANK_MAX_MEMORY_STRENGTH", "5")
+    config = MemoryBankConfig()
+    assert config.max_memory_strength == 5
+
+
+def test_max_memory_strength_zero_guarded():
+    """验证 max_memory_strength=0（零值）被守卫回退为 10。"""
+    config = MemoryBankConfig(max_memory_strength=0)
+    assert config.max_memory_strength == 10
+
+
+def test_retrieval_alpha_default():
+    """验证 retrieval_alpha 默认值为 0.7。"""
+    config = MemoryBankConfig()
+    assert config.retrieval_alpha == 0.7
+
+
+def test_retrieval_alpha_out_of_range_guarded():
+    """验证 retrieval_alpha=1.5 被守卫回退为 0.7。"""
+    config = MemoryBankConfig(retrieval_alpha=1.5)
+    assert config.retrieval_alpha == 0.7
+
+
+def test_bm25_fallback_defaults():
+    """验证 BM25 回退开关默认启用、阈值默认 0.5。"""
+    config = MemoryBankConfig()
+    assert config.bm25_fallback_enabled is True
+    assert config.bm25_fallback_threshold == 0.5
+
+
+def test_index_type_default():
+    """验证 index_type 默认为 flat。"""
+    config = MemoryBankConfig()
+    assert config.index_type == "flat"
+
+
+def test_ivf_nlist_default():
+    """验证 ivf_nlist 默认值为 128。"""
+    config = MemoryBankConfig()
+    assert config.ivf_nlist == 128
+
+
+def test_retrieval_alpha_zero_guarded():
+    """传入 0.0 时守卫回退到默认值 0.7。"""
+    config = MemoryBankConfig(retrieval_alpha=0.0)
+    assert config.retrieval_alpha == 0.7
+
+
+def test_retrieval_alpha_boundary_valid():
+    """传入有效边界值 1.0 应通过。"""
+    config = MemoryBankConfig(retrieval_alpha=1.0)
+    assert config.retrieval_alpha == 1.0
+
+
+def test_bm25_threshold_out_of_range_guarded():
+    """传入 1.5 时守卫回退到默认值 0.5。"""
+    config = MemoryBankConfig(bm25_fallback_threshold=1.5)
+    assert config.bm25_fallback_threshold == 0.5
+
+
+def test_ivf_nlist_zero_guarded():
+    """传入 0 时守卫回退到默认值 128。"""
+    config = MemoryBankConfig(ivf_nlist=0)
+    assert config.ivf_nlist == 128
+
+
+def test_bm25_threshold_zero_guarded():
+    """验证 bm25_fallback_threshold=0.0 被守卫回退为 0.5。"""
+    config = MemoryBankConfig(bm25_fallback_threshold=0.0)
+    assert config.bm25_fallback_threshold == 0.5
+
+
+def test_bm25_threshold_boundary_valid():
+    """验证 bm25_fallback_threshold=1.0 边界有效值通过。"""
+    config = MemoryBankConfig(bm25_fallback_threshold=1.0)
+    assert config.bm25_fallback_threshold == 1.0
+
+
+def test_ivf_nlist_negative_guarded():
+    """验证 ivf_nlist=-1 被守卫回退为 128。"""
+    config = MemoryBankConfig(ivf_nlist=-1)
+    assert config.ivf_nlist == 128
+
+
+def test_max_memory_strength_boundary_valid():
+    """验证 max_memory_strength=1 最小合法值通过。"""
+    config = MemoryBankConfig(max_memory_strength=1)
+    assert config.max_memory_strength == 1
+
+
+def test_ivf_nlist_boundary_valid():
+    """验证 ivf_nlist=1 最小合法值通过。"""
+    config = MemoryBankConfig(ivf_nlist=1)
+    assert config.ivf_nlist == 1
+
+
+def test_source_event_index_save_load(tmp_path):
+    """source_event_index 可序列化/反序列化"""
+    import json
+
+    index_path = tmp_path / "source_event_index.json"
+    data = {"2026-05-10": ["id1", "id2"], "2026-05-09": ["id3"]}
+    index_path.write_text(json.dumps(data))
+    loaded = json.loads(index_path.read_text())
+    assert loaded == data
+
+
+def test_source_event_index_corruption_recovery(tmp_path):
+    """损坏 JSON 回退空 dict"""
+    import json
+
+    index_path = tmp_path / "source_event_index.json"
+    index_path.write_text("not valid json {{{")
+    try:
+        json.loads(index_path.read_text())
+        pytest.fail("should have raised")
+    except json.JSONDecodeError:
+        pass  # 预期

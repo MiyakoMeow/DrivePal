@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from .index import FaissIndex
 
@@ -33,6 +35,65 @@ class MemoryBankConfig(BaseSettings):
     chunk_size_max: int = 8192
     coarse_search_factor: int = 4
     embedding_min_similarity: float = 0.3
+
+    # ── 记忆强度上限，防止无限回忆强化导致旧条目永不遗忘 ──
+    max_memory_strength: int = 10
+
+    @field_validator("max_memory_strength")
+    @classmethod
+    def _guard_max_memory_strength_positive(cls, v: int) -> int:
+        if v < 1:
+            logger.warning("max_memory_strength=%r < 1, falling back to 10", v)
+            return 10
+        return v
+
+    # ── 检索加权公式 α 系数（语义相似度 vs 记忆留存率权衡）──
+    retrieval_alpha: float = 0.7
+
+    @field_validator("retrieval_alpha")
+    @classmethod
+    def _guard_retrieval_alpha_range(cls, v: float) -> float:
+        if not (0.0 < v <= 1.0):
+            logger.warning(
+                "retrieval_alpha=%r out of range (0,1], falling back to 0.7", v
+            )
+            return 0.7
+        return v
+
+    # ── BM25 稀疏检索回退——FAISS 密集检索失效时的兜底 ──
+    bm25_fallback_enabled: bool = True
+    bm25_fallback_threshold: float = 0.5
+
+    @field_validator("bm25_fallback_threshold")
+    @classmethod
+    def _guard_bm25_threshold_range(cls, v: float) -> float:
+        if not (0.0 < v <= 1.0):
+            logger.warning(
+                "bm25_fallback_threshold=%r out of range (0,1], falling back to 0.5",
+                v,
+            )
+            return 0.5
+        return v
+
+    # ── FAISS 索引类型选择：flat 精确检索 / ivf_flat 近似检索 ──
+    index_type: Literal["flat", "ivf_flat"] = "flat"
+    ivf_nlist: int = 128
+
+    @field_validator("index_type")
+    @classmethod
+    def _guard_index_type_not_ivf(cls, v: str) -> str:
+        if v == "ivf_flat":
+            logger.warning("index_type=%r not yet supported, falling back to 'flat'", v)
+            return "flat"
+        return v
+
+    @field_validator("ivf_nlist")
+    @classmethod
+    def _guard_ivf_nlist_positive(cls, v: int) -> int:
+        if v < 1:
+            logger.warning("ivf_nlist=%r < 1, falling back to 128", v)
+            return 128
+        return v
 
     @field_validator("coarse_search_factor")
     @classmethod
