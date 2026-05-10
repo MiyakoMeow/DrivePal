@@ -51,6 +51,7 @@ class LLMProviderConfig:
     provider: ProviderConfig
     temperature: float = 0.7
     concurrency: int = 4
+    extra_params: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> LLMProviderConfig:
@@ -262,6 +263,10 @@ def _build_provider_config_from_ref(
     else:
         api_key = provider_config.get("api_key")
     concurrency = provider_config.get("concurrency", 4)
+
+    known_params: set[str] = {"temperature"}
+    extra_params = {k: v for k, v in resolved.params.items() if k not in known_params}
+
     return LLMProviderConfig(
         provider=ProviderConfig(
             model=resolved.model_name,
@@ -270,6 +275,7 @@ def _build_provider_config_from_ref(
         ),
         temperature=resolved.params.get("temperature", 0.7),
         concurrency=concurrency,
+        extra_params=extra_params,
     )
 
 

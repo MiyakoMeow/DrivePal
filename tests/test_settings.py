@@ -1,6 +1,6 @@
 """模型设置加载器测试."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -362,6 +362,205 @@ class TestEmbeddingModelFallback:
         emb._client = mock_client
         result = await emb.encode("test")
         assert result == [0.1, 0.2, 0.3]
+
+
+class TestDeepSeekThinkingMode:
+    """DeepSeek thinking mode 参数转发测试."""
+
+    @staticmethod
+    def _make_provider(
+        extra_params: dict[str, Any] | None = None,
+    ) -> LLMProviderConfig:
+        """创建含 extra_params 的 LLMProviderConfig."""
+        return LLMProviderConfig(
+            provider=ProviderConfig(
+                model="deepseek-chat",
+                base_url="https://api.deepseek.com/v1",
+                api_key="sk-test",
+            ),
+            extra_params=extra_params or {},
+        )
+
+    def test_merge_api_kwargs_from_provider(self) -> None:
+        """验证 reasoning_effort 从 provider extra_params 转发."""
+        provider = self._make_provider({"reasoning_effort": "high"})
+        result = ChatModel._merge_api_kwargs(provider, {})
+        assert result["reasoning_effort"] == "high"
+
+    def test_merge_api_kwargs_caller_overrides(self) -> None:
+        """验证调用方 kwargs 优先级高于 provider extra_params."""
+        provider = self._make_provider({"reasoning_effort": "low"})
+        result = ChatModel._merge_api_kwargs(provider, {"reasoning_effort": "high"})
+        assert result["reasoning_effort"] == "high"
+
+    def test_merge_api_kwargs_auto_inject_thinking(self) -> None:
+        """验证 reasoning_effort 已设置时自动注入 extra_body thinking=enabled."""
+        provider = self._make_provider({"reasoning_effort": "high"})
+        result = ChatModel._merge_api_kwargs(provider, {})
+        assert result["reasoning_effort"] == "high"
+        assert result["extra_body"] == {"thinking": {"type": "enabled"}}
+
+    def test_merge_api_kwargs_preserves_existing_extra_body(self) -> None:
+        """验证已有 extra_body 时不被 thinking 覆盖."""
+        provider = self._make_provider(
+            {"reasoning_effort": "high", "extra_body": {"custom": "value"}},
+        )
+        result = ChatModel._merge_api_kwargs(provider, {})
+        assert result["extra_body"]["thinking"] == {"type": "enabled"}
+        assert result["extra_body"]["custom"] == "value"
+
+    def test_merge_api_kwargs_no_thinking_without_reasoning_effort(self) -> None:
+        """验证无 reasoning_effort 时不注入 thinking."""
+        provider = self._make_provider({})
+        result = ChatModel._merge_api_kwargs(provider, {})
+        assert "extra_body" not in result
+
+    def test_merge_api_kwargs_extra_body_from_caller(self) -> None:
+        """验证调用方可以传入自定义 extra_body."""
+        provider = self._make_provider({})
+        result = ChatModel._merge_api_kwargs(
+            provider,
+            {"extra_body": {"thinking": {"type": "disabled"}}},
+        )
+        assert result["extra_body"] == {"thinking": {"type": "disabled"}}
+
+    def test_merge_api_kwargs_unknown_params_ignored(self) -> None:
+        """验证 _EXTRA_API_PARAMS 之外的参数不转发."""
+        provider = self._make_provider({"temperature": 0.1, "foo": "bar"})
+        result = ChatModel._merge_api_kwargs(provider, {})
+        assert "temperature" not in result
+        assert "foo" not in result
+
+    async def test_generate_forwards_reasoning_effort(self) -> None:
+        """验证 generate() 将 reasoning_effort 传递给 API 调用."""
+        providers = [
+            LLMProviderConfig(
+                provider=ProviderConfig(
+                    model="deepseek-chat",
+                    base_url="https://api.deepseek.com/v1",
+                    api_key="sk-test",
+                ),
+                extra_params={"reasoning_effort": "high"},
+            ),
+        ]
+        chat = ChatModel(providers=providers)
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "reasoned answer"
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "app.models.chat._get_cached_client",
+            AsyncMock(return_value=mock_client),
+        ):
+            result = await chat.generate("test query")
+
+        assert result == "reasoned answer"
+        mock_client.chat.completions.create.assert_called_once()
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["reasoning_effort"] == "high"
+        assert call_kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+
+    async def test_generate_accepts_caller_reasoning_effort(self) -> None:
+        """验证调用方在 generate() 中传入 reasoning_effort 生效."""
+        providers = [
+            LLMProviderConfig(
+                provider=ProviderConfig(
+                    model="deepseek-chat",
+                    base_url="https://api.deepseek.com/v1",
+                    api_key="sk-test",
+                ),
+            ),
+        ]
+        chat = ChatModel(providers=providers)
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "answer"
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "app.models.chat._get_cached_client",
+            AsyncMock(return_value=mock_client),
+        ):
+            result = await chat.generate(
+                "test",
+                reasoning_effort="max",
+            )
+
+        assert result == "answer"
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["reasoning_effort"] == "max"
+        assert call_kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+
+    async def test_generate_without_thinking_normal(self) -> None:
+        """验证无 thinking 参数时行为不变."""
+        providers = [
+            LLMProviderConfig(
+                provider=ProviderConfig(
+                    model="test-model",
+                    base_url="http://fake:8000/v1",
+                    api_key="sk-test",
+                ),
+            ),
+        ]
+        chat = ChatModel(providers=providers)
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "normal answer"
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "app.models.chat._get_cached_client",
+            AsyncMock(return_value=mock_client),
+        ):
+            result = await chat.generate("hello")
+
+        assert result == "normal answer"
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "reasoning_effort" not in call_kwargs
+        assert "extra_body" not in call_kwargs
+
+    def test_extra_params_from_model_string(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """验证模型字符串中的 extra params 经 _build_provider_config_from_ref 正确解析."""
+        from app.models.settings import LLMSettings
+
+        config = {
+            "model_groups": {
+                "default": {
+                    "models": [
+                        "deepseek/deepseek-chat?temperature=0.0&reasoning_effort=high",
+                    ],
+                },
+            },
+            "model_providers": {
+                "deepseek": {
+                    "base_url": "https://api.deepseek.com/v1",
+                    "api_key_env": "DEEPSEEK_API_KEY",
+                },
+            },
+        }
+        config_file = tmp_path / "llm.toml"
+        config_file.write_text(tomli_w.dumps(config))
+        monkeypatch.setenv("CONFIG_PATH", str(config_file))
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+        LLMSettings.load.cache_clear()
+
+        providers = LLMSettings.load().get_model_group_providers("default")
+        LLMSettings.load.cache_clear()
+
+        assert len(providers) == 1
+        assert providers[0].provider.model == "deepseek-chat"
+        assert providers[0].temperature == 0.0
+        assert providers[0].extra_params == {"reasoning_effort": "high"}
 
 
 def test_judge_provider_config_from_dict() -> None:

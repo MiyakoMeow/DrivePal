@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import hashlib
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import openai
 
@@ -16,6 +16,9 @@ from app.models.settings import (
     NoJudgeModelConfiguredError,
 )
 from app.models.types import ProviderConfig
+
+# OpenAI API 额外转发参数列表（来自 provider extra_params 或调用方 kwargs）
+_EXTRA_API_PARAMS: frozenset[str] = frozenset({"reasoning_effort", "extra_body"})
 
 _semaphore_cache: dict[str, asyncio.Semaphore] = {}
 _client_cache: dict[tuple[str, str], openai.AsyncOpenAI] = {}
@@ -165,6 +168,49 @@ class ChatModel:
         provider_key = provider.provider.base_url or "default"
         return await _get_provider_semaphore(provider_key, provider.concurrency)
 
+    @staticmethod
+    def _merge_api_kwargs(
+        provider: LLMProviderConfig,
+        caller_kwargs: dict[str, Any],
+    ) -> dict[str, Any]:
+        """合并 provider extra_params 和调用方 kwargs 中的 API 转发参数。
+
+        优先级（从高到低）：
+        1. 调用方 caller_kwargs
+        2. provider.extra_params（模型字符串配置）
+
+        当 reasoning_effort 已设置但 extra_body 不含 thinking 时，
+        自动注入 extra_body={"thinking": {"type": "enabled"}}。
+
+        Returns:
+            纯 API 转发参数字典（不含 model/messages/temperature 等基础字段）。
+
+        """
+        result: dict[str, Any] = {}
+
+        # 从 provider extra_params 获取
+        for key in _EXTRA_API_PARAMS:
+            value = provider.extra_params.get(key)
+            if value is not None:
+                result[key] = value
+
+        # 调用方 kwargs 覆盖
+        for key in _EXTRA_API_PARAMS:
+            value = caller_kwargs.get(key)
+            if value is not None:
+                result[key] = value
+
+        # 自动注入 thinking mode
+        if "reasoning_effort" in result:
+            extra_body = result.get("extra_body")
+            if not isinstance(extra_body, dict) or "thinking" not in extra_body:
+                result["extra_body"] = {
+                    **(extra_body or {}),
+                    "thinking": {"type": "enabled"},
+                }
+
+        return result
+
     async def generate(
         self,
         prompt: str = "",
@@ -189,6 +235,7 @@ class ChatModel:
                     }
                     if json_mode:
                         create_kwargs["response_format"] = {"type": "json_object"}
+                    create_kwargs.update(self._merge_api_kwargs(provider, kwargs))
                     response = await client.chat.completions.create(**create_kwargs)
                     return response.choices[0].message.content or ""
             except (openai.APIError, OSError, ValueError, TypeError, RuntimeError) as e:
@@ -201,9 +248,9 @@ class ChatModel:
         prompt: str = "",
         system_prompt: str | None = None,
         messages: list[ChatCompletionMessageParam] | None = None,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> AsyncIterator[str]:
-        """流式生成回复."""
+        """流式生成回复。kwargs 中支持 reasoning_effort 和 extra_body 等 API 转发参数。"""
         if messages is None:
             messages = self._build_messages(prompt, system_prompt)
 
@@ -218,6 +265,7 @@ class ChatModel:
                         messages=messages,
                         temperature=self._get_temperature(provider),
                         stream=True,
+                        **self._merge_api_kwargs(provider, kwargs),
                     )
                     async for chunk in stream:
                         delta = chunk.choices[0].delta

@@ -10,6 +10,11 @@ models = ["zhipuai-coding-plan/glm-4.7-flashx?temperature=0.1"]
 [model_groups.balanced]
 models = ["minimax-cn/MiniMax-M2.5?temperature=0.0"]
 
+# DeepSeek thinking mode: 启用思维链输出，支持 reasoning_effort 参数
+# 注意：thinking mode 下 temperature/top_p/presence_penalty/frequency_penalty 不生效
+[model_groups.deepseek-thinking]
+models = ["deepseek/deepseek-chat?temperature=0.0&reasoning_effort=high"]
+
 [model_providers.local]
 base_url = "http://127.0.0.1:50721/v1"
 api_key = "none"
