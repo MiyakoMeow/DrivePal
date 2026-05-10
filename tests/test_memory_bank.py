@@ -96,8 +96,8 @@ def test_max_memory_strength_env(monkeypatch):
     assert config.max_memory_strength == 5
 
 
-def test_max_memory_strength_negative_guarded():
-    """验证 max_memory_strength=0 被守卫回退为 10。"""
+def test_max_memory_strength_zero_guarded():
+    """验证 max_memory_strength=0（零值）被守卫回退为 10。"""
     config = MemoryBankConfig(max_memory_strength=0)
     assert config.max_memory_strength == 10
 
@@ -173,3 +173,15 @@ def test_ivf_nlist_negative_guarded():
     """验证 ivf_nlist=-1 被守卫回退为 128。"""
     config = MemoryBankConfig(ivf_nlist=-1)
     assert config.ivf_nlist == 128
+
+
+def test_max_memory_strength_boundary_valid():
+    """验证 max_memory_strength=1 最小合法值通过。"""
+    config = MemoryBankConfig(max_memory_strength=1)
+    assert config.max_memory_strength == 1
+
+
+def test_ivf_nlist_boundary_valid():
+    """验证 ivf_nlist=1 最小合法值通过。"""
+    config = MemoryBankConfig(ivf_nlist=1)
+    assert config.ivf_nlist == 1
