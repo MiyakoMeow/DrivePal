@@ -1,4 +1,9 @@
-"""概率推断模块：意图不确定性 + 打断风险评估。"""
+"""概率推断模块：意图不确定性 + 打断风险评估。
+
+PROBABILISTIC_INFERENCE_ENABLED 环境变量仅在模块导入时读取一次，
+用于初始化 _probabilistic_enabled ContextVar 的默认值。
+运行时如需切换状态必须通过 set_probabilistic_enabled() 显式调用。
+"""
 
 import contextvars
 import logging

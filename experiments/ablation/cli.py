@@ -151,22 +151,21 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
             try:
                 d = json.loads(stripped)
                 variant = Variant(d["variant"])
+                results.append(
+                    VariantResult(
+                        scenario_id=d["scenario_id"],
+                        variant=variant,
+                        decision=d.get("decision", {}),
+                        result_text="",
+                        event_id=None,
+                        stages=d.get("stages", {}),
+                        latency_ms=d.get("latency_ms", 0),
+                        modifications=d.get("modifications", []),
+                        round_index=d.get("round_index", 0),
+                    )
+                )
             except json.JSONDecodeError, KeyError, ValueError:
                 logger.warning("跳过无效行: %s", stripped[:80])
-                continue
-            results.append(
-                VariantResult(
-                    scenario_id=d["scenario_id"],
-                    variant=variant,
-                    decision=d.get("decision", {}),
-                    result_text="",
-                    event_id=None,
-                    stages=d.get("stages", {}),
-                    latency_ms=d.get("latency_ms", 0),
-                    modifications=d.get("modifications", []),
-                    round_index=d.get("round_index", 0),
-                )
-            )
     return results
 
 
@@ -270,11 +269,17 @@ async def main(argv: list[str] | None = None) -> None:
             raise ValueError(msg)
 
         tasks = [asyncio.create_task(_run_one(g)) for g in concurrent_groups]
+        failures: list[str] = []
         for r in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(r, Exception):
                 logger.error("Group experiment failed: %s", r)
+                failures.append(str(r))
             elif isinstance(r, tuple):
                 all_group_results[r[0]] = r[1]
+
+        if failures:
+            msg = f"{len(failures)} concurrent group(s) failed: {'; '.join(failures)}"
+            raise RuntimeError(msg)
 
     if serial_group:
         group = serial_group
