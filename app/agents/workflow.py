@@ -1,9 +1,9 @@
 """Agent工作流编排模块."""
 
+import contextvars
 import hashlib
 import json
 import logging
-import os
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -30,15 +30,14 @@ from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
 
-_ablation_disable_feedback: bool = bool(
-    int(os.getenv("ABLATION_DISABLE_FEEDBACK", "0"))
+_ablation_disable_feedback: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_ablation_disable_feedback", default=False
 )
 
 
 def set_ablation_disable_feedback(v: bool) -> None:
-    """设置消融实验标记：禁用反馈权重。"""
-    global _ablation_disable_feedback
-    _ablation_disable_feedback = v
+    """设置消融实验标记：禁用反馈权重。ContextVar 自动任务隔离。"""
+    _ablation_disable_feedback.set(v)
 
 
 logger = logging.getLogger(__name__)
@@ -350,7 +349,7 @@ class AgentWorkflow:
                 logger.warning("Probabilistic inference failed: %s", e)
 
         # 反馈权重注入
-        if _ablation_disable_feedback:
+        if _ablation_disable_feedback.get():
             weights = {
                 "meeting": 0.5,
                 "travel": 0.5,
