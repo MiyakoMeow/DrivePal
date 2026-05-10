@@ -98,6 +98,11 @@ def simulate_feedback(
 ) -> Literal["accept", "ignore"]:
     """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
 
+    实验简写版：直接操作 strategies.toml 的 reminder_weights，
+    不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
+
+    TODO: 可选集成正式 submitFeedback API。
+
     #126 后策略 Agent 输出 is_emergency（非 is_urgent），allowed_channels 列表（非 channel 字符串）。
     """
     if stage == "high-freq":
