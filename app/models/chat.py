@@ -60,7 +60,12 @@ async def close_client_cache() -> None:
 
 
 def clear_semaphore_cache() -> None:
-    """清理 provider semaphore 缓存和客户端缓存（供测试使用）。"""
+    """清理 provider semaphore 缓存和客户端缓存（供测试使用）。
+
+    注意：此函数不关闭缓存的 AsyncOpenAI 客户端。
+    测试应在 teardown 中使用 close_client_cache() 清理连接，
+    然后调用此函数重置缓存状态。
+    """
     _semaphore_cache.clear()
     _client_cache.clear()
     _get_lock.cache_clear()

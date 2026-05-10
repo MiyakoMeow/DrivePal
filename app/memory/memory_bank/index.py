@@ -380,6 +380,9 @@ class FaissIndex:
         if self._index is None:
             self._dim = emb_dim
             self._build_index()
+            if self._index is None:
+                msg = "Index not initialized"
+                raise RuntimeError(msg)
         elif self._index.d != emb_dim:
             logger.warning(
                 "FaissIndex dimension mismatch: index=%d, vector=%d. "
