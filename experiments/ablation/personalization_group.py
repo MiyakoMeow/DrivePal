@@ -265,9 +265,8 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
         return -1.0
 
     # 取最终最高权重类型，并列时取字典序最小以确定性消歧
-    target_types = sorted(
-        (t for t in final_weights if final_weights[t] == max(final_weights.values())),
-    )
+    max_w = max(final_weights.values())
+    target_types = sorted(t for t, w in final_weights.items() if w == max_w)
     target_type = target_types[0]
     target_final = final_weights[target_type]
 

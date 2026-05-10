@@ -190,9 +190,11 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
         dim_id = f"{combo['scenario']}_{combo['fatigue_level']}_{combo['workload']}_{combo['task_type']}_{combo['has_passengers']}"
         if dim_id in existing:
             return 0
+        # 注：dim_id 来自 _build_dimension_combinations() 的 360 种唯一排列，
+        # 无两 task 共享同 dim_id，故此检查在锁外安全。
 
         # 早退：已达目标数量则跳过，避免浪费 LLM 调用
-        # generated_count 只增不减，无锁读取可能滞后但最多多调 1 次 LLM
+        # generated_count 只增不减，无锁读取可能滞后，最多多调 sem 容量次 LLM
         if generated_count >= count:
             return 0
 
@@ -237,7 +239,10 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
         return 1
 
     tasks = [_synthesize_one(c) for c in combos]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    failures = sum(1 for r in results if isinstance(r, Exception))
+    if failures:
+        logger.warning("%d synthesis tasks failed", failures)
     return generated_count
 
 

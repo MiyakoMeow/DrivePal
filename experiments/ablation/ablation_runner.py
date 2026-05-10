@@ -189,21 +189,19 @@ async def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
     return existing
 
 
-async def _append_checkpoint(path: Path, vr: VariantResult) -> None:
+async def _append_checkpoint(
+    path: Path, vr: VariantResult, *, include_modifications: bool = False
+) -> None:
     """追加写单条 VariantResult 到 checkpoint JSONL。"""
+    record: dict[str, object] = {
+        "scenario_id": vr.scenario_id,
+        "variant": vr.variant.value,
+        "decision": vr.decision,
+        "stages": vr.stages,
+        "latency_ms": vr.latency_ms,
+        "round_index": vr.round_index,
+    }
+    if include_modifications:
+        record["modifications"] = vr.modifications
     async with aiofiles.open(path, "a") as f:
-        await f.write(
-            json.dumps(
-                {
-                    "scenario_id": vr.scenario_id,
-                    "variant": vr.variant.value,
-                    "decision": vr.decision,
-                    "stages": vr.stages,
-                    "latency_ms": vr.latency_ms,
-                    "round_index": vr.round_index,
-                    "modifications": vr.modifications,
-                },
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
+        await f.write(json.dumps(record, ensure_ascii=False) + "\n")
