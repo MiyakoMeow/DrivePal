@@ -11,7 +11,7 @@ from pathlib import Path
 
 import aiofiles
 
-from ._io import write_config, write_step_summary
+from ._io import write_config, write_json_atomic, write_step_summary
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     compute_quality_metrics,
@@ -42,7 +42,11 @@ logger = logging.getLogger(__name__)
 
 
 def _find_latest_run(runs_dir: Path) -> Path | None:
-    """按目录名降序取最新运行目录。"""
+    """按目录名降序取最新运行目录。
+
+    假设 run_id 为 {timestamp}_{seed} 格式（ISO 基本时间戳），
+    该格式下字典序等同时间序。
+    """
     if not runs_dir.is_dir():
         return None
     dirs = sorted(
@@ -152,8 +156,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             }
             for s in scores
         ]
-        scores_path.parent.mkdir(parents=True, exist_ok=True)
-        scores_path.write_text(json.dumps(scores_data, ensure_ascii=False, indent=2))
+        await write_json_atomic(scores_path, {"scores": scores_data})
 
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
@@ -190,7 +193,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         )
         print(f"{group_name} 组重新评分完成: {len(scores)} 评分")
 
-    render_report(all_group_results, run_dir)
+    await render_report(all_group_results, run_dir)
 
 
 async def _load_variant_results(path: Path) -> list[VariantResult]:
@@ -286,6 +289,22 @@ async def _run_and_summarize(
         raise ValueError(msg)
     elapsed = time.perf_counter() - t0
 
+    # 持久化 Judge 详细评分
+    if result.judge_scores:
+        scores_path = run_dir / group / "scores.json"
+        scores_data: list[dict] = [
+            {
+                "scenario_id": s.scenario_id,
+                "variant": s.variant.value,
+                "safety_score": s.safety_score,
+                "reasonableness_score": s.reasonableness_score,
+                "overall_score": s.overall_score,
+                "violation_flags": s.violation_flags,
+            }
+            for s in result.judge_scores
+        ]
+        await write_json_atomic(scores_path, {"scores": scores_data})
+
     step_path = run_dir / group / "step-summary.json"
     await write_step_summary(step_path, result, duration_seconds=elapsed)
     _print_step_summary(result, elapsed)
@@ -364,12 +383,15 @@ async def main(argv: list[str] | None = None) -> None:
             raise RuntimeError(msg)
 
     if serial_group:
-        grp_name, grp_result = await _run_and_summarize(
-            serial_group, all_scenarios, args.seed, run_dir
-        )
-        all_group_results[grp_name] = grp_result
+        try:
+            grp_name, grp_result = await _run_and_summarize(
+                serial_group, all_scenarios, args.seed, run_dir
+            )
+            all_group_results[grp_name] = grp_result
+        except Exception:
+            logger.exception("Serial group '%s' failed", serial_group)
 
-    render_report(all_group_results, run_dir)
+    await render_report(all_group_results, run_dir)
 
     print(f"\n=== 全部完成 [{run_id}] ===")
     for g, gr in all_group_results.items():

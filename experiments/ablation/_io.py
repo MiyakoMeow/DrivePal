@@ -21,15 +21,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _write_json_async(path: Path, data: dict[str, object]) -> None:
-    """异步写 JSON 到文件——含序列化降级容错。"""
+async def write_json_atomic(path: Path, data: dict[str, object]) -> None:
+    """异步原子写 JSON。先写临时文件，成功后再 rename 覆盖。
+
+    含序列化降级容错：遇不可序列化值（如自定义类型）用 str() 兜底。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        try:
-            await f.write(json.dumps(data, ensure_ascii=False, indent=2))
-        except (TypeError, ValueError) as e:
-            logger.warning("JSON 序列化失败（%s），降级写入", e)
-            await f.write(json.dumps(data, ensure_ascii=False, indent=2, default=str))
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    try:
+        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
+            try:
+                await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+            except (TypeError, ValueError) as e:
+                logger.warning("JSON 序列化失败（%s），降级写入", e)
+                await f.write(
+                    json.dumps(data, ensure_ascii=False, indent=2, default=str)
+                )
+        tmp_path.replace(path)
+    except OSError:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+        raise
 
 
 async def write_summary(path: Path, data: dict[str, object]) -> None:
@@ -38,7 +50,7 @@ async def write_summary(path: Path, data: dict[str, object]) -> None:
         "timestamp": datetime.now(tz=UTC).isoformat(),
         **data,
     }
-    await _write_json_async(path, record)
+    await write_json_atomic(path, record)
 
 
 async def write_config(path: Path, args: argparse.Namespace) -> None:
@@ -66,7 +78,7 @@ async def write_config(path: Path, args: argparse.Namespace) -> None:
         "cli_args": {k: getattr(args, k, None) for k in cli_keys},
         "environment": {k: os.environ.get(k, None) for k in env_keys},
     }
-    await _write_json_async(path, config)
+    await write_json_atomic(path, config)
 
 
 async def write_step_summary(
