@@ -32,7 +32,8 @@ async def run_personalization_group(
     *,
     judge: Judge,
 ) -> GroupResult:
-    """个性化组实验。20 轮，4 阶段偏好切换。"""
+    """个性化组实验。20 轮，4 阶段偏好切换。
+    场景不足 20 时通过取模循环复用（i % len），保证每轮有场景可用。"""
     rng = random.Random(seed)
     personalization_scenarios = scenarios[:20]
 
@@ -271,6 +272,7 @@ def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float
 
     for sp in switch_points:
         if sp < 1 or sp >= len(weight_history):
+            # 需要上一轮数据才能确定目标类型，不存在则跳过
             continue
 
         prev_weights = weight_history[sp - 1].get("weights", {})

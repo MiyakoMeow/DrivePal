@@ -41,7 +41,7 @@ class AblationRunner:
 
         """
         self.user_id = user_id
-        self._original_env: dict[str, str] = {}
+        self._original_env: dict[str, str | None] = {}
 
     def _set_env(self, **kwargs: str) -> None:
         for k, v in kwargs.items():
