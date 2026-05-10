@@ -290,5 +290,17 @@ async def _verify() -> None:
     print("Import OK")
 
 
+def load_calibration_set(path: Path) -> dict[str, dict[str, int]]:
+    """加载人工校准集。尚未创建——需人工标注后提供路径。
+
+    Returns: {scenario_id: {"overall_score": int}}
+    """
+    msg = (
+        "校准数据文件尚未创建。需人工标注后，调用此函数并传入 JSONL 文件路径。"
+        "JSONL 格式：每行 {'scenario_id': str, 'human_label': {'overall_score': int}}"
+    )
+    raise NotImplementedError(msg)
+
+
 if __name__ == "__main__":
     asyncio.run(_verify())
