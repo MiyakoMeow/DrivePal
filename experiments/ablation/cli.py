@@ -1,6 +1,7 @@
 """消融实验命令行接口."""
 
 import argparse
+import asyncio
 import json
 import logging
 import os
@@ -58,15 +59,17 @@ async def _score_group(
     scenarios_for_results: dict[str, list[VariantResult]],
     scenario_by_id: dict[str, Scenario],
 ) -> list[JudgeScores]:
-    """对一组结果的各场景评分并汇总。"""
-    scores: list[JudgeScores] = []
-    for sid, vrs in scenarios_for_results.items():
+    """对一组结果的各场景并发评分并汇总。"""
+
+    async def score_one(sid: str, vrs: list[VariantResult]) -> list[JudgeScores]:
         scenario = scenario_by_id.get(sid)
         if scenario is None:
-            continue
-        batch_scores = await judge.score_batch(scenario, vrs)
-        scores.extend(batch_scores)
-    return scores
+            return []
+        return await judge.score_batch(scenario, vrs)
+
+    tasks = [score_one(sid, vrs) for sid, vrs in scenarios_for_results.items()]
+    batches = await asyncio.gather(*tasks)
+    return [s for batch in batches for s in batch]
 
 
 async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
@@ -237,26 +240,36 @@ async def main(argv: list[str] | None = None) -> None:
 
     all_group_results: dict[str, GroupResult] = {}
 
-    for group in groups_to_run:
-        print(f"\n=== 运行 {group} 组 ===\n")
-
+    async def _run_one(group: str) -> tuple[str, GroupResult]:
         if group == "safety":
+            print(f"\n=== 运行 {group} 组 ===\n")
             result = await _run_safety_experiment(data_dir, all_scenarios, args.seed)
-            all_group_results[group] = result
             print(f"安全性组完成: {len(result.variant_results)} 结果")
-
-        elif group == "architecture":
+            return group, result
+        if group == "architecture":
+            print(f"\n=== 运行 {group} 组 ===\n")
             result = await _run_architecture_experiment(
                 data_dir, all_scenarios, args.seed
             )
-            all_group_results[group] = result
             print(f"架构组完成: {len(result.variant_results)} 结果")
+            return group, result
+        msg = f"未知组: {group}"
+        raise ValueError(msg)
 
-        elif group == "personalization":
-            result = await _run_personalization_experiment(
-                data_dir, all_scenarios, args.seed
-            )
-            all_group_results[group] = result
-            print(f"个性化组完成: {len(result.variant_results)} 结果")
+    concurrent_groups = [g for g in groups_to_run if g != "personalization"]
+    serial_group = "personalization" if "personalization" in groups_to_run else None
+
+    if concurrent_groups:
+        tasks = [asyncio.create_task(_run_one(g)) for g in concurrent_groups]
+        all_group_results.update(await asyncio.gather(*tasks))
+
+    if serial_group:
+        group = serial_group
+        print(f"\n=== 运行 {group} 组 ===\n")
+        result = await _run_personalization_experiment(
+            data_dir, all_scenarios, args.seed
+        )
+        all_group_results[group] = result
+        print(f"个性化组完成: {len(result.variant_results)} 结果")
 
     render_report(all_group_results, results_dir)

@@ -73,9 +73,11 @@ async def run_personalization_group(
 
                 if variant == Variant.FULL and vr.event_id:
                     action = simulate_feedback(vr.decision, stage_name, rng)
-                    await update_feedback_weight(runner.user_id, vr.event_id, action)
+                    await update_feedback_weight(
+                        runner.base_user_id, vr.event_id, action
+                    )
 
-            snapshot = await _read_weights(runner.user_id)
+            snapshot = await _read_weights(runner.base_user_id)
             weight_history.append(
                 {"round": i + 1, "stage": stage_name, "weights": snapshot}
             )
