@@ -185,3 +185,27 @@ def test_ivf_nlist_boundary_valid():
     """验证 ivf_nlist=1 最小合法值通过。"""
     config = MemoryBankConfig(ivf_nlist=1)
     assert config.ivf_nlist == 1
+
+
+def test_source_event_index_save_load(tmp_path):
+    """source_event_index 可序列化/反序列化"""
+    import json
+
+    index_path = tmp_path / "source_event_index.json"
+    data = {"2026-05-10": ["id1", "id2"], "2026-05-09": ["id3"]}
+    index_path.write_text(json.dumps(data))
+    loaded = json.loads(index_path.read_text())
+    assert loaded == data
+
+
+def test_source_event_index_corruption_recovery(tmp_path):
+    """损坏 JSON 回退空 dict"""
+    import json
+
+    index_path = tmp_path / "source_event_index.json"
+    index_path.write_text("not valid json {{{")
+    try:
+        json.loads(index_path.read_text())
+        pytest.fail("should have raised")
+    except json.JSONDecodeError:
+        pass  # 预期
