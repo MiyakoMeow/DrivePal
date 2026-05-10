@@ -13,7 +13,7 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
 
-from .ablation_runner import AblationRunner
+from .ablation_runner import AblationRunner, _append_checkpoint
 from .judge import Judge
 from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
 
@@ -54,6 +54,9 @@ async def run_personalization_group(
                 vr = await runner.run_variant(scenario, variant)
                 vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
                 all_results.append(vr)
+                await _append_checkpoint(
+                    output_path.with_suffix(".checkpoint.jsonl"), vr
+                )
 
                 if variant == Variant.FULL and vr.event_id:
                     action = simulate_feedback(vr.decision, stage_name, rng)

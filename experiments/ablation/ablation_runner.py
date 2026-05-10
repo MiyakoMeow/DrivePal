@@ -1,11 +1,18 @@
 """消融实验运行器——设置环境变量、分发变体调用、收集结果."""
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import time
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
+
+import aiofiles
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from app.agents.prompts import SINGLE_LLM_SYSTEM_PROMPT
 from app.agents.workflow import AgentWorkflow
@@ -38,15 +45,15 @@ class AblationRunner:
 
     def _set_env(self, **kwargs: str) -> None:
         for k, v in kwargs.items():
-            self._original_env.setdefault(k, os.environ.get(k, ""))
+            self._original_env.setdefault(k, os.environ.get(k))
             os.environ[k] = v
 
     def _restore_env(self) -> None:
         for k, v in self._original_env.items():
-            if v:
-                os.environ[k] = v
-            else:
+            if v is None:
                 os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
         self._original_env.clear()
 
     async def run_variant(self, scenario: Scenario, variant: Variant) -> VariantResult:
@@ -139,11 +146,60 @@ class AblationRunner:
         )
 
     async def run_batch(
-        self, scenarios: list[Scenario], variants: list[Variant]
+        self,
+        scenarios: list[Scenario],
+        variants: list[Variant],
+        *,
+        checkpoint_path: Path | None = None,
     ) -> list[VariantResult]:
-        """批量运行场景×变体笛卡尔积。"""
-        return [
-            await self.run_variant(scenario, variant)
-            for scenario in scenarios
-            for variant in variants
-        ]
+        """批量运行场景×变体笛卡尔积。checkpoint_path 指定则增量写 JSONL。"""
+        results: list[VariantResult] = []
+        for scenario in scenarios:
+            for variant in variants:
+                if checkpoint_path:
+                    existing_ids = _load_checkpoint_ids(checkpoint_path)
+                    if (scenario.id, variant.value) in existing_ids:
+                        continue
+                vr = await self.run_variant(scenario, variant)
+                results.append(vr)
+                if checkpoint_path:
+                    await _append_checkpoint(checkpoint_path, vr)
+        return results
+
+
+def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
+    """读取 JSONL 中已完成的 (scenario_id, variant) 对。"""
+    existing: set[tuple[str, str]] = set()
+    if not path.exists():
+        return existing
+    with path.open() as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                d = json.loads(stripped)
+                existing.add((d["scenario_id"], d["variant"]))
+            except json.JSONDecodeError, KeyError:
+                continue
+    return existing
+
+
+async def _append_checkpoint(path: Path, vr: VariantResult) -> None:
+    """追加写单条 VariantResult 到 checkpoint JSONL。"""
+    async with aiofiles.open(path, "a") as f:
+        await f.write(
+            json.dumps(
+                {
+                    "scenario_id": vr.scenario_id,
+                    "variant": vr.variant.value,
+                    "decision": vr.decision,
+                    "stages": vr.stages,
+                    "latency_ms": vr.latency_ms,
+                    "round_index": vr.round_index,
+                    "modifications": vr.modifications,
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )

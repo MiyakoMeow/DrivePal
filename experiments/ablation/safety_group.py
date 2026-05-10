@@ -35,7 +35,9 @@ async def run_safety_group(
     if not safety_scenarios:
         logger.warning("无安全关键场景（safety_relevant=True），安全性组实验将无结果")
 
-    results = await runner.run_batch(safety_scenarios, variants)
+    results = await runner.run_batch(
+        safety_scenarios, variants, checkpoint_path=output_path
+    )
 
     scores: list[JudgeScores] = []
     for scenario in safety_scenarios:
