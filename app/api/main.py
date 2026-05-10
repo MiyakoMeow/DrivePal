@@ -26,6 +26,7 @@ from app.api.resolvers.query import Query as QueryImpl
 from app.api.stream import router as stream_router
 from app.config import DATA_DIR
 from app.memory.singleton import _memory_module_state
+from app.models.chat import close_client_cache
 from app.storage.init_data import init_storage
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if mm is not None:
         await mm.close()
         logger.info("MemoryModule closed")
+    await close_client_cache()
+    logger.info("Chat client cache closed")
 
 
 app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
