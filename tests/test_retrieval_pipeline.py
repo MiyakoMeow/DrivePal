@@ -298,3 +298,37 @@ async def test_retention_weighting_reranks(mock_index, mock_embedding):
     assert len(results) >= 2
     # 新鲜条目加权后排第一
     assert results[0].get("text", "") == "new"
+
+
+@pytest.mark.asyncio
+async def test_bm25_fallback_triggered_on_low_faiss_score(mock_index, mock_embedding):
+    """FAISS 最高分 < bm25_fallback_threshold 时触发 BM25 回退"""
+    config = MemoryBankConfig(bm25_fallback_enabled=True, bm25_fallback_threshold=0.5)
+    pipeline = RetrievalPipeline(mock_index, mock_embedding, config)
+    mock_index.total = 10
+    mock_index.get_metadata.return_value = [
+        {
+            "faiss_id": 0,
+            "text": "test entry one two three",
+            "source": "d1",
+            "speakers": ["A"],
+            "memory_strength": 1,
+            "forgotten": False,
+            "last_recall_date": "2026-05-10",
+        },
+    ]
+    mock_index.search = AsyncMock(
+        return_value=[
+            {
+                "faiss_id": 0,
+                "text": "t",
+                "source": "d1",
+                "score": 0.3,
+                "_meta_idx": 0,
+                "speakers": ["A"],
+                "forgotten": False,
+            }
+        ]
+    )
+    results, _ = await pipeline.search("test query", top_k=2)
+    assert len(results) >= 1

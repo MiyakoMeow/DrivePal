@@ -9,10 +9,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import re
-import threading
 from collections import defaultdict, deque
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -359,7 +359,7 @@ class RetrievalPipeline:
         self._bm25_corpus: list[str] = []
         self._bm25_meta_indices: list[int] = []
         self._bm25_index: Any = None
-        self._bm25_lock = threading.Lock()
+        self._bm25_lock = asyncio.Lock()
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
@@ -387,7 +387,7 @@ class RetrievalPipeline:
 
         metadata = self._index.get_metadata()
 
-        results = self._apply_bm25_fallback(results, query, metadata, coarse_k)
+        results = await self._apply_bm25_fallback(results, query, metadata, coarse_k)
 
         # 过滤已遗忘条目（maybe_forget 在 store.py/lifecycle.py 中已设 forgotten 标记）
         results = [r for r in results if not r.get("forgotten")]
@@ -416,7 +416,7 @@ class RetrievalPipeline:
             _clean_search_result(r)
         return merged, updated
 
-    def _apply_bm25_fallback(
+    async def _apply_bm25_fallback(
         self,
         results: list[dict],
         query: str,
@@ -433,7 +433,7 @@ class RetrievalPipeline:
         if max_faiss_score >= self._config.bm25_fallback_threshold:
             return results
         if self._bm25_index is None:
-            with self._bm25_lock:
+            async with self._bm25_lock:
                 if self._bm25_index is None:
                     self._rebuild_bm25_index()
         if self._bm25_index is None:
