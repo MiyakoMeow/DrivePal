@@ -435,6 +435,9 @@ class RetrievalPipeline:
             return results
         tokenized_query = query.lower().split()
         bm25_scores = self._bm25_index.get_scores(tokenized_query)
+        max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 1.0
+        if max_bm25 > 0:
+            bm25_scores = [s / max_bm25 for s in bm25_scores]
         top_indices = sorted(
             range(len(bm25_scores)),
             key=lambda i: bm25_scores[i],

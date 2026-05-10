@@ -1,5 +1,6 @@
 """MemoryBankStore Facade，MemoryStore Protocol 实现。"""
 
+import asyncio
 import json
 import logging
 import time
@@ -91,6 +92,7 @@ class MemoryBankStore:
         self._source_event_index: dict[
             str, list[str]
         ] = {}  # date_key → [event_faiss_id, ...]
+        self._source_index_lock = asyncio.Lock()
 
         llm = LlmClient(chat_model, self._config) if chat_model else None
         summarizer = Summarizer(llm, self._index, self._config) if llm else None
@@ -122,9 +124,9 @@ class MemoryBankStore:
         if result.recovery_actions:
             for a in result.recovery_actions:
                 logger.info("FaissIndex recovery: %s", a)
-        self._load_source_index()
+        await self._load_source_index()
 
-    def _load_source_index(self) -> None:
+    async def _load_source_index(self) -> None:
         """从磁盘加载 source_event_index，损坏时回退空 dict。"""
         path = self._user_dir / self._SOURCE_INDEX_FILENAME
         if not path.exists():
@@ -132,18 +134,21 @@ class MemoryBankStore:
         try:
             data = json.loads(path.read_text())
             if isinstance(data, dict):
-                self._source_event_index = data
+                async with self._source_index_lock:
+                    self._source_event_index = data
         except json.JSONDecodeError, OSError:
             pass
 
-    def _save_source_index(self) -> None:
+    async def _save_source_index(self) -> None:
         """持久化 source_event_index 到磁盘。"""
         if not self._source_index_dirty:
             return
         path = self._user_dir / self._SOURCE_INDEX_FILENAME
-        path.write_text(
-            json.dumps(self._source_event_index, ensure_ascii=False, default=str)
-        )
+        async with self._source_index_lock:
+            payload = json.dumps(
+                self._source_event_index, ensure_ascii=False, default=str
+            )
+        path.write_text(payload)
         self._source_index_dirty = False
 
     def _get_reference_date(self) -> str:
@@ -155,7 +160,7 @@ class MemoryBankStore:
         if now - self._last_save_time >= self._config.save_interval_seconds:
             await self._index.save()
             self._last_save_time = now
-            self._save_source_index()  # 仅 FAISS 落盘时同步持久化
+            await self._save_source_index()  # 仅 FAISS 落盘时同步持久化
 
     # ── 委托方法 ──
 
@@ -165,7 +170,8 @@ class MemoryBankStore:
         fid = await self._lifecycle.write(event)
         self._retrieval.invalidate_bm25()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        self._source_event_index.setdefault(date_key, []).append(fid)
+        async with self._source_index_lock:
+            self._source_event_index.setdefault(date_key, []).append(fid)
         self._source_index_dirty = True
         return fid
 
@@ -175,7 +181,8 @@ class MemoryBankStore:
         fids = await self._lifecycle.write_batch(events)
         self._retrieval.invalidate_bm25()
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        self._source_event_index.setdefault(date_key, []).extend(fids)
+        async with self._source_index_lock:
+            self._source_event_index.setdefault(date_key, []).extend(fids)
         self._source_index_dirty = True
         return fids
 
@@ -197,16 +204,17 @@ class MemoryBankStore:
         self._retrieval.invalidate_bm25()
         # 将 interaction 关联到同 source（同 date_key）的所有事件条目
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
-        event_ids = self._source_event_index.get(date_key)
-        if event_ids is None:
+        async with self._source_index_lock:
+            event_ids = list(self._source_event_index.get(date_key, []))
+        if not event_ids:
             # 回退：进程启动后当日尚无 write()，全量扫描 metadata
-            event_ids = []
             for m in self._index.get_metadata():
                 if m.get("source") == date_key and m.get("type") != "daily_summary":
                     fid = m.get("faiss_id")
                     if fid is not None:
                         event_ids.append(str(fid))
-            self._source_event_index[date_key] = event_ids
+            async with self._source_index_lock:
+                self._source_event_index[date_key] = event_ids
         for eid in event_ids:
             if eid not in self._interaction_map:
                 self._interaction_map[eid] = []
@@ -367,7 +375,7 @@ class MemoryBankStore:
 
     async def close(self) -> None:
         """持久化后关闭索引。"""
-        self._save_source_index()
+        await self._save_source_index()
         try:
             await self.finalize_ingestion()
         except Exception:
