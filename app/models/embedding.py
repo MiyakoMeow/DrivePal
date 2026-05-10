@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 _EMBEDDING_MODEL_CACHE: dict[str, EmbeddingModel] = {}
 _background_tasks: set[asyncio.Task[None]] = set()
 
-_BATCH_SIZE = 32
 _RETRY_ATTEMPTS = 3
 _RETRY_BASE_DELAY_SECONDS = 1.0
 _MAX_RETRY_DELAY_SECONDS = 10.0
@@ -39,7 +38,7 @@ def _finalize_background_task(task: asyncio.Task[object]) -> None:
             logger.warning("Background cleanup task failed: %s", exc)
 
 
-def get_cached_embedding_model() -> EmbeddingModel:
+def get_cached_embedding_model(embedding_batch_size: int = 32) -> EmbeddingModel:
     """获取缓存的embedding模型实例，避免重复加载."""
     settings = LLMSettings.load()
     provider = settings.get_embedding_provider()
@@ -55,7 +54,9 @@ def get_cached_embedding_model() -> EmbeddingModel:
     key_fp = hashlib.sha256(api_key.encode()).hexdigest()[:12]
     cache_key = f"{model}|{base_url}|{key_fp}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
-        _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(provider=provider)
+        _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(
+            provider=provider, batch_size=embedding_batch_size
+        )
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
@@ -81,10 +82,11 @@ def clear_embedding_model_cache() -> None:
 class EmbeddingModel:
     """文本嵌入模型封装，仅使用 OpenAI 兼容远程接口."""
 
-    def __init__(self, provider: EmbeddingProviderConfig) -> None:
+    def __init__(self, provider: EmbeddingProviderConfig, batch_size: int = 32) -> None:
         """初始化嵌入模型."""
         self.provider = provider
         self._client: openai.AsyncOpenAI | None = None
+        self.batch_size = batch_size
 
     @property
     def client(self) -> openai.AsyncOpenAI:
@@ -144,7 +146,7 @@ class EmbeddingModel:
                 logger.warning(
                     "Embedding batch %d-%d failed (attempt %d/%d): %s",
                     start,
-                    min(start + _BATCH_SIZE, total),
+                    min(start + self.batch_size, total),
                     attempt + 1,
                     _RETRY_ATTEMPTS,
                     e,
@@ -156,7 +158,7 @@ class EmbeddingModel:
                     logger.warning(
                         "Embedding batch %d-%d returned empty data (attempt %d/%d)",
                         start,
-                        min(start + _BATCH_SIZE, total),
+                        min(start + self.batch_size, total),
                         attempt + 1,
                         _RETRY_ATTEMPTS,
                     )
@@ -184,8 +186,8 @@ class EmbeddingModel:
         """使用openai异步接口批量编码文本（含分批与重试）."""
         all_vectors: list[list[float]] = []
         total = len(texts)
-        for start in range(0, total, _BATCH_SIZE):
-            batch = texts[start : start + _BATCH_SIZE]
+        for start in range(0, total, self.batch_size):
+            batch = texts[start : start + self.batch_size]
             batch_vectors = await self._encode_batch_with_retry(
                 client, model, batch, start, total
             )
