@@ -49,6 +49,16 @@ class MemoryBankStore:
         user_id: str = "default",
         **_kwargs: object,
     ) -> None:
+        """初始化 MemoryBankStore。
+
+        Args:
+            data_dir: per-user 数据根目录。
+            embedding_model: 嵌入模型。
+            chat_model: 聊天模型。
+            user_id: 用户标识（Protocol 接口兼容）。
+            _kwargs: 额外参数（接口兼容）。
+
+        """
         self._config = MemoryBankConfig()
         embed_client = EmbeddingClient(embedding_model) if embedding_model else None
         if embed_client is None:
@@ -111,6 +121,7 @@ class MemoryBankStore:
     # ── 委托方法 ──
 
     async def write(self, event: MemoryEvent) -> str:
+        """写入事件元数据到索引。"""
         await self._ensure_loaded()
         fid = await self._lifecycle.write(event)
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -132,6 +143,7 @@ class MemoryBankStore:
         event_type: str = "reminder",
         **kwargs: object,
     ) -> InteractionResult:
+        """写入交互记录并关联到当日事件。"""
         await self._ensure_loaded()
         result = await self._lifecycle.write_interaction(
             query,
@@ -259,6 +271,7 @@ class MemoryBankStore:
         return "\n\n".join(parts)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
+        """获取最近历史事件列表。"""
         await self._ensure_loaded()
         events = await self._lifecycle.get_history(limit)
         for ev in events:
@@ -268,6 +281,7 @@ class MemoryBankStore:
         return events
 
     async def get_event_type(self, event_id: str) -> str | None:
+        """按 event_id 查找事件类型。"""
         await self._ensure_loaded()
         return await self._lifecycle.get_event_type(event_id)
 
@@ -304,9 +318,11 @@ class MemoryBankStore:
 
     @property
     def metrics(self) -> MemoryBankMetrics:
+        """返回可观测性指标实例。"""
         return self._metrics
 
     async def close(self) -> None:
+        """持久化后关闭索引。"""
         try:
             await self.finalize_ingestion()
         except Exception:

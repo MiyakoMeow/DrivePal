@@ -27,6 +27,12 @@ class AblationRunner:
     """消融实验运行器。管理环境变量、分发变体调用、收集结果。"""
 
     def __init__(self, user_id: str = "ablation") -> None:
+        """初始化运行器。
+
+        Args:
+            user_id: 实验用用户标识，默认 ablation。
+
+        """
         self.user_id = user_id
         self._original_env: dict[str, str] = {}
 
@@ -44,6 +50,7 @@ class AblationRunner:
         self._original_env.clear()
 
     async def run_variant(self, scenario: Scenario, variant: Variant) -> VariantResult:
+        """运行单个变体实验。设置环境变量，分发到 workflow 或单 LLM 路径。"""
         t0 = time.perf_counter()
 
         if variant == Variant.NO_RULES:
@@ -134,8 +141,9 @@ class AblationRunner:
     async def run_batch(
         self, scenarios: list[Scenario], variants: list[Variant]
     ) -> list[VariantResult]:
-        results: list[VariantResult] = []
-        for scenario in scenarios:
-            for variant in variants:
-                results.append(await self.run_variant(scenario, variant))
-        return results
+        """批量运行场景×变体笛卡尔积。"""
+        return [
+            await self.run_variant(scenario, variant)
+            for scenario in scenarios
+            for variant in variants
+        ]

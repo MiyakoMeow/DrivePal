@@ -80,14 +80,12 @@ class OutputRouter:
     def route(
         self,
         decision: dict,
-        scenario: str,  # 预留，后续 scenario-aware 路由使用
         rules_result: dict,
     ) -> MultiFormatContent:
         """将 LLM 决策路由为 MultiFormatContent。
 
         Args:
             decision: Strategy Agent 输出的决策 dict。
-            scenario: 驾驶场景字符串（预留，未来用于场景感知路由）。
             rules_result: 规则引擎 apply_rules() 的输出。
 
         """

@@ -452,12 +452,10 @@ class AgentWorkflow:
         # 延迟 / 位置触发 → 创建 PendingReminder
         if postpone or timing in ("delay", "location", "location_time"):
             output_router = OutputRouter()
-            scenario = ""
             rules_result = {}
             if driving_ctx:
                 rules_result = apply_rules(driving_ctx)
-                scenario = driving_ctx.get("scenario", "")
-            output_content = output_router.route(decision, scenario, rules_result)
+            output_content = output_router.route(decision, rules_result)
 
             pm = PendingReminderManager(user_data_dir(self.current_user))
             trigger_type, trigger_target, trigger_text = _map_pending_trigger(
@@ -537,12 +535,10 @@ class AgentWorkflow:
 
         # --- 多格式输出路由 ---
         output_router = OutputRouter()
-        scenario = ""
         rules_result = {}
         if driving_ctx:
             rules_result = apply_rules(driving_ctx)
-            scenario = driving_ctx.get("scenario", "")
-        output_content = output_router.route(decision, scenario, rules_result)
+        output_content = output_router.route(decision, rules_result)
 
         # 隐私脱敏：写入前脱敏 driving_ctx 中的位置信息
         safe_ctx = sanitize_context(driving_ctx) if driving_ctx else None

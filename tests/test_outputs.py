@@ -51,7 +51,7 @@ class TestOutputRouterSpeakableFallback:
             },
         }
         router = OutputRouter()
-        result = router.route(decision, scenario="city_driving", rules_result={})
+        result = router.route(decision, rules_result={})
         assert result.speakable_text == "3点开会"
 
     def test_fallback_truncation_from_detailed(self):
@@ -63,7 +63,7 @@ class TestOutputRouterSpeakableFallback:
             },
         }
         router = OutputRouter()
-        result = router.route(decision, scenario="city_driving", rules_result={})
+        result = router.route(decision, rules_result={})
         assert len(result.speakable_text) <= 15
         assert not result.speakable_text.endswith("。")
 
@@ -74,7 +74,7 @@ class TestOutputRouterSpeakableFallback:
             "reminder_content": {"detailed": ""},
         }
         router = OutputRouter()
-        result = router.route(decision, scenario="city_driving", rules_result={})
+        result = router.route(decision, rules_result={})
         assert result.speakable_text == "提醒"
 
     def test_reminder_content_as_string(self):
@@ -84,7 +84,7 @@ class TestOutputRouterSpeakableFallback:
             "reminder_content": "纯文本提醒内容",
         }
         router = OutputRouter()
-        result = router.route(decision, scenario="city_driving", rules_result={})
+        result = router.route(decision, rules_result={})
         assert len(result.speakable_text) <= 15
 
 
@@ -97,7 +97,7 @@ class TestOutputRouterInterruptLevel:
             "reminder_content": {"detailed": "xx"},
         }
         router = OutputRouter()
-        result = router.route(decision, scenario="city_driving", rules_result={})
+        result = router.route(decision, rules_result={})
         assert result.interrupt_level == InterruptLevel.URGENT_IMMEDIATE
 
     def test_only_urgent_is_urgent_normal(self):
@@ -109,7 +109,6 @@ class TestOutputRouterInterruptLevel:
         router = OutputRouter()
         result = router.route(
             decision,
-            scenario="city_driving",
             rules_result={"only_urgent": True},
         )
         assert result.interrupt_level == InterruptLevel.URGENT_NORMAL
@@ -121,7 +120,7 @@ class TestOutputRouterInterruptLevel:
             "reminder_content": {"detailed": "xx"},
         }
         router = OutputRouter()
-        result = router.route(decision, scenario="city_driving", rules_result={})
+        result = router.route(decision, rules_result={})
         assert result.interrupt_level == InterruptLevel.NORMAL
 
     def test_emergency_overrides_only_urgent(self):
@@ -134,7 +133,6 @@ class TestOutputRouterInterruptLevel:
         router = OutputRouter()
         result = router.route(
             decision,
-            scenario="city_driving",
             rules_result={"only_urgent": True},
         )
         assert result.interrupt_level == InterruptLevel.URGENT_IMMEDIATE
@@ -150,7 +148,6 @@ class TestOutputRouterChannel:
         router = OutputRouter()
         result = router.route(
             decision,
-            scenario="highway",
             rules_result={
                 "allowed_channels": [OutputChannel.AUDIO, OutputChannel.VISUAL]
             },
@@ -166,7 +163,6 @@ class TestOutputRouterChannel:
         router = OutputRouter()
         result = router.route(
             decision,
-            scenario="parked",
             rules_result={"allowed_channels": ["visual", "audio"]},
         )
         assert result.channel == OutputChannel.VISUAL
@@ -179,7 +175,6 @@ class TestOutputRouterChannel:
         router = OutputRouter()
         result = router.route(
             decision,
-            scenario="city_driving",
             rules_result={"allowed_channels": []},
         )
         assert result.channel == OutputChannel.VISUAL
@@ -190,5 +185,5 @@ class TestOutputRouterChannel:
             "reminder_content": {"detailed": "xx"},
         }
         router = OutputRouter()
-        result = router.route(decision, scenario="city_driving", rules_result={})
+        result = router.route(decision, rules_result={})
         assert result.channel == OutputChannel.VISUAL

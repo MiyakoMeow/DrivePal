@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
+from app.memory.exceptions import LLMCallFailedError, SummarizationEmpty
 from app.models.chat import AllProviderFailedError
 
 if TYPE_CHECKING:
@@ -35,6 +35,9 @@ _CONTEXT_EXCEEDED_PATTERNS = (
     "reduce the length",
     "input length",
 )
+_EMPTY_CONTENT_MSG = "LLM returned empty content"
+_LLM_ATTEMPT_FAILED_TEMPLATE = "LLM call failed after {attempt} attempts: {exc}"
+_LLM_EXHAUSTED_TEMPLATE = "LLM call failed — all {retries} attempts exhausted"
 
 
 class LlmClient:
@@ -47,6 +50,14 @@ class LlmClient:
         *,
         rng: random.Random | None = None,
     ) -> None:
+        """初始化 LlmClient。
+
+        Args:
+            chat_model: 实现 generate() 方法的 chat 模型。
+            config: MemoryBank 配置。
+            rng: 可选随机数生成器（退避 jitter）。
+
+        """
         self._chat_model = chat_model
         self._config = config
         self._rng = rng
@@ -57,7 +68,7 @@ class LlmClient:
         消息序列：system → user（锚定）→ assistant（应承）→ user（实际 prompt）。
 
         成功返回非空 str。
-        抛出 LLMCallFailed（API 失败，重试耗尽）。
+        抛出 LLMCallFailedError（API 失败，重试耗尽）。
         抛出 SummarizationEmpty（LLM 返回空内容——非错误，哨兵异常）。
 
         Args:
@@ -79,7 +90,7 @@ class LlmClient:
                     **{k: v for k, v in kwargs.items() if v is not None},
                 )
                 if not resp or not resp.strip():
-                    raise SummarizationEmpty("LLM returned empty content")
+                    raise SummarizationEmpty(_EMPTY_CONTENT_MSG)
                 return resp.strip()
             except AllProviderFailedError as exc:
                 err = str(exc).lower()
@@ -106,9 +117,9 @@ class LlmClient:
                 # 非瞬态错误：仅额外尝试一次（非瞬态应快速失败）
                 if attempt < min(1, self._config.llm_max_retries - 1):
                     continue
-                raise LLMCallFailed(
-                    f"LLM call failed after {attempt + 1} attempts: {exc}"
+                raise LLMCallFailedError(
+                    _LLM_ATTEMPT_FAILED_TEMPLATE.format(attempt=attempt + 1, exc=exc)
                 ) from exc
-        raise LLMCallFailed(
-            f"LLM call failed — all {self._config.llm_max_retries} attempts exhausted"
+        raise LLMCallFailedError(
+            _LLM_EXHAUSTED_TEMPLATE.format(retries=self._config.llm_max_retries)
         )

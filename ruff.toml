@@ -20,54 +20,32 @@ ignore = [
 exclude = [".agents/**"]
 
 [lint.per-file-ignores]
-"adapters/runner.py" = ["E402"]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
 "app/api/stream.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
-"app/memory/interfaces.py" = ["ANN401"]  # Protocol 接口故意返回 Any（调用方自行处理类型）
+
 "app/memory/memory_bank/llm.py" = [
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
-    "RET503",  # 循环内所有路径均已返回，末尾 return None 为防御性保留
-    "D107",  # __init__ 由类级 docstring 阐明语义
-    "TRY301",  # 抛异常处已在同一 try/except 中，提取无意义
-    "TRY003",  # 异常消息内联清晰
-    "EM101",  # 消息内联清晰
-    "EM102",  # f-string 内联清晰
 ]
 "app/api/resolvers/mutation.py" = [
-    "C901",  # submit_feedback 含多个异常处理器，各分支简单（McCabe 误报）
     "ARG002",  # close_session current_user 参数保留——Strawberry mutation 签名一致性
 ]
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 data_dir.mkdir()/ 操作，ruff 误判
-"app/memory/embedding_client.py" = [
-    "S311",  # 退避 jitter 使用伪随机种子，非安全场景
-]
+
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
 "app/memory/memory_bank/store.py" = [
-    "PLR0913",  # __init__ 参数多（依赖注入）
-    "S311",  # 伪随机种子用于退避 jitter，非安全场景
-    "D102",  # Facade 委托方法由类级 docstring 阐明语义
-    "D107",  # __init__ 由类级 docstring 阐明语义
-    "PLC0415",  # 局部导入由 try/except 防御模式驱动
     "BLE001",  # close() 中宽捕获 Exception 合理——持久化失败不应阻止 shutdown
     "ARG002",  # user_id 保留——MemoryStore Protocol 接口兼容
 ]
 "app/agents/workflow.py" = [
     "C901",  # _execution_node 含多条安全规则分支，复杂度可接受
-    "PLR0911",  # _check_frequency_guard 多个 early return，可读性优先
     "PLR0912",  # _execution_node 多条件分支——快捷指令/后处理/延迟/频次/正常路径
     "PLR0915",  # _execution_node + run_stream 语句多——安全关键路径不宜强行拆分
-    "ARG001",  # _extract_location_target 保留 decision 参数以与 _map_pending_trigger 签名一致
 ]
-"app/agents/shortcuts.py" = [
-    "PERF401",  # 嵌套循环 + 条件过滤，无法用 list.extend 替代
-]
-"app/agents/outputs.py" = [
-    "ARG002",  # OutputRouter.route scenario 参数预留，后续 scenario-aware 路由使用
-]
+
+
 "app/agents/pending.py" = [
     "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
-    "PLR2004",  # parse_time 中 23/12/8 为时间解析域常量，定义命名常量反降低可读性
 ]
 "app/agents/rules.py" = [
     "C901",  # postprocess_decision 含三约束分支+修改追踪，复杂度可接受
@@ -86,24 +64,17 @@ exclude = [".agents/**"]
 "experiments/ablation/judge.py" = [
     "S311",  # 确定性种子用于可复现实验（盲评 shuffle）
 ]
-"experiments/ablation/ablation_runner.py" = [
-    "D102",  # Facade 委托方法由类级 docstring 阐明语义
-    "D107",  # __init__ 由类级 docstring 阐明语义
-    "PERF401",  # run_batch 笛卡尔积 for-loop 可读性优先
-]
+
 "experiments/ablation/safety_group.py" = [
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
-    "PLR2004",  # safety_score >= 4 魔术数语义自明（安全合规阈值）
 ]
 "experiments/ablation/architecture_group.py" = [
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
-    "PLR2004",  # 疲劳阈值 0.7 与 FATIGUE_THRESHOLD 环境变量对齐，语义自明
 ]
 "experiments/ablation/metrics.py" = [
     "TC001",  # JudgeScores/VariantResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
-    "ARG001",  # results 保留——GroupRunner 接口兼容
 ]
 "experiments/ablation/report.py" = [
     "TC001",  # GroupResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
@@ -113,40 +84,23 @@ exclude = [".agents/**"]
     "S311",  # random.Random 用于实验可复现种子，非安全场景
     "TC001",  # AblationRunner 仅用于类型注解
     "TC003",  # Path 用于类型注解及运行时操作
-    "ARG001",  # output_path 保留——GroupRunner 接口兼容
-    "PLR2004",  # 模拟反馈概率 0.5 魔术数语义自明
-    "D103",  # simulate_feedback/update_feedback_weight 由模块级 docstring 阐明语义
 ]
-"app/memory/memory_bank/index_reader.py" = [
-    "D102",  # Protocol 桩方法由类级 docstring 阐明语义
-]
+
 "app/memory/memory_bank/lifecycle.py" = [
     "PLR0913",  # __init__ 参数≥6合理（含多个依赖注入）
-    "D107",  # __init__ 由类级 docstring 阐明语义
     "BLE001",  # 后台摘要失败不阻塞主流程，宽捕获 Exception 合理
 ]
 "app/memory/exceptions.py" = [
     "N818",  # 异常命名不强制 Error 后缀（如 LLMCallFailed 语义更精确）
-    "D107",  # __init__ 由类级 docstring 阐明语义
 ]
-"app/memory/memory.py" = [
-    "D107",  # __init__ 由类级 docstring 阐明语义
-    "D102",  # Facade 委托方法由类级 docstring 阐明语义
-]
+
 "app/memory/memory_bank/index.py" = [
     "C901",  # load() 含三级降级分支，复杂度合理
     "PLR0915",  # 降级恢复逻辑多但平铺直叙
     "PLR0912",  # 降级分支 13 > 12，每个分支平铺直叙
-    "PLR0911",  # 降级路径多导致 return 语句7条，每个场景独立可读
 ]
-"app/memory/memory_bank/observability.py" = [
-    "D101",  # 数据类由字段级 docstring 阐明语义
-    "D102",  # snapshot/reset 语义自明
-]
-"app/memory/memory_bank/summarizer.py" = [
-    "D107",  # __init__ 由类级 docstring 阐明语义
-    "TRY300",  # try/except 内 return 合理（哨兵异常处理）
-]
+
+
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法
     "S311",  # 测试中使用伪随机种子是标准做法

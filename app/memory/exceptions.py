@@ -9,6 +9,13 @@ class TransientError(MemoryBankError):
     """可重试的瞬态错误（网络、超时、限速）。"""
 
     def __init__(self, message: str, retry_after: float = 1.0) -> None:
+        """初始化瞬态错误。
+
+        Args:
+            message: 错误描述。
+            retry_after: 建议重试间隔（秒）。
+
+        """
         super().__init__(message)
         self.retry_after = retry_after
 
@@ -17,12 +24,8 @@ class FatalError(MemoryBankError):
     """不可恢复的永久错误（配置、数据损坏）。"""
 
 
-class LLMCallFailed(TransientError):
+class LLMCallFailedError(TransientError):
     """LLM 调用失败（可重试）。"""
-
-
-class EmbeddingFailed(TransientError):
-    """嵌入 API 调用失败（可重试）。"""
 
 
 class SummarizationEmpty(MemoryBankError):
@@ -31,10 +34,6 @@ class SummarizationEmpty(MemoryBankError):
 
 class ConfigError(FatalError):
     """配置错误。"""
-
-
-class MetadataCorrupted(FatalError):
-    """元数据损坏，不可自动恢复。"""
 
 
 class IndexIntegrityError(FatalError):

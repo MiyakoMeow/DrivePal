@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.memory.exceptions import LLMCallFailed
+from app.memory.exceptions import LLMCallFailedError
 from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.llm import LlmClient
 from app.models.chat import AllProviderFailedError
@@ -55,11 +55,11 @@ async def _noop_sleep(*_: object) -> None:
 
 @pytest.mark.asyncio
 async def test_llm_retry_on_transient(monkeypatch: pytest.MonkeyPatch):
-    """瞬态错误（rate limit）会重试直到耗尽，然后抛 LLMCallFailed。"""
+    """瞬态错误（rate limit）会重试直到耗尽，然后抛 LLMCallFailedError。"""
     monkeypatch.setattr("app.memory.memory_bank.llm._sleep", _noop_sleep)
     model = _ConstErrorModel("rate limit exceeded")
     client = LlmClient(model, MemoryBankConfig())
-    with pytest.raises(LLMCallFailed, match="3 attempts"):
+    with pytest.raises(LLMCallFailedError, match="3 attempts"):
         await client.call("test", system_prompt="test system prompt")
     assert model.call_count == 3
 
@@ -88,10 +88,10 @@ async def test_llm_context_trim_on_long_prompt():
 
 @pytest.mark.asyncio
 async def test_llm_nontransient_exhausts_retries():
-    """非瞬态错误（鉴权失败）快速失败，额外尝试一次后抛 LLMCallFailed。"""
+    """非瞬态错误（鉴权失败）快速失败，额外尝试一次后抛 LLMCallFailedError。"""
     model = _ConstErrorModel("Incorrect API key")
     client = LlmClient(model, MemoryBankConfig())
-    with pytest.raises(LLMCallFailed, match="2 attempts"):
+    with pytest.raises(LLMCallFailedError, match="2 attempts"):
         await client.call("test", system_prompt="test system prompt")
     assert model.call_count == 2
 

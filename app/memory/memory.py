@@ -16,6 +16,12 @@ class UnknownModeError(ValueError):
     MSG = "Unknown mode: {mode}"
 
     def __init__(self, mode: MemoryMode) -> None:
+        """初始化未知模式异常。
+
+        Args:
+            mode: 无法识别的记忆模式。
+
+        """
         super().__init__(self.MSG.format(mode=mode))
 
 
@@ -60,6 +66,14 @@ class MemoryModule:
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
     ) -> None:
+        """初始化 MemoryModule。
+
+        Args:
+            data_dir: 数据根目录。
+            embedding_model: 嵌入模型（可选）。
+            chat_model: 聊天模型（可选）。
+
+        """
         self._stores: dict[str, MemoryStore] = {}
         self._stores_lock = asyncio.Lock()
         self._data_dir = data_dir
@@ -124,6 +138,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> str:
+        """写入事件到存储后端。"""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.write(event)
 
@@ -137,6 +152,7 @@ class MemoryModule:
         user_id: str = "default",
         **kwargs: object,
     ) -> InteractionResult:
+        """写入交互记录到存储后端。"""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         if not getattr(store, "supports_interaction", False):
             msg = f"Store '{store.store_name}' does not support write_interaction"
@@ -151,6 +167,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> list[SearchResult]:
+        """搜索记忆。"""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.search(query, top_k=top_k)
 
@@ -161,6 +178,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> list[MemoryEvent]:
+        """获取最近历史事件。"""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.get_history(limit)
 
@@ -171,6 +189,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> str | None:
+        """按 event_id 查找事件类型。"""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.get_event_type(event_id)
 
@@ -182,6 +201,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> None:
+        """更新用户反馈。"""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         await store.update_feedback(event_id, feedback)
 
