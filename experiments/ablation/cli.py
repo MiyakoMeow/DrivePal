@@ -49,12 +49,11 @@ def _find_latest_run(runs_dir: Path) -> Path | None:
     """
     if not runs_dir.is_dir():
         return None
-    dirs = sorted(
-        [d for d in runs_dir.iterdir() if d.is_dir()],
+    return max(
+        (d for d in runs_dir.iterdir() if d.is_dir()),
         key=lambda d: d.name,
-        reverse=True,
+        default=None,
     )
-    return dirs[0] if dirs else None
 
 
 def _print_step_summary(result: GroupResult, elapsed: float) -> None:
@@ -165,7 +164,8 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         else:  # personalization
             summary_path = run_dir / group_name / "results.summary.json"
             try:
-                raw = json.loads(summary_path.read_text())
+                async with aiofiles.open(summary_path, encoding="utf-8") as f:
+                    raw = json.loads(await f.read())
             except FileNotFoundError:
                 logger.warning(
                     "个性化组 results.summary.json 不存在（%s），指标将为空。"
@@ -379,8 +379,11 @@ async def main(argv: list[str] | None = None) -> None:
                 all_group_results[r[0]] = r[1]
 
         if failures:
-            msg = f"{len(failures)} concurrent group(s) failed: {'; '.join(failures)}"
-            raise RuntimeError(msg)
+            logger.error(
+                "Incomplete results: %d concurrent group(s) failed — %s",
+                len(failures),
+                "; ".join(failures),
+            )
 
     if serial_group:
         try:

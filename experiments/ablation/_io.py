@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def write_json_atomic(path: Path, data: dict[str, object]) -> None:
+async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
     """异步原子写 JSON。先写临时文件，成功后再 rename 覆盖。
 
     含序列化降级容错：遇不可序列化值（如自定义类型）用 str() 兜底。
@@ -44,9 +44,9 @@ async def write_json_atomic(path: Path, data: dict[str, object]) -> None:
         raise
 
 
-async def write_summary(path: Path, data: dict[str, object]) -> None:
+async def write_summary(path: Path, data: dict[str, Any]) -> None:
     """写 JSON 总结文件。包含 timestamp + 状态。"""
-    record: dict[str, object] = {
+    record: dict[str, Any] = {
         "timestamp": datetime.now(tz=UTC).isoformat(),
         **data,
     }
@@ -73,7 +73,7 @@ async def write_config(path: Path, args: argparse.Namespace) -> None:
         "judge_only",
         "run_id",
     )
-    config: dict[str, object] = {
+    config: dict[str, Any] = {
         "timestamp": datetime.now(tz=UTC).isoformat(),
         "cli_args": {k: getattr(args, k, None) for k in cli_keys},
         "environment": {k: os.environ.get(k, None) for k in env_keys},
@@ -127,7 +127,9 @@ async def dump_variant_results_jsonl(
                 }
                 if include_modifications:
                     record["modifications"] = r.modifications
-                await f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                await f.write(
+                    json.dumps(record, ensure_ascii=False, default=str) + "\n"
+                )
         tmp_path.replace(path)
     except OSError:
         if tmp_path.exists():
