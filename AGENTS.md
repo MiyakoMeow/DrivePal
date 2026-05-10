@@ -84,6 +84,7 @@ tests/                 # 测试
 config/llm.toml        # 模型配置
 data/                  # 运行时数据
 webui/                 # 模拟测试工作台
+archive/               # 归档卷。唯藏论文初稿、开题报告等旧稿，备参，非命勿改。
 ```
 
 ## Agent工作流
