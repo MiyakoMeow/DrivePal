@@ -57,7 +57,7 @@ async def run_architecture_group(
         batch_scores = await judge.score_batch(scenario, scenario_results)
         scores.extend(batch_scores)
 
-    await dump_variant_results_jsonl(output_path, results)
+    await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 
     metrics = compute_quality_metrics(scores, results)
 

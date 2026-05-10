@@ -155,11 +155,16 @@ class AblationRunner:
         *,
         checkpoint_path: Path | None = None,
     ) -> list[VariantResult]:
-        """批量运行场景×变体笛卡尔积。checkpoint_path 指定则增量写 JSONL。"""
+        """批量运行场景×变体笛卡尔积。checkpoint_path 指定则增量写 JSONL。
+
+        续跑行为：先加载 checkpoint 中已有结果至返回列表，再运行未完成的变体。
+        避免中途中断后旧数据丢失。
+        """
         results: list[VariantResult] = []
-        existing_ids: set[tuple[str, str]] = (
-            await _load_checkpoint_ids(checkpoint_path) if checkpoint_path else set()
-        )
+        existing_ids: set[tuple[str, str]] = set()
+        if checkpoint_path:
+            existing_ids, existing_results = await _load_checkpoint(checkpoint_path)
+            results.extend(existing_results)
         for scenario in scenarios:
             for variant in variants:
                 if (scenario.id, variant.value) in existing_ids:
@@ -172,9 +177,15 @@ class AblationRunner:
         return results
 
 
-async def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
-    """读取 JSONL 中已完成的 (scenario_id, variant) 对。"""
-    existing: set[tuple[str, str]] = set()
+async def _load_checkpoint(
+    path: Path,
+) -> tuple[set[tuple[str, str]], list[VariantResult]]:
+    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表)。
+
+    用于续跑：将已有结果加载回内存，避免 `dump_variant_results_jsonl` 覆盖丢失。
+    """
+    ids: set[tuple[str, str]] = set()
+    results: list[VariantResult] = []
     try:
         async with aiofiles.open(path, encoding="utf-8") as f:
             async for line in f:
@@ -183,13 +194,26 @@ async def _load_checkpoint_ids(path: Path) -> set[tuple[str, str]]:
                     continue
                 try:
                     d = json.loads(stripped)
-                    existing.add((d["scenario_id"], d["variant"]))
-                except json.JSONDecodeError, KeyError:
+                    ids.add((d["scenario_id"], d["variant"]))
+                    results.append(
+                        VariantResult(
+                            scenario_id=d["scenario_id"],
+                            variant=Variant(d["variant"]),
+                            decision=d.get("decision", {}),
+                            result_text="",
+                            event_id=None,
+                            stages=d.get("stages", {}),
+                            latency_ms=d.get("latency_ms", 0),
+                            modifications=d.get("modifications", []),
+                            round_index=d.get("round_index", 0),
+                        )
+                    )
+                except json.JSONDecodeError, KeyError, ValueError:
                     logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                     continue
     except FileNotFoundError:
-        return existing
-    return existing
+        return ids, results
+    return ids, results
 
 
 async def _append_checkpoint(

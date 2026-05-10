@@ -101,7 +101,17 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
             summary_path = result_path.with_suffix(".summary.json")
             try:
                 raw = json.loads(summary_path.read_text())
-            except FileNotFoundError, json.JSONDecodeError:
+            except FileNotFoundError:
+                logger.warning(
+                    "个性化组 .summary.json 不存在（%s），指标将为空。"
+                    "请先运行完整个性化组实验。",
+                    summary_path,
+                )
+                metrics = {}
+            except json.JSONDecodeError:
+                logger.warning(
+                    "个性化组 .summary.json 解析失败（%s），指标将为空。", summary_path
+                )
                 metrics = {}
             else:
                 weight_history = raw.get("weight_history", [])
