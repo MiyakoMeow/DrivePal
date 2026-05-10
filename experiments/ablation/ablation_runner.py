@@ -57,9 +57,19 @@ class AblationRunner:
         elif variant == Variant.NO_FEEDBACK:
             set_ablation_disable_feedback(True)
 
-        if variant == Variant.SINGLE_LLM:
-            return await self._run_single_llm(scenario, uid, t0)
-        return await self._run_agent_workflow(scenario, variant, uid, t0)
+        try:
+            if variant == Variant.SINGLE_LLM:
+                return await self._run_single_llm(scenario, uid, t0)
+            return await self._run_agent_workflow(scenario, variant, uid, t0)
+        finally:
+            # 重置 ContextVar——防御直接调用（非 create_task 包装）时的状态泄漏
+            # 如 personalization_group 中 FULL/NO_FEEDBACK 交替直接调用 run_variant
+            if variant == Variant.NO_RULES:
+                set_ablation_disable_rules(False)
+            elif variant == Variant.NO_PROB:
+                set_probabilistic_enabled(True)
+            elif variant == Variant.NO_FEEDBACK:
+                set_ablation_disable_feedback(False)
 
     async def _run_agent_workflow(
         self, scenario: Scenario, variant: Variant, user_id: str, t0: float
