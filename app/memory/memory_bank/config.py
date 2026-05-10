@@ -34,7 +34,7 @@ class MemoryBankConfig(BaseSettings):
     coarse_search_factor: int = 4
     embedding_min_similarity: float = 0.3
 
-    # ── Fix 4: 记忆强度上限 ──
+    # ── 记忆强度上限，防止无限回忆强化导致旧条目永不遗忘 ──
     max_memory_strength: int = 10
 
     @field_validator("max_memory_strength")
@@ -44,7 +44,7 @@ class MemoryBankConfig(BaseSettings):
             return 10
         return v
 
-    # ── Fix 5: 检索加权 alpha ──
+    # ── 检索加权公式 α 系数（语义相似度 vs 记忆留存率权衡）──
     retrieval_alpha: float = 0.7
 
     @field_validator("retrieval_alpha")
@@ -54,7 +54,7 @@ class MemoryBankConfig(BaseSettings):
             return 0.7
         return v
 
-    # ── Fix 6: BM25 回退 ──
+    # ── BM25 稀疏检索回退——FAISS 密集检索失效时的兜底 ──
     bm25_fallback_enabled: bool = True
     bm25_fallback_threshold: float = 0.5
 
@@ -65,7 +65,7 @@ class MemoryBankConfig(BaseSettings):
             return 0.5
         return v
 
-    # ── Fix 7: FAISS 索引类型 ──
+    # ── FAISS 索引类型选择：flat 精确检索 / ivf_flat 近似检索 ──
     index_type: Literal["flat", "ivf_flat"] = "flat"
     ivf_nlist: int = 128
 

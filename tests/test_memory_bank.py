@@ -123,3 +123,27 @@ def test_index_type_default():
 def test_ivf_nlist_default():
     config = MemoryBankConfig()
     assert config.ivf_nlist == 128
+
+
+def test_retrieval_alpha_zero_guarded():
+    """传入 0.0 时守卫回退到默认值 0.7。"""
+    config = MemoryBankConfig(retrieval_alpha=0.0)
+    assert config.retrieval_alpha == 0.7
+
+
+def test_retrieval_alpha_boundary_valid():
+    """传入有效边界值 1.0 应通过。"""
+    config = MemoryBankConfig(retrieval_alpha=1.0)
+    assert config.retrieval_alpha == 1.0
+
+
+def test_bm25_threshold_out_of_range_guarded():
+    """传入 1.5 时守卫回退到默认值 0.5。"""
+    config = MemoryBankConfig(bm25_fallback_threshold=1.5)
+    assert config.bm25_fallback_threshold == 0.5
+
+
+def test_ivf_nlist_zero_guarded():
+    """传入 0 时守卫回退到默认值 128。"""
+    config = MemoryBankConfig(ivf_nlist=0)
+    assert config.ivf_nlist == 128
