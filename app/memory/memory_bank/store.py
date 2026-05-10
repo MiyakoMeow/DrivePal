@@ -8,6 +8,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import aiofiles
+
 from app.memory.embedding_client import EmbeddingClient
 from app.memory.schemas import (
     FeedbackData,
@@ -140,22 +142,23 @@ class MemoryBankStore:
             pass
 
     async def _save_source_index(self) -> None:
-        """持久化 source_event_index 到磁盘。"""
+        """持久化 source_event_index 到磁盘（tmp + os.replace 原子写入）。"""
         if not self._source_index_dirty:
             return
-        path = self._user_dir / self._SOURCE_INDEX_FILENAME
         async with self._source_index_lock:
             if not self._source_index_dirty:  # 双重检查
                 return
             payload = json.dumps(
                 self._source_event_index, ensure_ascii=False, default=str
             )
-            self._source_index_dirty = False  # 锁内原子化重置
+            self._source_index_dirty = False
+        tmp_path = self._user_dir / (self._SOURCE_INDEX_FILENAME + ".tmp")
         try:
-            path.write_text(payload)
+            async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
+                await f.write(payload)
+            tmp_path.replace(self._user_dir / self._SOURCE_INDEX_FILENAME)
         except OSError:
-            async with self._source_index_lock:
-                self._source_index_dirty = True  # 写盘失败，标记下次重试
+            pass
 
     def _get_reference_date(self) -> str:
         return resolve_reference_date(self._config, self._index)

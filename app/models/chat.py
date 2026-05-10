@@ -1,6 +1,7 @@
 """LLM对话模型封装，基于openai SDK，支持多provider自动fallback."""
 
 import asyncio
+import contextlib
 import hashlib
 from functools import cache
 from typing import TYPE_CHECKING
@@ -54,9 +55,11 @@ async def _get_cached_client(
 async def close_client_cache() -> None:
     """关闭所有缓存的客户端（lifespan 关闭时调用）。"""
     async with _get_client_cache_lock():
-        for client in _client_cache.values():
-            await client.close()
+        clients = list(_client_cache.values())
         _client_cache.clear()
+    for client in clients:
+        with contextlib.suppress(Exception):
+            await client.close()
 
 
 def clear_semaphore_cache() -> None:

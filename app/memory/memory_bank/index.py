@@ -96,7 +96,6 @@ class FaissIndex:
 
         self._index_type = index_type
         self._ivf_nlist = ivf_nlist
-        self._needs_train = False
 
     def _build_index(self) -> None:
         """按 index_type 构建 FAISS 索引。"""
@@ -109,10 +108,8 @@ class FaissIndex:
             )
             # 注意：IVF 需训练后才能调用 add_with_ids。当前默认 index_type="flat"，
             # IVF 为预留接口，完整训练逻辑待后续实现。
-            self._needs_train = True
         else:
             self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
-            self._needs_train = False
 
     async def load(self) -> LoadResult:
         """从磁盘加载索引与元数据；损坏时降级恢复，不直接丢弃向量。

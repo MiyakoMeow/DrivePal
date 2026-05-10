@@ -577,4 +577,5 @@ class RetrievalPipeline:
 
     def invalidate_bm25(self) -> None:
         """标记 BM25 索引失效，下次搜索时重建。"""
+        # Python GIL 保证引用赋值的原子性，无需锁
         self._bm25_index = None
