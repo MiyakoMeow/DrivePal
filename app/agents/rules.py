@@ -27,22 +27,47 @@ class Rule:
 URGENT_TYPES = frozenset({"warning", "safety", "alert"})
 
 
+_cached_fatigue_threshold: float | None = None
+
+
 def _get_fatigue_threshold() -> float:
+    global _cached_fatigue_threshold
+    if _cached_fatigue_threshold is not None:
+        return _cached_fatigue_threshold
     raw = os.environ.get("FATIGUE_THRESHOLD", "0.7")
     try:
         value = float(raw)
     except ValueError:
         logger.warning("Invalid FATIGUE_THRESHOLD=%r, using default 0.7", raw)
+        _cached_fatigue_threshold = 0.7
         return 0.7
     if not math.isfinite(value):
         logger.warning("FATIGUE_THRESHOLD=%r is NaN/Inf, using default 0.7", raw)
+        _cached_fatigue_threshold = 0.7
         return 0.7
     if not 0.0 <= value <= 1.0:
         logger.warning(
             "FATIGUE_THRESHOLD=%r out of range [0,1], using default 0.7", raw
         )
+        _cached_fatigue_threshold = 0.7
         return 0.7
+    _cached_fatigue_threshold = value
     return value
+
+
+def reset_fatigue_threshold_cache() -> None:
+    """重置疲劳阈值缓存（供测试使用）。"""
+    global _cached_fatigue_threshold
+    _cached_fatigue_threshold = None
+
+
+_ablation_disable_rules: bool = bool(int(os.getenv("ABLATION_DISABLE_RULES", "0")))
+
+
+def set_ablation_disable_rules(v: bool) -> None:
+    """设置消融实验标记：禁用规则引擎后处理。"""
+    global _ablation_disable_rules
+    _ablation_disable_rules = v
 
 
 _FALLBACK_RULES: list[Rule] = [
@@ -230,7 +255,7 @@ def postprocess_decision(
         (修改后的决策, 被修改的字段列表)
 
     """
-    if os.getenv("ABLATION_DISABLE_RULES") == "1":
+    if _ablation_disable_rules:
         return decision, []
 
     result = dict(decision)

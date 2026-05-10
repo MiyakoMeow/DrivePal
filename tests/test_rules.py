@@ -403,3 +403,29 @@ def test_only_urgent_preserved_with_city_driving(rules_toml_7):
     result = apply_rules(ctx, rules)
     assert result["only_urgent"] is True
     assert "audio" in result["allowed_channels"]
+
+
+def test_disable_rules_skips_postprocess():
+    """set_ablation_disable_rules(True) 使 postprocess_decision 跳过修改"""
+    from app.agents.rules import postprocess_decision, set_ablation_disable_rules
+
+    set_ablation_disable_rules(True)
+    decision = {"should_remind": True, "reminder_content": "test"}
+    ctx: dict[str, Any] = {"scenario": "highway"}
+    result, mods = postprocess_decision(decision, ctx)
+    assert result is decision
+    assert mods == []
+    set_ablation_disable_rules(False)
+
+
+def test_fatigue_threshold_cached(monkeypatch):
+    """_get_fatigue_threshold 首次读 env 后缓存，改 env 不生效"""
+    from app.agents.rules import _get_fatigue_threshold, reset_fatigue_threshold_cache
+
+    reset_fatigue_threshold_cache()
+    monkeypatch.setenv("FATIGUE_THRESHOLD", "0.85")
+    first = _get_fatigue_threshold()
+    monkeypatch.setenv("FATIGUE_THRESHOLD", "0.5")
+    second = _get_fatigue_threshold()
+    assert first == second == 0.85
+    reset_fatigue_threshold_cache()
