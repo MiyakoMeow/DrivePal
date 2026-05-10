@@ -235,16 +235,18 @@ class Mutation:
         u_dir = user_data_dir(current_user)
         files: dict[str, str] = {}
         if u_dir.exists():
-            for fpath in u_dir.rglob("*"):
-                if "memorybank" in fpath.parts:
-                    continue  # 跳过 FAISS 二进制和内部元数据
-                if fpath.is_file() and fpath.suffix in (".jsonl", ".toml", ".json"):
-                    try:
-                        content = fpath.read_text(encoding="utf-8")
-                    except UnicodeDecodeError:
+            allowed_suffixes = (".jsonl", ".toml", ".json")
+            for suffix in allowed_suffixes:
+                for fpath in u_dir.rglob(f"*{suffix}"):
+                    if "memorybank" in fpath.parts:
                         continue
-                    rel = str(fpath.relative_to(u_dir))
-                    files[rel] = content
+                    if fpath.is_file():
+                        try:
+                            content = fpath.read_text(encoding="utf-8")
+                        except UnicodeDecodeError:
+                            continue
+                        rel = str(fpath.relative_to(u_dir))
+                        files[rel] = content
         return ExportDataResult(files=cast("JSON", files))
 
     @strawberry.mutation
