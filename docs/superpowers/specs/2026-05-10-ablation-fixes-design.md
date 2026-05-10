@@ -18,7 +18,7 @@
 **文件：** `experiments/ablation/personalization_group.py`, `experiments/ablation/cli.py`
 
 - `run_personalization_group()` 签名加 `judge: Judge` 参数
-- 运行完所有变体后，按 scenario 分组调用 `judge.score_batch()`，3 次取中位数
+- 运行完所有变体后，按 `scenario_id` 分组调用 `judge.score_batch()`（同一场景的 FULL/NO_FEEDBACK 两个变体输出打包盲评），3 次取中位数
 - `cli.py` `_run_personalization_experiment` 传入 judge 实例
 - `--judge-only` 中 personalization 分支：加载结果 → `judge.score_batch()` → 计算指标
 
@@ -65,7 +65,7 @@
 
 **文件：** `experiments/ablation/personalization_group.py`
 
-- 函数重命名为 `_compute_decision_divergence`
+- 函数重命名为 `_compute_decision_divergence`，`_compute_preference_metrics` 返回的 metrics dict 中 key 同步更名为 `decision_divergence`（原 `overfitting_gap`）。`report.py` 无需变更——其仅遍历 metrics dict 键值对
 - 改为比较 FULL vs NO_FEEDBACK 所有决策字段的差异项数（非仅 `should_remind`）
 - `_compute_matching_rate` 中 mixed 阶段 `_decision_matches_stage` 返回 None（新增行为：原函数对所有阶段返回 bool，现 mixed 阶段返回 None 表"不适用"），`_compute_matching_rate` 处理方式：None 不计入分母（即跳过该项，不参与该阶段的匹配率分子分母）
 - 实现前需 `grep` 审计 `_decision_matches_stage` 所有调用点，确保无其他调用方依赖 bool 返回值
