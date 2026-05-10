@@ -15,7 +15,7 @@ from .architecture_group import (
 )
 from .judge import Judge
 from .personalization_group import (
-    _STAGES,
+    STAGES,
     _compute_preference_metrics,
     run_personalization_group,
 )
@@ -107,7 +107,7 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
                 weight_history = raw.get("weight_history", [])
                 # 重新计算偏好指标（依赖 weight_history + variant_results）
                 metrics = _compute_preference_metrics(
-                    variant_results, weight_history, _STAGES
+                    variant_results, weight_history, STAGES
                 )
 
         all_group_results[group_name] = GroupResult(

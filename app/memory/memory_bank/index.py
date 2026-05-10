@@ -13,7 +13,7 @@ import logging
 import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import faiss
 import numpy as np
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_DIM = 1536
 _TIMESTAMP_LENGTH = 10
+_IVF_NOT_SUPPORTED = (
+    "IVF index type is reserved for future use. "
+    "Set MEMORYBANK_INDEX_TYPE=flat (the default) instead."
+)
 
 
 @dataclass
@@ -72,7 +76,7 @@ class FaissIndex:
         self,
         data_dir: Path,
         embedding_dim: int = DEFAULT_EMBEDDING_DIM,
-        index_type: str = "flat",
+        index_type: Literal["flat", "ivf_flat"] = "flat",
         ivf_nlist: int = 128,
     ) -> None:
         """初始化 FaissIndex。
@@ -100,16 +104,8 @@ class FaissIndex:
     def _build_index(self) -> None:
         """按 index_type 构建 FAISS 索引。"""
         if self._index_type == "ivf_flat":
-            quantizer = faiss.IndexFlatIP(self._dim)
-            self._index = faiss.IndexIDMap(
-                faiss.IndexIVFFlat(
-                    quantizer, self._dim, self._ivf_nlist, faiss.METRIC_INNER_PRODUCT
-                )
-            )
-            # 注意：IVF 需训练后才能调用 add_with_ids。当前默认 index_type="flat"，
-            # IVF 为预留接口，完整训练逻辑待后续实现。
-        else:
-            self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
+            raise RuntimeError(_IVF_NOT_SUPPORTED)
+        self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
 
     async def load(self) -> LoadResult:
         """从磁盘加载索引与元数据；损坏时降级恢复，不直接丢弃向量。

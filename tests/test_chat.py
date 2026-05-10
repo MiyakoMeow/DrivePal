@@ -12,11 +12,12 @@ from app.models.types import ProviderConfig as PCfg
 
 
 @pytest.fixture(autouse=True)
-def _clean_cache():
+async def _clean_cache():
     """每个测试前后清理客户端缓存"""
     clear_semaphore_cache()
     yield
     clear_semaphore_cache()
+    await close_client_cache()
 
 
 @pytest.mark.asyncio

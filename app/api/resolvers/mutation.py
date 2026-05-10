@@ -236,17 +236,16 @@ class Mutation:
         files: dict[str, str] = {}
         if u_dir.exists():
             allowed_suffixes = (".jsonl", ".toml", ".json")
-            for suffix in allowed_suffixes:
-                for fpath in u_dir.rglob(f"*{suffix}"):
-                    if "memorybank" in fpath.parts:
+            for fpath in u_dir.rglob("*"):
+                if "memorybank" in fpath.parts or fpath.suffix not in allowed_suffixes:
+                    continue
+                if fpath.is_file():
+                    try:
+                        content = fpath.read_text(encoding="utf-8")
+                    except UnicodeDecodeError:
                         continue
-                    if fpath.is_file():
-                        try:
-                            content = fpath.read_text(encoding="utf-8")
-                        except UnicodeDecodeError:
-                            continue
-                        rel = str(fpath.relative_to(u_dir))
-                        files[rel] = content
+                    rel = str(fpath.relative_to(u_dir))
+                    files[rel] = content
         return ExportDataResult(files=cast("JSON", files))
 
     @strawberry.mutation

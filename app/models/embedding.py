@@ -38,7 +38,7 @@ def _finalize_background_task(task: asyncio.Task[object]) -> None:
             logger.warning("Background cleanup task failed: %s", exc)
 
 
-def get_cached_embedding_model(embedding_batch_size: int = 32) -> EmbeddingModel:
+def get_cached_embedding_model(embedding_batch_size: int = 100) -> EmbeddingModel:
     """获取缓存的embedding模型实例，避免重复加载."""
     settings = LLMSettings.load()
     provider = settings.get_embedding_provider()
@@ -52,7 +52,7 @@ def get_cached_embedding_model(embedding_batch_size: int = 32) -> EmbeddingModel
         raise RuntimeError(msg)
     api_key = provider.provider.api_key or ""
     key_fp = hashlib.sha256(api_key.encode()).hexdigest()[:12]
-    cache_key = f"{model}|{base_url}|{key_fp}"
+    cache_key = f"{model}|{base_url}|{key_fp}|b{embedding_batch_size}"
     if cache_key not in _EMBEDDING_MODEL_CACHE:
         _EMBEDDING_MODEL_CACHE[cache_key] = EmbeddingModel(
             provider=provider, batch_size=embedding_batch_size

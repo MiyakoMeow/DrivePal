@@ -27,7 +27,7 @@ _INITIAL_WEIGHT_TOLERANCE = 0.01
 _CONVERGENCE_TOLERANCE = 0.05
 _CONSECUTIVE_FOR_CONVERGENCE = 3
 
-_STAGES: list[tuple[str, int, int]] = [
+STAGES: list[tuple[str, int, int]] = [
     ("high-freq", 0, 5),
     ("silent", 5, 10),
     ("visual-detail", 10, 15),
@@ -54,7 +54,7 @@ async def run_personalization_group(
         msg = "no personalization scenarios available"
         raise ValueError(msg)
 
-    stages = _STAGES[:]  # 浅拷贝防止调用方修改
+    stages = STAGES[:]  # 浅拷贝防止调用方修改
 
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []

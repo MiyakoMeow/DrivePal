@@ -15,7 +15,7 @@ class EmbeddingClient:
     此处不再冗余重试。
     """
 
-    def __init__(self, embedding_model: EmbeddingModel, batch_size: int = 32) -> None:
+    def __init__(self, embedding_model: EmbeddingModel, batch_size: int = 100) -> None:
         """初始化 EmbeddingClient。
 
         Args:
