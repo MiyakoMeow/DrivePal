@@ -64,7 +64,11 @@ async def run_personalization_group(
             scenario = personalization_scenarios[i % len(personalization_scenarios)]
 
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
-                vr = await runner.run_variant(scenario, variant)
+                vr = await runner.run_variant(
+                    scenario,
+                    variant,
+                    user_id=f"{runner.base_user_id}-{variant.value}",
+                )
                 vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
                 all_results.append(vr)
                 await _append_checkpoint(
@@ -74,10 +78,16 @@ async def run_personalization_group(
                 )
 
                 if variant == Variant.FULL and vr.event_id:
-                    action = simulate_feedback(vr.decision, stage_name, rng)
-                    await update_feedback_weight(
-                        runner.base_user_id, vr.event_id, action
-                    )
+                    try:
+                        action = simulate_feedback(vr.decision, stage_name, rng)
+                        await update_feedback_weight(
+                            runner.base_user_id, vr.event_id, action
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Feedback update failed for round %d, skipping",
+                            i + 1,
+                        )
 
             snapshot = await _read_weights(runner.base_user_id)
             weight_history.append(

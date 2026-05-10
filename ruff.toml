@@ -79,6 +79,7 @@ exclude = [".agents/**"]
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
     "BLE001",  # _score_one 捕获所有异常记录并返回空 dict，不重抛
+    "PLR2004",  # len(latencies) 比较魔法数字（1/2），延迟分析常见模式
 ]
 "experiments/ablation/metrics.py" = [
     "TC001",  # JudgeScores/VariantResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
@@ -91,6 +92,8 @@ exclude = [".agents/**"]
     "S311",  # random.Random 用于实验可复现种子，非安全场景
     "TC001",  # AblationRunner 仅用于类型注解
     "TC003",  # Path 用于类型注解及运行时操作
+    "BLE001",  # update_feedback_weight 失败记录日志后跳过，不中断实验
+    "C901",  # run_personalization_group 含 4 阶段 × 20 轮 × 2 变体编排，复杂度可接受
 ]
 
 "app/memory/memory_bank/lifecycle.py" = [

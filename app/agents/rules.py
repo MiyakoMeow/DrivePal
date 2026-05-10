@@ -72,6 +72,11 @@ def set_ablation_disable_rules(v: bool) -> None:
     _ablation_disable_rules.set(v)
 
 
+def get_ablation_disable_rules() -> bool:
+    """读取消融实验标记（当前 Context 的值）。"""
+    return _ablation_disable_rules.get()
+
+
 _FALLBACK_RULES: list[Rule] = [
     Rule(
         name="highway_audio_only",

@@ -95,10 +95,12 @@ def compute_quality_metrics(
         n = len(variant_scores)
         variant_results = [r for r in results if r.variant.value == variant]
         latencies = sorted([r.latency_ms for r in variant_results])
-        if latencies:
+        if len(latencies) >= 2:
             percentiles = statistics.quantiles(latencies, n=100, method="inclusive")
             p50 = percentiles[49]
             p90 = percentiles[89]
+        elif len(latencies) == 1:
+            p50 = p90 = latencies[0]
         else:
             p50 = p90 = 0.0
 

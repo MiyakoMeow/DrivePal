@@ -19,6 +19,11 @@ def set_probabilistic_enabled(v: bool) -> None:
     _probabilistic_enabled.set(v)
 
 
+def get_probabilistic_enabled() -> bool:
+    """读取概率推断启用状态（当前 Context 的值）。"""
+    return _probabilistic_enabled.get()
+
+
 _WORKLOAD_MAP = {"low": 0.1, "normal": 0.3, "high": 0.6, "overloaded": 0.9}
 _SCENARIO_MAP = {"parked": 0.0, "city_driving": 0.4, "traffic_jam": 0.3, "highway": 0.7}
 

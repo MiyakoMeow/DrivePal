@@ -40,6 +40,11 @@ def set_ablation_disable_feedback(v: bool) -> None:
     _ablation_disable_feedback.set(v)
 
 
+def get_ablation_disable_feedback() -> bool:
+    """读取消融实验标记（当前 Context 的值）。"""
+    return _ablation_disable_feedback.get()
+
+
 logger = logging.getLogger(__name__)
 
 

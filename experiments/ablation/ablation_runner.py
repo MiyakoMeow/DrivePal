@@ -14,10 +14,17 @@ import aiofiles
 if TYPE_CHECKING:
     from pathlib import Path
 
-from app.agents.probabilistic import set_probabilistic_enabled
+from app.agents.probabilistic import (
+    get_probabilistic_enabled,
+    set_probabilistic_enabled,
+)
 from app.agents.prompts import SINGLE_LLM_SYSTEM_PROMPT
-from app.agents.rules import set_ablation_disable_rules
-from app.agents.workflow import AgentWorkflow, set_ablation_disable_feedback
+from app.agents.rules import get_ablation_disable_rules, set_ablation_disable_rules
+from app.agents.workflow import (
+    AgentWorkflow,
+    get_ablation_disable_feedback,
+    set_ablation_disable_feedback,
+)
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
@@ -50,6 +57,11 @@ class AblationRunner:
         uid = user_id or self.base_user_id
         t0 = time.perf_counter()
 
+        # 保存原始 ContextVar 值——finally 需恢复原始值而非硬编码默认
+        orig_rules = get_ablation_disable_rules()
+        orig_feedback = get_ablation_disable_feedback()
+        orig_prob = get_probabilistic_enabled()
+
         if variant == Variant.NO_RULES:
             set_ablation_disable_rules(True)
         elif variant == Variant.NO_PROB:
@@ -62,14 +74,10 @@ class AblationRunner:
                 return await self._run_single_llm(scenario, uid, t0)
             return await self._run_agent_workflow(scenario, variant, uid, t0)
         finally:
-            # 重置 ContextVar——防御直接调用（非 create_task 包装）时的状态泄漏
-            # 如 personalization_group 中 FULL/NO_FEEDBACK 交替直接调用 run_variant
-            if variant == Variant.NO_RULES:
-                set_ablation_disable_rules(False)
-            elif variant == Variant.NO_PROB:
-                set_probabilistic_enabled(True)
-            elif variant == Variant.NO_FEEDBACK:
-                set_ablation_disable_feedback(False)
+            # 恢复原始值而非硬编码默认——尊重用户环境变量设置（如 PROBABILISTIC_INFERENCE_ENABLED=0）
+            set_ablation_disable_rules(orig_rules)
+            set_probabilistic_enabled(orig_prob)
+            set_ablation_disable_feedback(orig_feedback)
 
     async def _run_agent_workflow(
         self, scenario: Scenario, variant: Variant, user_id: str, t0: float
