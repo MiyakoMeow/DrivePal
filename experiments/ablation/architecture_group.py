@@ -1,5 +1,6 @@
 """架构组实验——四 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
 
+import asyncio
 import logging
 import os
 import statistics
@@ -52,10 +53,15 @@ async def run_architecture_group(
     )
 
     scores: list[JudgeScores] = []
-    for scenario in arch_scenarios:
-        scenario_results = [r for r in results if r.scenario_id == scenario.id]
-        batch_scores = await judge.score_batch(scenario, scenario_results)
-        scores.extend(batch_scores)
+
+    async def score_one(scenario: Scenario) -> list[JudgeScores]:
+        vrs = [r for r in results if r.scenario_id == scenario.id]
+        return await judge.score_batch(scenario, vrs)
+
+    tasks = [score_one(s) for s in arch_scenarios]
+    scores_batches = await asyncio.gather(*tasks)
+    for batch in scores_batches:
+        scores.extend(batch)
 
     await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 
