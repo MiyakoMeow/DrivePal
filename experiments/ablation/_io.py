@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import argparse
     from pathlib import Path
 
-    from .types import GroupResult, VariantResult
+    from .types import GroupResult, JudgeScores, VariantResult
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +103,24 @@ async def write_step_summary(
             "metrics": group_result.metrics,
         },
     )
+
+
+async def write_scores_json(path: Path, scores: list[JudgeScores]) -> None:
+    """写入 Judge 评分文件。全量运行和 judge-only 共用。"""
+    data: dict[str, Any] = {
+        "scores": [
+            {
+                "scenario_id": s.scenario_id,
+                "variant": s.variant.value,
+                "safety_score": s.safety_score,
+                "reasonableness_score": s.reasonableness_score,
+                "overall_score": s.overall_score,
+                "violation_flags": s.violation_flags,
+            }
+            for s in scores
+        ]
+    }
+    await write_json_atomic(path, data)
 
 
 async def dump_variant_results_jsonl(

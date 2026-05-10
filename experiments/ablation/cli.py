@@ -5,13 +5,14 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 
 import aiofiles
 
-from ._io import write_config, write_json_atomic, write_step_summary
+from ._io import write_config, write_scores_json, write_step_summary
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     compute_quality_metrics,
@@ -141,27 +142,13 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
 
         scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
-
-        # 写 scores.json
-        scores_path = run_dir / group_name / "scores.json"
-        scores_data = [
-            {
-                "scenario_id": s.scenario_id,
-                "variant": s.variant.value,
-                "safety_score": s.safety_score,
-                "reasonableness_score": s.reasonableness_score,
-                "overall_score": s.overall_score,
-                "violation_flags": s.violation_flags,
-            }
-            for s in scores
-        ]
-        await write_json_atomic(scores_path, {"scores": scores_data})
+        await write_scores_json(run_dir / group_name / "scores.json", scores)
 
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
         elif group_name == "architecture":
             metrics = compute_quality_metrics(scores, variant_results)
-        else:  # personalization
+        elif group_name == "personalization":
             summary_path = run_dir / group_name / "results.summary.json"
             try:
                 async with aiofiles.open(summary_path, encoding="utf-8") as f:
@@ -184,6 +171,9 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
                 metrics = _compute_preference_metrics(
                     variant_results, weight_history, STAGES
                 )
+        else:
+            msg = f"未知组: {group_name}"
+            raise ValueError(msg)
 
         all_group_results[group_name] = GroupResult(
             group=group_name,
@@ -291,19 +281,9 @@ async def _run_and_summarize(
 
     # 持久化 Judge 详细评分
     if result.judge_scores:
-        scores_path = run_dir / group / "scores.json"
-        scores_data: list[dict] = [
-            {
-                "scenario_id": s.scenario_id,
-                "variant": s.variant.value,
-                "safety_score": s.safety_score,
-                "reasonableness_score": s.reasonableness_score,
-                "overall_score": s.overall_score,
-                "violation_flags": s.violation_flags,
-            }
-            for s in result.judge_scores
-        ]
-        await write_json_atomic(scores_path, {"scores": scores_data})
+        await write_scores_json(
+            run_dir / group / "scores.json", result.judge_scores
+        )
 
     step_path = run_dir / group / "step-summary.json"
     await write_step_summary(step_path, result, duration_seconds=elapsed)
@@ -359,6 +339,7 @@ async def main(argv: list[str] | None = None) -> None:
     await write_config(run_dir / "config.json", args)
 
     all_group_results: dict[str, GroupResult] = {}
+    failures: list[str] = []
 
     concurrent_groups = [g for g in groups_to_run if g != "personalization"]
     serial_group = "personalization" if "personalization" in groups_to_run else None
@@ -370,7 +351,6 @@ async def main(argv: list[str] | None = None) -> None:
             )
             for g in concurrent_groups
         ]
-        failures: list[str] = []
         for r in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(r, Exception):
                 logger.error("Group experiment failed: %s", r)
@@ -393,6 +373,7 @@ async def main(argv: list[str] | None = None) -> None:
             all_group_results[grp_name] = grp_result
         except Exception:
             logger.exception("Serial group '%s' failed", serial_group)
+            failures.append(f"serial:{serial_group}")
 
     await render_report(all_group_results, run_dir)
 
@@ -401,3 +382,6 @@ async def main(argv: list[str] | None = None) -> None:
         print(
             f"  {g}: {len(gr.variant_results)} results, {len(gr.judge_scores)} scores"
         )
+
+    if failures:
+        sys.exit(1)
