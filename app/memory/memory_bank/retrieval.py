@@ -550,7 +550,6 @@ class RetrievalPipeline:
             original_score = max(float(r.get("score", 0.0)), 0.0)
             r["score"] = alpha * original_score + (1.0 - alpha) * retention
 
-        results.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         return results
 
     def _rebuild_bm25_index(self) -> None:

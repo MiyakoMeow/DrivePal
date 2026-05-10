@@ -61,6 +61,8 @@ def reset_fatigue_threshold_cache() -> None:
     _cached_fatigue_threshold = None
 
 
+# 消融实验与正常 API 请求分离运行，无并发竞争。
+# 若未来需并发，改用 threading.local() 或 contextvars。
 _ablation_disable_rules: bool = bool(int(os.getenv("ABLATION_DISABLE_RULES", "0")))
 
 

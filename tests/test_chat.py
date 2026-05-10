@@ -1,7 +1,5 @@
 """ChatModel 客户端缓存测试."""
 
-import asyncio
-
 import pytest
 
 from app.models.chat import (

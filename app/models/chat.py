@@ -133,13 +133,6 @@ class ChatModel:
         self.providers = providers
         self.temperature = temperature
 
-    def _create_client(
-        self,
-        provider: LLMProviderConfig,
-    ) -> openai.AsyncOpenAI:
-        """创建openai异步客户端（回退用，新代码优先使用 _get_cached_client）。"""
-        return _make_client(provider)
-
     def _build_messages(
         self,
         prompt: str,
