@@ -19,6 +19,9 @@ _PROXIMITY_RADIUS_M = 500
 _PROXIMITY_RADIUS_PARKED_M = 1000  # 停车时放宽距离容差（GPS 偏移）
 _DEFAULT_TTL_SECONDS = 3600
 _TTL_EXTRA_FOR_TIME = 1800
+_MAX_HOUR = 23
+_NOON = 12
+_AM_THRESHOLD = 8  # < 8 且无 AM/PM 标记时视为 PM
 
 
 @dataclass
@@ -279,11 +282,13 @@ def parse_time(s: str) -> str | None:
         return None
     am_pm = m.group(1)
     hour = int(m.group(2))
-    if hour < 0 or hour > 23:
+    if hour < 0 or hour > _MAX_HOUR:
         return None
-    if am_pm == "上午" and hour == 12:
+    if am_pm == "上午" and hour == _NOON:
         hour = 0
-    elif (am_pm == "下午" and hour != 12) or (am_pm is None and hour < 8):
-        hour += 12
+    elif (am_pm == "下午" and hour != _NOON) or (
+        am_pm is None and hour < _AM_THRESHOLD
+    ):
+        hour += _NOON
     today = datetime.now(UTC).date().isoformat()
     return f"{today}T{hour:02d}:00:00"

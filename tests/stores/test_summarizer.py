@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
+from app.memory.exceptions import LLMCallFailedError, SummarizationEmpty
 from app.memory.memory_bank.config import MemoryBankConfig
 from app.memory.memory_bank.index import FaissIndex
 from app.memory.memory_bank.summarizer import GENERATION_EMPTY, Summarizer
@@ -135,7 +135,7 @@ async def test_overall_personality_skips_when_exists():
 
 @pytest.mark.asyncio
 async def test_llm_call_failed_propagates():
-    """LLMCallFailed 应上抛（不被 Summarizer 吞）。"""
+    """LLMCallFailedError 应上抛（不被 Summarizer 吞）。"""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -146,9 +146,9 @@ async def test_llm_call_failed_propagates():
             {"source": "2024-06-15"},
         )
         mock_llm = AsyncMock()
-        mock_llm.call = AsyncMock(side_effect=LLMCallFailed("API error"))
+        mock_llm.call = AsyncMock(side_effect=LLMCallFailedError("API error"))
         summ = Summarizer(mock_llm, idx, MemoryBankConfig())
-        with pytest.raises(LLMCallFailed):
+        with pytest.raises(LLMCallFailedError):
             await summ.get_daily_summary("2024-06-15")
 
 

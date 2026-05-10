@@ -25,6 +25,8 @@ def _p90(values: list[float] | deque) -> float:
 
 @dataclass
 class MemoryBankMetrics:
+    """MemoryBank 可观测性指标，低开销计数与延迟采样。"""
+
     search_count: int = 0
     search_empty_index_count: int = 0  # 索引为空
     search_empty_count: int = 0  # 结果为空（含过滤后空）
@@ -40,6 +42,7 @@ class MemoryBankMetrics:
     index_load_warnings: deque[str] = field(default_factory=lambda: deque(maxlen=100))
 
     def snapshot(self) -> dict[str, Any]:
+        """返回当前指标快照。"""
         return {
             "search_count": self.search_count,
             "search_empty_ratio": (
@@ -62,6 +65,7 @@ class MemoryBankMetrics:
         }
 
     def reset(self) -> None:
+        """重置所有指标。"""
         self.search_count = 0
         self.search_empty_count = 0
         self.search_empty_index_count = 0

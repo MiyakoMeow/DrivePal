@@ -29,13 +29,12 @@ class ShortcutResolver:
 
     def resolve(self, query: str) -> dict | None:
         """匹配查询返回预构建 decision dict，未命中返回 None."""
-        candidates: list[tuple[int, int, dict, str]] = []
-        for sc in self._shortcuts:
-            for pat in sc.get("patterns", []):
-                if query == pat or query.startswith(pat):
-                    candidates.append(
-                        (len(pat), sc.get("priority", 0), sc, query[len(pat) :].strip())
-                    )
+        candidates: list[tuple[int, int, dict, str]] = [
+            (len(pat), sc.get("priority", 0), sc, query[len(pat) :].strip())
+            for sc in self._shortcuts
+            for pat in sc.get("patterns", [])
+            if query == pat or query.startswith(pat)
+        ]
         if not candidates:
             return None
         candidates.sort(key=lambda x: (-x[0], -x[1]))

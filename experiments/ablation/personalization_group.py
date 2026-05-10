@@ -16,6 +16,11 @@ from app.storage.toml_store import TOMLStore
 from .ablation_runner import AblationRunner
 from .types import GroupResult, Scenario, Variant, VariantResult
 
+_SIMULATED_ACCEPT_PROB = 0.5
+_MIN_HISTORY_LEN = 2
+_CONVERGENCE_TOLERANCE = 0.05
+_CONSECUTIVE_FOR_CONVERGENCE = 3
+
 
 async def run_personalization_group(
     runner: AblationRunner,
@@ -95,13 +100,14 @@ def simulate_feedback(
             "accept" if "visual" in decision.get("allowed_channels", []) else "ignore"
         )
     if stage == "mixed":
-        return "accept" if rng.random() < 0.5 else "ignore"
+        return "accept" if rng.random() < _SIMULATED_ACCEPT_PROB else "ignore"
     return "ignore"
 
 
 async def update_feedback_weight(
     user_id: str, event_id: str, action: Literal["accept", "ignore"]
 ) -> None:
+    """模拟反馈写入 strategies.toml，更新 reminder_weights。"""
     mm = get_memory_module()
     mode = MemoryMode.MEMORY_BANK
     event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
@@ -198,7 +204,7 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
 
     返回值 ∈ [0, 1] 表示收敛速度（越小越快），-1.0 表示未收敛。
     """
-    if not weight_history or len(weight_history) < 2:
+    if not weight_history or len(weight_history) < _MIN_HISTORY_LEN:
         return -1.0
 
     final_weights = weight_history[-1].get("weights", {})
@@ -212,9 +218,9 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     first_stable_round = -1
     for i, wh in enumerate(weight_history):
         current_weight = wh.get("weights", {}).get(target_type, 0.5)
-        if abs(current_weight - target_final) <= 0.05:
+        if abs(current_weight - target_final) <= _CONVERGENCE_TOLERANCE:
             consecutive += 1
-            if consecutive >= 3 and first_stable_round < 0:
+            if consecutive >= _CONSECUTIVE_FOR_CONVERGENCE and first_stable_round < 0:
                 first_stable_round = i - 2
         else:
             consecutive = 0
@@ -242,7 +248,7 @@ def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float
             sum(wh.get("weights", {}).values()) / max(1, len(wh.get("weights", {})))
             for wh in window
         ]
-        if len(weights_per_round) < 2:
+        if len(weights_per_round) < _MIN_HISTORY_LEN:
             continue
         mean = sum(weights_per_round) / len(weights_per_round)
         variance = sum((w - mean) ** 2 for w in weights_per_round) / len(

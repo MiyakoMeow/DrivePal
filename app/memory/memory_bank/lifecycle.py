@@ -5,7 +5,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from app.memory.exceptions import LLMCallFailed, SummarizationEmpty
+from app.memory.exceptions import LLMCallFailedError, SummarizationEmpty
 from app.memory.schemas import FeedbackData, InteractionResult, MemoryEvent
 
 from .config import resolve_reference_date
@@ -34,6 +34,17 @@ class MemoryLifecycle:
         config: MemoryBankConfig,
         metrics: MemoryBankMetrics | None = None,
     ) -> None:
+        """初始化 MemoryLifecycle。
+
+        Args:
+            index: FAISS 索引。
+            embedding_client: 嵌入客户端。
+            forget: 遗忘曲线。
+            summarizer: 摘要生成器（可选）。
+            config: MemoryBank 配置。
+            metrics: 可观测性指标（可选）。
+
+        """
         self._index = index
         self._embedding_client = embedding_client
         self._forget = forget
@@ -299,7 +310,7 @@ class MemoryLifecycle:
             await self._summarizer.get_daily_personality(date_key)
         except SummarizationEmpty:
             return
-        except LLMCallFailed:
+        except LLMCallFailedError:
             if self._metrics:
                 self._metrics.background_task_failures += 1
             logger.warning(
@@ -336,7 +347,7 @@ class MemoryLifecycle:
             try:
                 await self._summarizer.get_overall_summary()
                 await self._summarizer.get_overall_personality()
-            except LLMCallFailed:
+            except LLMCallFailedError:
                 if self._metrics:
                     self._metrics.background_task_failures += 1
                 logger.warning(
