@@ -65,6 +65,7 @@ exclude = [".agents/**"]
 "experiments/ablation/cli.py" = [
     "T201",  # CLI 入口用 print 输出进度，非生产日志
     "C901",  # main() 入口编排多组实验，复杂度可接受
+    "PLR0912",  # main() 含多个 CLI 分支（synthesize/judge_only/并发/串行），逻辑清晰
     "PLR2004",  # 元组长度检查等魔法数字在编排逻辑中可接受
 ]
 "experiments/ablation/judge.py" = [

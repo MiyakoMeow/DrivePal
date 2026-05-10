@@ -5,10 +5,13 @@ import asyncio
 import json
 import logging
 import os
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiofiles
 
+from ._io import write_config, write_step_summary
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     compute_quality_metrics,
@@ -38,6 +41,35 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+def _find_latest_run(runs_dir: Path) -> Path | None:
+    """按目录名降序取最新运行目录。"""
+    if not runs_dir.is_dir():
+        return None
+    dirs = sorted(
+        [d for d in runs_dir.iterdir() if d.is_dir()],
+        key=lambda d: d.name,
+        reverse=True,
+    )
+    return dirs[0] if dirs else None
+
+
+def _print_step_summary(result: GroupResult, elapsed: float) -> None:
+    """控制台输出步骤摘要。"""
+    group = result.group
+    n = len(result.variant_results)
+    m = len(result.judge_scores)
+    metrics_parts: list[str] = []
+    for k, v in result.metrics.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                if isinstance(v2, (int, float)):
+                    metrics_parts.append(f"{k2}: {v2}")
+        elif isinstance(v, (int, float)):
+            metrics_parts.append(f"{k}: {v}")
+    metrics_str = "; ".join(metrics_parts[:8])  # 至多 8 项防过长
+    print(f"[{group}] {n} results, {m} scores, {elapsed:.1f}s | {metrics_str}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """构建消融实验命令行参数解析器。"""
     parser = argparse.ArgumentParser(description="DrivePal-2 消融实验")
@@ -51,6 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--judge-only", action="store_true", help="仅重新评分")
     parser.add_argument("--data-dir", default="data/experiments")
     parser.add_argument("--seed", type=int, default=42, help="ABLATION_SEED")
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="运行标识符（缺省自动生成 {timestamp}_{seed}）",
+    )
     return parser
 
 
@@ -78,7 +116,7 @@ async def _score_group(
     return scores
 
 
-async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
+async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> None:
     """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出。"""
     all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
     if not all_scenarios:
@@ -86,12 +124,11 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
         return
 
     scenario_by_id: dict[str, Scenario] = {s.id: s for s in all_scenarios}
-    results_dir = data_dir / "results"
     judge = Judge()
     all_group_results: dict[str, GroupResult] = {}
 
     for group_name in groups:
-        result_path = results_dir / f"{group_name}.jsonl"
+        result_path = run_dir / group_name / "results.jsonl"
         if not result_path.exists():
             continue
 
@@ -102,29 +139,45 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
 
         scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
 
+        # 写 scores.json
+        scores_path = run_dir / group_name / "scores.json"
+        scores_data = [
+            {
+                "scenario_id": s.scenario_id,
+                "variant": s.variant.value,
+                "safety_score": s.safety_score,
+                "reasonableness_score": s.reasonableness_score,
+                "overall_score": s.overall_score,
+                "violation_flags": s.violation_flags,
+            }
+            for s in scores
+        ]
+        scores_path.parent.mkdir(parents=True, exist_ok=True)
+        scores_path.write_text(json.dumps(scores_data, ensure_ascii=False, indent=2))
+
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
         elif group_name == "architecture":
             metrics = compute_quality_metrics(scores, variant_results)
         else:  # personalization
-            summary_path = result_path.with_suffix(".summary.json")
+            summary_path = run_dir / group_name / "results.summary.json"
             try:
                 raw = json.loads(summary_path.read_text())
             except FileNotFoundError:
                 logger.warning(
-                    "个性化组 .summary.json 不存在（%s），指标将为空。"
+                    "个性化组 results.summary.json 不存在（%s），指标将为空。"
                     "请先运行完整个性化组实验。",
                     summary_path,
                 )
                 metrics = {}
             except json.JSONDecodeError:
                 logger.warning(
-                    "个性化组 .summary.json 解析失败（%s），指标将为空。", summary_path
+                    "个性化组 results.summary.json 解析失败（%s），指标将为空。",
+                    summary_path,
                 )
                 metrics = {}
             else:
                 weight_history = raw.get("weight_history", [])
-                # 重新计算偏好指标（依赖 weight_history + variant_results）
                 metrics = _compute_preference_metrics(
                     variant_results, weight_history, STAGES
                 )
@@ -135,9 +188,15 @@ async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
             judge_scores=scores,
             metrics=metrics,
         )
+
+        # 更新 step-summary
+        step_path = run_dir / group_name / "step-summary.json"
+        await write_step_summary(
+            step_path, all_group_results[group_name], duration_seconds=0
+        )
         print(f"{group_name} 组重新评分完成: {len(scores)} 评分")
 
-    render_report(all_group_results, results_dir)
+    render_report(all_group_results, run_dir)
 
 
 async def _load_variant_results(path: Path) -> list[VariantResult]:
@@ -170,19 +229,19 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
 
 
 async def _run_safety_experiment(
-    data_dir: Path, all_scenarios: list[Scenario], seed: int
+    all_scenarios: list[Scenario], seed: int, run_dir: Path
 ) -> GroupResult:
     """运行安全性组实验。"""
     runner = AblationRunner(base_user_id="experiment-safety")
     judge = Judge()
     safety_scenarios = sample_scenarios(all_scenarios, 50, safety_only=True, seed=seed)
     return await run_safety_group(
-        runner, judge, safety_scenarios, data_dir / "results" / "safety.jsonl"
+        runner, judge, safety_scenarios, run_dir / "safety" / "results.jsonl"
     )
 
 
 async def _run_architecture_experiment(
-    data_dir: Path, all_scenarios: list[Scenario], seed: int
+    all_scenarios: list[Scenario], seed: int, run_dir: Path
 ) -> GroupResult:
     """运行架构组实验。"""
     runner = AblationRunner(base_user_id="experiment-arch")
@@ -191,12 +250,12 @@ async def _run_architecture_experiment(
         all_scenarios, 50, safety_only=False, seed=seed + 1
     )
     return await run_architecture_group(
-        runner, judge, arch_scenarios, data_dir / "results" / "architecture.jsonl"
+        runner, judge, arch_scenarios, run_dir / "architecture" / "results.jsonl"
     )
 
 
 async def _run_personalization_experiment(
-    data_dir: Path, all_scenarios: list[Scenario], seed: int
+    all_scenarios: list[Scenario], seed: int, run_dir: Path
 ) -> GroupResult:
     """运行个性化组实验。"""
     runner = AblationRunner(base_user_id="experiment-personalization")
@@ -207,10 +266,36 @@ async def _run_personalization_experiment(
     return await run_personalization_group(
         runner,
         personalization_scenarios,
-        data_dir / "results" / "personalization.jsonl",
+        run_dir / "personalization" / "results.jsonl",
         seed=seed,
         judge=judge,
     )
+
+
+async def _run_and_summarize(
+    group: str,
+    all_scenarios: list[Scenario],
+    seed: int,
+    run_dir: Path,
+) -> tuple[str, GroupResult]:
+    """运行一组实验并写 step-summary + 控制台输出。"""
+    t0 = time.perf_counter()
+    print(f"\n=== 运行 {group} 组 ===\n")
+    if group == "safety":
+        result = await _run_safety_experiment(all_scenarios, seed, run_dir)
+    elif group == "architecture":
+        result = await _run_architecture_experiment(all_scenarios, seed, run_dir)
+    elif group == "personalization":
+        result = await _run_personalization_experiment(all_scenarios, seed, run_dir)
+    else:
+        msg = f"未知组: {group}"
+        raise ValueError(msg)
+    elapsed = time.perf_counter() - t0
+
+    step_path = run_dir / group / "step-summary.json"
+    await write_step_summary(step_path, result, duration_seconds=elapsed)
+    _print_step_summary(result, elapsed)
+    return group, result
 
 
 async def main(argv: list[str] | None = None) -> None:
@@ -232,7 +317,16 @@ async def main(argv: list[str] | None = None) -> None:
         return
 
     if args.judge_only:
-        await _judge_only(data_dir, groups=groups_to_run)
+        run_dir: Path
+        if args.run_id:
+            run_dir = data_dir / "runs" / args.run_id
+        else:
+            latest = _find_latest_run(data_dir / "runs")
+            if latest is None:
+                print("无已有运行，请先运行实验")
+                return
+            run_dir = latest
+        await _judge_only(run_dir, data_dir, groups=groups_to_run)
         return
 
     all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
@@ -240,8 +334,13 @@ async def main(argv: list[str] | None = None) -> None:
         print("无场景数据，请先运行 --synthesize-only")
         return
 
-    results_dir = data_dir / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    run_id = args.run_id or (
+        datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S") + f"_{args.seed}"
+    )
+    run_dir = data_dir / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    await write_config(run_dir / "config.json", args)
 
     all_group_results: dict[str, GroupResult] = {}
 
@@ -249,26 +348,12 @@ async def main(argv: list[str] | None = None) -> None:
     serial_group = "personalization" if "personalization" in groups_to_run else None
 
     if concurrent_groups:
-
-        async def _run_one(group: str) -> tuple[str, GroupResult]:
-            if group == "safety":
-                print(f"\n=== 运行 {group} 组 ===\n")
-                result = await _run_safety_experiment(
-                    data_dir, all_scenarios, args.seed
-                )
-                print(f"安全性组完成: {len(result.variant_results)} 结果")
-                return group, result
-            if group == "architecture":
-                print(f"\n=== 运行 {group} 组 ===\n")
-                result = await _run_architecture_experiment(
-                    data_dir, all_scenarios, args.seed
-                )
-                print(f"架构组完成: {len(result.variant_results)} 结果")
-                return group, result
-            msg = f"未知组: {group}"
-            raise ValueError(msg)
-
-        tasks = [asyncio.create_task(_run_one(g)) for g in concurrent_groups]
+        tasks = [
+            asyncio.create_task(
+                _run_and_summarize(g, all_scenarios, args.seed, run_dir)
+            )
+            for g in concurrent_groups
+        ]
         failures: list[str] = []
         for r in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(r, Exception):
@@ -282,12 +367,15 @@ async def main(argv: list[str] | None = None) -> None:
             raise RuntimeError(msg)
 
     if serial_group:
-        group = serial_group
-        print(f"\n=== 运行 {group} 组 ===\n")
-        result = await _run_personalization_experiment(
-            data_dir, all_scenarios, args.seed
+        grp_name, grp_result = await _run_and_summarize(
+            serial_group, all_scenarios, args.seed, run_dir
         )
-        all_group_results[group] = result
-        print(f"个性化组完成: {len(result.variant_results)} 结果")
+        all_group_results[grp_name] = grp_result
 
-    render_report(all_group_results, results_dir)
+    render_report(all_group_results, run_dir)
+
+    print(f"\n=== 全部完成 [{run_id}] ===")
+    for g, gr in all_group_results.items():
+        print(
+            f"  {g}: {len(gr.variant_results)} results, {len(gr.judge_scores)} scores"
+        )
