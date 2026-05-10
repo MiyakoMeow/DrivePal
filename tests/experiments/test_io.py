@@ -56,14 +56,19 @@ async def test_load_variant_results_restores_round_index(tmp_path: Path):
     """Given JSONL with round_index=5, When _load_variant_results, Then VariantResult.round_index==5."""
     path = tmp_path / "results.jsonl"
     async with aiofiles.open(path, "w") as f:
-        await f.write(json.dumps({
-            "scenario_id": "s1",
-            "variant": "full",
-            "decision": {},
-            "stages": {},
-            "latency_ms": 0.0,
-            "round_index": 5,
-        }) + "\n")
+        await f.write(
+            json.dumps(
+                {
+                    "scenario_id": "s1",
+                    "variant": "full",
+                    "decision": {},
+                    "stages": {},
+                    "latency_ms": 0.0,
+                    "round_index": 5,
+                }
+            )
+            + "\n"
+        )
 
     results = await _load_variant_results(path)
     assert len(results) == 1
