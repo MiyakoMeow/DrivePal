@@ -145,11 +145,17 @@ class MemoryBankStore:
             return
         path = self._user_dir / self._SOURCE_INDEX_FILENAME
         async with self._source_index_lock:
+            if not self._source_index_dirty:  # 双重检查
+                return
             payload = json.dumps(
                 self._source_event_index, ensure_ascii=False, default=str
             )
-        path.write_text(payload)
-        self._source_index_dirty = False
+            self._source_index_dirty = False  # 锁内原子化重置
+        try:
+            path.write_text(payload)
+        except OSError:
+            async with self._source_index_lock:
+                self._source_index_dirty = True  # 写盘失败，标记下次重试
 
     def _get_reference_date(self) -> str:
         return resolve_reference_date(self._config, self._index)

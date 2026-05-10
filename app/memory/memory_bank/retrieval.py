@@ -430,7 +430,8 @@ class RetrievalPipeline:
         max_faiss_score = max(float(r.get("score", 0.0)) for r in results)
         if max_faiss_score >= self._config.bm25_fallback_threshold:
             return results
-        self._rebuild_bm25_index()
+        if self._bm25_index is None:
+            self._rebuild_bm25_index()
         if self._bm25_index is None:
             return results
         tokenized_query = query.lower().split()
