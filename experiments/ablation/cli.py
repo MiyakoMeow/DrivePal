@@ -68,8 +68,14 @@ async def _score_group(
         return await judge.score_batch(scenario, vrs)
 
     tasks = [score_one(sid, vrs) for sid, vrs in scenarios_for_results.items()]
-    batches = await asyncio.gather(*tasks)
-    return [s for batch in batches for s in batch]
+    batches = await asyncio.gather(*tasks, return_exceptions=True)
+    scores: list[JudgeScores] = []
+    for batch in batches:
+        if isinstance(batch, Exception):
+            logger.error("Judge scoring failed: %s", batch)
+        elif isinstance(batch, list):
+            scores.extend(batch)
+    return scores
 
 
 async def _judge_only(data_dir: Path, *, groups: list[str]) -> None:
@@ -240,28 +246,35 @@ async def main(argv: list[str] | None = None) -> None:
 
     all_group_results: dict[str, GroupResult] = {}
 
-    async def _run_one(group: str) -> tuple[str, GroupResult]:
-        if group == "safety":
-            print(f"\n=== 运行 {group} 组 ===\n")
-            result = await _run_safety_experiment(data_dir, all_scenarios, args.seed)
-            print(f"安全性组完成: {len(result.variant_results)} 结果")
-            return group, result
-        if group == "architecture":
-            print(f"\n=== 运行 {group} 组 ===\n")
-            result = await _run_architecture_experiment(
-                data_dir, all_scenarios, args.seed
-            )
-            print(f"架构组完成: {len(result.variant_results)} 结果")
-            return group, result
-        msg = f"未知组: {group}"
-        raise ValueError(msg)
-
     concurrent_groups = [g for g in groups_to_run if g != "personalization"]
     serial_group = "personalization" if "personalization" in groups_to_run else None
 
     if concurrent_groups:
+
+        async def _run_one(group: str) -> tuple[str, GroupResult]:
+            if group == "safety":
+                print(f"\n=== 运行 {group} 组 ===\n")
+                result = await _run_safety_experiment(
+                    data_dir, all_scenarios, args.seed
+                )
+                print(f"安全性组完成: {len(result.variant_results)} 结果")
+                return group, result
+            if group == "architecture":
+                print(f"\n=== 运行 {group} 组 ===\n")
+                result = await _run_architecture_experiment(
+                    data_dir, all_scenarios, args.seed
+                )
+                print(f"架构组完成: {len(result.variant_results)} 结果")
+                return group, result
+            msg = f"未知组: {group}"
+            raise ValueError(msg)
+
         tasks = [asyncio.create_task(_run_one(g)) for g in concurrent_groups]
-        all_group_results.update(await asyncio.gather(*tasks))
+        for r in await asyncio.gather(*tasks, return_exceptions=True):
+            if isinstance(r, Exception):
+                logger.error("Group experiment failed: %s", r)
+            elif isinstance(r, tuple):
+                all_group_results[r[0]] = r[1]
 
     if serial_group:
         group = serial_group

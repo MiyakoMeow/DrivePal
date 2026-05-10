@@ -59,9 +59,12 @@ async def run_architecture_group(
         return await judge.score_batch(scenario, vrs)
 
     tasks = [score_one(s) for s in arch_scenarios]
-    scores_batches = await asyncio.gather(*tasks)
+    scores_batches = await asyncio.gather(*tasks, return_exceptions=True)
     for batch in scores_batches:
-        scores.extend(batch)
+        if isinstance(batch, Exception):
+            logger.error("Judge scoring failed: %s", batch)
+        elif isinstance(batch, list):
+            scores.extend(batch)
 
     await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 

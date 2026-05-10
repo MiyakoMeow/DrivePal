@@ -180,8 +180,11 @@ class AblationRunner:
         if not pending:
             return results
         tasks = [asyncio.create_task(run_one(s, v)) for s, v in pending]
-        new_results = await asyncio.gather(*tasks)
-        return results + list(new_results)
+        new_results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in new_results:
+            if isinstance(r, Exception):
+                logger.error("Variant run failed: %s", r)
+        return results + [r for r in new_results if isinstance(r, VariantResult)]
 
 
 async def _load_checkpoint(

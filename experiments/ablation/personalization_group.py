@@ -68,7 +68,9 @@ async def run_personalization_group(
                 vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
                 all_results.append(vr)
                 await _append_checkpoint(
-                    output_path.with_suffix(".checkpoint.jsonl"), vr
+                    output_path.with_suffix(".checkpoint.jsonl"),
+                    vr,
+                    include_modifications=True,
                 )
 
                 if variant == Variant.FULL and vr.event_id:
