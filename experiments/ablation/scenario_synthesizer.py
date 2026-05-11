@@ -148,7 +148,7 @@ def _load_existing_ids(path: Path) -> set[str]:
     existing: set[str] = set()
     if not path.exists():
         return existing
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         for raw_line in f:
             stripped = raw_line.strip()
             if not stripped:
@@ -255,7 +255,7 @@ def load_scenarios(path: Path) -> list[Scenario]:
     scenarios: list[Scenario] = []
     if not path.exists():
         return scenarios
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         for raw_line in f:
             stripped = raw_line.strip()
             if not stripped:

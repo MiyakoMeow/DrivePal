@@ -202,7 +202,10 @@ class AblationRunner:
                         )
                 except TimeoutError:
                     logger.warning(
-                        "Variant timeout after 5min: %s %s", scenario.id, variant.value
+                        "Variant timeout after %ds: %s %s",
+                        _VARIANT_TIMEOUT_SECONDS,
+                        scenario.id,
+                        variant.value,
                     )
                     raise
                 if checkpoint_path:
