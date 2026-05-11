@@ -18,3 +18,7 @@ rules = { "invalid-argument-type" = "ignore" }  # cast(Callable[[], T], dict) �
 [[overrides]]
 include = ["tests/test_memory_bank.py"]
 rules = { "invalid-assignment" = "ignore" }  # mock 替换 _index.load 时类型不匹配
+
+[[overrides]]
+include = ["tests/test_llm_json_validation.py"]
+rules = { "invalid-assignment" = "ignore" }  # mock 替换 _call_llm_json 时类型不匹配

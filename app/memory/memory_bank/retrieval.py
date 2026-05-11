@@ -178,6 +178,15 @@ def _merge_result_group(merging: list[dict], members: list[int]) -> dict | None:
         for idx, part in zip(indices, parts, strict=True):
             index_to_part.setdefault(idx, part)
 
+    if not index_to_part:
+        logger.warning(
+            "合并结果：index_to_part 为空（所有 entry 的 text/indices 都不匹配）。"
+            "成员数量=%d, 最佳索引=%s",
+            len(members),
+            best_idx,
+        )
+        return None
+
     deduped_parts = [
         index_to_part[idx] for idx in r["_merged_indices"] if idx in index_to_part
     ]

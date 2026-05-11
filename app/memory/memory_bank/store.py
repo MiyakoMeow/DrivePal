@@ -113,27 +113,31 @@ class MemoryBankStore:
         self._source_index_dirty = False
         self._last_save_time: float = time.monotonic()
         self._loaded: bool = False
+        self._ensure_loaded_lock = asyncio.Lock()
 
     async def _ensure_loaded(self) -> None:
         """加载索引，消费 LoadResult 告警。"""
         if self._loaded:
             return
-        result = await self._index.load()
-        if result.ok:
-            self._loaded = True
-        else:
-            logger.error(
-                "FaissIndex load failed — index file corrupted and deleted. "
-                "Re-ingest data to recover."
-            )
-        if result.warnings:
-            self._metrics.index_load_warnings.extend(result.warnings)
-            for w in result.warnings:
-                logger.warning("FaissIndex load warning: %s", w)
-        if result.recovery_actions:
-            for a in result.recovery_actions:
-                logger.info("FaissIndex recovery: %s", a)
-        await self._load_source_index()
+        async with self._ensure_loaded_lock:
+            if self._loaded:
+                return
+            result = await self._index.load()
+            if result.ok:
+                self._loaded = True
+            else:
+                logger.error(
+                    "FaissIndex load failed — index file corrupted and deleted. "
+                    "Re-ingest data to recover."
+                )
+            if result.warnings:
+                self._metrics.index_load_warnings.extend(result.warnings)
+                for w in result.warnings:
+                    logger.warning("FaissIndex load warning: %s", w)
+            if result.recovery_actions:
+                for a in result.recovery_actions:
+                    logger.info("FaissIndex recovery: %s", a)
+            await self._load_source_index()
 
     async def _load_source_index(self) -> None:
         """从磁盘加载 source_event_index，损坏时回退空 dict。"""

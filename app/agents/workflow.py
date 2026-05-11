@@ -332,7 +332,9 @@ class AgentWorkflow:
 
             parsed = await self._call_llm_json(prompt)
             try:
-                validated = ContextOutput.model_validate(parsed.model_dump())
+                validated = ContextOutput.model_validate(
+                    parsed.model_dump(exclude={"raw"})
+                )
                 context = validated.model_dump()
             except ValidationError as e:
                 logger.warning("ContextOutput validation failed: %s", e)
@@ -365,7 +367,7 @@ class AgentWorkflow:
 
         parsed = await self._call_llm_json(prompt)
         try:
-            validated = TaskOutput.model_validate(parsed.model_dump())
+            validated = TaskOutput.model_validate(parsed.model_dump(exclude={"raw"}))
             task = validated.model_dump()
         except ValidationError as e:
             logger.warning("TaskOutput validation failed: %s", e)
@@ -440,7 +442,9 @@ class AgentWorkflow:
 
         parsed = await self._call_llm_json(prompt)
         try:
-            validated = StrategyOutput.model_validate(parsed.model_dump())
+            validated = StrategyOutput.model_validate(
+                parsed.model_dump(exclude={"raw"})
+            )
             decision = validated.model_dump()
         except ValidationError as e:
             logger.warning("StrategyOutput validation failed: %s", e)

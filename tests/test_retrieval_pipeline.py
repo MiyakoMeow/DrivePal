@@ -344,8 +344,18 @@ def test_merge_dropped_tracks_count():
 
     metrics = MemoryBankMetrics()
     merging = [
-        {"_merged_indices": [0, 1], "text": "text", "score": 0.5, "memory_strength": 1},
-        {"_merged_indices": [1, 2], "text": "", "score": 0.4, "memory_strength": 1},
+        {
+            "_merged_indices": [0, 1],
+            "text": "part0\x00part1",
+            "score": 0.5,
+            "memory_strength": 1,
+        },
+        {
+            "_merged_indices": [1, 2],
+            "text": "part1\x00part2",
+            "score": 0.4,
+            "memory_strength": 1,
+        },
     ]
     groups = _build_overlap_groups(merging)
     assert len(groups) >= 1
@@ -354,7 +364,7 @@ def test_merge_dropped_tracks_count():
     assert len(result) > 0
     assert metrics.forget_count == 0
 
-    # 所有成员空文本 → 全部丢弃
+    # 所有成员空文本或 text/indices 长度不匹配 → 全部丢弃
     merging_all_empty = [
         {"_merged_indices": [0, 1], "text": "", "score": 0.5, "memory_strength": 1},
         {"_merged_indices": [1, 2], "text": "", "score": 0.4, "memory_strength": 1},

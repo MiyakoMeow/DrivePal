@@ -1,9 +1,12 @@
 """测试 LLM JSON 输出结构化验证模型."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from pydantic import ValidationError
 
 from app.agents.workflow import (
+    AgentWorkflow,
     ContextOutput,
     LLMJsonResponse,
     StrategyOutput,
@@ -111,3 +114,79 @@ class TestStrategyOutput:
             pytest.fail("应抛出 ValidationError")
         except ValidationError:
             pass
+
+
+class TestWorkflowValidationPath:
+    @pytest.mark.asyncio
+    async def test_context_node_validation_success(self, tmp_path):
+        """LLM 返回合法 JSON 时走 validate 分支，不抛异常。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._call_llm_json = AsyncMock(
+            return_value=LLMJsonResponse(
+                raw='{"scenario":"highway","driver_state":{},'
+                '"spatial":{},"traffic":{},'
+                '"current_datetime":"2026-01-01"}',
+            )
+        )
+        result = await workflow._context_node(
+            {
+                "original_query": "test",
+                "context": {},
+                "task": None,
+                "decision": None,
+                "result": None,
+                "event_id": None,
+                "driving_context": None,
+                "stages": None,
+                "session_id": None,
+            }
+        )
+        assert "context" in result
+
+    @pytest.mark.asyncio
+    async def test_task_node_validation_success(self, tmp_path):
+        """Task 节点 validate 分支不抛异常。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._call_llm_json = AsyncMock(
+            return_value=LLMJsonResponse(
+                raw='{"type":"meeting","confidence":0.9,'
+                '"description":"开会","entities":["会议室"]}',
+            )
+        )
+        result = await workflow._task_node(
+            {
+                "original_query": "test",
+                "context": {},
+                "task": None,
+                "decision": None,
+                "result": None,
+                "event_id": None,
+                "driving_context": None,
+                "stages": None,
+            }
+        )
+        assert "task" in result
+
+    @pytest.mark.asyncio
+    async def test_strategy_node_validation_success(self, tmp_path):
+        """Strategy 节点 validate 分支不抛异常。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._call_llm_json = AsyncMock(
+            return_value=LLMJsonResponse(
+                raw='{"should_remind":true,"timing":"now",'
+                '"reminder_content":"测试","type":"general"}',
+            )
+        )
+        result = await workflow._strategy_node(
+            {
+                "original_query": "test",
+                "context": {},
+                "task": {},
+                "decision": None,
+                "result": None,
+                "event_id": None,
+                "driving_context": None,
+                "stages": None,
+            }
+        )
+        assert "decision" in result
