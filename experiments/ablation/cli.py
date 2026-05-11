@@ -13,6 +13,8 @@ from pathlib import Path
 
 import aiofiles
 
+from app.memory.singleton import close_memory_module
+
 from ._io import write_config, write_scores_json, write_step_summary
 from .ablation_runner import AblationRunner
 from .architecture_group import (
@@ -406,3 +408,4 @@ async def main(argv: list[str] | None = None) -> None:
             os.environ.pop("ABLATION_SEED", None)
         else:
             os.environ["ABLATION_SEED"] = old_seed
+        await close_memory_module()

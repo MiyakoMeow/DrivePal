@@ -1,5 +1,6 @@
 """个性化组实验——反馈学习机制的个性化效果."""
 
+import dataclasses
 import json
 import logging
 import random
@@ -71,8 +72,27 @@ async def run_personalization_group(
                     if variant == Variant.FULL
                     else f"{runner.base_user_id}-{variant.value}"
                 )
-                vr = await runner.run_variant(scenario, variant, user_id=uid)
-                vr.round_index = i + 1  # 显式标注轮次，避免依赖列表顺序
+                try:
+                    vr = await runner.run_variant(scenario, variant, user_id=uid)
+                except Exception:
+                    logger.exception(
+                        "Variant %s failed for round %d scenario %s",
+                        variant.value,
+                        i + 1,
+                        scenario.id,
+                    )
+                    vr = VariantResult(
+                        scenario_id=scenario.id,
+                        variant=variant,
+                        decision={"error": "Variant execution failed"},
+                        result_text="",
+                        event_id=None,
+                        stages={},
+                        latency_ms=0,
+                        round_index=i + 1,
+                    )
+                else:
+                    vr = dataclasses.replace(vr, round_index=i + 1)
                 all_results.append(vr)
                 await _append_checkpoint(
                     output_path.with_suffix(".checkpoint.jsonl"),
