@@ -127,7 +127,7 @@ def render_mermaid(code: str, cache_dir: Path) -> Path | None:
                 continue  # 一次重试
             print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
             return None
-    return None
+    return None  # 所有路径应已返回，此处仅为类型检查器完备
 
 
 def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
@@ -159,6 +159,7 @@ def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
             peek = i
             if (peek < len(tokens) and tokens[peek]["type"] == "paragraph_open"
                 and peek + 1 < len(tokens) and tokens[peek + 1]["type"] == "inline"
+                and peek + 2 < len(tokens) and tokens[peek + 2]["type"] == "paragraph_close"
                 and tokens[peek + 1].get("content", "").strip().startswith("**图")):
                 # 跳过 paragraph_open + inline(**图X-X) + paragraph_close
                 i += 3
@@ -547,7 +548,7 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
         if tp == "inline" and pending_heading_level is not None:
             text = _extract_plain_text(t["content"])
             _add_heading(doc, text, pending_heading_level)
-            if "参考文献" in t["content"]:
+            if "参考文献" in text:
                 in_references = True
             pending_heading_level = None
             continue
