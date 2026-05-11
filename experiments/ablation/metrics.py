@@ -146,6 +146,7 @@ def compute_comparison(
                 if baseline_overalls
                 else 0
             ),
+            # cohens_d(variant, baseline) → 正值表示 variant 优于 baseline
             "cohens_d": cohens_d(overalls, baseline_overalls),
             "n": len(overalls),
         }
