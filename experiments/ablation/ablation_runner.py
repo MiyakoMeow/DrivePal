@@ -31,6 +31,7 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
+from ._io import safe_event_id
 from .types import Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
@@ -241,11 +242,7 @@ async def _load_checkpoint(
                             variant=Variant(d["variant"]),
                             decision=d.get("decision", {}),
                             result_text=d.get("result_text", ""),
-                            event_id=(
-                                d.get("event_id")
-                                if isinstance(d.get("event_id"), (str, type(None)))
-                                else None
-                            ),
+                            event_id=safe_event_id(d),
                             stages=d.get("stages", {}),
                             latency_ms=d.get("latency_ms", 0),
                             modifications=d.get("modifications", []),

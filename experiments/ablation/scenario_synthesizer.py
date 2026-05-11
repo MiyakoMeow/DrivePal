@@ -300,11 +300,11 @@ def sample_scenarios(
         key = stratify_key(s)
         strata.setdefault(key, []).append(s)
 
-    required = len(strata) * min_per_stratum
+    required = sum(min(min_per_stratum, len(g)) for g in strata.values())
     if required > n:
         raise ValueError(
             f"无法满足 min_per_stratum={min_per_stratum}，"
-            f"共 {len(strata)} 层需要 {required} 个样本，但仅请求 {n} 个"
+            f"实际需要 {required} 个样本（考虑各层容量），但仅请求 {n} 个"
         )
 
     result: list[Scenario] = []

@@ -146,8 +146,7 @@ async def run_personalization_group(
 
     # 清理中间 checkpoint（实验完成后只需最终 results JSONL）
     checkpoint_path = output_path.with_suffix(".checkpoint.jsonl")
-    if await asyncio.to_thread(checkpoint_path.exists):
-        await asyncio.to_thread(checkpoint_path.unlink)
+    await asyncio.to_thread(checkpoint_path.unlink, missing_ok=True)
 
     # 写 weight_history + metrics 到侧车文件
     summary_path = output_path.with_suffix(".summary.json")

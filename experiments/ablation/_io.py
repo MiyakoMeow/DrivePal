@@ -21,6 +21,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def safe_event_id(record: dict[str, Any]) -> str | None:
+    """从 JSON dict 安全读取 event_id，过滤非法类型。"""
+    eid = record.get("event_id")
+    return eid if isinstance(eid, (str, type(None))) else None
+
+
 async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
     """异步原子写 JSON。先写临时文件，成功后再 rename 覆盖。
 

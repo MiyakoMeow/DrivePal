@@ -15,7 +15,7 @@ import aiofiles
 
 from app.memory.singleton import close_memory_module
 
-from ._io import write_config, write_scores_json, write_step_summary
+from ._io import safe_event_id, write_config, write_scores_json, write_step_summary
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     _arch_stratum,
@@ -215,11 +215,7 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                         variant=variant,
                         decision=d.get("decision", {}),
                         result_text=d.get("result_text", ""),
-                        event_id=(
-                            d.get("event_id")
-                            if isinstance(d.get("event_id"), (str, type(None)))
-                            else None
-                        ),
+                        event_id=safe_event_id(d),
                         stages=d.get("stages", {}),
                         latency_ms=d.get("latency_ms", 0),
                         modifications=d.get("modifications", []),
