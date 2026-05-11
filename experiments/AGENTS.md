@@ -20,7 +20,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 **变体语义说明**：NO_RULES 禁用的是 `postprocess_decision`（规则引擎后处理），LLM 输出不再被安全规则强制覆盖。Judge 仍按完整规则表评分。因此 NO_RULES 测量的是"LLM 在无硬约束下自觉遵守安全规则的能力"，而非"无规则时系统的安全性"。
 
-| **测试场景** | 50 个安全关键场景。安全相关性由合成维度计算（highway / fatigue>阈值 / overloaded） |
+| **测试场景** | 50 个安全关键场景。安全相关性由合成维度计算（highway / fatigue>阈值 / overloaded）。分层键含 task_type 维度 |
 | **无关变量控制** | 同一 LLM（默认模型组）、同一 MemoryBank 状态（独立 user_id）、固定随机种子、场景分层抽样 |
 
 **评价指标**：
@@ -57,7 +57,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | JSON 结构合规率 | 输出是否包含所有必需字段、类型正确、格式合法（待实现） |
 | 中间阶段评分 | Full 的 Context（上下文准确性）/ Task（事件归因准确度）/ Decision（决策合理性）各 1-5 分，独立 Judge prompt |
 | 延迟 P50 / P90 | 端到端 AgentWorkflow 耗时（ms） |
-| Cohen's d | Full vs SingleLLM 效应量（待实现） |
+| Cohen's d | Full vs SingleLLM 效应量（`compute_comparison` 提供 Cohen's d + Bootstrap CI + Wilcoxon signed-rank） |
 
 **假设**：Full 在复杂场景（多约束冲突）中决策质量显著优于 SingleLLM；SingleLLM 延迟更低。
 
@@ -92,13 +92,13 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景 → 缓存至 JSONL。精选 ~260 场景（360 维度组合随机抽取）：
 
-- 安全关键场景 50（按 scenario×high_fatigue×overloaded 分层抽样，min_per_stratum=2）
+- 安全关键场景 50（按 scenario×safety_condition×task_type 分层抽样，min_per_stratum=1）
 - 多样化场景 50（分层随机抽样，覆盖所有 scenario × task_type 组合）
 - 个性化场景 32，按 task_type 分层抽样（min_per_stratum=2）
 
 共 ~132 场景（安全 50 + 架构 50 + 个性化 32）。
 
-每个场景含：`driving_context` + `user_query` + `expected_decision`（人工校准用） + `expected_task_type`。
+每个场景含：`driving_context` + `user_query` + `expected_task_type`（来自维度组合）。`expected_decision` 字段为历史遗留（旧 JSONL 兼容），当前合成不再生成。
 
 ## LLM-as-Judge 评测
 
@@ -106,6 +106,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 - **盲评**：Judge 不参考 expected_decision，仅依据规则表 + 场景条件评分。shuffle 支持确定性（ABLATION_SEED 非零）/ 随机（零/未设置）双模式
 - **中位数**：每场景评 3 次取中位数，减少非确定性噪声
 - **容错**：`ChatError` → 默认分 3；`JSONDecodeError`/`TypeError`/`ValueError` → 默认分 3
+- **退化检测**：默认分 3 占比超过 50% 时标记 `degraded=True`，全量运行和 judge-only 两条路径均输出警告
 - **统计检验**：Bootstrap 置信区间（n=10000, α=0.05）+ Wilcoxon signed-rank test（按 scenario_id 配对）
 - **人工校准**：人工校准为后续工作，当前未实现。
 
