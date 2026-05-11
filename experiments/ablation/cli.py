@@ -87,6 +87,9 @@ def _print_step_summary(result: GroupResult, elapsed: float) -> None:
                     metrics_parts.append(f"{k2}: {v2}")
         elif isinstance(v, (int, float)):
             metrics_parts.append(f"{k}: {v}")
+    degradation = result.metrics.get("_judge_degradation", {})
+    if degradation.get("degraded"):
+        print(f"  ⚠ {degradation.get('warning', 'Judge 评分退化')}")
     suffix = f" | {'; '.join(metrics_parts[:8])}" if metrics_parts else ""
     print(f"[{group}] {n} results, {m} scores, {elapsed:.1f}s{suffix}")
 
