@@ -31,6 +31,7 @@ def safety_stratum(s: Scenario) -> str:
         parts.append("high_fatigue")
     if d["workload"] == "overloaded":
         parts.append("overloaded")
+    parts.append(d["task_type"])
     return "+".join(parts)
 
 

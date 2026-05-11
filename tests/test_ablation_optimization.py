@@ -142,7 +142,7 @@ class TestStratumFunctions:
             },
         )
         key = safety_stratum(s)
-        assert "highway" in key
+        assert key == "highway+high_fatigue+meeting"
 
     def test_arch_stratum_with_dims(self):
         from experiments.ablation.architecture_group import arch_stratum

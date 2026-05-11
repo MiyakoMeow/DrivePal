@@ -257,7 +257,7 @@ def _prepare_group_scenarios(
             50,
             safety_only=True,
             stratify_key=safety_stratum,
-            min_per_stratum=2,
+            min_per_stratum=1,
             seed=seed,
         )
         used_ids |= {s.id for s in group_scenarios["safety"]}
