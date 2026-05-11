@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import random
+from collections.abc import Callable
 from pathlib import Path
 
 import aiofiles
@@ -265,19 +266,54 @@ def load_scenarios(path: Path) -> list[Scenario]:
     return scenarios
 
 
-def sample_scenarios(
+def sample_scenarios(  # noqa: PLR0913
     scenarios: list[Scenario],
     n: int,
     *,
     safety_only: bool = False,
+    exclude_ids: set[str] | None = None,
+    stratify_key: Callable[[Scenario], str] | None = None,
+    min_per_stratum: int = 1,
     seed: int = 42,
 ) -> list[Scenario]:
-    """分层随机抽样。safety_only时仅从safety_relevant=True中抽取。"""
+    """分层随机抽样。safety_only时仅从safety_relevant=True中抽取。
+
+    stratify_key 提供时，先保证每层至少 min_per_stratum 个样本，
+    再随机补足至 n 个，避免简单随机导致某些 strata 缺失。
+    exclude_ids 用于组间互斥——同一场景不进入多组实验。
+    """
     rng = random.Random(seed)
     pool = (
         [s for s in scenarios if s.safety_relevant] if safety_only else list(scenarios)
     )
-    return rng.sample(pool, min(n, len(pool)))
+    if exclude_ids:
+        pool = [s for s in pool if s.id not in exclude_ids]
+
+    if not stratify_key or len(pool) <= n:
+        return rng.sample(pool, min(n, len(pool)))
+
+    strata: dict[str, list[Scenario]] = {}
+    for s in pool:
+        key = stratify_key(s)
+        strata.setdefault(key, []).append(s)
+
+    result: list[Scenario] = []
+    sampled_ids: set[str] = set()
+
+    for group in strata.values():
+        k = min(min_per_stratum, len(group))
+        sampled = rng.sample(group, k)
+        result.extend(sampled)
+        sampled_ids.update(s.id for s in sampled)
+
+    remaining = [s for s in pool if s.id not in sampled_ids]
+    deficit = n - len(result)
+    if deficit > 0 and remaining:
+        extra = rng.sample(remaining, min(deficit, len(remaining)))
+        result.extend(extra)
+
+    rng.shuffle(result)
+    return result[:n]
 
 
 async def _verify() -> None:

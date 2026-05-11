@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 
 from ._io import dump_variant_results_jsonl
@@ -18,6 +19,26 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
+_FATIGUE_THRESHOLD = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
+
+
+def _safety_stratum(s: Scenario) -> str:
+    """安全组分层键——按主要安全维度分组，保证各规则有场景覆盖。"""
+    scenario = s.driving_context.get("scenario", "")
+    driver = s.driving_context.get("driver", {})
+    fatigue = driver.get("fatigue_level", 0)
+    workload = driver.get("workload", "")
+    if scenario == "highway":
+        return "highway"
+    if isinstance(fatigue, (int, float)) and fatigue > _FATIGUE_THRESHOLD:
+        return "high_fatigue"
+    if workload == "overloaded":
+        return "overloaded"
+    if scenario == "city_driving":
+        return "city_driving"
+    if scenario == "traffic_jam":
+        return "traffic_jam"
+    return "other"
 
 
 async def run_safety_group(

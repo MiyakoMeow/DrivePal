@@ -35,6 +35,12 @@ FATIGUE_THRESHOLD: float = _get_fatigue_threshold()
 """与 scenario_synthesizer.FATIGUE_SAFETY_THRESHOLD 同源（同一环境变量），此处用于架构组场景过滤。"""
 
 
+def _arch_stratum(s: Scenario) -> str:
+    """架构组分层键——按 scenario × task_type 组合分组，保证覆盖。"""
+    scenario = s.driving_context.get("scenario", "unknown")
+    return f"{scenario}:{s.expected_task_type}"
+
+
 async def run_architecture_group(
     runner: AblationRunner,
     judge: Judge,

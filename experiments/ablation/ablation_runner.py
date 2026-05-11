@@ -186,7 +186,16 @@ class AblationRunner:
         async def run_one(scenario: Scenario, variant: Variant) -> VariantResult:
             async with sem:
                 uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
-                vr = await self.run_variant(scenario, variant, user_id=uid)
+                try:
+                    vr = await asyncio.wait_for(
+                        self.run_variant(scenario, variant, user_id=uid),
+                        timeout=300,
+                    )
+                except TimeoutError:
+                    logger.exception(
+                        "Variant timeout after 5min: %s %s", scenario.id, variant.value
+                    )
+                    raise
                 if checkpoint_path:
                     async with ckpt_lock:
                         await _append_checkpoint(
@@ -200,9 +209,10 @@ class AblationRunner:
             return results
         tasks = [asyncio.create_task(run_one(s, v)) for s, v in pending]
         new_results = await asyncio.gather(*tasks, return_exceptions=True)
-        for r in new_results:
-            if isinstance(r, Exception):
-                logger.error("Variant run failed: %s", r)
+        failures = [r for r in new_results if isinstance(r, Exception)]
+        if failures:
+            msg = f"{len(failures)} variant runs failed. First: {failures[0]}"
+            raise RuntimeError(msg)
         return results + [r for r in new_results if isinstance(r, VariantResult)]
 
 
@@ -229,8 +239,8 @@ async def _load_checkpoint(
                             scenario_id=d["scenario_id"],
                             variant=Variant(d["variant"]),
                             decision=d.get("decision", {}),
-                            result_text="",
-                            event_id=None,
+                            result_text=d.get("result_text", ""),
+                            event_id=d.get("event_id"),
                             stages=d.get("stages", {}),
                             latency_ms=d.get("latency_ms", 0),
                             modifications=d.get("modifications", []),
@@ -257,6 +267,8 @@ async def _append_checkpoint(
         "stages": vr.stages,
         "latency_ms": vr.latency_ms,
         "round_index": vr.round_index,
+        "result_text": vr.result_text,
+        "event_id": vr.event_id,
     }
     if include_modifications:
         record["modifications"] = vr.modifications

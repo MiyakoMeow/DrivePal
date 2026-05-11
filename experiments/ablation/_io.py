@@ -143,6 +143,8 @@ async def dump_variant_results_jsonl(
                     "stages": r.stages,
                     "latency_ms": r.latency_ms,
                     "round_index": r.round_index,
+                    "result_text": r.result_text,
+                    "event_id": r.event_id,
                 }
                 if include_modifications:
                     record["modifications"] = r.modifications
