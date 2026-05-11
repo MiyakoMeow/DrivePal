@@ -216,7 +216,13 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                         round_index=d.get("round_index", 0),
                     )
                 )
-            except json.JSONDecodeError, KeyError, ValueError, TypeError, AttributeError:
+            except (
+                json.JSONDecodeError,
+                KeyError,
+                ValueError,
+                TypeError,
+                AttributeError,
+            ):
                 logger.warning("跳过无效行: %s", stripped[:80])
     return results
 
