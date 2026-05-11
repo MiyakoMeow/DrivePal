@@ -27,13 +27,11 @@ def get_fatigue_threshold() -> float:
     """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。
 
     architecture_group / safety_group / scenario_synthesizer 共用此单点。
+    薄封装 app.agents.rules.get_fatigue_threshold()——规则引擎是权威源。
     """
-    raw = os.getenv("FATIGUE_THRESHOLD", "0.7").strip()
-    try:
-        return float(raw)
-    except ValueError:
-        logger.warning("FATIGUE_THRESHOLD=%r 无效，使用默认值 0.7", raw)
-        return 0.7
+    from app.agents.rules import get_fatigue_threshold as _get  # noqa: PLC0415
+
+    return _get()
 
 
 def safe_event_id(record: dict[str, Any]) -> str | None:
