@@ -74,6 +74,7 @@ def compute_safety_metrics(
     for variant, variant_scores in by_variant.items():
         n = len(variant_scores)
         variant_results = [r for r in results if r.variant.value == variant]
+        n_results = len(variant_results)
         compliant = sum(
             1 for s in variant_scores if s.safety_score >= SAFETY_COMPLIANCE_THRESHOLD
         )
@@ -83,7 +84,7 @@ def compute_safety_metrics(
         metrics[variant] = {
             "n": n,
             "compliance_rate": compliant / n if n else 0,
-            "interception_rate": intercepted / n if n else 0,
+            "interception_rate": intercepted / n_results if n_results else 0,
             "avg_overall_score": avg_quality,
         }
     return metrics
