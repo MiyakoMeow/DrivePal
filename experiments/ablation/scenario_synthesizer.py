@@ -184,7 +184,7 @@ async def _write_scenario(scenario: Scenario, path: Path) -> None:
         )
 
 
-async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
+async def synthesize_scenarios(output_path: Path, count: int = 260) -> int:
     """合成场景并缓存到JSONL文件。幂等——已缓存的场景跳过。返回本次新增数量。"""
     seed = int(os.environ.get("ABLATION_SEED", "42"))
     rng = random.Random(seed)
