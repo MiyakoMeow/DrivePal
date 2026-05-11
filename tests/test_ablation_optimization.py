@@ -79,8 +79,8 @@ class TestWilcoxonTest:
 
     def _make_scores(
         self,
-        baseline_scores: list[float],
-        variant_scores: list[float],
+        baseline_scores: list[int],
+        variant_scores: list[int],
         variant_name: str,
     ) -> list[JudgeScores]:
         scores = []
@@ -111,8 +111,8 @@ class TestWilcoxonTest:
         return scores
 
     def test_paired_comparison(self):
-        baseline = [4.0, 5.0, 4.0, 5.0, 4.0]
-        variant = [2.0, 3.0, 2.0, 3.0, 2.0]
+        baseline = [4, 5, 4, 5, 4]
+        variant = [2, 3, 2, 3, 2]
         scores = self._make_scores(baseline, variant, "no-rules")
         result = wilcoxon_test(scores)
         assert "no-rules" in result
@@ -199,3 +199,37 @@ class TestStratumFunctions:
             scenario_type="highway",
         )
         assert safety_stratum(s) == "highway"
+
+
+class TestBuildStages:
+    """个性化组动态轮数截断."""
+
+    def test_full_32_produces_4_equal_stages(self):
+        from experiments.ablation.personalization_group import _build_stages
+
+        stages, available = _build_stages(32)
+        assert available == 32
+        assert len(stages) == 4
+        assert stages[-1][2] == 32
+
+    def test_less_than_32_truncates(self):
+        from experiments.ablation.personalization_group import _build_stages
+
+        stages, available = _build_stages(20)
+        assert available == 20
+        assert stages[-1][2] == 20
+
+    def test_minimum_4_scenarios(self):
+        from experiments.ablation.personalization_group import _build_stages
+
+        stages, available = _build_stages(4)
+        assert available == 4
+        assert len(stages) == 4
+
+    def test_below_minimum_raises(self):
+        import pytest
+
+        from experiments.ablation.personalization_group import _build_stages
+
+        with pytest.raises(ValueError, match="≥4"):
+            _build_stages(3)

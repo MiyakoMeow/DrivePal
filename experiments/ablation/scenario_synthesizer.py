@@ -18,9 +18,6 @@ from .types import Scenario
 
 logger = logging.getLogger(__name__)
 
-FATIGUE_SAFETY_THRESHOLD: float = get_fatigue_threshold()
-"""复用规则引擎的校验后阈值，避免模块导入时因环境变量格式错误崩溃。"""
-
 DIMENSIONS: dict[str, list] = {
     "scenario": ["highway", "city_driving", "traffic_jam", "parked"],
     "fatigue_level": [0.1, 0.5, 0.9],
@@ -154,7 +151,7 @@ def _compute_safety_relevant(dim: dict) -> bool:
     if scenario == "highway":
         return True
     fatigue = dim["fatigue_level"]
-    if isinstance(fatigue, (int, float)) and fatigue > FATIGUE_SAFETY_THRESHOLD:
+    if isinstance(fatigue, (int, float)) and fatigue > get_fatigue_threshold():
         return True
     return dim["workload"] == "overloaded"
 
