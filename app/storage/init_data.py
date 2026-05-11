@@ -6,9 +6,11 @@ from pathlib import Path
 
 import tomli_w
 
-from app.config import DATA_ROOT, user_data_dir
+from app.config import DATA_DIR, DATA_ROOT, user_data_dir
 
 logger = logging.getLogger(__name__)
+
+_MIGRATED_FLAG = ".migrated_flag"
 
 
 def _write_toml_data(filepath: Path, data: dict) -> None:
@@ -127,10 +129,17 @@ def init_user_dir(user_id: str) -> Path:
     return u_dir
 
 
-def init_storage() -> None:
-    """兼容旧调用——迁移+初始化默认用户。lifespan 使用。"""
+def init_storage(data_dir: Path | None = None) -> None:
+    """初始化数据目录。存在标记时跳过迁移。"""
+    root = data_dir or DATA_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    flag = root / _MIGRATED_FLAG
+    if flag.exists():
+        logger.debug("Migration already completed, skipping")
+        return
     _migrate_legacy()
     init_user_dir("default")
+    flag.write_text("1")
 
 
 if __name__ == "__main__":

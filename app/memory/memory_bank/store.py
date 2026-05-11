@@ -107,14 +107,21 @@ class MemoryBankStore:
             self._config,
             metrics=self._metrics,
         )
-        self._retrieval = RetrievalPipeline(self._index, embed_client, self._config)
+        self._retrieval = RetrievalPipeline(
+            self._index, embed_client, self._config, metrics=self._metrics
+        )
         self._source_index_dirty = False
         self._last_save_time: float = time.monotonic()
+        self._loaded: bool = False
 
     async def _ensure_loaded(self) -> None:
         """加载索引，消费 LoadResult 告警。"""
+        if self._loaded:
+            return
         result = await self._index.load()
-        if not result.ok:
+        if result.ok:
+            self._loaded = True
+        else:
             logger.error(
                 "FaissIndex load failed — index file corrupted and deleted. "
                 "Re-ingest data to recover."

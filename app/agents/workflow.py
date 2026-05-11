@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.agents.conversation import _conversation_manager
 from app.agents.outputs import OutputRouter
@@ -60,7 +60,7 @@ class ChatModelUnavailableError(RuntimeError):
 class LLMJsonResponse(BaseModel):
     """LLM JSON 输出包装，含校验与兜底."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     raw: str
 
@@ -69,15 +69,56 @@ class LLMJsonResponse(BaseModel):
         """Parse LLM output, warning on fail but always return valid."""
         cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip())
         cleaned = re.sub(r"\s*```$", "", cleaned)
-        parsed: dict = {}
         try:
             data = json.loads(cleaned)
             if isinstance(data, dict):
-                parsed = data
-        except json.JSONDecodeError as e:
-            logger.warning("LLM JSON parse failed: %s", e)
-        parsed.pop("raw", None)  # prevent collision with explicit raw=text
-        return cls(raw=text, **parsed)
+                data.pop("raw", None)  # prevent collision with explicit raw=text
+                return cls(raw=text, **data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.warning("LLM JSON parse/validate failed: %s", e)
+        return cls(raw=text)
+
+
+class ContextOutput(BaseModel):
+    """Context Agent JSON 输出模型，extra forbid."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scenario: str = ""
+    driver_state: dict = {}
+    spatial: dict = {}
+    traffic: dict = {}
+    current_datetime: str = ""
+    related_events: list = []
+    conversation_history: list | None = None
+
+
+class TaskOutput(BaseModel):
+    """Task Agent JSON 输出模型，extra forbid."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str = "general"
+    confidence: float = 0.0
+    description: str = ""
+    entities: list = []
+
+
+class StrategyOutput(BaseModel):
+    """Strategy Agent JSON 输出模型，extra forbid."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    should_remind: bool = True
+    timing: str = "now"
+    target_time: str = ""
+    delay_seconds: int = 300
+    reminder_content: str | dict = ""
+    type: str = "general"
+    reason: str = ""
+    allowed_channels: list = []
+    action: str = ""
+    postpone: bool = False
 
 
 class ReminderContent(BaseModel):
@@ -290,11 +331,18 @@ class AgentWorkflow:
 请输出JSON格式的上下文对象. """
 
             parsed = await self._call_llm_json(prompt)
-            context = {
-                **parsed.model_dump(),
-                "current_datetime": current_datetime,
-                "related_events": relevant_memories,
-            }
+            try:
+                validated = ContextOutput.model_validate(parsed.model_dump())
+                context = validated.model_dump()
+            except ValidationError as e:
+                logger.warning("ContextOutput validation failed: %s", e)
+                try:
+                    raw_data = json.loads(parsed.raw)
+                    context = raw_data if isinstance(raw_data, dict) else {}
+                except json.JSONDecodeError:
+                    context = {}
+            context["current_datetime"] = current_datetime
+            context["related_events"] = relevant_memories
 
         if stages is not None:
             stages.context = context
@@ -315,7 +363,17 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象. """
 
-        task = (await self._call_llm_json(prompt)).model_dump()
+        parsed = await self._call_llm_json(prompt)
+        try:
+            validated = TaskOutput.model_validate(parsed.model_dump())
+            task = validated.model_dump()
+        except ValidationError as e:
+            logger.warning("TaskOutput validation failed: %s", e)
+            try:
+                raw_data = json.loads(parsed.raw)
+                task = raw_data if isinstance(raw_data, dict) else {}
+            except json.JSONDecodeError:
+                task = {}
         if stages is not None:
             stages.task = task
         return {
@@ -380,7 +438,17 @@ class AgentWorkflow:
 
 请输出JSON格式的决策结果. """
 
-        decision = (await self._call_llm_json(prompt)).model_dump()
+        parsed = await self._call_llm_json(prompt)
+        try:
+            validated = StrategyOutput.model_validate(parsed.model_dump())
+            decision = validated.model_dump()
+        except ValidationError as e:
+            logger.warning("StrategyOutput validation failed: %s", e)
+            try:
+                raw_data = json.loads(parsed.raw)
+                decision = raw_data if isinstance(raw_data, dict) else {}
+            except json.JSONDecodeError:
+                decision = {}
         decision["postpone"] = postpone
         if stages is not None:
             stages.decision = decision

@@ -143,3 +143,13 @@ async def test_get_event_type_returns_none_for_missing(tmp_path: Path) -> None:
     memory = MemoryModule(tmp_path)
     event_type = await memory.get_event_type("nonexistent_id")
     assert event_type is None
+
+
+def test_migration_skipped_with_flag(tmp_path: Path) -> None:
+    """存在迁移标记时跳过迁移。"""
+    from app.storage.init_data import init_storage
+
+    flag = tmp_path / ".migrated_flag"
+    flag.write_text("1")
+    init_storage(data_dir=tmp_path)
+    assert flag.exists()

@@ -31,7 +31,7 @@ class MemoryBankMetrics:
     search_empty_index_count: int = 0  # 索引为空
     search_empty_count: int = 0  # 结果为空（含过滤后空）
     search_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
-    forget_count: int = 0
+    forget_count: int = 0  # 也用于统计合并丢弃事件
     forget_removed_count: int = 0
     write_count: int = 0
     write_latency_ms: deque[float] = field(default_factory=lambda: deque(maxlen=1000))

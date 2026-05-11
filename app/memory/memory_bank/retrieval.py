@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from .config import MemoryBankConfig
     from .index_reader import IndexReader
+    from .observability import MemoryBankMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +198,10 @@ def _merge_result_group(merging: list[dict], members: list[int]) -> dict | None:
     return r
 
 
-def _merge_overlapping_results(results: list[dict]) -> list[dict]:
+def _merge_overlapping_results(
+    results: list[dict],
+    metrics: MemoryBankMetrics | None = None,
+) -> list[dict]:
     non_merging = [
         r
         for r in results
@@ -215,10 +219,21 @@ def _merge_overlapping_results(results: list[dict]) -> list[dict]:
     groups = _build_overlap_groups(merging)
 
     merged: list[dict] = []
+    dropped = 0
     for members in groups.values():
         r = _merge_result_group(merging, members)
         if r is not None:
             merged.append(r)
+        else:
+            dropped += 1
+
+    if dropped:
+        logger.warning(
+            "_merge_overlapping_results: %d group(s) dropped due to empty text",
+            dropped,
+        )
+        if metrics is not None:
+            metrics.forget_count += 1
 
     if non_merging:
         merged.extend(non_merging)
@@ -366,11 +381,13 @@ class RetrievalPipeline:
         index: IndexReader,
         embedding_client: EmbeddingClient,
         config: MemoryBankConfig,
+        metrics: MemoryBankMetrics | None = None,
     ) -> None:
         """初始化检索管道。"""
         self._index = index
         self._embedding_client = embedding_client
         self._config = config
+        self._metrics = metrics
         self._bm25_corpus: list[str] = []
         self._bm25_meta_indices: list[int] = []
         self._bm25_index: Any = None
@@ -513,7 +530,9 @@ class RetrievalPipeline:
             )
 
         if len(merged_results) > 1:
-            merged_results = _merge_overlapping_results(merged_results)
+            merged_results = _merge_overlapping_results(
+                merged_results, metrics=self._metrics
+            )
 
         merged_results.extend(non_indexed)
         merged_results.sort(key=lambda r: r.get("score", 0.0), reverse=True)

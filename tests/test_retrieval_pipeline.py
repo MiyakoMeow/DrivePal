@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.memory.memory_bank.config import MemoryBankConfig
+from app.memory.memory_bank.observability import MemoryBankMetrics
 from app.memory.memory_bank.retrieval import RetrievalPipeline
 
 
@@ -332,3 +333,32 @@ async def test_bm25_fallback_triggered_on_low_faiss_score(mock_index, mock_embed
     )
     results, _ = await pipeline.search("test query", top_k=2)
     assert len(results) >= 1
+
+
+def test_merge_dropped_tracks_count():
+    """合并丢弃时 metrics.forget_count 应递增。"""
+    from app.memory.memory_bank.retrieval import (
+        _build_overlap_groups,
+        _merge_overlapping_results,
+    )
+
+    metrics = MemoryBankMetrics()
+    merging = [
+        {"_merged_indices": [0, 1], "text": "text", "score": 0.5, "memory_strength": 1},
+        {"_merged_indices": [1, 2], "text": "", "score": 0.4, "memory_strength": 1},
+    ]
+    groups = _build_overlap_groups(merging)
+    assert len(groups) >= 1
+
+    result = _merge_overlapping_results(merging, metrics=metrics)
+    assert len(result) > 0
+    assert metrics.forget_count == 0
+
+    # 所有成员空文本 → 全部丢弃
+    merging_all_empty = [
+        {"_merged_indices": [0, 1], "text": "", "score": 0.5, "memory_strength": 1},
+        {"_merged_indices": [1, 2], "text": "", "score": 0.4, "memory_strength": 1},
+    ]
+    _merge_overlapping_results(merging_all_empty, metrics=metrics)
+    # 两组重叠，合并为一组后丢弃
+    assert metrics.forget_count > 0
