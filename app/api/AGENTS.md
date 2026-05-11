@@ -36,10 +36,15 @@ closeSession(sessionId, currentUser): Boolean
 **SSE 流式端点：**
 - `POST /query/stream` — SSE 流式返回工作流各阶段结果，逐 event 推送（`event: stage_start/context_done/task_done/decision/done/error`，其中 stage_start 的 data.stage 含 context/task/strategy/execution），`Content-Type: text/event-stream`
 
-**错误类：**
-- `InternalServerError` — 内部服务器错误
-- `GraphQLInvalidActionError` — 无效操作类型
-- `GraphQLEventNotFoundError` — 事件不存在
+## 错误处理
+
+GraphQL 层异常统一继承 `graphql.error.GraphQLError`，自动转为标准 GraphQL error response：
+
+| 异常类 | 触发条件 |
+|--------|----------|
+| `InternalServerError` | 未预期的服务器错误 |
+| `GraphQLInvalidActionError` | feedback action 非 accept/ignore |
+| `GraphQLEventNotFoundError` | 事件 ID 不存在 |
 
 支持外部上下文注入（DrivingContext），跳过LLM推断。
 
