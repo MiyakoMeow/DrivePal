@@ -86,19 +86,11 @@ SCENARIO_PROMPT_TEMPLATE = """请生成一个车载AI测试场景，维度条件
     }},
     "scenario": "{scenario}"
   }},
-  "user_query": "用户说的中文句子，简短自然，如'帮我记一下3点开会'、'导航去最近的加油站'",
-  "expected_decision": {{
-    "should_remind": true或false,
-    "timing": "now/delay/skip",
-    "content": "提醒内容中文",
-    "is_emergency": true或false
-  }},
-  "expected_task_type": "{task_type}"
+  "user_query": "用户说的中文句子，简短自然，如'帮我记一下3点开会'、'导航去最近的加油站'"
 }}
 
 注意：
-- 如果疲劳度≥0.9 或 workload==overloaded，expected_decision 的 should_remind 应倾向于 false（非紧急不打扰）
-- user_query 必须与 task_type 匹配（meeting→会议提醒, travel→导航/路线, shopping→购物, contact→联系人, other→一般问题）
+- user_query 倾向于匹配 task_type（meeting→会议提醒, travel→导航/路线, shopping→购物, contact→联系人, other→一般问题）
 - 生成的数据要尽量多样化，经纬度、地址、速度都应当随场景变化"""
 
 SCENARIO_DESC_MAP: dict[str, str] = {

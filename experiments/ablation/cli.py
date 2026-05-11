@@ -81,12 +81,19 @@ def _print_step_summary(result: GroupResult, elapsed: float) -> None:
     m = len(result.judge_scores)
     metrics_parts: list[str] = []
     for k, v in result.metrics.items():
+        # 跳过 _ 前缀内部键（_comparison / _judge_degradation 等），
+        # 避免内层 float 值被拼入 suffix 导致信息重复
+        if k.startswith("_"):
+            continue
         if isinstance(v, dict):
             for k2, v2 in v.items():
                 if isinstance(v2, (int, float)):
                     metrics_parts.append(f"{k2}: {v2}")
         elif isinstance(v, (int, float)):
             metrics_parts.append(f"{k}: {v}")
+    degradation = result.metrics.get("_judge_degradation", {})
+    if degradation.get("degraded"):
+        print(f"  ⚠ {degradation.get('warning', 'Judge 评分退化')}")
     suffix = f" | {'; '.join(metrics_parts[:8])}" if metrics_parts else ""
     print(f"[{group}] {n} results, {m} scores, {elapsed:.1f}s{suffix}")
 
@@ -257,7 +264,7 @@ def _prepare_group_scenarios(
             50,
             safety_only=True,
             stratify_key=safety_stratum,
-            min_per_stratum=2,
+            min_per_stratum=1,
             seed=seed,
         )
         used_ids |= {s.id for s in group_scenarios["safety"]}

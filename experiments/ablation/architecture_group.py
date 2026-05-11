@@ -9,6 +9,7 @@ from typing import Any
 from ._io import dump_variant_results_jsonl, get_fatigue_threshold
 from .ablation_runner import AblationRunner
 from .judge import Judge, detect_judge_degradation
+from .metrics import compute_comparison
 from .types import (
     GroupResult,
     JudgeScores,
@@ -112,6 +113,7 @@ def compute_quality_metrics(
             "latency_p90_ms": p90,
         }
     metrics["_judge_degradation"] = detect_judge_degradation(scores)
+    metrics["_comparison"] = compute_comparison(scores)
     return metrics
 
 
