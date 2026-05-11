@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import re
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -646,19 +647,35 @@ class AgentWorkflow:
 
         return result, event_id, stages
 
+    @staticmethod
+    def _build_done_data(state: AgentState, session_id: str | None) -> dict:
+        """构建 done 事件 data 字典。"""
+        done_data: dict[str, object] = {
+            "event_id": state.get("event_id"),
+            "session_id": session_id,
+        }
+        pending_id = state.get("pending_reminder_id")
+        if pending_id:
+            done_data["status"] = "pending"
+            done_data["pending_reminder_id"] = pending_id
+        elif state.get("result") and "取消" in str(state.get("result")):
+            done_data["status"] = "suppressed"
+            done_data["reason"] = state.get("result")
+        else:
+            done_data["status"] = "delivered"
+            done_data["result"] = state.get("output_content")
+        return done_data
+
     async def run_stream(
         self,
         user_input: str,
         driving_context: dict | None = None,
         session_id: str | None = None,
-    ) -> list[dict]:
-        """SSE 流式方法。返回阶段事件列表，SSE 端点遍历发送。
+    ) -> AsyncGenerator[dict]:
+        """SSE 流式方法，逐阶段 yield 事件。
 
-        设计说明：返回 list[dict]（非 async generator）。
-        当前实现先完成全部阶段计算再批量返回事件列表——非真正逐阶段流式。
-        若需逐阶段推送（减少首字节延迟），改为 AsyncGenerator，每阶段完成后 yield。
+        每个阶段完成后立即 yield，不等待全部阶段结束。
         """
-        events: list[dict] = []
         stages = WorkflowStages()
         state: AgentState = {
             "original_query": user_input,
@@ -680,23 +697,16 @@ class AgentWorkflow:
                     shortcut_decision, driving_context
                 )
             state["decision"] = shortcut_decision
-            exec_result = await self._execution_node(state)
-            state.update(exec_result)
-            done_data: dict[str, object] = {
-                "event_id": state.get("event_id"),
-                "session_id": session_id,
-                "status": "delivered",
-            }
-            pending_id = state.get("pending_reminder_id")
-            if pending_id:
-                done_data["status"] = "pending"
-                done_data["pending_reminder_id"] = pending_id
-            elif state.get("result") and "取消" in str(state.get("result")):
-                done_data["status"] = "suppressed"
-                done_data["reason"] = state.get("result")
-            else:
-                done_data["result"] = state.get("output_content")
-            events.append({"event": "done", "data": done_data})
+            try:
+                exec_result = await self._execution_node(state)
+                state.update(exec_result)
+                done_data = self._build_done_data(state, session_id)
+                yield {"event": "done", "data": done_data}
+            except Exception as e:
+                yield {
+                    "event": "error",
+                    "data": {"code": "INTERNAL", "message": str(e)},
+                }
             if session_id:
                 self._conversations.add_turn(
                     session_id,
@@ -704,54 +714,61 @@ class AgentWorkflow:
                     shortcut_decision,
                     state.get("result") or "",
                 )
-            return events
+            return
 
-        events.append({"event": "stage_start", "data": {"stage": "context"}})
-        updates = await self._context_node(state)
-        state.update(updates)
-        events.append({"event": "context_done", "data": {"context": state["context"]}})
+        # Stage 1: Context
+        yield {"event": "stage_start", "data": {"stage": "context"}}
+        try:
+            updates = await self._context_node(state)
+            state.update(updates)
+            yield {"event": "context_done", "data": {"context": state["context"]}}
+        except Exception as e:
+            yield {
+                "event": "error",
+                "data": {"code": "CONTEXT_FAILED", "message": str(e)},
+            }
+            return
 
         # Stage 2: Task
-        events.append({"event": "stage_start", "data": {"stage": "task"}})
-        updates = await self._task_node(state)
-        state.update(updates)
-        events.append(
-            {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
-        )
+        yield {"event": "stage_start", "data": {"stage": "task"}}
+        try:
+            updates = await self._task_node(state)
+            state.update(updates)
+            yield {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
+        except Exception as e:
+            yield {"event": "error", "data": {"code": "TASK_FAILED", "message": str(e)}}
+            return
 
         # Stage 3: Strategy
-        events.append({"event": "stage_start", "data": {"stage": "strategy"}})
-        updates = await self._strategy_node(state)
-        state.update(updates)
-        decision = state.get("decision") or {}
-        events.append(
-            {
+        yield {"event": "stage_start", "data": {"stage": "strategy"}}
+        try:
+            updates = await self._strategy_node(state)
+            state.update(updates)
+            decision = state.get("decision") or {}
+            yield {
                 "event": "decision",
                 "data": {"should_remind": decision.get("should_remind")},
             }
-        )
+        except Exception as e:
+            yield {
+                "event": "error",
+                "data": {"code": "STRATEGY_FAILED", "message": str(e)},
+            }
+            return
 
         # Stage 4: Execution
-        events.append({"event": "stage_start", "data": {"stage": "execution"}})
-        updates = await self._execution_node(state)
-        state.update(updates)
-
-        # done 事件
-        done_data: dict[str, object] = {
-            "event_id": state.get("event_id"),
-            "session_id": session_id,
-        }
-        pending_id = state.get("pending_reminder_id")
-        if pending_id:
-            done_data["status"] = "pending"
-            done_data["pending_reminder_id"] = pending_id
-        elif state.get("result") and "取消" in str(state.get("result")):
-            done_data["status"] = "suppressed"
-            done_data["reason"] = state.get("result")
-        else:
-            done_data["status"] = "delivered"
-            done_data["result"] = state.get("output_content")
-        events.append({"event": "done", "data": done_data})
+        yield {"event": "stage_start", "data": {"stage": "execution"}}
+        try:
+            updates = await self._execution_node(state)
+            state.update(updates)
+            done_data = self._build_done_data(state, session_id)
+            yield {"event": "done", "data": done_data}
+        except Exception as e:
+            yield {
+                "event": "error",
+                "data": {"code": "EXECUTION_FAILED", "message": str(e)},
+            }
+            return
 
         if session_id:
             self._conversations.add_turn(
@@ -760,5 +777,3 @@ class AgentWorkflow:
                 state.get("decision") or {},
                 state.get("result") or "",
             )
-
-        return events
