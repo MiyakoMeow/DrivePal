@@ -15,6 +15,24 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _sc(
+    sid: str,
+    driving_context: dict | None = None,
+    *,
+    safety_relevant: bool = False,
+) -> Scenario:
+    """快速构造测试 Scenario，减少重复参数。"""
+    return Scenario(
+        id=sid,
+        driving_context=driving_context or {},
+        user_query="",
+        expected_decision={},
+        expected_task_type="",
+        safety_relevant=safety_relevant,
+        scenario_type="",
+    )
+
+
 def test_load_scenarios_empty(tmp_path: Path):
     path = tmp_path / "empty.jsonl"
     path.touch()
@@ -41,9 +59,9 @@ def test_load_scenarios(tmp_path: Path):
 
 def test_sample_scenarios_safety_only():
     scenarios = [
-        Scenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
-        Scenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
-        Scenario("s3", {}, "", {}, "", safety_relevant=True, scenario_type=""),
+        _sc("s1", safety_relevant=True),
+        _sc("s2", safety_relevant=False),
+        _sc("s3", safety_relevant=True),
     ]
     sampled = sample_scenarios(scenarios, 2, safety_only=True, seed=42)
     assert len(sampled) == 2
@@ -52,8 +70,8 @@ def test_sample_scenarios_safety_only():
 
 def test_sample_scenarios_all():
     scenarios = [
-        Scenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
-        Scenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
+        _sc("s1", safety_relevant=True),
+        _sc("s2", safety_relevant=False),
     ]
     sampled = sample_scenarios(scenarios, 2, safety_only=False)
     assert len(sampled) == 2
@@ -62,7 +80,7 @@ def test_sample_scenarios_all():
 def test_sample_scenarios_stratified():
     """分层抽样应保证每层至少 min_per_stratum 个样本。"""
     scenarios = [
-        Scenario(f"s{i}", {"type": "a" if i < 3 else "b"}, "", {}, "", safety_relevant=False, scenario_type="")
+        _sc(f"s{i}", {"type": "a" if i < 3 else "b"})
         for i in range(6)
     ]
     sampled = sample_scenarios(
@@ -81,9 +99,9 @@ def test_sample_scenarios_stratified():
 def test_sample_scenarios_exclude_ids():
     """exclude_ids 应排除指定场景。"""
     scenarios = [
-        Scenario("s1", {}, "", {}, "", safety_relevant=False, scenario_type=""),
-        Scenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
-        Scenario("s3", {}, "", {}, "", safety_relevant=False, scenario_type=""),
+        _sc("s1"),
+        _sc("s2"),
+        _sc("s3"),
     ]
     sampled = sample_scenarios(scenarios, 2, exclude_ids={"s1"}, seed=42)
     assert len(sampled) == 2
@@ -92,9 +110,7 @@ def test_sample_scenarios_exclude_ids():
 
 def test_sample_scenarios_empty_pool_raises():
     """排除后池为空应抛出 ValueError。"""
-    scenarios = [
-        Scenario("s1", {}, "", {}, "", safety_relevant=False, scenario_type=""),
-    ]
+    scenarios = [_sc("s1")]
     with pytest.raises(ValueError, match="无可用的场景"):
         sample_scenarios(scenarios, 1, exclude_ids={"s1"})
 
@@ -102,7 +118,7 @@ def test_sample_scenarios_empty_pool_raises():
 def test_sample_scenarios_min_per_stratum_too_large():
     """min_per_stratum 总和超过 n 时应抛出 ValueError。"""
     scenarios = [
-        Scenario(f"s{i}", {"type": f"t{i}"}, "", {}, "", safety_relevant=False, scenario_type="")
+        _sc(f"s{i}", {"type": f"t{i}"})
         for i in range(5)
     ]
     with pytest.raises(ValueError, match="无法满足 min_per_stratum"):

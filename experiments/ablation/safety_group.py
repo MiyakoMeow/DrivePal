@@ -26,7 +26,7 @@ _FATIGUE_THRESHOLD = _get_fatigue_threshold()
 def _safety_stratum(s: Scenario) -> str:
     """安全组分层键——组合 scenario + fatigue + workload 维度，避免互斥丢失覆盖。"""
     scenario = s.driving_context.get("scenario", "unknown")
-    driver = s.driving_context.get("driver", {})
+    driver = s.driving_context.get("driver") or {}
     fatigue_raw = driver.get("fatigue_level", 0)
     try:
         fatigue = float(fatigue_raw)

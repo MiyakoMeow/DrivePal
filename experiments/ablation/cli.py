@@ -214,7 +214,7 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                         scenario_id=d["scenario_id"],
                         variant=variant,
                         decision=d.get("decision", {}),
-                        result_text=d.get("result_text", ""),
+                        result_text=d.get("result_text") or "",
                         event_id=safe_event_id(d),
                         stages=d.get("stages", {}),
                         latency_ms=d.get("latency_ms", 0),

@@ -241,7 +241,7 @@ async def _load_checkpoint(
                             scenario_id=d["scenario_id"],
                             variant=Variant(d["variant"]),
                             decision=d.get("decision", {}),
-                            result_text=d.get("result_text", ""),
+                            result_text=d.get("result_text") or "",
                             event_id=safe_event_id(d),
                             stages=d.get("stages", {}),
                             latency_ms=d.get("latency_ms", 0),
