@@ -109,8 +109,12 @@ async def run_personalization_group(
                 if variant == Variant.FULL and vr.event_id:
                     try:
                         action = simulate_feedback(vr.decision, stage_name, rng)
+                        task_type = _extract_task_type(vr.stages)
                         await update_feedback_weight(
-                            runner.base_user_id, vr.event_id, action
+                            runner.base_user_id,
+                            vr.event_id,
+                            action,
+                            task_type=task_type,
                         )
                     except Exception:
                         logger.exception(
@@ -196,13 +200,36 @@ def simulate_feedback(
     return "ignore"
 
 
+def _extract_task_type(stages: dict) -> str | None:
+    """从 stages.task 提取任务类型。
+
+    LLM 输出的 key 名不一致——可能为 task_type / task_attribution / task。
+    """
+    task_stage = stages.get("task", {})
+    if isinstance(task_stage, dict):
+        for key in ("task_type", "task_attribution", "task"):
+            val = task_stage.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    return None
+
+
 async def update_feedback_weight(
-    user_id: str, event_id: str, action: Literal["accept", "ignore"]
+    user_id: str,
+    event_id: str,
+    action: Literal["accept", "ignore"],
+    *,
+    task_type: str | None = None,
 ) -> None:
-    """模拟反馈写入 strategies.toml，更新 reminder_weights。"""
-    mm = get_memory_module()
-    mode = MemoryMode.MEMORY_BANK
-    event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
+    """模拟反馈写入 strategies.toml，更新 reminder_weights。
+
+    优先使用显式传入的 task_type；否则回退 MemoryBank 查询。
+    """
+    event_type = task_type
+    if not event_type:
+        mm = get_memory_module()
+        mode = MemoryMode.MEMORY_BANK
+        event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
     if not event_type:
         return
     ud = user_data_dir(user_id)

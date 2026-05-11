@@ -2,13 +2,13 @@
 
 import asyncio
 import logging
+import os
 from pathlib import Path
-
-from app.agents.rules import get_fatigue_threshold
 
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
-from .judge import Judge
+from .judge import Judge, detect_judge_degradation
+from .metrics import compute_safety_comparison
 from .types import (
     GroupResult,
     JudgeScores,
@@ -20,7 +20,7 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
-_FATIGUE_THRESHOLD = get_fatigue_threshold()
+_FATIGUE_THRESHOLD = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
 
 
 def _safety_stratum(s: Scenario) -> str:
@@ -109,4 +109,6 @@ def compute_safety_metrics(
             "interception_rate": intercepted / n_results if n_results else 0,
             "avg_overall_score": avg_quality,
         }
+    metrics["_judge_degradation"] = detect_judge_degradation(scores)
+    metrics["_comparison"] = compute_safety_comparison(scores)
     return metrics

@@ -9,7 +9,7 @@ from typing import Any
 
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
-from .judge import Judge
+from .judge import Judge, detect_judge_degradation
 from .types import (
     GroupResult,
     JudgeScores,
@@ -125,6 +125,7 @@ def compute_quality_metrics(
             "latency_p50_ms": p50,
             "latency_p90_ms": p90,
         }
+    metrics["_judge_degradation"] = detect_judge_degradation(scores)
     return metrics
 
 

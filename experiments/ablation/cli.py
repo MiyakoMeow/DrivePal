@@ -24,6 +24,7 @@ from ._io import (
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     _arch_stratum,
+    _is_arch_scenario,
     compute_quality_metrics,
     run_architecture_group,
 )
@@ -240,8 +241,15 @@ def _prepare_group_scenarios(
         used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
+        arch_pool = [s for s in all_scenarios if _is_arch_scenario(s)]
+        if len(arch_pool) < 50:
+            logger.warning(
+                "架构组可用场景仅 %d（不足 50），将使用所有可用场景。"
+                "增加 --synthesize-only count=200 可扩充池。",
+                len(arch_pool),
+            )
         group_scenarios["architecture"] = sample_scenarios(
-            all_scenarios,
+            arch_pool,
             50,
             safety_only=False,
             exclude_ids=used_ids,
@@ -360,7 +368,7 @@ async def main(argv: list[str] | None = None) -> None:
         )
 
         if args.synthesize_only:
-            n = await synthesize_scenarios(data_dir / "scenarios.jsonl")
+            n = await synthesize_scenarios(data_dir / "scenarios.jsonl", count=200)
             print(f"合成完成: {n} 场景")
             return
 
