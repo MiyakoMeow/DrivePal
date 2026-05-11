@@ -38,14 +38,15 @@ model = "openrouter/baai/bge-m3"
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
 | `ZHIPU_API_KEY` | 智谱 API Key |
 | `OPENROUTER_API_KEY` | OpenRouter API Key |
-| `JUDGE_MODEL` / `JUDGE_BASE_URL` / `JUDGE_API_KEY` | 消融实验 Judge 配置。应用内 Judge 通过 TOML 配置，非此环境变量（预留） |
+| `JUDGE_MODEL` / `JUDGE_BASE_URL` | 消融实验 Judge 配置（记录实验环境快照）。应用内 Judge 通过 TOML 配置 |
+| `JUDGE_API_KEY` | 预留，当前未使用 |
 | `FATIGUE_THRESHOLD` | 疲劳规则阈值（默认0.7） |
 | `PROBABILISTIC_INFERENCE_ENABLED` | 概率推断开关（默认1） |
 | `MEMORYBANK_SEED` | 遗忘随机种子（benchmark复现用） |
 | `MEMORYBANK_FORGET_MODE` | 遗忘模式：deterministic/probabilistic |
 | `MEMORYBANK_ENABLE_FORGETTING` | 启用遗忘（默认关闭） |
 | `MEMORYBANK_CHUNK_SIZE` | 检索分块大小（默认 None，自适应；回退默认值 1500） |
-| `MEMORYBANK_LLM_TEMPERATURE` | LLM 温度（None=使用ChatModel默认，摘要默认0.3） |
+| `MEMORYBANK_LLM_TEMPERATURE` | LLM 温度（None=使用摘要默认值 0.3） |
 | `MEMORYBANK_LLM_MAX_TOKENS` | LLM 最大 token 数（摘要默认400） |
 | `MEMORYBANK_EMBEDDING_BATCH_SIZE` | 嵌入批量大小（默认100） |
 | `MEMORYBANK_SAVE_INTERVAL_SECONDS` | 持久化节流间隔（默认30秒） |

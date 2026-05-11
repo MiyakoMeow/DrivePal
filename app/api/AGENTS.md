@@ -4,8 +4,8 @@
 
 **Query:**
 ```graphql
-history(limit, memoryMode, currentUser): [MemoryEvent]
-scenarioPresets(currentUser): [ScenarioPreset]
+history(limit, memoryMode, currentUser): [MemoryEventGQL]
+scenarioPresets(currentUser): [ScenarioPresetGQL]
 experimentResults: ExperimentResults
 ```
 
@@ -13,7 +13,7 @@ experimentResults: ExperimentResults
 ```graphql
 processQuery(input: {query, memoryMode, context, currentUser, sessionId}): {result, eventId, stages}
 submitFeedback(input: {eventId, action, memoryMode, currentUser, modifiedContent}): {status}
-saveScenarioPreset(input): ScenarioPreset
+saveScenarioPreset(input): ScenarioPresetGQL
 deleteScenarioPreset(presetId, currentUser): Boolean
 exportData(currentUser): ExportDataResult
 deleteAllData(currentUser): Boolean

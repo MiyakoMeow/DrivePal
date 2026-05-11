@@ -16,4 +16,4 @@
 SSE 查询端点 `POST /query/stream` 的输入/输出 schema，文档化契约参考。
 
 - **ProcessQueryRequest**: query (str), memory_mode (MemoryMode), context (dict | None), current_user (str), session_id (str | None)
-- **ProcessQueryResult**: status (delivered/pending/suppressed), event_id, session_id, result (dict | None), pending_reminder_id, trigger_text, reason, cancelled (bool | None)
+- **ProcessQueryResult**: status (str, 默认 "delivered"，可能值 delivered/pending/suppressed 见注释), event_id, session_id, result (dict | None), pending_reminder_id, trigger_text, reason, cancelled (bool | None)

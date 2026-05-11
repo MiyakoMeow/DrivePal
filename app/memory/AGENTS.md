@@ -118,7 +118,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 | `SummarizationEmpty` | LLM 返回空内容 | 哨兵异常，非错误 |
 | `ConfigError` | 配置错误 | 永久 |
 | `IndexIntegrityError` | 数据损坏 | 永久 |
-| `InvalidActionError` | FeedbackData action 校验失败 | 永久 |
+| `InvalidActionError` | FeedbackData action 校验失败（继承 `ValueError`，独立于 `MemoryBankError` 体系） | — |
 
 ## 关键阈值
 
@@ -176,8 +176,8 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 写入记忆前自动脱敏位置信息：
 - 经纬度截断至小数点后 2 位（约 1km 精度）
 - 地址只保留街道级（逗号前第一段）
-- `sanitize_context()` 递归处理 `spatial.current_location` + `destination`
+- `sanitize_context()` 固定处理 `spatial.current_location` + `destination` 两个字段，无递归遍历
 
 ### 数据可携带性
 
-`exportData(currentUser)` mutation 导出当前用户全量文本文件（JSONL/TOML/JSON），返回 `{files: {filename: content}}`。`deleteAllData(currentUser)` 删除 `data/users/{currentUser}/` 整个目录。
+`exportData`/`deleteAllData` 属于 GraphQL API 层（`app/api/`），通过 `MemoryModule` 接口操作数据。
