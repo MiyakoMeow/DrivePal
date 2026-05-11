@@ -36,3 +36,25 @@ def test_compute_comparison():
     assert no_rules_key in comparison
     assert comparison[no_rules_key]["mean_score"] == 2.5
     assert comparison[no_rules_key]["mean_diff"] == -2.0  # 2.5 - 4.5
+
+
+def test_architecture_metrics_includes_comparison():
+    """架构组 compute_quality_metrics 应包含 _comparison 键。"""
+    from experiments.ablation.architecture_group import compute_quality_metrics
+    from experiments.ablation.types import VariantResult
+
+    scores = [
+        JudgeScores("1", Variant.FULL, 4, 4, 4, [], ""),
+        JudgeScores("2", Variant.FULL, 5, 5, 5, [], ""),
+        JudgeScores("1", Variant.SINGLE_LLM, 3, 3, 3, [], ""),
+        JudgeScores("2", Variant.SINGLE_LLM, 2, 2, 2, [], ""),
+    ]
+    results = [
+        VariantResult("1", Variant.FULL, {}, "", None, {}, 100),
+        VariantResult("2", Variant.FULL, {}, "", None, {}, 150),
+        VariantResult("1", Variant.SINGLE_LLM, {}, "", None, {}, 50),
+        VariantResult("2", Variant.SINGLE_LLM, {}, "", None, {}, 80),
+    ]
+    metrics = compute_quality_metrics(scores, results)
+    assert "_comparison" in metrics
+    assert "single-llm" in metrics["_comparison"]
