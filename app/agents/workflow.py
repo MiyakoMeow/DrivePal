@@ -609,31 +609,38 @@ class AgentWorkflow:
             "session_id": session_id,
         }
 
-        # --- 快捷指令检查 ---
-        shortcut_decision = self._shortcuts.resolve(user_input)
-        if shortcut_decision:
-            if driving_context:
-                shortcut_decision, _modifications = postprocess_decision(
-                    shortcut_decision, driving_context
-                )
-            state["decision"] = shortcut_decision
-            exec_result = await self._execution_node(state)
-            state.update(exec_result)
+        try:
+            # --- 快捷指令检查 ---
+            shortcut_decision = self._shortcuts.resolve(user_input)
+            if shortcut_decision:
+                if driving_context:
+                    shortcut_decision, _modifications = postprocess_decision(
+                        shortcut_decision, driving_context
+                    )
+                state["decision"] = shortcut_decision
+                exec_result = await self._execution_node(state)
+                state.update(exec_result)
+                result = state.get("result") or "处理完成"
+                event_id = state.get("event_id")
+                self._log_conversation_turn(state, session_id, user_input)
+                return result, event_id, stages
+
+            for node_fn in self._nodes:
+                updates = await node_fn(state)
+                state.update(updates)
+
             result = state.get("result") or "处理完成"
             event_id = state.get("event_id")
-            self._log_conversation_turn(state, session_id, user_input)
+
+        except Exception as e:
+            logger.warning("run_with_stages failed: %s", e, exc_info=True)
+            if session_id:
+                self._log_conversation_turn(state, session_id, user_input)
+            raise
+        else:
+            if session_id:
+                self._log_conversation_turn(state, session_id, user_input)
             return result, event_id, stages
-
-        for node_fn in self._nodes:
-            updates = await node_fn(state)
-            state.update(updates)
-
-        result = state.get("result") or "处理完成"
-        event_id = state.get("event_id")
-
-        self._log_conversation_turn(state, session_id, user_input)
-
-        return result, event_id, stages
 
     @staticmethod
     def _build_done_data(state: AgentState, session_id: str | None) -> dict:
@@ -702,6 +709,7 @@ class AgentWorkflow:
                 done_data = self._build_done_data(state, session_id)
                 yield {"event": "done", "data": done_data}
             except Exception as e:
+                logger.warning("run_stream shortcut stage failed: %s", e, exc_info=True)
                 yield {
                     "event": "error",
                     "data": {"code": "INTERNAL", "message": str(e)},

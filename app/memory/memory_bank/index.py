@@ -148,13 +148,13 @@ class FaissIndex:
                     )
                     bak_path = ip.with_suffix(".faiss.bak")
                     await self._run_sync(lambda: shutil.copy(str(ip), str(bak_path)))
-                    if mp.exists():
+                    if await self._run_sync(mp.exists):
                         await self._run_sync(
                             lambda: shutil.copy(
                                 str(mp), str(mp.with_suffix(".json.bak"))
                             )
                         )
-                    if ep.exists():
+                    if await self._run_sync(ep.exists):
                         await self._run_sync(
                             lambda: shutil.copy(
                                 str(ep), str(ep.with_suffix(".json.bak"))
@@ -177,11 +177,11 @@ class FaissIndex:
                 bak_path = ip.with_suffix(".faiss.bak")
                 logger.warning("FaissIndex index.faiss corrupted, backing up: %s", exc)
                 await self._run_sync(lambda: shutil.copy(str(ip), str(bak_path)))
-                if mp.exists():
+                if await self._run_sync(mp.exists):
                     await self._run_sync(
                         lambda: shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
                     )
-                if ep.exists():
+                if await self._run_sync(ep.exists):
                     await self._run_sync(
                         lambda: shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
                     )
@@ -294,7 +294,7 @@ class FaissIndex:
 
             # 3. 加载 extra_metadata（损坏仅警告，不阻塞）
             extra_recovery: list[str] = []
-            if ep.exists():
+            if await self._run_sync(ep.exists):
                 try:
                     raw_extra = await self._run_sync(ep.read_text)
                     e: object = await self._run_sync(lambda: json.loads(raw_extra))
