@@ -142,7 +142,12 @@ async def _http_fetch_with_retry(client, url: str):
                 msg = "响应非 PNG 格式"
                 raise ValueError(msg)
             return response.content
-        except httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError:
+        except (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+            httpx.RemoteProtocolError,
+            httpx.NetworkError,
+        ):
             if attempt == 0:
                 continue  # 一次重试
             raise
@@ -415,6 +420,10 @@ async def _render_inline_content(
                 )
                 i = end + 2
                 continue
+            # 无闭合标记 → 按纯文本输出，避免静默丢弃
+            _add_run(paragraph, marker, font_size=font_size)
+            i += 2
+            continue
         # 斜体 *...* 或 _..._（需排除 __ 情况）
         if content[i] in "*_":
             if content[i] == "_" and i + 1 < n and content[i + 1] == "_":
@@ -559,6 +568,9 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
 
     tbl = table._tbl
     tblPr = tbl.tblPr if tbl.tblPr is not None else tbl.makeelement(qn("w:tblPr"), {})
+    # 移除样式可能预设的 tblBorders，避免重复元素
+    for existing in tblPr.findall(qn("w:tblBorders")):
+        tblPr.remove(existing)
     borders = tblPr.makeelement(qn("w:tblBorders"), {})
     top = borders.makeelement(
         qn("w:top"), {qn("w:val"): "single", qn("w:sz"): "12", qn("w:color"): "000000"}
