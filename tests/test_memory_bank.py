@@ -209,3 +209,18 @@ def test_source_event_index_corruption_recovery(tmp_path):
         pytest.fail("should have raised")
     except json.JSONDecodeError:
         pass  # 预期
+
+
+@pytest.mark.asyncio
+async def test_ensure_loaded_skips_after_first(tmp_path):
+    """_ensure_loaded 首次后应跳过 load 调用。"""
+    from unittest.mock import AsyncMock
+
+    from app.memory.memory_bank.store import MemoryBankStore
+
+    store = MemoryBankStore(tmp_path, embedding_model=AsyncMock())
+    store._index.load = AsyncMock(wraps=store._index.load)
+    await store._ensure_loaded()
+    call_count_1 = store._index.load.call_count
+    await store._ensure_loaded()
+    assert store._index.load.call_count == call_count_1

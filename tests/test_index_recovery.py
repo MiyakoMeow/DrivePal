@@ -1,5 +1,6 @@
 """FaissIndex 降级恢复测试。"""
 
+import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -94,3 +95,33 @@ async def test_compute_reference_date_empty():
         await idx.load()
         ref = idx.compute_reference_date()
         assert ref  # 任意非空字符串
+
+
+@pytest.mark.asyncio
+async def test_load_does_not_block_event_loop():
+    """load() 不阻塞事件循环——与 canary 协程并发验证 yield 点。"""
+    import time
+
+    canary_started = False
+    canary_done = False
+
+    async def canary():
+        nonlocal canary_started, canary_done
+        canary_started = True
+        await asyncio.sleep(0.01)
+        canary_done = True
+
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        await idx.add_vector("x", [0.1] * 1536, "2024-06-15T00:00:00", {})
+        await idx.save()
+
+        idx2 = FaissIndex(Path(tmp))
+        t0 = time.monotonic()
+        await asyncio.gather(idx2.load(), canary())
+        elapsed = time.monotonic() - t0
+
+        assert canary_started, "canary never started — load blocked"
+        assert canary_done, "canary not done — load blocked event loop"
+        assert elapsed < 5.0, "load took too long — possible event loop block"

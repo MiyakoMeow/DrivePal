@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.models.chat import (
+    ChatModel,
     _get_cached_client,
     clear_semaphore_cache,
     close_client_cache,
@@ -64,3 +66,18 @@ async def test_close_client_cache():
     from app.models.chat import _client_cache
 
     assert len(_client_cache) == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_generate_uses_provider_semaphore():
+    """batch_generate 应通过 provider semaphore 控制并发。"""
+    provider = LLMProviderConfig(
+        provider=PCfg(model="test-model", base_url="http://test", api_key="test"),
+        temperature=0.0,
+        concurrency=2,
+    )
+    model = ChatModel(providers=[provider])
+    model.generate = AsyncMock(return_value="ok")
+    results = await model.batch_generate(["a", "b", "c"])
+    assert len(results) == 3
+    assert model.generate.call_count == 3

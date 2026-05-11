@@ -34,15 +34,14 @@ async def query_stream(req: ProcessQueryRequest) -> StreamingResponse:
     )
 
     driving_context = req.context
-    events = await workflow.run_stream(
-        req.query,
-        driving_context,
-        session_id=req.session_id,
-    )
 
     async def event_generator() -> AsyncGenerator[str]:
         try:
-            for event in events:
+            async for event in workflow.run_stream(
+                req.query,
+                driving_context,
+                session_id=req.session_id,
+            ):
                 data_str = json.dumps(event["data"], ensure_ascii=False)
                 yield f"event: {event['event']}\ndata: {data_str}\n\n"
         except Exception as e:

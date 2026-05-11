@@ -97,9 +97,15 @@ class ConversationManager:
             )
         return list(session["turns"])
 
-    def close(self, session_id: str) -> None:
-        """关闭指定会话，释放资源。"""
-        self._sessions.pop(session_id, None)
+    def close(self, session_id: str, user_id: str | None = None) -> bool:
+        """关闭指定会话。返回是否实际关闭。"""
+        session = self._sessions.get(session_id)
+        if session is None:
+            return False
+        if user_id is not None and session["user_id"] != user_id:
+            return False
+        del self._sessions[session_id]
+        return True
 
     def cleanup_expired(self) -> None:
         """清理所有超时未活动的会话。"""

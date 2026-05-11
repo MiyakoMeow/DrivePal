@@ -5,10 +5,11 @@ import hashlib
 import json
 import logging
 import re
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.agents.conversation import _conversation_manager
 from app.agents.outputs import OutputRouter
@@ -59,7 +60,7 @@ class ChatModelUnavailableError(RuntimeError):
 class LLMJsonResponse(BaseModel):
     """LLM JSON 输出包装，含校验与兜底."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     raw: str
 
@@ -68,15 +69,56 @@ class LLMJsonResponse(BaseModel):
         """Parse LLM output, warning on fail but always return valid."""
         cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip())
         cleaned = re.sub(r"\s*```$", "", cleaned)
-        parsed: dict = {}
         try:
             data = json.loads(cleaned)
             if isinstance(data, dict):
-                parsed = data
-        except json.JSONDecodeError as e:
-            logger.warning("LLM JSON parse failed: %s", e)
-        parsed.pop("raw", None)  # prevent collision with explicit raw=text
-        return cls(raw=text, **parsed)
+                data.pop("raw", None)  # prevent collision with explicit raw=text
+                return cls(raw=text, **data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.warning("LLM JSON parse/validate failed: %s", e)
+        return cls(raw=text)
+
+
+class ContextOutput(BaseModel):
+    """Context Agent JSON 输出模型，extra forbid."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scenario: str = ""
+    driver_state: dict = {}
+    spatial: dict = {}
+    traffic: dict = {}
+    current_datetime: str = ""
+    related_events: list = []
+    conversation_history: list | None = None
+
+
+class TaskOutput(BaseModel):
+    """Task Agent JSON 输出模型，extra forbid."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str = "general"
+    confidence: float = 0.0
+    description: str = ""
+    entities: list = []
+
+
+class StrategyOutput(BaseModel):
+    """Strategy Agent JSON 输出模型，extra forbid."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    should_remind: bool = True
+    timing: str = "now"
+    target_time: str = ""
+    delay_seconds: int = 300
+    reminder_content: str | dict = ""
+    type: str = "general"
+    reason: str = ""
+    allowed_channels: list = []
+    action: str = ""
+    postpone: bool = False
 
 
 class ReminderContent(BaseModel):
@@ -289,11 +331,20 @@ class AgentWorkflow:
 请输出JSON格式的上下文对象. """
 
             parsed = await self._call_llm_json(prompt)
-            context = {
-                **parsed.model_dump(),
-                "current_datetime": current_datetime,
-                "related_events": relevant_memories,
-            }
+            try:
+                validated = ContextOutput.model_validate(
+                    parsed.model_dump(exclude={"raw"})
+                )
+                context = validated.model_dump()
+            except ValidationError as e:
+                logger.warning("ContextOutput validation failed: %s", e)
+                try:
+                    raw_data = json.loads(parsed.raw)
+                    context = raw_data if isinstance(raw_data, dict) else {}
+                except json.JSONDecodeError:
+                    context = {}
+            context["current_datetime"] = current_datetime
+            context["related_events"] = relevant_memories
 
         if stages is not None:
             stages.context = context
@@ -314,7 +365,17 @@ class AgentWorkflow:
 
 请输出JSON格式的任务对象. """
 
-        task = (await self._call_llm_json(prompt)).model_dump()
+        parsed = await self._call_llm_json(prompt)
+        try:
+            validated = TaskOutput.model_validate(parsed.model_dump(exclude={"raw"}))
+            task = validated.model_dump()
+        except ValidationError as e:
+            logger.warning("TaskOutput validation failed: %s", e)
+            try:
+                raw_data = json.loads(parsed.raw)
+                task = raw_data if isinstance(raw_data, dict) else {}
+            except json.JSONDecodeError:
+                task = {}
         if stages is not None:
             stages.task = task
         return {
@@ -379,7 +440,19 @@ class AgentWorkflow:
 
 请输出JSON格式的决策结果. """
 
-        decision = (await self._call_llm_json(prompt)).model_dump()
+        parsed = await self._call_llm_json(prompt)
+        try:
+            validated = StrategyOutput.model_validate(
+                parsed.model_dump(exclude={"raw"})
+            )
+            decision = validated.model_dump()
+        except ValidationError as e:
+            logger.warning("StrategyOutput validation failed: %s", e)
+            try:
+                raw_data = json.loads(parsed.raw)
+                decision = raw_data if isinstance(raw_data, dict) else {}
+            except json.JSONDecodeError:
+                decision = {}
         decision["postpone"] = postpone
         if stages is not None:
             stages.decision = decision
@@ -447,7 +520,10 @@ class AgentWorkflow:
         driving_ctx = state.get("driving_context")
         modifications: list[str] = []
         if driving_ctx:
-            decision, modifications = postprocess_decision(decision, driving_ctx)
+            if decision.get("_postprocessed"):
+                modifications = []
+            else:
+                decision, modifications = postprocess_decision(decision, driving_ctx)
 
         # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
         if not decision.get("should_remind", True):
@@ -608,57 +684,82 @@ class AgentWorkflow:
             "session_id": session_id,
         }
 
-        # --- 快捷指令检查 ---
-        shortcut_decision = self._shortcuts.resolve(user_input)
-        if shortcut_decision:
-            if driving_context:
-                shortcut_decision, _modifications = postprocess_decision(
-                    shortcut_decision, driving_context
-                )
-            state["decision"] = shortcut_decision
-            exec_result = await self._execution_node(state)
-            state.update(exec_result)
+        try:
+            # --- 快捷指令检查 ---
+            shortcut_decision = self._shortcuts.resolve(user_input)
+            if shortcut_decision:
+                if driving_context:
+                    shortcut_decision, _modifications = postprocess_decision(
+                        shortcut_decision, driving_context
+                    )
+                    shortcut_decision["_postprocessed"] = True
+                state["decision"] = shortcut_decision
+                exec_result = await self._execution_node(state)
+                state.update(exec_result)
+                result = state.get("result") or "处理完成"
+                event_id = state.get("event_id")
+                self._log_conversation_turn(state, session_id, user_input)
+                return result, event_id, stages
+
+            for node_fn in self._nodes:
+                updates = await node_fn(state)
+                state.update(updates)
+
             result = state.get("result") or "处理完成"
             event_id = state.get("event_id")
+
+        except Exception as e:
+            logger.warning("run_with_stages failed: %s", e, exc_info=True)
             if session_id:
-                self._conversations.add_turn(
-                    session_id,
-                    user_input,
-                    shortcut_decision,
-                    result,
-                )
+                self._log_conversation_turn(state, session_id, user_input)
+            raise
+        else:
+            if session_id:
+                self._log_conversation_turn(state, session_id, user_input)
             return result, event_id, stages
 
-        for node_fn in self._nodes:
-            updates = await node_fn(state)
-            state.update(updates)
+    @staticmethod
+    def _build_done_data(state: AgentState, session_id: str | None) -> dict:
+        """构建 done 事件 data 字典。"""
+        done_data: dict[str, object] = {
+            "event_id": state.get("event_id"),
+            "session_id": session_id,
+        }
+        pending_id = state.get("pending_reminder_id")
+        if pending_id:
+            done_data["status"] = "pending"
+            done_data["pending_reminder_id"] = pending_id
+        elif state.get("result") and any(
+            kw in str(state.get("result")) for kw in ("取消", "抑制")
+        ):
+            done_data["status"] = "suppressed"
+            done_data["reason"] = state.get("result")
+        else:
+            done_data["status"] = "delivered"
+            done_data["result"] = state.get("output_content")
+        return done_data
 
-        result = state.get("result") or "处理完成"
-        event_id = state.get("event_id")
-
+    def _log_conversation_turn(
+        self, state: AgentState, session_id: str | None, user_input: str
+    ) -> None:
         if session_id:
             self._conversations.add_turn(
                 session_id,
                 user_input,
                 state.get("decision") or {},
-                result,
+                state.get("result") or "",
             )
-
-        return result, event_id, stages
 
     async def run_stream(
         self,
         user_input: str,
         driving_context: dict | None = None,
         session_id: str | None = None,
-    ) -> list[dict]:
-        """SSE 流式方法。返回阶段事件列表，SSE 端点遍历发送。
+    ) -> AsyncGenerator[dict]:
+        """SSE 流式方法，逐阶段 yield 事件。
 
-        设计说明：返回 list[dict]（非 async generator）。
-        当前实现先完成全部阶段计算再批量返回事件列表——非真正逐阶段流式。
-        若需逐阶段推送（减少首字节延迟），改为 AsyncGenerator，每阶段完成后 yield。
+        每个阶段完成后立即 yield，不等待全部阶段结束。
         """
-        events: list[dict] = []
         stages = WorkflowStages()
         state: AgentState = {
             "original_query": user_input,
@@ -679,86 +780,88 @@ class AgentWorkflow:
                 shortcut_decision, _modifications = postprocess_decision(
                     shortcut_decision, driving_context
                 )
+                shortcut_decision["_postprocessed"] = True
             state["decision"] = shortcut_decision
-            exec_result = await self._execution_node(state)
-            state.update(exec_result)
-            done_data: dict[str, object] = {
-                "event_id": state.get("event_id"),
-                "session_id": session_id,
-                "status": "delivered",
-            }
-            pending_id = state.get("pending_reminder_id")
-            if pending_id:
-                done_data["status"] = "pending"
-                done_data["pending_reminder_id"] = pending_id
-            elif state.get("result") and "取消" in str(state.get("result")):
-                done_data["status"] = "suppressed"
-                done_data["reason"] = state.get("result")
-            else:
-                done_data["result"] = state.get("output_content")
-            events.append({"event": "done", "data": done_data})
-            if session_id:
-                self._conversations.add_turn(
-                    session_id,
-                    user_input,
-                    shortcut_decision,
-                    state.get("result") or "",
-                )
-            return events
+            try:
+                exec_result = await self._execution_node(state)
+                state.update(exec_result)
+                done_data = self._build_done_data(state, session_id)
+                yield {"event": "done", "data": done_data}
+            except Exception as e:
+                logger.warning("run_stream shortcut stage failed: %s", e, exc_info=True)
+                yield {
+                    "event": "error",
+                    "data": {"code": "INTERNAL", "message": str(e)},
+                }
+            self._log_conversation_turn(state, session_id, user_input)
+            return
 
-        events.append({"event": "stage_start", "data": {"stage": "context"}})
-        updates = await self._context_node(state)
-        state.update(updates)
-        events.append({"event": "context_done", "data": {"context": state["context"]}})
+        # Stage 1: Context
+        yield {"event": "stage_start", "data": {"stage": "context"}}
+        try:
+            updates = await self._context_node(state)
+            state.update(updates)
+            yield {"event": "context_done", "data": {"context": state["context"]}}
+        except Exception as e:
+            logger.warning(
+                "run_stream %s stage failed: %s", "context", e, exc_info=True
+            )
+            yield {
+                "event": "error",
+                "data": {"code": "CONTEXT_FAILED", "message": str(e)},
+            }
+            self._log_conversation_turn(state, session_id, user_input)
+            return
 
         # Stage 2: Task
-        events.append({"event": "stage_start", "data": {"stage": "task"}})
-        updates = await self._task_node(state)
-        state.update(updates)
-        events.append(
-            {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
-        )
+        yield {"event": "stage_start", "data": {"stage": "task"}}
+        try:
+            updates = await self._task_node(state)
+            state.update(updates)
+            yield {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
+        except Exception as e:
+            logger.warning("run_stream %s stage failed: %s", "task", e, exc_info=True)
+            yield {"event": "error", "data": {"code": "TASK_FAILED", "message": str(e)}}
+            self._log_conversation_turn(state, session_id, user_input)
+            return
 
         # Stage 3: Strategy
-        events.append({"event": "stage_start", "data": {"stage": "strategy"}})
-        updates = await self._strategy_node(state)
-        state.update(updates)
-        decision = state.get("decision") or {}
-        events.append(
-            {
+        yield {"event": "stage_start", "data": {"stage": "strategy"}}
+        try:
+            updates = await self._strategy_node(state)
+            state.update(updates)
+            decision = state.get("decision") or {}
+            yield {
                 "event": "decision",
                 "data": {"should_remind": decision.get("should_remind")},
             }
-        )
+        except Exception as e:
+            logger.warning(
+                "run_stream %s stage failed: %s", "strategy", e, exc_info=True
+            )
+            yield {
+                "event": "error",
+                "data": {"code": "STRATEGY_FAILED", "message": str(e)},
+            }
+            self._log_conversation_turn(state, session_id, user_input)
+            return
 
         # Stage 4: Execution
-        events.append({"event": "stage_start", "data": {"stage": "execution"}})
-        updates = await self._execution_node(state)
-        state.update(updates)
-
-        # done 事件
-        done_data: dict[str, object] = {
-            "event_id": state.get("event_id"),
-            "session_id": session_id,
-        }
-        pending_id = state.get("pending_reminder_id")
-        if pending_id:
-            done_data["status"] = "pending"
-            done_data["pending_reminder_id"] = pending_id
-        elif state.get("result") and "取消" in str(state.get("result")):
-            done_data["status"] = "suppressed"
-            done_data["reason"] = state.get("result")
-        else:
-            done_data["status"] = "delivered"
-            done_data["result"] = state.get("output_content")
-        events.append({"event": "done", "data": done_data})
-
-        if session_id:
-            self._conversations.add_turn(
-                session_id,
-                user_input,
-                state.get("decision") or {},
-                state.get("result") or "",
+        yield {"event": "stage_start", "data": {"stage": "execution"}}
+        try:
+            updates = await self._execution_node(state)
+            state.update(updates)
+            done_data = self._build_done_data(state, session_id)
+            yield {"event": "done", "data": done_data}
+        except Exception as e:
+            logger.warning(
+                "run_stream %s stage failed: %s", "execution", e, exc_info=True
             )
+            yield {
+                "event": "error",
+                "data": {"code": "EXECUTION_FAILED", "message": str(e)},
+            }
+            self._log_conversation_turn(state, session_id, user_input)
+            return
 
-        return events
+        self._log_conversation_turn(state, session_id, user_input)

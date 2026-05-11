@@ -1,6 +1,7 @@
 """遗忘曲线与判定测试。"""
 
 import math
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -10,6 +11,8 @@ from app.memory.memory_bank.forget import (
     compute_ingestion_forget_ids,
     forgetting_retention,
 )
+from app.memory.memory_bank.lifecycle import MemoryLifecycle
+from app.memory.schemas import FeedbackData
 
 
 class TestForgettingRetention:
@@ -194,3 +197,85 @@ class TestIngestionForget:
         ids = compute_ingestion_forget_ids(meta, "2020-02-01", config)
         assert ids == []  # retention ≈ 0.74 > 0.3
         assert "forgotten" not in meta[0]
+
+
+class TestUpdateFeedbackConcurrency:
+    """update_feedback 并发安全与上限约束测试。"""
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_concurrent_safe(self):
+        """并发 10 次 accept，验证锁必要性——无锁时读-改-写竞争会丢更新，有锁时准确 = 21.0。"""
+        import asyncio
+
+        index = MagicMock()
+        meta = {
+            "faiss_id": 0,
+            "memory_strength": 1.0,
+            "text": "test",
+            "timestamp": "2026-01-01T00:00:00",
+        }
+        index.get_metadata_by_id.return_value = meta
+        index.save = AsyncMock()
+        embed = AsyncMock()
+        embed.encode = AsyncMock(return_value=[0.1] * 1536)
+        forget = MagicMock()
+        config = MemoryBankConfig(max_memory_strength=100)
+        lifecycle = MemoryLifecycle(index, embed, forget, None, config)
+
+        feedback = FeedbackData(event_id="0", action="accept")
+        await asyncio.gather(
+            *(lifecycle.update_feedback("0", feedback) for _ in range(10))
+        )
+        # 10 accepts × +2 = 20, plus initial 1.0 = 21.0; cap 100 不挡
+        # 无锁时因读-改-写竞争，最终值远小于 21.0
+        assert meta["memory_strength"] == 21.0, (
+            f"expected 21.0, got {meta['memory_strength']}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_respects_max_strength(self):
+        """max_memory_strength=5，3 次 accept → 最终 5.0。"""
+        index = MagicMock()
+        meta = {
+            "faiss_id": 0,
+            "memory_strength": 1.0,
+            "text": "test",
+            "timestamp": "2026-01-01T00:00:00",
+        }
+        index.get_metadata_by_id.return_value = meta
+        index.save = AsyncMock()
+        embed = AsyncMock()
+        embed.encode = AsyncMock(return_value=[0.1] * 1536)
+        forget = MagicMock()
+        config = MemoryBankConfig(max_memory_strength=5)
+        lifecycle = MemoryLifecycle(index, embed, forget, None, config)
+
+        feedback = FeedbackData(event_id="0", action="accept")
+        for _ in range(3):
+            await lifecycle.update_feedback("0", feedback)
+
+        assert meta["memory_strength"] == 5.0  # capped
+
+    @pytest.mark.asyncio
+    async def test_update_feedback_ignore_never_below_one(self):
+        """5 次 ignore → 最终 1.0。"""
+        index = MagicMock()
+        meta = {
+            "faiss_id": 0,
+            "memory_strength": 6.0,
+            "text": "test",
+            "timestamp": "2026-01-01T00:00:00",
+        }
+        index.get_metadata_by_id.return_value = meta
+        index.save = AsyncMock()
+        embed = AsyncMock()
+        embed.encode = AsyncMock(return_value=[0.1] * 1536)
+        forget = MagicMock()
+        config = MemoryBankConfig(max_memory_strength=10)
+        lifecycle = MemoryLifecycle(index, embed, forget, None, config)
+
+        feedback = FeedbackData(event_id="0", action="ignore")
+        for _ in range(5):
+            await lifecycle.update_feedback("0", feedback)
+
+        assert meta["memory_strength"] == 1.0  # floored

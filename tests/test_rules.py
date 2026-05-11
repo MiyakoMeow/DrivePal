@@ -420,6 +420,15 @@ def test_disable_rules_skips_postprocess() -> None:
         set_ablation_disable_rules(False)
 
 
+def test_shortcut_decision_marked_postprocessed():
+    """shortcut 路径的 decision 应标记 _postprocessed。"""
+    decision = {"should_remind": True, "_postprocessed": True}
+    driving_ctx = {"scenario": "highway"}
+    result, mods = postprocess_decision(decision, driving_ctx)
+    assert result["should_remind"] is True
+    assert len(mods) == 0
+
+
 def test_fatigue_threshold_cached(monkeypatch):
     """_get_fatigue_threshold 首次读 env 后缓存，改 env 不生效"""
     from app.agents.rules import _get_fatigue_threshold, reset_fatigue_threshold_cache

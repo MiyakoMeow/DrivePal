@@ -184,6 +184,28 @@ class MemoryBankConfig(BaseSettings):
     shutdown_timeout_seconds: float = 30.0
 
 
+def validate_settings(config: MemoryBankConfig | None = None) -> list[str]:
+    """校验配置参数，返回警告列表。值无效时 warn 不 raise。"""
+    cfg = config or MemoryBankConfig()
+    warnings: list[str] = []
+    if not 0.0 < cfg.retrieval_alpha <= 1.0:
+        warnings.append(f"retrieval_alpha={cfg.retrieval_alpha} 超出范围 (0,1]")
+    if not 0.0 < cfg.soft_forget_threshold <= 1.0:
+        warnings.append(
+            f"soft_forget_threshold={cfg.soft_forget_threshold} 超出范围 [0,1]"
+        )
+    if (
+        cfg.chunk_size is not None
+        and not cfg.chunk_size_min <= cfg.chunk_size <= cfg.chunk_size_max
+    ):
+        warnings.append(
+            f"chunk_size={cfg.chunk_size} 超出 [{cfg.chunk_size_min}, {cfg.chunk_size_max}]"
+        )
+    for w in warnings:
+        logger.warning("Config warning: %s", w)
+    return warnings
+
+
 def resolve_reference_date(
     config: MemoryBankConfig,
     index: FaissIndex,

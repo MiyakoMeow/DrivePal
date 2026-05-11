@@ -44,3 +44,15 @@ class TestConversationManager:
         """Given 不存在的 session_id, When get_history, Then 返回空列表."""
         cm = ConversationManager()
         assert cm.get_history("nonexistent") == []
+
+    async def test_close_session_checks_user(self):
+        """Given 用户 A 的会话, When 用户 B 关闭, Then 拒绝; 用户 A 关闭, Then 成功."""
+        cm = ConversationManager()
+        sid = cm.create("user_a")
+        assert cm.close(sid, user_id="user_b") is False
+        assert cm.close(sid, user_id="user_a") is True
+
+    async def test_close_session_nonexistent(self):
+        """Given 不存在的 session_id, When close, Then 返回 False."""
+        cm = ConversationManager()
+        assert cm.close("nonexistent") is False
