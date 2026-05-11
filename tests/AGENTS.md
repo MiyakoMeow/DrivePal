@@ -31,6 +31,7 @@ pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, tim
 | test_rules.py | 规则引擎合并策略 |
 | test_context_schemas.py | 数据模型验证 |
 | test_graphql.py | GraphQL端点 |
+| test_sse_stream.py | SSE 流式测试 |
 | test_memory_bank.py | 记忆写入 → 检索 → 回放集成测试 |
 | test_forgetting.py | 遗忘曲线单元测试（确定性/概率模式、阈值、节流） |
 | test_retrieval_pipeline.py | 四阶段检索管道（mock FAISS + Embedding） |
@@ -44,6 +45,7 @@ pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, tim
 | test_privacy.py | 隐私过滤与脱敏 |
 | test_probabilistic.py | 概率推断模块 |
 | test_chat.py | ChatModel 客户端缓存（_get_cached_client） |
+| test_llm_json_validation.py | LLM JSON 输出验证 |
 | test_conversation.py | 会话管理 |
 | test_embedding.py | Embedding 封装 |
 | test_embedding_client.py | Embedding API 客户端 |
