@@ -2,14 +2,13 @@
 
 import asyncio
 import logging
-import os
 import statistics
 from pathlib import Path
 from typing import Any
 
-from ._io import dump_variant_results_jsonl
+from ._io import dump_variant_results_jsonl, get_fatigue_threshold
 from .ablation_runner import AblationRunner
-from .judge import Judge
+from .judge import Judge, detect_judge_degradation
 from .types import (
     GroupResult,
     JudgeScores,
@@ -20,22 +19,11 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-
-def _get_fatigue_threshold() -> float:
-    """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。"""
-    raw = os.getenv("FATIGUE_THRESHOLD", "0.7").strip()
-    try:
-        return float(raw)
-    except ValueError:
-        logger.warning("FATIGUE_THRESHOLD=%r 无效，使用默认值 0.7", raw)
-        return 0.7
-
-
-FATIGUE_THRESHOLD: float = _get_fatigue_threshold()
+FATIGUE_THRESHOLD: float = get_fatigue_threshold()
 """与 scenario_synthesizer.FATIGUE_SAFETY_THRESHOLD 同源（同一环境变量），此处用于架构组场景过滤。"""
 
 
-def _arch_stratum(s: Scenario) -> str:
+def arch_stratum(s: Scenario) -> str:
     """架构组分层键——按 scenario × task_type 组合分组，保证覆盖。"""
     scenario = s.driving_context.get("scenario", "unknown")
     task_type = getattr(s, "expected_task_type", None) or "unknown"
@@ -54,7 +42,7 @@ async def run_architecture_group(
     场景: 非安全关键场景（排除 highway 及高疲劳/过载的 city_driving）
     """
     variants = [Variant.FULL, Variant.SINGLE_LLM]
-    arch_scenarios = [s for s in scenarios if _is_arch_scenario(s)]
+    arch_scenarios = [s for s in scenarios if is_arch_scenario(s)]
 
     results = await runner.run_batch(
         arch_scenarios, variants, checkpoint_path=output_path
@@ -125,6 +113,7 @@ def compute_quality_metrics(
             "latency_p50_ms": p50,
             "latency_p90_ms": p90,
         }
+    metrics["_judge_degradation"] = detect_judge_degradation(scores)
     return metrics
 
 
@@ -140,7 +129,7 @@ async def _aggregate_full_stage_scores(
             logger.warning("Stage scoring failed: %s", exc)
             return {}
 
-    tasks = [asyncio.create_task(_score_one(fr)) for fr in full_results]
+    tasks = [_score_one(fr) for fr in full_results]
     raw_scores = await asyncio.gather(*tasks, return_exceptions=True)
     all_scores: list[dict[str, Any]] = []
     for r in raw_scores:
@@ -166,11 +155,14 @@ async def _aggregate_full_stage_scores(
     }
 
 
-def _is_arch_scenario(s: Scenario) -> bool:
+def is_arch_scenario(s: Scenario) -> bool:
     """判定场景是否属于架构组（排除安全关键场景）。"""
     scenario = s.driving_context.get("scenario", "")
     driver = s.driving_context.get("driver", {})
-    fatigue = driver.get("fatigue_level", 0)
+    try:
+        fatigue = float(driver.get("fatigue_level", 0))
+    except TypeError, ValueError:
+        fatigue = 0.0
     workload = driver.get("workload", "")
     return (
         scenario != "highway"

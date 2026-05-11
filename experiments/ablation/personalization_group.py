@@ -18,7 +18,7 @@ from app.storage.toml_store import TOMLStore
 
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner, _append_checkpoint
-from .judge import Judge
+from .judge import Judge, detect_judge_degradation
 from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
@@ -30,14 +30,14 @@ _CONVERGENCE_TOLERANCE = 0.05
 _CONSECUTIVE_FOR_CONVERGENCE = 3
 
 STAGES: list[tuple[str, int, int]] = [
-    ("high-freq", 0, 5),
-    ("silent", 5, 10),
-    ("visual-detail", 10, 15),
-    ("mixed", 15, 20),
+    ("high-freq", 0, 8),
+    ("silent", 8, 16),
+    ("visual-detail", 16, 24),
+    ("mixed", 24, 32),
 ]
 
 
-def _pers_stratum(s: Scenario) -> str:
+def pers_stratum(s: Scenario) -> str:
     """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
     return getattr(s, "expected_task_type", None) or "unknown"
 
@@ -50,12 +50,12 @@ async def run_personalization_group(
     *,
     judge: Judge,
 ) -> GroupResult:
-    """个性化组实验。20 轮，4 阶段偏好切换。
+    """个性化组实验。32 轮，4 阶段偏好切换。
 
-    场景不足 20 时通过取模循环复用（i % len），保证每轮有场景可用。
+    场景不足 32 时通过取模循环复用（i % len），保证每轮有场景可用。
     """
     rng = random.Random(seed)
-    personalization_scenarios = scenarios[:20]
+    personalization_scenarios = scenarios[:32]
 
     if not personalization_scenarios:
         msg = "no personalization scenarios available"
@@ -106,17 +106,22 @@ async def run_personalization_group(
                     include_modifications=True,
                 )
 
-                if variant == Variant.FULL and vr.event_id:
-                    try:
-                        action = simulate_feedback(vr.decision, stage_name, rng)
-                        await update_feedback_weight(
-                            runner.base_user_id, vr.event_id, action
-                        )
-                    except Exception:
-                        logger.exception(
-                            "Feedback update failed for round %d, skipping",
-                            i + 1,
-                        )
+                if variant == Variant.FULL:
+                    task_type = _extract_task_type(vr.stages)
+                    if task_type:
+                        try:
+                            action = simulate_feedback(vr.decision, stage_name, rng)
+                            await update_feedback_weight(
+                                runner.base_user_id,
+                                vr.event_id,
+                                action,
+                                task_type=task_type,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Feedback update failed for round %d, skipping",
+                                i + 1,
+                            )
 
             snapshot = await _read_weights(runner.base_user_id)
             weight_history.append(
@@ -138,7 +143,9 @@ async def run_personalization_group(
         batch_scores = await judge.score_batch(scenario, scenario_vrs)
         scores.extend(batch_scores)
 
-    metrics = _compute_preference_metrics(all_results, weight_history, stages)
+    metrics = compute_preference_metrics(
+        all_results, weight_history, stages, scores=scores
+    )
 
     # 写 VariantResult JSONL 到 output_path（供 --judge-only 重载）
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -176,8 +183,6 @@ def simulate_feedback(
     不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
 
     TODO: 可选集成正式 submitFeedback API。
-
-    #126 后策略 Agent 输出 is_emergency（非 is_urgent），allowed_channels 列表（非 channel 字符串）。
     """
     if stage == "high-freq":
         return "accept" if decision.get("should_remind") else "ignore"
@@ -188,21 +193,74 @@ def simulate_feedback(
             else "ignore"
         )
     if stage == "visual-detail":
-        return (
-            "accept" if "visual" in decision.get("allowed_channels", []) else "ignore"
-        )
+        # 检测 LLM 意图而非最终 allowed_channels——后者受规则引擎硬约束。
+        # display_text / detailed 是 LLM 自由决定详略的字段，可通过反馈塑造。
+        return "accept" if _has_visual_content(decision) else "ignore"
     if stage == "mixed":
         return "accept" if rng.random() < _SIMULATED_ACCEPT_PROB else "ignore"
     return "ignore"
 
 
+def _has_visual_content(decision: dict) -> bool:
+    """判断 LLM 是否意图生成视觉内容。
+
+    通过 reminder_content 中的 display_text 和 detailed 字段推断——
+    此二字段由 LLM 自由决定详略，不受规则引擎后处理约束。
+    """
+    rc = decision.get("reminder_content")
+    if not isinstance(rc, dict):
+        return False
+    display = rc.get("display_text")
+    detailed = rc.get("detailed")
+    return bool(
+        (isinstance(display, str) and display.strip())
+        or (isinstance(detailed, str) and detailed.strip())
+    )
+
+
+_KNOWN_TASK_TYPES: frozenset[str] = frozenset(
+    {"meeting", "travel", "shopping", "contact", "other"}
+)
+
+
+def _extract_task_type(stages: dict) -> str | None:
+    """从 stages.task 提取任务类型。
+
+    LLM 输出的 key 名不一致——可能为 task_type / task_attribution。
+    返回值仅接受已知类型集合，过滤无效值。
+    """
+    task_stage = stages.get("task", {})
+    if isinstance(task_stage, dict):
+        for key in ("task_type", "task_attribution"):
+            val = task_stage.get(key)
+            if isinstance(val, str) and val.strip():
+                stripped = val.strip()
+                if stripped in _KNOWN_TASK_TYPES:
+                    return stripped
+                logger.debug("task_type=%r 不在已知类型集合中，跳过反馈", stripped)
+    return None
+
+
 async def update_feedback_weight(
-    user_id: str, event_id: str, action: Literal["accept", "ignore"]
+    user_id: str,
+    event_id: str | None,
+    action: Literal["accept", "ignore"],
+    *,
+    task_type: str | None = None,
 ) -> None:
-    """模拟反馈写入 strategies.toml，更新 reminder_weights。"""
-    mm = get_memory_module()
-    mode = MemoryMode.MEMORY_BANK
-    event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
+    """模拟反馈写入 strategies.toml，更新 reminder_weights。
+
+    优先使用显式传入的 task_type；否则回退 MemoryBank 查询。
+    """
+    event_type = task_type
+    if not event_type:
+        logger.debug(
+            "task_type 未从 stages 提取（event_id=%s），回退 MemoryBank 查询", event_id
+        )
+        if event_id:
+            mm = get_memory_module()
+            mode = MemoryMode.MEMORY_BANK
+            event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
     if not event_type:
         return
     ud = user_data_dir(user_id)
@@ -229,10 +287,12 @@ async def _read_weights(user_id: str) -> dict:
     )
 
 
-def _compute_preference_metrics(
+def compute_preference_metrics(
     results: list[VariantResult],
     weight_history: list[dict],
     stages: list[tuple],
+    *,
+    scores: list[JudgeScores] | None = None,
 ) -> dict:
     """计算个性化组四个量化指标。"""
     rounds = len(weight_history)
@@ -241,7 +301,7 @@ def _compute_preference_metrics(
     stability = _compute_stability(weight_history, stages)
     decision_divergence = _compute_decision_divergence(results, weight_history)
 
-    return {
+    metrics = {
         "rounds": rounds,
         "weight_history": weight_history,
         "preference_matching_rate": preference_matching_rate,
@@ -249,6 +309,9 @@ def _compute_preference_metrics(
         "stability": stability,
         "decision_divergence": decision_divergence,
     }
+    if scores is not None:
+        metrics["_judge_degradation"] = detect_judge_degradation(scores)
+    return metrics
 
 
 def _compute_matching_rate(
@@ -290,14 +353,15 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
             decision.get("is_emergency")
         )
     if stage == "visual-detail":
-        return "visual" in decision.get("allowed_channels", [])
+        return _has_visual_content(decision)
     return True
 
 
 def _compute_convergence_speed(weight_history: list[dict]) -> float:
-    """收敛速度：最高权重类型首次距终值 ±0.05 内且持续 ≥3 轮的轮次号（归一化）。
+    """收敛速度：最高权重类型最长稳定段的起始轮次（归一化）。
 
-    返回值 ∈ [0, 1] 表示收敛速度（越小越快），-1.0 表示未收敛。
+    追踪权重在终值 ±0.05 范围内最长的连续稳定段（≥3 轮），
+    返回该段起始轮次 / 总轮数。返回值 ∈ [0, 1]（越小越快），-1.0 表示未收敛。
     """
     if not weight_history or len(weight_history) < _MIN_HISTORY_LEN:
         return -1.0
@@ -310,22 +374,38 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     max_w = max(final_weights.values())
     target_types = sorted(t for t, w in final_weights.items() if w == max_w)
     target_type = target_types[0]
+    if len(target_types) > 1:
+        logger.debug(
+            "最终最高权重类型并列（%s），取 %s 计算收敛速度",
+            target_types,
+            target_type,
+        )
     target_final = final_weights[target_type]
 
     consecutive = 0
-    first_stable_round = -1
+    best_start = -1
+    best_len = 0
+    current_start = 0
     for i, wh in enumerate(weight_history):
-        current_weight = wh.get("weights", {}).get(target_type, 0.5)
+        weights = wh.get("weights")
+        if not isinstance(weights, dict) or target_type not in weights:
+            # target_type 尚未出现——视为非收敛
+            consecutive = 0
+            continue
+        current_weight = weights[target_type]
         if abs(current_weight - target_final) <= _CONVERGENCE_TOLERANCE:
+            if consecutive == 0:
+                current_start = i
             consecutive += 1
-            if consecutive >= _CONSECUTIVE_FOR_CONVERGENCE and first_stable_round < 0:
-                first_stable_round = i - 2
+            if consecutive >= _CONSECUTIVE_FOR_CONVERGENCE and consecutive > best_len:
+                best_start = current_start
+                best_len = consecutive
         else:
             consecutive = 0
 
-    if first_stable_round < 0:
+    if best_start < 0:
         return -1.0  # 未收敛
-    return first_stable_round / len(weight_history)
+    return best_start / len(weight_history)
 
 
 def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float:

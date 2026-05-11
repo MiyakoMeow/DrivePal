@@ -11,9 +11,9 @@ from pathlib import Path
 
 import aiofiles
 
-from app.agents.rules import get_fatigue_threshold
 from app.models.chat import ChatError, get_chat_model
 
+from ._io import get_fatigue_threshold
 from .types import Scenario
 
 logger = logging.getLogger(__name__)

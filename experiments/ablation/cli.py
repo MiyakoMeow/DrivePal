@@ -23,22 +23,23 @@ from ._io import (
 )
 from .ablation_runner import AblationRunner
 from .architecture_group import (
-    _arch_stratum,
+    arch_stratum,
     compute_quality_metrics,
+    is_arch_scenario,
     run_architecture_group,
 )
 from .judge import Judge
 from .personalization_group import (
     STAGES,
-    _compute_preference_metrics,
-    _pers_stratum,
+    compute_preference_metrics,
+    pers_stratum,
     run_personalization_group,
 )
 from .report import render_report
 from .safety_group import (
-    _safety_stratum,
     compute_safety_metrics,
     run_safety_group,
+    safety_stratum,
 )
 from .scenario_synthesizer import (
     load_scenarios,
@@ -184,8 +185,8 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
                 metrics = {}
             else:
                 weight_history = raw.get("weight_history", [])
-                metrics = _compute_preference_metrics(
-                    variant_results, weight_history, STAGES
+                metrics = compute_preference_metrics(
+                    variant_results, weight_history, STAGES, scores=scores
                 )
         else:
             msg = f"未知组: {group_name}"
@@ -198,6 +199,10 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             metrics=metrics,
         )
         print(f"{group_name} 组重新评分完成: {len(scores)} 评分")
+        # 检查 Judge 退化并给出控制台警告
+        degradation = metrics.get("_judge_degradation", {})
+        if degradation.get("degraded"):
+            print(f"  ⚠ {degradation.get('warning', 'Judge 评分退化')}")
 
     await render_report(all_group_results, run_dir)
 
@@ -233,31 +238,53 @@ def _prepare_group_scenarios(
             all_scenarios,
             50,
             safety_only=True,
-            stratify_key=_safety_stratum,
+            stratify_key=safety_stratum,
             min_per_stratum=2,
             seed=seed,
         )
         used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
-        group_scenarios["architecture"] = sample_scenarios(
-            all_scenarios,
-            50,
-            safety_only=False,
-            exclude_ids=used_ids,
-            stratify_key=_arch_stratum,
-            min_per_stratum=1,
-            seed=seed + 1,
-        )
-        used_ids |= {s.id for s in group_scenarios["architecture"]}
+        # 先按 is_arch_scenario 预过滤池，再分层采样。
+        # arch_pool 中的场景已排除 highway / 高疲劳 / 过载，
+        # 故 safety_only=False 虽语义冗余但不会误选安全关键场景。
+        arch_pool = [s for s in all_scenarios if is_arch_scenario(s)]
+        # exclude_ids 还会进一步减少可用数（安全性组已占场景），
+        # 此处仅报告预过滤池大小作为预警下限。
+        if len(arch_pool) < 50:
+            logger.warning(
+                "架构组可用场景仅 %d（不足 50），将使用所有可用场景。"
+                "增加 --synthesize-only count=200 可扩充池。",
+                len(arch_pool),
+            )
+        try:
+            group_scenarios["architecture"] = sample_scenarios(
+                arch_pool,
+                50,
+                safety_only=False,
+                exclude_ids=used_ids,
+                stratify_key=arch_stratum,
+                min_per_stratum=1,
+                seed=seed + 1,
+            )
+        except ValueError:
+            logger.warning(
+                "架构组经 exclude_ids 排除后无可用场景，跳过架构组实验。"
+                "可用池 %d 场景，已用 %d。",
+                len(arch_pool),
+                len(used_ids),
+            )
+            group_scenarios["architecture"] = []
+        if group_scenarios["architecture"]:
+            used_ids |= {s.id for s in group_scenarios["architecture"]}
 
     if "personalization" in groups_to_run:
         group_scenarios["personalization"] = sample_scenarios(
             all_scenarios,
-            20,
+            32,
             safety_only=False,
             exclude_ids=used_ids,
-            stratify_key=_pers_stratum,
+            stratify_key=pers_stratum,
             min_per_stratum=2,
             seed=seed + 2,
         )
@@ -360,7 +387,7 @@ async def main(argv: list[str] | None = None) -> None:
         )
 
         if args.synthesize_only:
-            n = await synthesize_scenarios(data_dir / "scenarios.jsonl")
+            n = await synthesize_scenarios(data_dir / "scenarios.jsonl", count=260)
             print(f"合成完成: {n} 场景")
             return
 
