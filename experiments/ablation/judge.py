@@ -61,6 +61,9 @@ only_urgent / postpone：取布尔或——任一规则要求即生效。
 STAGE_JUDGE_PROMPT = """你是一个车载AI工作流评估专家。请对各阶段的输出质量进行独立评分。
 每个阶段评分（1-5分），并提供中文解释。请以JSON格式输出：{"score": int, "explanation": "..."}"""
 
+_JUDGE_TOKEN_WARN_THRESHOLD = 8000
+"""Judge prompt token 估算上限（远低于常见模型 32K context）。"""
+
 
 class Judge:
     """LLM-as-Judge 评分器。"""
@@ -89,6 +92,13 @@ class Judge:
             },
             ensure_ascii=False,
         )
+        # 粗略 token 估算（中文约 1.5 字符/token，英文约 4 字符/token）
+        estimated_tokens = len(JUDGE_SYSTEM_PROMPT) // 2 + len(user_msg) // 2
+        if estimated_tokens > _JUDGE_TOKEN_WARN_THRESHOLD:
+            logger.warning(
+                "Judge prompt 可能超过 token 限制（估算 %d tokens）",
+                estimated_tokens,
+            )
         try:
             response = await self.model.generate(
                 system_prompt=JUDGE_SYSTEM_PROMPT,

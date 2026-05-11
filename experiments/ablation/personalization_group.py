@@ -340,6 +340,12 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     max_w = max(final_weights.values())
     target_types = sorted(t for t, w in final_weights.items() if w == max_w)
     target_type = target_types[0]
+    if len(target_types) > 1:
+        logger.info(
+            "最终最高权重类型并列（%s），取 %s 计算收敛速度",
+            target_types,
+            target_type,
+        )
     target_final = final_weights[target_type]
 
     consecutive = 0

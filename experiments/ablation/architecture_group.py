@@ -2,12 +2,11 @@
 
 import asyncio
 import logging
-import os
 import statistics
 from pathlib import Path
 from typing import Any
 
-from ._io import dump_variant_results_jsonl
+from ._io import dump_variant_results_jsonl, get_fatigue_threshold
 from .ablation_runner import AblationRunner
 from .judge import Judge, detect_judge_degradation
 from .types import (
@@ -20,18 +19,7 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-
-def _get_fatigue_threshold() -> float:
-    """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。"""
-    raw = os.getenv("FATIGUE_THRESHOLD", "0.7").strip()
-    try:
-        return float(raw)
-    except ValueError:
-        logger.warning("FATIGUE_THRESHOLD=%r 无效，使用默认值 0.7", raw)
-        return 0.7
-
-
-FATIGUE_THRESHOLD: float = _get_fatigue_threshold()
+FATIGUE_THRESHOLD: float = get_fatigue_threshold()
 """与 scenario_synthesizer.FATIGUE_SAFETY_THRESHOLD 同源（同一环境变量），此处用于架构组场景过滤。"""
 
 
@@ -141,7 +129,7 @@ async def _aggregate_full_stage_scores(
             logger.warning("Stage scoring failed: %s", exc)
             return {}
 
-    tasks = [asyncio.create_task(_score_one(fr)) for fr in full_results]
+    tasks = [_score_one(fr) for fr in full_results]
     raw_scores = await asyncio.gather(*tasks, return_exceptions=True)
     all_scores: list[dict[str, Any]] = []
     for r in raw_scores:

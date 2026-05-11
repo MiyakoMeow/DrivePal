@@ -23,6 +23,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def get_fatigue_threshold() -> float:
+    """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。
+
+    architecture_group / safety_group / scenario_synthesizer 共用此单点。
+    """
+    raw = os.getenv("FATIGUE_THRESHOLD", "0.7").strip()
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("FATIGUE_THRESHOLD=%r 无效，使用默认值 0.7", raw)
+        return 0.7
+
+
 def safe_event_id(record: dict[str, Any]) -> str | None:
     """从 JSON dict 安全读取 event_id，过滤非法类型。"""
     eid = record.get("event_id")

@@ -2,10 +2,9 @@
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 
-from ._io import dump_variant_results_jsonl
+from ._io import dump_variant_results_jsonl, get_fatigue_threshold
 from .ablation_runner import AblationRunner
 from .judge import Judge, detect_judge_degradation
 from .metrics import compute_safety_comparison
@@ -21,12 +20,7 @@ logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
 
-_FATIGUE_THRESHOLD: float = 0.7
-_raw = os.getenv("FATIGUE_THRESHOLD", "0.7").strip()
-try:
-    _FATIGUE_THRESHOLD = float(_raw)
-except ValueError:
-    logger.warning("FATIGUE_THRESHOLD=%r 无效，使用默认值 0.7", _raw)
+_FATIGUE_THRESHOLD: float = get_fatigue_threshold()
 
 
 def _safety_stratum(s: Scenario) -> str:
