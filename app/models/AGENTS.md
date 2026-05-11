@@ -20,12 +20,11 @@ LLM/Embedding 调用封装层，多 provider 自动 fallback，纯异步。
 - provider 级别 semaphore 限制并发（共享同一 `base_url` 的 provider 共享 semaphore）
 - 12 小时 read timeout（长时推理不断开）
 - JSON mode 支持（`response_format={"type": "json_object"}`）
-- MemoryBank 摘要调用默认 temperature=0.3、max_tokens=400（环境变量覆盖）
 
 ## Embedding 模型（embedding.py）
 
-- 纯远程调用（vLLM OpenAI 兼容接口）
-- 批量编码（默认 batch_size=100）
+- 纯远程调用（vLLM OpenAI 兼容接口或 OpenRouter）
+- 批量编码（默认 batch_size=32；MemoryBank 层默认 100 通过 `MEMORYBANK_EMBEDDING_BATCH_SIZE` 覆盖）
 - 3 次指数退避重试
 
 ## 模型配置（settings.py）
@@ -34,31 +33,38 @@ LLM/Embedding 调用封装层，多 provider 自动 fallback，纯异步。
 
 ```toml
 [model_groups.default]
-models = ["local/qwen3.5-2b"]
+models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
 
-[model_providers.local]
-base_url = "http://127.0.0.1:50721/v1"
-api_key = "none"
-concurrency = 4
+[model_providers.deepseek]
+base_url = "https://api.deepseek.com/v1"
+api_key_env = "DEEPSEEK_API_KEY"
+concurrency = 8
+
+[model_groups.judge]
+models = ["zhipu-coding/glm-4.5-air?temperature=0.1"]
+
+[model_providers.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+concurrency = 16
 
 [embedding]
-model = "local/text-embedding-bge-m3"
+model = "openrouter/baai/bge-m3"
 ```
+
+`api_key_env` 指定环境变量名，`_resolve_api_key()` 运行时读取。`judge_model_group` 键指定 Judge 模型组名（默认 `"judge"`）。
 
 ## 模型引用字符串（model_string.py）
 
 格式：`provider/model?key=value`，解析为 `ResolvedModel` 类型。
 
-## 环境变量
+## 环境变量（models 模块相关）
 
 | 变量 | 说明 |
 |------|------|
 | `CONFIG_PATH` | 自定义配置文件路径（默认 config/llm.toml） |
-| `DATA_DIR` | 数据目录路径（默认 data） |
-| `WEBUI_DIR` | WebUI 静态文件目录路径（默认 webui/） |
 | `MINIMAX_API_KEY` | MiniMax API Key |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
 | `ZHIPU_API_KEY` | 智谱 API Key |
-| `JUDGE_MODEL` / `JUDGE_BASE_URL` / `JUDGE_API_KEY` | Judge 模型配置 |
-| `MEMORYBANK_LLM_TEMPERATURE` | MemoryBank LLM 温度覆盖 |
-| `MEMORYBANK_LLM_MAX_TOKENS` | MemoryBank LLM max_tokens 覆盖 |
+| `MEMORYBANK_LLM_TEMPERATURE` | MemoryBank 摘要 LLM 温度覆盖（summarizer 使用 ChatModel 时回退 0.3） |
+| `MEMORYBANK_LLM_MAX_TOKENS` | MemoryBank 摘要 LLM max_tokens 覆盖（summarizer 使用 ChatModel 时回退 400） |

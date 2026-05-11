@@ -10,9 +10,13 @@
 - **异常**：`AppendError`（非列表调 append）/ `UpdateError`（非字典调 update）
 - **API**：`read()` / `write()` / `append(item)` / `update(key, value)`
 
-## JSONLStore（jsonl_store.py）
+## JSONLinesStore（jsonl_store.py）
 
 JSONL 追加写，用于高频写入数据（events、interactions、feedback、experiment_results）。
+
+## ExperimentStore（experiment_store.py）
+
+只读 store，读取 `experiment_benchmark.toml`。仅实验框架使用。
 
 ## init_data.py
 

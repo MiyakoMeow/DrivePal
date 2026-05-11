@@ -13,8 +13,8 @@ Python 3.14 + `uv`。
 | Web框架 | FastAPI + Uvicorn |
 | API层 | Strawberry GraphQL (code-first) |
 | AI工作流 | 自定义四Agent流水线 + 轻量规则引擎 |
-| LLM | Qwen3.5-2B (vLLM), MiniMax-M2.5, DeepSeek, GLM-4.7-flashx |
-| Embedding | BGE-M3 (vLLM, OpenAI兼容接口, 纯远程) |
+| LLM | DeepSeek, GLM (智谱), 可扩展 provider (TOML 配置) |
+| Embedding | BGE-M3 (OpenRouter, 纯远程) |
 | 记忆 | MemoryBank (FAISS + Ebbinghaus遗忘曲线) |
 | 存储 | TOML (tomllib + tomli-w) + JSONL |
 | 开发 | uv, pytest (asyncio_mode=auto), ruff, ty |
@@ -56,7 +56,7 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 
 ### ty 配置
 
-`ty.toml`，rules all=error，faiss 替换为 Any。
+`ty.toml`，rules all=error，`replace-imports-with-any = ["faiss", "docx"]`。
 
 ## 代码规范
 
@@ -78,11 +78,10 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 | GraphQL | `GraphQLInvalidActionError` | feedback action 非 accept/ignore |
 | GraphQL | `GraphQLEventNotFoundError` | 事件 ID 不存在 |
 | 记忆 | `MemoryBankError` → `TransientError`/`FatalError` | MemoryBank 异常基类（三层） |
-| 记忆 | `LLMCallFailed` | LLM API 调用失败（瞬态，可重试） |
+| 记忆 | `LLMCallFailedError` | LLM API 调用失败（瞬态，可重试） |
 | 记忆 | `SummarizationEmpty` | LLM 返回空内容（哨兵异常，非错误） |
-| 记忆 | `EmbeddingFailed` | 嵌入 API 调用失败（瞬态） |
-| 记忆 | `MetadataCorrupted` / `IndexIntegrityError` | 数据损坏（永久） |
-| 记忆 | `InvalidActionError` | FeedbackData action 校验失败 |
+| 记忆 | `IndexIntegrityError` | FAISS 索引文件损坏（永久） |
+| 记忆 | `ConfigError` | 配置错误（永久） |
 | 存储 | `AppendError` / `UpdateError` | TOMLStore 类型不匹配 |
 | 模型 | `ProviderNotFoundError` | 引用字符串中 provider 未配置 |
 | 模型 | `ModelGroupNotFoundError` | 引用字符串中 model_group 未配置 |
@@ -96,12 +95,15 @@ GraphQL 异常继承 `graphql.error.GraphQLError`，自动转为标准 GraphQL e
 | SOFT_FORGET_THRESHOLD | 0.3 | memory_bank/config.py |
 | FORGET_INTERVAL_SECONDS | 300 | memory_bank/config.py |
 | EMBEDDING_MIN_SIMILARITY | 0.3 | memory_bank/config.py |
-| COARSE_SEARCH_FACTOR | 4 | memory_bank/retrieval.py |
-| AGGREGATION_SIMILARITY_THRESHOLD | 0.8 | memory_bank/retrieval.py |
-| OVERLAP_RATIO_THRESHOLD | 0.45 | memory_bank/retrieval.py |
+| COARSE_SEARCH_FACTOR | 4 | memory_bank/config.py |
+| RETRIEVAL_ALPHA | 0.7 | memory_bank/config.py |
+| BM25_FALLBACK_THRESHOLD | 0.5 | memory_bank/config.py |
 | CHUNK_SIZE_MIN/MAX | 200/8192 | memory_bank/config.py |
+| MAX_MEMORY_STRENGTH | 10 | memory_bank/config.py |
+| FORGETTING_TIME_SCALE | 1.0 | memory_bank/config.py |
 | HTTP read timeout | 12h | models/_http.py |
-| Embedding batch size/retry | 100/3次 | models/embedding.py |
+| Embedding batch size | 100 | memory_bank/config.py |
+| LLM max retries | 3 | memory_bank/config.py |
 | SAVE_INTERVAL_SECONDS | 30 | memory_bank/config.py |
 | LLM_TEMPERATURE/MAX_TOKENS | 0.3/400 | memory_bank/summarizer.py |
 

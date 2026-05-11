@@ -9,8 +9,9 @@
 | `DriverState` | emotion, workload, fatigue_level | emotion: neutral/anxious/fatigued/calm/angry; workload: low/normal/high/overloaded; fatigue_level: 0~1 |
 | `GeoLocation` | latitude, longitude, address, speed_kmh | 位置信息 |
 | `SpatioTemporalContext` | current_location, destination, eta_minutes, heading | 时空上下文 |
-| `TrafficCondition` | congestion_level, incidents, delay_minutes | congestion_level: smooth/slow/congested/blocked |
-| `DrivingContext` | driver + spatial + traffic + scenario | scenario: parked/city_driving/highway/traffic_jam |
+| `TrafficCondition` | congestion_level, incidents, estimated_delay_minutes | congestion_level: smooth/slow/congested/blocked |
+| `DrivingContext` | driver, spatial, traffic, scenario, passengers | scenario: parked/city_driving/highway/traffic_jam; passengers: list[str] |
+| `ScenarioPreset` | id, name, context, created_at | 场景预设 |
 
 ## 用途
 
