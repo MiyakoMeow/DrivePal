@@ -48,3 +48,6 @@ config/llm.json
 result
 
 .worktrees/
+
+# md2docx mermaid cache
+archive/mermaid/
