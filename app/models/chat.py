@@ -307,10 +307,10 @@ class ChatModel:
         prompts: list[str],
         system_prompt: str | None = None,
     ) -> list[str]:
-        """并行批量生成回复，通过 semaphore 限制并发保护 provider。"""
+        """并行批量生成，使用首个 provider 的 semaphore 控制并发。"""
         if not prompts:
             return []
-        sem = asyncio.Semaphore(8)
+        sem = await self._acquire_slot(self.providers[0])
 
         async def _bounded(p: str) -> str:
             async with sem:

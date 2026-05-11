@@ -520,7 +520,10 @@ class AgentWorkflow:
         driving_ctx = state.get("driving_context")
         modifications: list[str] = []
         if driving_ctx:
-            decision, modifications = postprocess_decision(decision, driving_ctx)
+            if decision.get("_postprocessed"):
+                modifications = []
+            else:
+                decision, modifications = postprocess_decision(decision, driving_ctx)
 
         # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
         if not decision.get("should_remind", True):
@@ -689,6 +692,7 @@ class AgentWorkflow:
                     shortcut_decision, _modifications = postprocess_decision(
                         shortcut_decision, driving_context
                     )
+                    shortcut_decision["_postprocessed"] = True
                 state["decision"] = shortcut_decision
                 exec_result = await self._execution_node(state)
                 state.update(exec_result)
@@ -774,6 +778,7 @@ class AgentWorkflow:
                 shortcut_decision, _modifications = postprocess_decision(
                     shortcut_decision, driving_context
                 )
+                shortcut_decision["_postprocessed"] = True
             state["decision"] = shortcut_decision
             try:
                 exec_result = await self._execution_node(state)
