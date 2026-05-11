@@ -67,7 +67,7 @@ def parse(filepath: Path) -> list[dict]:
     md = MarkdownIt()
     try:
         tokens = md.parse(filepath.read_text(encoding="utf-8"))
-    except Exception as e:
+    except Exception as e:  # 宽捕获：任何解析失败均终止并退出，无需细分
         sys.exit(f"markdown 解析失败: {e}")
 
     result: list[dict] = []
@@ -111,15 +111,19 @@ def render_mermaid(code: str, cache_dir: Path) -> Path | None:
         return cache_path
 
     url = f"{MERMAID_API}pako:{encoded}?type=png"
-    try:
-        response = httpx.get(url, timeout=MERMAID_TIMEOUT)
-        response.raise_for_status()
-        cache_path.write_bytes(response.content)
-        print(f"  [mermaid] 渲染成功 → {cache_path.name}")
-        return cache_path
-    except httpx.HTTPError as e:
-        print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
-        return None
+    for attempt in range(2):
+        try:
+            response = httpx.get(url, timeout=MERMAID_TIMEOUT)
+            response.raise_for_status()
+            cache_path.write_bytes(response.content)
+            print(f"  [mermaid] 渲染成功 → {cache_path.name}")
+            return cache_path
+        except httpx.HTTPError as e:
+            if attempt == 0:
+                continue  # 一次重试
+            print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
+            return None
+    return None
 
 
 def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
@@ -387,7 +391,14 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
     """将二维数据渲染为三线表。首行（表头）加粗。"""
     if not rows or not rows[0]:
         return
-    table = doc.add_table(rows=len(rows), cols=len(rows[0]))
+
+    # 列数不一致时补齐空字符串，防止内容错列
+    expected_cols = len(rows[0])
+    for row_data in rows:
+        while len(row_data) < expected_cols:
+            row_data.append("")
+
+    table = doc.add_table(rows=len(rows), cols=expected_cols)
     table.style = "Table Grid"
 
     for i, row_data in enumerate(rows):
