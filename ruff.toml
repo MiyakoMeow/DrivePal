@@ -118,6 +118,31 @@ exclude = [".agents/**"]
 ]
 
 
+"scripts/md2docx.py" = [
+    "INP001",   # scripts/ 目录无需 __init__.py
+    "T201",     # CLI 工具用 print 输出进度
+    "PLC0415",  # 可选依赖的局部导入（httpx、markdown-it-py）
+    "SLF001",   # python-docx 内部 API（_element、_tbl）
+    "C901",     # 单文件脚本复杂度可接受
+    "PLR0912",  # build_docx 分支多但平铺直叙
+    "PLR0915",  # build_docx 语句多但平铺直叙
+    "PLR0913",  # _add_run/_new_paragraph 参数多（格式化配置）
+    "N806",     # OOXML XML 元素命名沿用 camelCase（rPr、tblPr、fldChar）
+    "BLE001",   # parse() 宽捕获 Exception 合理——解析失败均 sys.exit
+    "B007",     # os.walk 中 root 仅用于遍历，dirs/files 用于内部逻辑
+    "PLR2004",  # 标题层级/目录缩进的魔法数字平铺直叙
+    "FBT001",   # _add_list_item 布尔参数平铺直叙
+    "ANN001",   # python-docx paragraph 类型无需显式标注
+    "ANN202",   # _new_paragraph 返回 paragraph 类型，隐式可推导
+    "D103",     # main() docstring 由 script header 替代
+    "TRY300",   # render_mermaid 中 return 在 else 块偏离成功路径
+    "PTH112",   # os.path.isdir 在 _check_font_warning 中跨平台兼容
+    "EM101",    # 异常消息内联（CLI 工具，非库代码）
+    "TRY003",   # 异常消息直接使用字符串字面量（CLI 工具，非库代码）
+    "TRY301",   # try 内 raise 用于 mermaid 重试逻辑，无需提取
+    "RET503",   # _http_fetch_with_retry 所有路径均 raise/return，for 后 unreachable
+]
+
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法
     "S311",  # 测试中使用伪随机种子是标准做法
