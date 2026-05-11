@@ -1,5 +1,6 @@
 """记忆生命周期管理：写入、遗忘、摘要编排。"""
 
+import asyncio
 import logging
 import time
 from datetime import UTC, datetime
@@ -51,6 +52,7 @@ class MemoryLifecycle:
         self._summarizer = summarizer
         self._config = config
         self._metrics = metrics
+        self._feedback_lock = asyncio.Lock()
 
     async def purge_forgotten(self, metadata: list[dict]) -> bool:
         """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
@@ -265,33 +267,36 @@ class MemoryLifecycle:
         ignore → memory_strength = max(1, strength - 1)
         两者均更新 last_recall_date 为当天。
         """
-        try:
-            fid = int(event_id)
-        except ValueError, TypeError:
-            logger.warning("update_feedback: invalid event_id=%r", event_id)
-            return
+        async with self._feedback_lock:
+            try:
+                fid = int(event_id)
+            except ValueError, TypeError:
+                logger.warning("update_feedback: invalid event_id=%r", event_id)
+                return
 
-        m = self._index.get_metadata_by_id(fid)
-        if m is None:
-            logger.warning("update_feedback: event_id=%r not found", event_id)
-            return
+            m = self._index.get_metadata_by_id(fid)
+            if m is None:
+                logger.warning("update_feedback: event_id=%r not found", event_id)
+                return
 
-        try:
-            old_strength = float(m.get("memory_strength", 1))
-        except ValueError, TypeError:
-            logger.warning(
-                "update_feedback: invalid memory_strength for event_id=%r", event_id
-            )
-            return
-        if feedback.action == "accept":
-            m["memory_strength"] = old_strength + 2.0
-        elif feedback.action == "ignore":
-            m["memory_strength"] = max(1.0, old_strength - 1.0)
-        else:
-            logger.warning("update_feedback: unknown action=%r", feedback.action)
-            return
-        m["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
-        await self._index.save()
+            try:
+                old_strength = float(m.get("memory_strength", 1))
+            except ValueError, TypeError:
+                logger.warning(
+                    "update_feedback: invalid memory_strength for event_id=%r", event_id
+                )
+                return
+            if feedback.action == "accept":
+                m["memory_strength"] = min(
+                    old_strength + 2.0, float(self._config.max_memory_strength)
+                )
+            elif feedback.action == "ignore":
+                m["memory_strength"] = max(1.0, old_strength - 1.0)
+            else:
+                logger.warning("update_feedback: unknown action=%r", feedback.action)
+                return
+            m["last_recall_date"] = datetime.now(UTC).strftime("%Y-%m-%d")
+            await self._index.save()
 
     async def _finalize_date_summary(self, date_key: str) -> None:
         """为单个日期生成 daily_summary + daily_personality。"""
