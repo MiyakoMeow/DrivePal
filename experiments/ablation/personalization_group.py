@@ -131,7 +131,9 @@ async def run_personalization_group(
                     task_type = _extract_task_type(vr.stages)
                     if task_type:
                         try:
-                            action = simulate_feedback(vr.decision, stage_name, rng)
+                            action = simulate_feedback(
+                                vr.decision, stage_name, rng, stages=vr.stages
+                            )
                             await update_feedback_weight(
                                 runner.base_user_id,
                                 vr.event_id,
@@ -200,14 +202,22 @@ async def run_personalization_group(
 
 
 def simulate_feedback(
-    decision: dict, stage: str, rng: random.Random
+    decision: dict, stage: str, rng: random.Random, *, stages: dict | None = None
 ) -> Literal["accept", "ignore"]:
     """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
 
     实验简写版：直接操作 strategies.toml 的 reminder_weights，
     不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
 
+    Args:
+        decision: 最终决策 dict（可能已被规则引擎修改）。
+        stage: 当前实验阶段名。
+        rng: 随机数生成器。
+        stages: AgentWorkflow 各阶段原始输出。visual-detail 阶段优先从此读取
+            LLM 原始意图（规则引擎前的 reminder_content）。
+
     TODO: 可选集成正式 submitFeedback API。
+
     """
     if stage == "high-freq":
         return "accept" if decision.get("should_remind") else "ignore"
@@ -220,19 +230,26 @@ def simulate_feedback(
     if stage == "visual-detail":
         # 检测 LLM 意图而非最终 allowed_channels——后者受规则引擎硬约束。
         # display_text / detailed 是 LLM 自由决定详略的字段，可通过反馈塑造。
-        return "accept" if _has_visual_content(decision) else "ignore"
+        return "accept" if _has_visual_content(decision, stages=stages) else "ignore"
     if stage == "mixed":
         return "accept" if rng.random() < _SIMULATED_ACCEPT_PROB else "ignore"
     return "ignore"
 
 
-def _has_visual_content(decision: dict) -> bool:
+def _has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
     """判断 LLM 是否意图生成视觉内容。
 
-    通过 reminder_content 中的 display_text 和 detailed 字段推断——
-    此二字段由 LLM 自由决定详略，不受规则引擎后处理约束。
+    优先从 stages["decision"]（规则引擎前的 LLM 原始输出）读取，
+    stages 无数据时 fallback 到 decision（可能已被规则引擎修改）。
     """
-    rc = decision.get("reminder_content")
+    source = decision
+    if stages:
+        stage_decision = stages.get("decision")
+        if isinstance(stage_decision, dict) and isinstance(
+            stage_decision.get("reminder_content"), dict
+        ):
+            source = stage_decision
+    rc = source.get("reminder_content")
     if not isinstance(rc, dict):
         return False
     display = rc.get("display_text")

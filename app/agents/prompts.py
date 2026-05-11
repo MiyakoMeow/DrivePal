@@ -72,14 +72,31 @@ SINGLE_LLM_SYSTEM_PROMPT = """你是一个车载AI智能体，负责情境建模
 
 3. 策略决策（decision）：
    - 是否提醒（should_remind）
-   - 提醒时机（now/delay/skip）
+   - 提醒时机（now/delay/skip/location）
+   - 是否为紧急事件（is_emergency）——如急救、事故预警、儿童遗留检测
    - 提醒方式（visual/audio/detailed）
-   - 提醒内容
+   - reminder_content 对象，包含三种格式：
+     * speakable_text：可播报文本，≤15字，无标点符号
+     * display_text：车机显示文本，≤20字
+     * detailed：完整文本（停车时可查看详情）
    - 决策理由
 
 考虑个性化策略和安全边界。
 
-输出JSON格式: {{"context": {{...}}, "task": {{...}}, "decision": {{...}}}}"""
+输出JSON格式: {{"context": {{...}}, "task": {{...}}, "decision": {{...}}}}
+
+decision 示例：
+{{
+  "should_remind": true,
+  "timing": "now",
+  "is_emergency": false,
+  "reminder_content": {{
+    "speakable_text": "3点公司3楼会议",
+    "display_text": "会议 · 15:00 · 公司3F",
+    "detailed": "会议提醒：下午3点在公司3楼会议室"
+  }},
+  "reason": "用户请求会议提醒"
+}}"""
 
 SYSTEM_PROMPTS = {
     "context": CONTEXT_SYSTEM_PROMPT,

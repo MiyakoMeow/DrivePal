@@ -233,3 +233,108 @@ class TestBuildStages:
 
         with pytest.raises(ValueError, match="≥4"):
             _build_stages(3)
+
+
+class TestFormatRulesForJudge:
+    """Judge 规则动态生成."""
+
+    def test_generates_rule_descriptions(self):
+        from app.agents.rules import SAFETY_RULES
+        from experiments.ablation.judge import format_rules_for_judge
+
+        text = format_rules_for_judge(SAFETY_RULES)
+        assert "规则1" in text
+        assert "priority=" in text
+        assert "fatigue" in text.lower()
+        assert "highway" in text.lower()
+
+    def test_empty_rules_returns_empty(self):
+        from experiments.ablation.judge import format_rules_for_judge
+
+        assert format_rules_for_judge([]) == ""
+
+    def test_rule_count_matches_safety_rules(self):
+        from app.agents.rules import SAFETY_RULES
+        from experiments.ablation.judge import format_rules_for_judge
+
+        text = format_rules_for_judge(SAFETY_RULES)
+        assert text.count("规则") == len(SAFETY_RULES)
+
+
+class TestMedianScores:
+    """逐维度独立取中位数."""
+
+    def test_per_dimension_median(self):
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 5, 4, 5, [], "high"),
+            JudgeScores("s1", Variant.FULL, 3, 5, 3, [], "mid"),
+            JudgeScores("s1", Variant.FULL, 1, 3, 1, [], "low"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        r = result[0]
+        assert r.safety_score == 3
+        assert r.reasonableness_score == 4
+        assert r.overall_score == 3
+
+    def test_single_score(self):
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 4, 4, 4, [], "ok"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        assert result[0].safety_score == 4
+
+    def test_two_variants_grouped(self):
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 5, 5, 5, [], ""),
+            JudgeScores("s1", Variant.FULL, 3, 3, 3, [], ""),
+            JudgeScores("s1", Variant.FULL, 1, 1, 1, [], ""),
+            JudgeScores("s1", Variant.NO_RULES, 2, 2, 2, [], ""),
+            JudgeScores("s1", Variant.NO_RULES, 4, 4, 4, [], ""),
+            JudgeScores("s1", Variant.NO_RULES, 3, 3, 3, [], ""),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 2
+        full = [r for r in result if r.variant == Variant.FULL][0]
+        no_rules = [r for r in result if r.variant == Variant.NO_RULES][0]
+        assert full.safety_score == 3
+        assert no_rules.safety_score == 3
+
+    def test_even_count_takes_upper_median(self):
+        """偶数条记录取上中位（index n//2）。"""
+        from experiments.ablation.judge import _median_scores
+
+        # 2 条记录，safety [1, 5]，上中位 index=1 → safety_score=5
+        scores = [
+            JudgeScores("s1", Variant.FULL, 1, 3, 3, [], "low"),
+            JudgeScores("s1", Variant.FULL, 5, 4, 4, [], "high"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        assert result[0].safety_score == 5  # [1,5] 上中位
+        assert result[0].reasonableness_score == 4  # [3,4] 上中位
+        assert result[0].overall_score == 4  # [3,4] 上中位
+
+    def test_median_preserves_metadata_from_base_record(self):
+        """violation_flags 和 explanation 取 overall 中位数对应记录的值。"""
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 5, 5, 1, ["flag_a"], "low overall"),
+            JudgeScores("s1", Variant.FULL, 3, 3, 3, ["flag_b"], "mid overall"),
+            JudgeScores("s1", Variant.FULL, 1, 1, 5, ["flag_c"], "high overall"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        r = result[0]
+        # overall [1,3,5] 中位=3，对应第二条记录
+        assert r.overall_score == 3
+        assert r.violation_flags == ["flag_b"]
+        assert r.explanation == "mid overall"

@@ -76,6 +76,8 @@ exclude = [".agents/**"]
 ]
 "experiments/ablation/judge.py" = [
     "S311",  # 确定性种子用于可复现实验（盲评 shuffle）
+    "ANN202",  # _make_raw_conditions_loader 返回闭包，类型注解需 Callable 运行时导入
+    "TC003",  # Callable 用于 _make_raw_conditions_loader 返回类型注解，运行时必需
 ]
 
 "experiments/ablation/safety_group.py" = [
