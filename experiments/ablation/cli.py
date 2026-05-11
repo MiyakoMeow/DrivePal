@@ -205,7 +205,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
 async def _load_variant_results(path: Path) -> list[VariantResult]:
     """从 JSONL 重建 VariantResult 列表。"""
     results: list[VariantResult] = []
-    async with aiofiles.open(path) as f:
+    async with aiofiles.open(path, encoding="utf-8") as f:
         async for line in f:
             stripped = line.strip()
             if not stripped:
@@ -400,6 +400,8 @@ async def main(argv: list[str] | None = None) -> None:
         all_group_results: dict[str, GroupResult] = {}
         failures: list[str] = []
 
+        # personalization 组必须串行：该组依赖 MemoryBank 权重状态的顺序累积，
+        # 并发会导致多任务竞争同一用户状态，产生不可复现的权重交叉污染。
         concurrent_groups = [g for g in groups_to_run if g != "personalization"]
         serial_group = "personalization" if "personalization" in groups_to_run else None
 

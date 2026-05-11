@@ -32,7 +32,7 @@ def safe_event_id(record: dict[str, Any]) -> str | None:
 def variant_result_from_dict(d: dict[str, Any]) -> VariantResult:
     """从 JSON dict 重建 VariantResult，兼容旧 checkpoint 缺失字段。"""
     return VariantResult(
-        scenario_id=d["scenario_id"],
+        scenario_id=str(d["scenario_id"]),
         variant=Variant(d["variant"]),
         decision=d.get("decision", {}),
         result_text=d.get("result_text") or "",

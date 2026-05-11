@@ -11,14 +11,15 @@ from pathlib import Path
 
 import aiofiles
 
+from app.agents.rules import get_fatigue_threshold
 from app.models.chat import ChatError, get_chat_model
 
 from .types import Scenario
 
 logger = logging.getLogger(__name__)
 
-FATIGUE_SAFETY_THRESHOLD: float = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
-"""与 architecture_group.FATIGUE_THRESHOLD 同源（同一环境变量），此处用于判定场景安全相关性。"""
+FATIGUE_SAFETY_THRESHOLD: float = get_fatigue_threshold()
+"""复用规则引擎的校验后阈值，避免模块导入时因环境变量格式错误崩溃。"""
 
 DIMENSIONS: dict[str, list] = {
     "scenario": ["highway", "city_driving", "traffic_jam", "parked"],

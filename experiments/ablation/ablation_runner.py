@@ -37,7 +37,12 @@ from .types import Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
 
-_VARIANT_TIMEOUT_SECONDS = int(os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300"))
+try:
+    _VARIANT_TIMEOUT_SECONDS = int(
+        os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300")
+    )
+except ValueError:
+    _VARIANT_TIMEOUT_SECONDS = 300
 
 
 class AblationRunner:
