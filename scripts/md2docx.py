@@ -25,14 +25,14 @@ FONT_HEADING = "黑体"
 FONT_CODE = "Courier New"
 
 # 字号（磅）
-SIZE_H1 = Pt(18)    # 二号
-SIZE_H2 = Pt(16)    # 三号
-SIZE_H3 = Pt(15)    # 小三
-SIZE_H4 = Pt(14)    # 四号
+SIZE_H1 = Pt(18)  # 二号
+SIZE_H2 = Pt(16)  # 三号
+SIZE_H3 = Pt(15)  # 小三
+SIZE_H4 = Pt(14)  # 四号
 SIZE_BODY = Pt(12)  # 小四
 SIZE_CODE = Pt(10)  # 五号
-SIZE_REF = Pt(9)    # 小五（参考文献）
-SIZE_TOC = Pt(12)   # 目录正文
+SIZE_REF = Pt(9)  # 小五（参考文献）
+SIZE_TOC = Pt(12)  # 目录正文
 
 # 段落
 LINE_SPACING = 1.5
@@ -82,9 +82,7 @@ def parse(filepath: Path) -> list[dict]:
         if hasattr(t, "info") and t.info:
             d["info"] = t.info
         if t.children:
-            d["children"] = [
-                {"type": c.type, "content": c.content} for c in t.children
-            ]
+            d["children"] = [{"type": c.type, "content": c.content} for c in t.children]
         result.append(d)
     return result
 
@@ -181,18 +179,25 @@ def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
                         alt = next_content.strip().strip("*")
                 result.append({"type": "image", "path": str(png_path), "alt": alt})
             else:
-                result.append({
-                    "type": "paragraph",
-                    "content": f'[图表渲染失败，请手动处理]\n```mermaid\n{t["content"]}\n```',
-                })
+                result.append(
+                    {
+                        "type": "paragraph",
+                        "content": f"[图表渲染失败，请手动处理]\n```mermaid\n{t['content']}\n```",
+                    }
+                )
             i += 1
             # 仅当紧跟的是图注段落（paragraph_open + inline(**图X-X) + paragraph_close）
             # 时才整体跳过。非图注段落保留，避免 token 流配对破坏。
             peek = i
-            if (peek < len(tokens) and tokens[peek]["type"] == "paragraph_open"
-                and peek + 1 < len(tokens) and tokens[peek + 1]["type"] == "inline"
-                and peek + 2 < len(tokens) and tokens[peek + 2]["type"] == "paragraph_close"
-                and tokens[peek + 1].get("content", "").strip().startswith("**图")):
+            if (
+                peek < len(tokens)
+                and tokens[peek]["type"] == "paragraph_open"
+                and peek + 1 < len(tokens)
+                and tokens[peek + 1]["type"] == "inline"
+                and peek + 2 < len(tokens)
+                and tokens[peek + 2]["type"] == "paragraph_close"
+                and tokens[peek + 1].get("content", "").strip().startswith("**图")
+            ):
                 # 跳过 paragraph_open + inline(**图X-X) + paragraph_close
                 i += 3
             continue
@@ -207,6 +212,7 @@ def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
 def _check_font_warning() -> None:
     """检测中文字体可用性，缺失时警告。"""
     import platform
+
     system = platform.system()
     if system == "Linux":
         font_dirs = ["/usr/share/fonts", "/usr/local/share/fonts"]
@@ -227,7 +233,10 @@ def _check_font_warning() -> None:
             if found:
                 break
         if not found:
-            print(f"警告: 字体 '{font_name}'（{label}）未在系统中找到，将使用 Calibri 回退", file=sys.stderr)
+            print(
+                f"警告: 字体 '{font_name}'（{label}）未在系统中找到，将使用 Calibri 回退",
+                file=sys.stderr,
+            )
 
 
 def _setup_document(doc: Document) -> None:
@@ -252,9 +261,16 @@ def _setup_document(doc: Document) -> None:
     rFonts.set(qn("w:eastAsia"), FONT_BODY)
 
 
-def _add_run(paragraph, text: str, *, bold: bool = False, italic: bool = False,
-             font_name: str | None = None, font_size: Pt | None = None,
-             superscript: bool = False) -> None:
+def _add_run(
+    paragraph,
+    text: str,
+    *,
+    bold: bool = False,
+    italic: bool = False,
+    font_name: str | None = None,
+    font_size: Pt | None = None,
+    superscript: bool = False,
+) -> None:
     """添加一个格式化的 run 到段落。"""
     run = paragraph.add_run(text)
     run.bold = bold
@@ -273,10 +289,17 @@ def _add_run(paragraph, text: str, *, bold: bool = False, italic: bool = False,
         run.font.size = font_size
 
 
-def _new_paragraph(doc: Document, text: str = "", *, alignment: int | None = None,
-                   font_name: str | None = None, font_size: Pt | None = None,
-                   bold: bool = False, spacing: float | None = None,
-                   first_line_indent: Cm | None = None):
+def _new_paragraph(
+    doc: Document,
+    text: str = "",
+    *,
+    alignment: int | None = None,
+    font_name: str | None = None,
+    font_size: Pt | None = None,
+    bold: bool = False,
+    spacing: float | None = None,
+    first_line_indent: Cm | None = None,
+):
     """创建新段落，可选设置对齐/字体/行距/首行缩进。"""
     p = doc.add_paragraph()
     if alignment is not None:
@@ -301,7 +324,10 @@ def _add_heading(doc: Document, text: str, level: int) -> None:
     spacing_after = {1: Pt(24), 2: Pt(18), 3: Pt(12), 4: Pt(8)}
 
     p = _new_paragraph(
-        doc, text, bold=True, font_name=FONT_HEADING,
+        doc,
+        text,
+        bold=True,
+        font_name=FONT_HEADING,
         font_size=sizes.get(level, SIZE_H4),
         alignment=alignments.get(level, WD_ALIGN_PARAGRAPH.LEFT),
         spacing=LINE_SPACING,
@@ -315,6 +341,7 @@ def _add_heading(doc: Document, text: str, level: int) -> None:
 def _extract_plain_text(md_content: str) -> str:
     """从 markdown inline 文本中提取纯文本（去除粗斜体标记）。"""
     from markdown_it import MarkdownIt
+
     md = MarkdownIt()
     inline_tokens = md.parseInline(md_content)
     return "".join(t.content for t in inline_tokens if t.content)
@@ -323,7 +350,9 @@ def _extract_plain_text(md_content: str) -> str:
 # ── 正文处理 ──
 
 
-def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY) -> None:
+def _render_inline_content(
+    paragraph, content: str, *, font_size: Pt = SIZE_BODY
+) -> None:
     """将 inline markdown 文本渲染为 paragraph 中的 runs。
 
     支持：**bold**/__bold__、*italic*/_italic_、`code`、[N] 上标引用。
@@ -345,8 +374,9 @@ def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY
             marker = content[i : i + 2]
             end = content.find(marker, i + 2)
             if end != -1:
-                _render_inner_with_citations(paragraph, content[i + 2 : end],
-                                             bold=True, font_size=font_size)
+                _render_inner_with_citations(
+                    paragraph, content[i + 2 : end], bold=True, font_size=font_size
+                )
                 i = end + 2
                 continue
         # 斜体 *...* 或 _..._（需排除 __ 情况）
@@ -358,16 +388,21 @@ def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY
                 continue
             end = content.find(content[i], i + 1)
             if end != -1:
-                _render_inner_with_citations(paragraph, content[i + 1 : end],
-                                             italic=True, font_size=font_size)
+                _render_inner_with_citations(
+                    paragraph, content[i + 1 : end], italic=True, font_size=font_size
+                )
                 i = end + 1
                 continue
         # 行内代码 `...`
         if content[i] == "`":
             end = content.find("`", i + 1)
             if end != -1:
-                _add_run(paragraph, content[i + 1 : end],
-                         font_name=FONT_CODE, font_size=SIZE_CODE)
+                _add_run(
+                    paragraph,
+                    content[i + 1 : end],
+                    font_name=FONT_CODE,
+                    font_size=SIZE_CODE,
+                )
                 i = end + 1
                 continue
         # 行内公式 $...$（不匹配 $$ 块级公式）
@@ -396,8 +431,14 @@ def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY
         i += 1
 
 
-def _render_inner_with_citations(paragraph, text: str, *, bold: bool = False,
-                                  italic: bool = False, font_size: Pt = SIZE_BODY) -> None:
+def _render_inner_with_citations(
+    paragraph,
+    text: str,
+    *,
+    bold: bool = False,
+    italic: bool = False,
+    font_size: Pt = SIZE_BODY,
+) -> None:
     """渲染粗/斜体内部文本，同时解析其中的 [N] 引用上标。
 
     将文本按 _CITATION_RE 分割，对引用部分附加 superscript，
@@ -409,11 +450,19 @@ def _render_inner_with_citations(paragraph, text: str, *, bold: bool = False,
         if part:
             _add_run(paragraph, part, bold=bold, italic=italic, font_size=font_size)
         if k < len(citations):
-            _add_run(paragraph, citations[k], bold=bold, italic=italic,
-                     superscript=True, font_size=font_size)
+            _add_run(
+                paragraph,
+                citations[k],
+                bold=bold,
+                italic=italic,
+                superscript=True,
+                font_size=font_size,
+            )
 
 
-def _add_body_paragraph(doc: Document, content: str, *, use_ref_font: bool = False) -> None:
+def _add_body_paragraph(
+    doc: Document, content: str, *, use_ref_font: bool = False
+) -> None:
     """添加正文段落，处理粗斜体和 [N] 上标引用。"""
     # 块级公式 $$...$$：整段替换为居中图片
     stripped = content.strip()
@@ -468,7 +517,7 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
 
     for i, row_data in enumerate(rows):
         row = table.rows[i]
-        is_header = (i == 0)  # 首行为表头
+        is_header = i == 0  # 首行为表头
         for j, cell_text in enumerate(row_data):
             if j >= len(row.cells):
                 break  # 防御：列数不一致时截断
@@ -482,17 +531,31 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
     tbl = table._tbl
     tblPr = tbl.tblPr if tbl.tblPr is not None else tbl.makeelement(qn("w:tblPr"), {})
     borders = tblPr.makeelement(qn("w:tblBorders"), {})
-    top = borders.makeelement(qn("w:top"), {qn("w:val"): "single", qn("w:sz"): "12", qn("w:color"): "000000"})
+    top = borders.makeelement(
+        qn("w:top"), {qn("w:val"): "single", qn("w:sz"): "12", qn("w:color"): "000000"}
+    )
     borders.append(top)
-    bottom = borders.makeelement(qn("w:bottom"), {qn("w:val"): "single", qn("w:sz"): "12", qn("w:color"): "000000"})
+    bottom = borders.makeelement(
+        qn("w:bottom"),
+        {qn("w:val"): "single", qn("w:sz"): "12", qn("w:color"): "000000"},
+    )
     borders.append(bottom)
-    insideH = borders.makeelement(qn("w:insideH"), {qn("w:val"): "single", qn("w:sz"): "4", qn("w:color"): "000000"})
+    insideH = borders.makeelement(
+        qn("w:insideH"),
+        {qn("w:val"): "single", qn("w:sz"): "4", qn("w:color"): "000000"},
+    )
     borders.append(insideH)
-    insideV = borders.makeelement(qn("w:insideV"), {qn("w:val"): "none", qn("w:sz"): "0"})
+    insideV = borders.makeelement(
+        qn("w:insideV"), {qn("w:val"): "none", qn("w:sz"): "0"}
+    )
     borders.append(insideV)
-    left = borders.makeelement(qn("w:left"), {qn("w:val"): "single", qn("w:sz"): "4", qn("w:color"): "000000"})
+    left = borders.makeelement(
+        qn("w:left"), {qn("w:val"): "single", qn("w:sz"): "4", qn("w:color"): "000000"}
+    )
     borders.append(left)
-    right = borders.makeelement(qn("w:right"), {qn("w:val"): "single", qn("w:sz"): "4", qn("w:color"): "000000"})
+    right = borders.makeelement(
+        qn("w:right"), {qn("w:val"): "single", qn("w:sz"): "4", qn("w:color"): "000000"}
+    )
     borders.append(right)
     tblPr.append(borders)
 
@@ -537,8 +600,14 @@ def _add_toc(doc: Document, headings: list[tuple[int, str]]) -> None:
     仅含标题与缩进，不含页码。python-docx 不支持 TOC 域代码，
     静态目录为已知限制——转换后在 Word 中手动补页码或插入自动目录。
     """
-    p = _new_paragraph(doc, "目录", bold=True, font_name=FONT_HEADING,
-                       font_size=SIZE_H2, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    p = _new_paragraph(
+        doc,
+        "目录",
+        bold=True,
+        font_name=FONT_HEADING,
+        font_size=SIZE_H2,
+        alignment=WD_ALIGN_PARAGRAPH.CENTER,
+    )
     p.paragraph_format.space_after = Pt(18)
 
     for level, text in headings:
@@ -559,15 +628,20 @@ def _add_page_numbers(doc: Document) -> None:
         p = footer.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = p.add_run()
-        fldChar1 = run._element.makeelement(qn("w:fldChar"), {qn("w:fldCharType"): "begin"})
+        fldChar1 = run._element.makeelement(
+            qn("w:fldChar"), {qn("w:fldCharType"): "begin"}
+        )
         run._element.append(fldChar1)
         run2 = p.add_run()
         instrText = run2._element.makeelement(
-            qn("w:instrText"), {qn("xml:space"): "preserve"})
+            qn("w:instrText"), {qn("xml:space"): "preserve"}
+        )
         instrText.text = " PAGE "
         run2._element.append(instrText)
         run3 = p.add_run()
-        fldChar2 = run3._element.makeelement(qn("w:fldChar"), {qn("w:fldCharType"): "end"})
+        fldChar2 = run3._element.makeelement(
+            qn("w:fldChar"), {qn("w:fldCharType"): "end"}
+        )
         run3._element.append(fldChar2)
 
 
@@ -718,10 +792,12 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Markdown 论文 → docx 转换器")
-    parser.add_argument("-i", "--input", type=Path, default=DEFAULT_INPUT,
-                        help="输入 markdown 文件路径")
-    parser.add_argument("-o", "--output", type=Path, default=DEFAULT_OUTPUT,
-                        help="输出 docx 文件路径")
+    parser.add_argument(
+        "-i", "--input", type=Path, default=DEFAULT_INPUT, help="输入 markdown 文件路径"
+    )
+    parser.add_argument(
+        "-o", "--output", type=Path, default=DEFAULT_OUTPUT, help="输出 docx 文件路径"
+    )
     args = parser.parse_args()
 
     if not args.input.exists():
