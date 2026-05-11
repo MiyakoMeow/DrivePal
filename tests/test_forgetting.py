@@ -204,7 +204,7 @@ class TestUpdateFeedbackConcurrency:
 
     @pytest.mark.asyncio
     async def test_update_feedback_concurrent_safe(self):
-        """并发 10 次 accept，最终值不超过 max_memory_strength。"""
+        """并发 10 次 accept，验证锁必要性——无锁时读-改-写竞争会丢更新，有锁时准确 = 21.0。"""
         import asyncio
 
         index = MagicMock()
@@ -219,15 +219,18 @@ class TestUpdateFeedbackConcurrency:
         embed = AsyncMock()
         embed.encode = AsyncMock(return_value=[0.1] * 1536)
         forget = MagicMock()
-        config = MemoryBankConfig(max_memory_strength=10)
+        config = MemoryBankConfig(max_memory_strength=100)
         lifecycle = MemoryLifecycle(index, embed, forget, None, config)
 
         feedback = FeedbackData(event_id="0", action="accept")
         await asyncio.gather(
             *(lifecycle.update_feedback("0", feedback) for _ in range(10))
         )
-        # 10 accepts × +2 = 20, but capped at 10
-        assert meta["memory_strength"] == 10.0
+        # 10 accepts × +2 = 20, plus initial 1.0 = 21.0; cap 100 不挡
+        # 无锁时因读-改-写竞争，最终值远小于 21.0
+        assert meta["memory_strength"] == 21.0, (
+            f"expected 21.0, got {meta['memory_strength']}"
+        )
 
     @pytest.mark.asyncio
     async def test_update_feedback_respects_max_strength(self):

@@ -621,13 +621,7 @@ class AgentWorkflow:
             state.update(exec_result)
             result = state.get("result") or "处理完成"
             event_id = state.get("event_id")
-            if session_id:
-                self._conversations.add_turn(
-                    session_id,
-                    user_input,
-                    shortcut_decision,
-                    result,
-                )
+            self._log_conversation_turn(state, session_id, user_input)
             return result, event_id, stages
 
         for node_fn in self._nodes:
@@ -637,13 +631,7 @@ class AgentWorkflow:
         result = state.get("result") or "处理完成"
         event_id = state.get("event_id")
 
-        if session_id:
-            self._conversations.add_turn(
-                session_id,
-                user_input,
-                state.get("decision") or {},
-                result,
-            )
+        self._log_conversation_turn(state, session_id, user_input)
 
         return result, event_id, stages
 
@@ -665,6 +653,17 @@ class AgentWorkflow:
             done_data["status"] = "delivered"
             done_data["result"] = state.get("output_content")
         return done_data
+
+    def _log_conversation_turn(
+        self, state: AgentState, session_id: str | None, user_input: str
+    ) -> None:
+        if session_id:
+            self._conversations.add_turn(
+                session_id,
+                user_input,
+                state.get("decision") or {},
+                state.get("result") or "",
+            )
 
     async def run_stream(
         self,
@@ -707,13 +706,7 @@ class AgentWorkflow:
                     "event": "error",
                     "data": {"code": "INTERNAL", "message": str(e)},
                 }
-            if session_id:
-                self._conversations.add_turn(
-                    session_id,
-                    user_input,
-                    shortcut_decision,
-                    state.get("result") or "",
-                )
+            self._log_conversation_turn(state, session_id, user_input)
             return
 
         # Stage 1: Context
@@ -770,10 +763,4 @@ class AgentWorkflow:
             }
             return
 
-        if session_id:
-            self._conversations.add_turn(
-                session_id,
-                user_input,
-                state.get("decision") or {},
-                state.get("result") or "",
-            )
+        self._log_conversation_turn(state, session_id, user_input)

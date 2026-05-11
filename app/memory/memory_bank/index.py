@@ -202,7 +202,7 @@ class FaissIndex:
         meta_warnings: list[str] = []
         try:
             raw_meta_text = await self._run_sync(mp.read_text)
-            raw_meta = json.loads(raw_meta_text)
+            raw_meta = await self._run_sync(lambda: json.loads(raw_meta_text))
             meta = _validate_metadata_structure(raw_meta)
             # 校验 count
             if idx.ntotal != len(meta):
@@ -288,7 +288,7 @@ class FaissIndex:
         if ep.exists():
             try:
                 raw_extra = await self._run_sync(ep.read_text)
-                e: object = json.loads(raw_extra)
+                e: object = await self._run_sync(lambda: json.loads(raw_extra))
                 self._extra = e if isinstance(e, dict) else {}
             except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
                 logger.warning("FaissIndex extra_metadata corrupted, ignoring: %s", exc)

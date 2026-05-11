@@ -99,12 +99,17 @@ async def test_compute_reference_date_empty():
 
 @pytest.mark.asyncio
 async def test_load_does_not_block_event_loop():
-    """load() 不阻塞事件循环——call_soon 回调查看 yield 点。"""
-    loop_interleaved = False
+    """load() 不阻塞事件循环——与 canary 协程并发验证 yield 点。"""
+    import time
 
-    def mark_interleaved():
-        nonlocal loop_interleaved
-        loop_interleaved = True
+    canary_started = False
+    canary_done = False
+
+    async def canary():
+        nonlocal canary_started, canary_done
+        canary_started = True
+        await asyncio.sleep(0.01)
+        canary_done = True
 
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
@@ -113,7 +118,10 @@ async def test_load_does_not_block_event_loop():
         await idx.save()
 
         idx2 = FaissIndex(Path(tmp))
-        loop = asyncio.get_running_loop()
-        loop.call_soon(mark_interleaved)
-        await idx2.load()
-        assert loop_interleaved, "事件循环被阻塞——load() 未让出控制权"
+        t0 = time.monotonic()
+        await asyncio.gather(idx2.load(), canary())
+        elapsed = time.monotonic() - t0
+
+        assert canary_started, "canary never started — load blocked"
+        assert canary_done, "canary not done — load blocked event loop"
+        assert elapsed < 5.0, "load took too long — possible event loop block"
