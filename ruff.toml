@@ -140,6 +140,7 @@ exclude = [".agents/**"]
     "EM101",    # 异常消息内联（CLI 工具，非库代码）
     "TRY003",   # 异常消息直接使用字符串字面量（CLI 工具，非库代码）
     "TRY301",   # try 内 raise 用于 mermaid 重试逻辑，无需提取
+    "RET503",   # _http_fetch_with_retry 所有路径均 raise/return，for 后 unreachable
 ]
 
 "tests/**" = [

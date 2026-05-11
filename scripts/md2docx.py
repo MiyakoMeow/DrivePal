@@ -125,6 +125,31 @@ async def _write_cache(cache_path: Path, data: bytes) -> None:
     await asyncio.to_thread(cache_path.write_bytes, data)
 
 
+async def _check_cache(cache_path: Path) -> bool:
+    """异步校验缓存 PNG 是否有效。"""
+    return await asyncio.to_thread(_is_valid_png, cache_path)
+
+
+async def _http_fetch_with_retry(client, url: str):
+    """HTTP GET 带一次重试，仅对瞬态网络错误重试。"""
+    import httpx
+
+    for attempt in range(2):
+        try:
+            response = await client.get(url, timeout=MERMAID_TIMEOUT)
+            response.raise_for_status()
+            if response.content[:8] != b"\x89PNG\r\n\x1a\n":
+                msg = "响应非 PNG 格式"
+                raise ValueError(msg)
+            return response.content
+        except httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError:
+            if attempt == 0:
+                continue  # 一次重试
+            raise
+        except httpx.HTTPStatusError, ValueError:
+            raise  # 非瞬态错误，不重试
+
+
 async def render_mermaid(code: str, cache_dir: Path, client) -> Path | None:
     """将 mermaid 代码渲染为 PNG，缓存至 cache_dir。"""
     import json
@@ -137,26 +162,18 @@ async def render_mermaid(code: str, cache_dir: Path, client) -> Path | None:
 
     await _mkdir_cache(cache_dir)
     cache_path = cache_dir / f"{_mermaid_hash(code)}.png"
-    if cache_path.exists() and _is_valid_png(cache_path):
+    if await _check_cache(cache_path):
         return cache_path
 
     url = f"{MERMAID_API}pako:{encoded}?type=png"
-    for attempt in range(2):
-        try:
-            response = await client.get(url, timeout=MERMAID_TIMEOUT)
-            response.raise_for_status()
-            if response.content[:8] != b"\x89PNG\r\n\x1a\n":
-                msg = "响应非 PNG 格式"
-                raise ValueError(msg)
-            await _write_cache(cache_path, response.content)
-            print(f"  [mermaid] 渲染成功 → {cache_path.name}")
-            return cache_path
-        except Exception as e:
-            if attempt == 0:
-                continue  # 一次重试
-            print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
-            return None
-    return None
+    try:
+        data = await _http_fetch_with_retry(client, url)
+        await _write_cache(cache_path, data)
+        print(f"  [mermaid] 渲染成功 → {cache_path.name}")
+        return cache_path
+    except Exception as e:
+        print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
+        return None
 
 
 async def render_latex(
@@ -171,16 +188,12 @@ async def render_latex(
 
     await _mkdir_cache(cache_dir)
     cache_path = cache_dir / f"{_mermaid_hash(latex + str(display))}.png"
-    if cache_path.exists() and _is_valid_png(cache_path):
+    if await _check_cache(cache_path):
         return cache_path
 
     try:
-        response = await client.get(url, timeout=MERMAID_TIMEOUT)
-        response.raise_for_status()
-        if response.content[:8] != b"\x89PNG\r\n\x1a\n":
-            msg = "公式渲染响应非 PNG 格式"
-            raise ValueError(msg)
-        await _write_cache(cache_path, response.content)
+        data = await _http_fetch_with_retry(client, url)
+        await _write_cache(cache_path, data)
         return cache_path
     except Exception as e:
         print(f"  [latex] 渲染失败: {e}", file=sys.stderr)
