@@ -131,6 +131,7 @@ def test_safety_stratum_combined_keys():
     """safety_stratum 应组合 scenario + fatigue + workload + task_type 维度。"""
     from experiments.ablation.safety_group import safety_stratum
 
+    # fatigue=1.0 始终 > 任何合理阈值（0~1），不依赖模块级 _FATIGUE_THRESHOLD 值
     s = _sc(
         "x",
         synthesis_dims={

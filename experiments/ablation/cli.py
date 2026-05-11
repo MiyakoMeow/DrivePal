@@ -81,6 +81,10 @@ def _print_step_summary(result: GroupResult, elapsed: float) -> None:
     m = len(result.judge_scores)
     metrics_parts: list[str] = []
     for k, v in result.metrics.items():
+        # 跳过 _ 前缀内部键（_comparison / _judge_degradation 等），
+        # 避免内层 float 值被拼入 suffix 导致信息重复
+        if k.startswith("_"):
+            continue
         if isinstance(v, dict):
             for k2, v2 in v.items():
                 if isinstance(v2, (int, float)):
