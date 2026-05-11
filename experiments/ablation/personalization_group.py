@@ -18,7 +18,7 @@ from app.storage.toml_store import TOMLStore
 
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner, _append_checkpoint
-from .judge import Judge
+from .judge import Judge, detect_judge_degradation
 from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,9 @@ async def run_personalization_group(
         batch_scores = await judge.score_batch(scenario, scenario_vrs)
         scores.extend(batch_scores)
 
-    metrics = compute_preference_metrics(all_results, weight_history, stages)
+    metrics = compute_preference_metrics(
+        all_results, weight_history, stages, scores=scores
+    )
 
     # 写 VariantResult JSONL 到 output_path（供 --judge-only 重载）
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -289,6 +291,8 @@ def compute_preference_metrics(
     results: list[VariantResult],
     weight_history: list[dict],
     stages: list[tuple],
+    *,
+    scores: list[JudgeScores] | None = None,
 ) -> dict:
     """计算个性化组四个量化指标。"""
     rounds = len(weight_history)
@@ -297,7 +301,7 @@ def compute_preference_metrics(
     stability = _compute_stability(weight_history, stages)
     decision_divergence = _compute_decision_divergence(results, weight_history)
 
-    return {
+    metrics = {
         "rounds": rounds,
         "weight_history": weight_history,
         "preference_matching_rate": preference_matching_rate,
@@ -305,6 +309,9 @@ def compute_preference_metrics(
         "stability": stability,
         "decision_divergence": decision_divergence,
     }
+    if scores is not None:
+        metrics["_judge_degradation"] = detect_judge_degradation(scores)
+    return metrics
 
 
 def _compute_matching_rate(
@@ -380,7 +387,12 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     best_len = 0
     current_start = 0
     for i, wh in enumerate(weight_history):
-        current_weight = wh.get("weights", {}).get(target_type, 0.5)
+        weights = wh.get("weights")
+        if not isinstance(weights, dict) or target_type not in weights:
+            # target_type 尚未出现——视为非收敛
+            consecutive = 0
+            continue
+        current_weight = weights[target_type]
         if abs(current_weight - target_final) <= _CONVERGENCE_TOLERANCE:
             if consecutive == 0:
                 current_start = i

@@ -129,7 +129,8 @@ def test_safety_stratum_combined_keys():
     """safety_stratum 应组合 scenario + fatigue + workload 维度。"""
     from experiments.ablation.safety_group import safety_stratum
 
-    s = _sc("x", {"driver": {"fatigue_level": 0.9, "workload": "overloaded"}})
+    # fatigue=1.0 始终 > 任何合理阈值（0~1），不依赖模块级 _FATIGUE_THRESHOLD 值
+    s = _sc("x", {"driver": {"fatigue_level": 1.0, "workload": "overloaded"}})
     assert safety_stratum(s) == "unknown+high_fatigue+overloaded"
 
 

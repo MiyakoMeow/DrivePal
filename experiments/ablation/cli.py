@@ -186,7 +186,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             else:
                 weight_history = raw.get("weight_history", [])
                 metrics = compute_preference_metrics(
-                    variant_results, weight_history, STAGES
+                    variant_results, weight_history, STAGES, scores=scores
                 )
         else:
             msg = f"未知组: {group_name}"
