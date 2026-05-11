@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 import aiofiles
 
+from app.agents.rules import get_fatigue_threshold as _get_fatigue_threshold
+
 from .types import Variant, VariantResult
 
 if TYPE_CHECKING:
@@ -29,9 +31,7 @@ def get_fatigue_threshold() -> float:
     architecture_group / safety_group / scenario_synthesizer 共用此单点。
     薄封装 app.agents.rules.get_fatigue_threshold()——规则引擎是权威源。
     """
-    from app.agents.rules import get_fatigue_threshold as _get  # noqa: PLC0415
-
-    return _get()
+    return _get_fatigue_threshold()
 
 
 def safe_event_id(record: dict[str, Any]) -> str | None:

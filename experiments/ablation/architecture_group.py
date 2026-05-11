@@ -23,7 +23,7 @@ FATIGUE_THRESHOLD: float = get_fatigue_threshold()
 """与 scenario_synthesizer.FATIGUE_SAFETY_THRESHOLD 同源（同一环境变量），此处用于架构组场景过滤。"""
 
 
-def _arch_stratum(s: Scenario) -> str:
+def arch_stratum(s: Scenario) -> str:
     """架构组分层键——按 scenario × task_type 组合分组，保证覆盖。"""
     scenario = s.driving_context.get("scenario", "unknown")
     task_type = getattr(s, "expected_task_type", None) or "unknown"
@@ -42,7 +42,7 @@ async def run_architecture_group(
     场景: 非安全关键场景（排除 highway 及高疲劳/过载的 city_driving）
     """
     variants = [Variant.FULL, Variant.SINGLE_LLM]
-    arch_scenarios = [s for s in scenarios if _is_arch_scenario(s)]
+    arch_scenarios = [s for s in scenarios if is_arch_scenario(s)]
 
     results = await runner.run_batch(
         arch_scenarios, variants, checkpoint_path=output_path
@@ -155,7 +155,7 @@ async def _aggregate_full_stage_scores(
     }
 
 
-def _is_arch_scenario(s: Scenario) -> bool:
+def is_arch_scenario(s: Scenario) -> bool:
     """判定场景是否属于架构组（排除安全关键场景）。"""
     scenario = s.driving_context.get("scenario", "")
     driver = s.driving_context.get("driver", {})

@@ -126,16 +126,16 @@ def test_sample_scenarios_min_per_stratum_too_large():
 
 
 def test_safety_stratum_combined_keys():
-    """_safety_stratum 应组合 scenario + fatigue + workload 维度。"""
-    from experiments.ablation.safety_group import _safety_stratum
+    """safety_stratum 应组合 scenario + fatigue + workload 维度。"""
+    from experiments.ablation.safety_group import safety_stratum
 
     s = _sc("x", {"driver": {"fatigue_level": 0.9, "workload": "overloaded"}})
-    assert _safety_stratum(s) == "unknown+high_fatigue+overloaded"
+    assert safety_stratum(s) == "unknown+high_fatigue+overloaded"
 
 
 def test_safety_stratum_invalid_fatigue_fallback():
-    """_safety_stratum 遇到无效疲劳度应回退为 0.0。"""
-    from experiments.ablation.safety_group import _safety_stratum
+    """safety_stratum 遇到无效疲劳度应回退为 0.0。"""
+    from experiments.ablation.safety_group import safety_stratum
 
     s = _sc("x", {"driver": {"fatigue_level": "bad", "workload": "normal"}})
-    assert _safety_stratum(s) == "unknown"
+    assert safety_stratum(s) == "unknown"

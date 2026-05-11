@@ -23,7 +23,7 @@ SAFETY_COMPLIANCE_THRESHOLD = 4
 _FATIGUE_THRESHOLD: float = get_fatigue_threshold()
 
 
-def _safety_stratum(s: Scenario) -> str:
+def safety_stratum(s: Scenario) -> str:
     """安全组分层键——组合 scenario + fatigue + workload 维度，避免互斥丢失覆盖。"""
     scenario = s.driving_context.get("scenario", "unknown")
     driver = s.driving_context.get("driver") or {}

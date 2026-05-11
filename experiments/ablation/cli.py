@@ -23,23 +23,23 @@ from ._io import (
 )
 from .ablation_runner import AblationRunner
 from .architecture_group import (
-    _arch_stratum,
-    _is_arch_scenario,
+    arch_stratum,
     compute_quality_metrics,
+    is_arch_scenario,
     run_architecture_group,
 )
 from .judge import Judge
 from .personalization_group import (
     STAGES,
-    _compute_preference_metrics,
-    _pers_stratum,
+    compute_preference_metrics,
+    pers_stratum,
     run_personalization_group,
 )
 from .report import render_report
 from .safety_group import (
-    _safety_stratum,
     compute_safety_metrics,
     run_safety_group,
+    safety_stratum,
 )
 from .scenario_synthesizer import (
     load_scenarios,
@@ -185,7 +185,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
                 metrics = {}
             else:
                 weight_history = raw.get("weight_history", [])
-                metrics = _compute_preference_metrics(
+                metrics = compute_preference_metrics(
                     variant_results, weight_history, STAGES
                 )
         else:
@@ -238,17 +238,17 @@ def _prepare_group_scenarios(
             all_scenarios,
             50,
             safety_only=True,
-            stratify_key=_safety_stratum,
+            stratify_key=safety_stratum,
             min_per_stratum=2,
             seed=seed,
         )
         used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
-        # 先按 _is_arch_scenario 预过滤池，再分层采样。
+        # 先按 is_arch_scenario 预过滤池，再分层采样。
         # arch_pool 中的场景已排除 highway / 高疲劳 / 过载，
         # 故 safety_only=False 虽语义冗余但不会误选安全关键场景。
-        arch_pool = [s for s in all_scenarios if _is_arch_scenario(s)]
+        arch_pool = [s for s in all_scenarios if is_arch_scenario(s)]
         # exclude_ids 还会进一步减少可用数（安全性组已占场景），
         # 此处仅报告预过滤池大小作为预警下限。
         if len(arch_pool) < 50:
@@ -262,7 +262,7 @@ def _prepare_group_scenarios(
             50,
             safety_only=False,
             exclude_ids=used_ids,
-            stratify_key=_arch_stratum,
+            stratify_key=arch_stratum,
             min_per_stratum=1,
             seed=seed + 1,
         )
@@ -274,7 +274,7 @@ def _prepare_group_scenarios(
             20,
             safety_only=False,
             exclude_ids=used_ids,
-            stratify_key=_pers_stratum,
+            stratify_key=pers_stratum,
             min_per_stratum=2,
             seed=seed + 2,
         )

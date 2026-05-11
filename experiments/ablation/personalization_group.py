@@ -37,7 +37,7 @@ STAGES: list[tuple[str, int, int]] = [
 ]
 
 
-def _pers_stratum(s: Scenario) -> str:
+def pers_stratum(s: Scenario) -> str:
     """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
     return getattr(s, "expected_task_type", None) or "unknown"
 
@@ -142,7 +142,7 @@ async def run_personalization_group(
         batch_scores = await judge.score_batch(scenario, scenario_vrs)
         scores.extend(batch_scores)
 
-    metrics = _compute_preference_metrics(all_results, weight_history, stages)
+    metrics = compute_preference_metrics(all_results, weight_history, stages)
 
     # 写 VariantResult JSONL 到 output_path（供 --judge-only 重载）
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -259,7 +259,7 @@ async def _read_weights(user_id: str) -> dict:
     )
 
 
-def _compute_preference_metrics(
+def compute_preference_metrics(
     results: list[VariantResult],
     weight_history: list[dict],
     stages: list[tuple],
@@ -355,7 +355,7 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
         if abs(current_weight - target_final) <= _CONVERGENCE_TOLERANCE:
             consecutive += 1
             if consecutive >= _CONSECUTIVE_FOR_CONVERGENCE and first_stable_round < 0:
-                first_stable_round = i - 2
+                first_stable_round = i - (_CONSECUTIVE_FOR_CONVERGENCE - 1)
         else:
             consecutive = 0
             first_stable_round = -1  # 偏离终值后需重新收敛
