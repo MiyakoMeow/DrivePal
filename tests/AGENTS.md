@@ -14,7 +14,7 @@ pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, tim
 `tests/conftest.py` 提供：
 - `pytest_configure` 注册 `integration` / `llm` / `embedding` 三个标记
 - `pytest_addoption` 注册 `--run-integration` / `--test-llm` / `--test-embedding` 选项
-- `pytest_collection_modifyitems` 根据选项跳过未标记测试
+- `pytest_collection_modifyitems` 根据选项跳过带标记测试（未提供选项时跳过标有对应标记的测试）
 - `llm_provider` 和 `embedding` 两个会话级 fixture
 
 ## 子目录

@@ -14,7 +14,7 @@ Python 3.14 + `uv`。
 
 | 内容 | 路径 |
 |------|------|
-| 本仓库 | `~/Codes/DrivePal-2` |
+| 本仓库 | `~/Codes/DrivePal` |
 | VehicleMemBench 基准测试 | `~/Codes/VehicleMemBench` |
 | 论文 | `~/Papers/` |
 

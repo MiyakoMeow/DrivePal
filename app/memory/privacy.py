@@ -20,7 +20,7 @@ def sanitize_location(
 
 
 def sanitize_context(context: dict) -> dict:
-    """递归脱敏 context 中的位置信息（current_location + destination）。深度拷贝避免副作用。"""
+    """脱敏 context 中的位置信息（仅处理 current_location + destination 两个固定字段）。深度拷贝避免副作用。"""
     result = deepcopy(context)
     spatial = result.get("spatial", {})
     if isinstance(spatial, dict):
