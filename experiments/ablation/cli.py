@@ -15,9 +15,15 @@ import aiofiles
 
 from app.memory.singleton import close_memory_module
 
-from ._io import write_config, write_scores_json, write_step_summary
+from ._io import (
+    variant_result_from_dict,
+    write_config,
+    write_scores_json,
+    write_step_summary,
+)
 from .ablation_runner import AblationRunner
 from .architecture_group import (
+    _arch_stratum,
     compute_quality_metrics,
     run_architecture_group,
 )
@@ -25,10 +31,15 @@ from .judge import Judge
 from .personalization_group import (
     STAGES,
     _compute_preference_metrics,
+    _pers_stratum,
     run_personalization_group,
 )
 from .report import render_report
-from .safety_group import compute_safety_metrics, run_safety_group
+from .safety_group import (
+    _safety_stratum,
+    compute_safety_metrics,
+    run_safety_group,
+)
 from .scenario_synthesizer import (
     load_scenarios,
     sample_scenarios,
@@ -38,7 +49,6 @@ from .types import (
     GroupResult,
     JudgeScores,
     Scenario,
-    Variant,
     VariantResult,
 )
 
@@ -195,70 +205,97 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
 async def _load_variant_results(path: Path) -> list[VariantResult]:
     """从 JSONL 重建 VariantResult 列表。"""
     results: list[VariantResult] = []
-    async with aiofiles.open(path) as f:
+    async with aiofiles.open(path, encoding="utf-8") as f:
         async for line in f:
             stripped = line.strip()
             if not stripped:
                 continue
             try:
                 d = json.loads(stripped)
-                variant = Variant(d["variant"])
-                results.append(
-                    VariantResult(
-                        scenario_id=d["scenario_id"],
-                        variant=variant,
-                        decision=d.get("decision", {}),
-                        result_text="",
-                        event_id=None,
-                        stages=d.get("stages", {}),
-                        latency_ms=d.get("latency_ms", 0),
-                        modifications=d.get("modifications", []),
-                        round_index=d.get("round_index", 0),
-                    )
-                )
+                results.append(variant_result_from_dict(d))
             except json.JSONDecodeError, KeyError, ValueError:
                 logger.warning("跳过无效行: %s", stripped[:80])
     return results
 
 
+def _prepare_group_scenarios(
+    all_scenarios: list[Scenario],
+    groups_to_run: list[str],
+    *,
+    seed: int,
+) -> dict[str, list[Scenario]]:
+    """预采样：组间互斥 + 分层，避免同一场景进入多组实验。"""
+    used_ids: set[str] = set()
+    group_scenarios: dict[str, list[Scenario]] = {}
+
+    if "safety" in groups_to_run:
+        group_scenarios["safety"] = sample_scenarios(
+            all_scenarios,
+            50,
+            safety_only=True,
+            stratify_key=_safety_stratum,
+            min_per_stratum=2,
+            seed=seed,
+        )
+        used_ids |= {s.id for s in group_scenarios["safety"]}
+
+    if "architecture" in groups_to_run:
+        group_scenarios["architecture"] = sample_scenarios(
+            all_scenarios,
+            50,
+            safety_only=False,
+            exclude_ids=used_ids,
+            stratify_key=_arch_stratum,
+            min_per_stratum=1,
+            seed=seed + 1,
+        )
+        used_ids |= {s.id for s in group_scenarios["architecture"]}
+
+    if "personalization" in groups_to_run:
+        group_scenarios["personalization"] = sample_scenarios(
+            all_scenarios,
+            20,
+            safety_only=False,
+            exclude_ids=used_ids,
+            stratify_key=_pers_stratum,
+            min_per_stratum=2,
+            seed=seed + 2,
+        )
+
+    return group_scenarios
+
+
 async def _run_safety_experiment(
-    all_scenarios: list[Scenario], seed: int, run_dir: Path
+    scenarios: list[Scenario], run_dir: Path
 ) -> GroupResult:
     """运行安全性组实验。"""
     runner = AblationRunner(base_user_id="experiment-safety")
     judge = Judge()
-    safety_scenarios = sample_scenarios(all_scenarios, 50, safety_only=True, seed=seed)
     return await run_safety_group(
-        runner, judge, safety_scenarios, run_dir / "safety" / "results.jsonl"
+        runner, judge, scenarios, run_dir / "safety" / "results.jsonl"
     )
 
 
 async def _run_architecture_experiment(
-    all_scenarios: list[Scenario], seed: int, run_dir: Path
+    scenarios: list[Scenario], run_dir: Path
 ) -> GroupResult:
     """运行架构组实验。"""
     runner = AblationRunner(base_user_id="experiment-arch")
     judge = Judge()
-    arch_scenarios = sample_scenarios(
-        all_scenarios, 50, safety_only=False, seed=seed + 1
-    )
     return await run_architecture_group(
-        runner, judge, arch_scenarios, run_dir / "architecture" / "results.jsonl"
+        runner, judge, scenarios, run_dir / "architecture" / "results.jsonl"
     )
 
 
 async def _run_personalization_experiment(
-    all_scenarios: list[Scenario], seed: int, run_dir: Path
+    scenarios: list[Scenario], seed: int, run_dir: Path
 ) -> GroupResult:
     """运行个性化组实验。"""
     runner = AblationRunner(base_user_id="experiment-personalization")
     judge = Judge()
-    personalization_scenarios = sample_scenarios(
-        all_scenarios, 20, safety_only=False, seed=seed + 2
-    )
     return await run_personalization_group(
         runner,
-        personalization_scenarios,
+        scenarios,
         run_dir / "personalization" / "results.jsonl",
         seed=seed,
         judge=judge,
@@ -267,7 +304,7 @@ async def _run_personalization_experiment(
 
 async def _run_and_summarize(
     group: str,
-    all_scenarios: list[Scenario],
+    scenarios: list[Scenario],
     seed: int,
     run_dir: Path,
 ) -> tuple[str, GroupResult]:
@@ -275,11 +312,11 @@ async def _run_and_summarize(
     t0 = time.perf_counter()
     print(f"\n=== 运行 {group} 组 ===\n")
     if group == "safety":
-        result = await _run_safety_experiment(all_scenarios, seed, run_dir)
+        result = await _run_safety_experiment(scenarios, run_dir)
     elif group == "architecture":
-        result = await _run_architecture_experiment(all_scenarios, seed, run_dir)
+        result = await _run_architecture_experiment(scenarios, run_dir)
     elif group == "personalization":
-        result = await _run_personalization_experiment(all_scenarios, seed, run_dir)
+        result = await _run_personalization_experiment(scenarios, seed, run_dir)
     else:
         msg = f"未知组: {group}"
         raise ValueError(msg)
@@ -356,16 +393,22 @@ async def main(argv: list[str] | None = None) -> None:
 
         await write_config(run_dir / "config.json", args)
 
+        group_scenarios = _prepare_group_scenarios(
+            all_scenarios, groups_to_run, seed=args.seed
+        )
+
         all_group_results: dict[str, GroupResult] = {}
         failures: list[str] = []
 
+        # personalization 组必须串行：该组依赖 MemoryBank 权重状态的顺序累积，
+        # 并发会导致多任务竞争同一用户状态，产生不可复现的权重交叉污染。
         concurrent_groups = [g for g in groups_to_run if g != "personalization"]
         serial_group = "personalization" if "personalization" in groups_to_run else None
 
         if concurrent_groups:
             tasks = [
                 asyncio.create_task(
-                    _run_and_summarize(g, all_scenarios, args.seed, run_dir)
+                    _run_and_summarize(g, group_scenarios[g], args.seed, run_dir)
                 )
                 for g in concurrent_groups
             ]
@@ -386,7 +429,7 @@ async def main(argv: list[str] | None = None) -> None:
         if serial_group:
             try:
                 grp_name, grp_result = await _run_and_summarize(
-                    serial_group, all_scenarios, args.seed, run_dir
+                    serial_group, group_scenarios[serial_group], args.seed, run_dir
                 )
                 all_group_results[grp_name] = grp_result
             except Exception:

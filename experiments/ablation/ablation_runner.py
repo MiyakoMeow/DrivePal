@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from copy import deepcopy
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import aiofiles
 
@@ -31,9 +32,15 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
+from ._io import variant_result_from_dict
 from .types import Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
+
+try:
+    _VARIANT_TIMEOUT_SECONDS = int(os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300"))
+except ValueError:
+    _VARIANT_TIMEOUT_SECONDS = 300
 
 
 class AblationRunner:
@@ -141,13 +148,13 @@ class AblationRunner:
         return VariantResult(
             scenario_id=scenario.id,
             variant=Variant.SINGLE_LLM,
-            decision=cast("dict", output.get("decision", {})),
+            decision=cast("dict[str, Any]", output.get("decision", {})),
             result_text="",
             event_id=None,
             stages={
-                "context": cast("dict", output.get("context", {})),
-                "task": cast("dict", output.get("task", {})),
-                "decision": cast("dict", output.get("decision", {})),
+                "context": cast("dict[str, Any]", output.get("context", {})),
+                "task": cast("dict[str, Any]", output.get("task", {})),
+                "decision": cast("dict[str, Any]", output.get("decision", {})),
                 "execution": {},
             },
             latency_ms=latency_ms,
@@ -186,7 +193,17 @@ class AblationRunner:
         async def run_one(scenario: Scenario, variant: Variant) -> VariantResult:
             async with sem:
                 uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
-                vr = await self.run_variant(scenario, variant, user_id=uid)
+                try:
+                    async with asyncio.timeout(_VARIANT_TIMEOUT_SECONDS):
+                        vr = await self.run_variant(scenario, variant, user_id=uid)
+                except TimeoutError:
+                    logger.warning(
+                        "Variant timeout after %ds: %s %s",
+                        _VARIANT_TIMEOUT_SECONDS,
+                        scenario.id,
+                        variant.value,
+                    )
+                    raise
                 if checkpoint_path:
                     async with ckpt_lock:
                         await _append_checkpoint(
@@ -200,10 +217,17 @@ class AblationRunner:
             return results
         tasks = [asyncio.create_task(run_one(s, v)) for s, v in pending]
         new_results = await asyncio.gather(*tasks, return_exceptions=True)
-        for r in new_results:
-            if isinstance(r, Exception):
-                logger.error("Variant run failed: %s", r)
-        return results + [r for r in new_results if isinstance(r, VariantResult)]
+        succeeded = [r for r in new_results if isinstance(r, VariantResult)]
+        failures = [r for r in new_results if isinstance(r, Exception)]
+        if failures:
+            failure_msgs = "; ".join(str(f) for f in failures[:5])
+            logger.error(
+                "%d/%d variant runs failed: %s",
+                len(failures),
+                len(new_results),
+                failure_msgs,
+            )
+        return results + succeeded
 
 
 async def _load_checkpoint(
@@ -224,19 +248,7 @@ async def _load_checkpoint(
                 try:
                     d = json.loads(stripped)
                     ids.add((d["scenario_id"], d["variant"]))
-                    results.append(
-                        VariantResult(
-                            scenario_id=d["scenario_id"],
-                            variant=Variant(d["variant"]),
-                            decision=d.get("decision", {}),
-                            result_text="",
-                            event_id=None,
-                            stages=d.get("stages", {}),
-                            latency_ms=d.get("latency_ms", 0),
-                            modifications=d.get("modifications", []),
-                            round_index=d.get("round_index", 0),
-                        )
-                    )
+                    results.append(variant_result_from_dict(d))
                 except json.JSONDecodeError, KeyError, ValueError:
                     logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                     continue
@@ -257,6 +269,8 @@ async def _append_checkpoint(
         "stages": vr.stages,
         "latency_ms": vr.latency_ms,
         "round_index": vr.round_index,
+        "result_text": vr.result_text,
+        "event_id": vr.event_id,
     }
     if include_modifications:
         record["modifications"] = vr.modifications

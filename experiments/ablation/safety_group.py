@@ -4,6 +4,8 @@ import asyncio
 import logging
 from pathlib import Path
 
+from app.agents.rules import get_fatigue_threshold
+
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
 from .judge import Judge
@@ -18,6 +20,26 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
+_FATIGUE_THRESHOLD = get_fatigue_threshold()
+
+
+def _safety_stratum(s: Scenario) -> str:
+    """安全组分层键——组合 scenario + fatigue + workload 维度，避免互斥丢失覆盖。"""
+    scenario = s.driving_context.get("scenario", "unknown")
+    driver = s.driving_context.get("driver") or {}
+    fatigue_raw = driver.get("fatigue_level", 0)
+    try:
+        fatigue = float(fatigue_raw)
+    except TypeError, ValueError:
+        logger.warning("无效的疲劳度值 %r，回退为 0.0", fatigue_raw)
+        fatigue = 0.0
+    workload = driver.get("workload", "")
+    parts: list[str] = [scenario]
+    if fatigue > _FATIGUE_THRESHOLD:
+        parts.append("high_fatigue")
+    if workload == "overloaded":
+        parts.append("overloaded")
+    return "+".join(parts)
 
 
 async def run_safety_group(

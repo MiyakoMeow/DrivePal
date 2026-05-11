@@ -6,18 +6,20 @@ import json
 import logging
 import os
 import random
+from collections.abc import Callable
 from pathlib import Path
 
 import aiofiles
 
+from app.agents.rules import get_fatigue_threshold
 from app.models.chat import ChatError, get_chat_model
 
 from .types import Scenario
 
 logger = logging.getLogger(__name__)
 
-FATIGUE_SAFETY_THRESHOLD: float = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
-"""与 architecture_group.FATIGUE_THRESHOLD 同源（同一环境变量），此处用于判定场景安全相关性。"""
+FATIGUE_SAFETY_THRESHOLD: float = get_fatigue_threshold()
+"""复用规则引擎的校验后阈值，避免模块导入时因环境变量格式错误崩溃。"""
 
 DIMENSIONS: dict[str, list] = {
     "scenario": ["highway", "city_driving", "traffic_jam", "parked"],
@@ -146,7 +148,7 @@ def _load_existing_ids(path: Path) -> set[str]:
     existing: set[str] = set()
     if not path.exists():
         return existing
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         for raw_line in f:
             stripped = raw_line.strip()
             if not stripped:
@@ -213,6 +215,8 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
                 return 0
 
             driving_context = data.get("driving_context", {})
+            if not isinstance(driving_context, dict):
+                driving_context = {}
             scenario_type_val = driving_context.get("scenario", combo["scenario"])
             safety = _is_safety_relevant(driving_context)
 
@@ -251,7 +255,7 @@ def load_scenarios(path: Path) -> list[Scenario]:
     scenarios: list[Scenario] = []
     if not path.exists():
         return scenarios
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
         for raw_line in f:
             stripped = raw_line.strip()
             if not stripped:
@@ -270,14 +274,59 @@ def sample_scenarios(
     n: int,
     *,
     safety_only: bool = False,
+    exclude_ids: set[str] | None = None,
+    stratify_key: Callable[[Scenario], str] | None = None,
+    min_per_stratum: int = 1,
     seed: int = 42,
 ) -> list[Scenario]:
-    """分层随机抽样。safety_only时仅从safety_relevant=True中抽取。"""
+    """分层随机抽样。safety_only时仅从safety_relevant=True中抽取。
+
+    stratify_key 提供时，先保证每层至少 min_per_stratum 个样本，
+    再随机补足至 n 个，避免简单随机导致某些 strata 缺失。
+    exclude_ids 用于组间互斥——同一场景不进入多组实验。
+    """
     rng = random.Random(seed)
     pool = (
         [s for s in scenarios if s.safety_relevant] if safety_only else list(scenarios)
     )
-    return rng.sample(pool, min(n, len(pool)))
+    if exclude_ids:
+        pool = [s for s in pool if s.id not in exclude_ids]
+
+    if not pool:
+        raise ValueError("过滤/排除后无可用的场景")
+
+    if not stratify_key or len(pool) <= n:
+        return rng.sample(pool, min(n, len(pool)))
+
+    strata: dict[str, list[Scenario]] = {}
+    for s in pool:
+        key = stratify_key(s)
+        strata.setdefault(key, []).append(s)
+
+    required = sum(min(min_per_stratum, len(g)) for g in strata.values())
+    if required > n:
+        raise ValueError(
+            f"无法满足 min_per_stratum={min_per_stratum}，"
+            f"实际需要 {required} 个样本（考虑各层容量），但仅请求 {n} 个"
+        )
+
+    result: list[Scenario] = []
+    sampled_ids: set[str] = set()
+
+    for group in strata.values():
+        k = min(min_per_stratum, len(group))
+        sampled = rng.sample(group, k)
+        result.extend(sampled)
+        sampled_ids.update(s.id for s in sampled)
+
+    remaining = [s for s in pool if s.id not in sampled_ids]
+    deficit = n - len(result)
+    if deficit > 0 and remaining:
+        extra = rng.sample(remaining, min(deficit, len(remaining)))
+        result.extend(extra)
+
+    rng.shuffle(result)
+    return result[:n]
 
 
 async def _verify() -> None:

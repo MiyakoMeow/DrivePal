@@ -3,6 +3,8 @@
 import json
 from typing import TYPE_CHECKING
 
+import pytest
+
 from experiments.ablation.scenario_synthesizer import (
     load_scenarios,
     sample_scenarios,
@@ -11,6 +13,24 @@ from experiments.ablation.types import Scenario
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+def _sc(
+    sid: str,
+    driving_context: dict | None = None,
+    *,
+    safety_relevant: bool = False,
+) -> Scenario:
+    """快速构造测试 Scenario，减少重复参数。"""
+    return Scenario(
+        id=sid,
+        driving_context=driving_context or {},
+        user_query="",
+        expected_decision={},
+        expected_task_type="",
+        safety_relevant=safety_relevant,
+        scenario_type="",
+    )
 
 
 def test_load_scenarios_empty(tmp_path: Path):
@@ -39,9 +59,9 @@ def test_load_scenarios(tmp_path: Path):
 
 def test_sample_scenarios_safety_only():
     scenarios = [
-        Scenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
-        Scenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
-        Scenario("s3", {}, "", {}, "", safety_relevant=True, scenario_type=""),
+        _sc("s1", safety_relevant=True),
+        _sc("s2", safety_relevant=False),
+        _sc("s3", safety_relevant=True),
     ]
     sampled = sample_scenarios(scenarios, 2, safety_only=True, seed=42)
     assert len(sampled) == 2
@@ -50,8 +70,72 @@ def test_sample_scenarios_safety_only():
 
 def test_sample_scenarios_all():
     scenarios = [
-        Scenario("s1", {}, "", {}, "", safety_relevant=True, scenario_type=""),
-        Scenario("s2", {}, "", {}, "", safety_relevant=False, scenario_type=""),
+        _sc("s1", safety_relevant=True),
+        _sc("s2", safety_relevant=False),
     ]
     sampled = sample_scenarios(scenarios, 2, safety_only=False)
     assert len(sampled) == 2
+
+
+def test_sample_scenarios_stratified():
+    """分层抽样应保证每层至少 min_per_stratum 个样本。"""
+    scenarios = [_sc(f"s{i}", {"type": "a" if i < 3 else "b"}) for i in range(6)]
+    sampled = sample_scenarios(
+        scenarios,
+        4,
+        stratify_key=lambda s: s.driving_context.get("type", "unknown"),
+        min_per_stratum=1,
+        seed=42,
+    )
+    assert len(sampled) == 4
+    types = {s.driving_context.get("type") for s in sampled}
+    assert "a" in types
+    assert "b" in types
+
+
+def test_sample_scenarios_exclude_ids():
+    """exclude_ids 应排除指定场景。"""
+    scenarios = [
+        _sc("s1"),
+        _sc("s2"),
+        _sc("s3"),
+    ]
+    sampled = sample_scenarios(scenarios, 2, exclude_ids={"s1"}, seed=42)
+    assert len(sampled) == 2
+    assert all(s.id != "s1" for s in sampled)
+
+
+def test_sample_scenarios_empty_pool_raises():
+    """排除后池为空应抛出 ValueError。"""
+    scenarios = [_sc("s1")]
+    with pytest.raises(ValueError, match="无可用的场景"):
+        sample_scenarios(scenarios, 1, exclude_ids={"s1"})
+
+
+def test_sample_scenarios_min_per_stratum_too_large():
+    """min_per_stratum 总和超过 n 时应抛出 ValueError。"""
+    scenarios = [_sc(f"s{i}", {"type": f"t{i}"}) for i in range(5)]
+    with pytest.raises(ValueError, match="无法满足 min_per_stratum"):
+        sample_scenarios(
+            scenarios,
+            3,
+            stratify_key=lambda s: s.driving_context.get("type", "unknown"),
+            min_per_stratum=1,
+            seed=42,
+        )
+
+
+def test_safety_stratum_combined_keys():
+    """_safety_stratum 应组合 scenario + fatigue + workload 维度。"""
+    from experiments.ablation.safety_group import _safety_stratum
+
+    s = _sc("x", {"driver": {"fatigue_level": 0.9, "workload": "overloaded"}})
+    assert _safety_stratum(s) == "unknown+high_fatigue+overloaded"
+
+
+def test_safety_stratum_invalid_fatigue_fallback():
+    """_safety_stratum 遇到无效疲劳度应回退为 0.0。"""
+    from experiments.ablation.safety_group import _safety_stratum
+
+    s = _sc("x", {"driver": {"fatigue_level": "bad", "workload": "normal"}})
+    assert _safety_stratum(s) == "unknown"

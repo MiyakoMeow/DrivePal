@@ -1,5 +1,6 @@
 """个性化组实验——反馈学习机制的个性化效果."""
 
+import asyncio
 import dataclasses
 import json
 import logging
@@ -34,6 +35,11 @@ STAGES: list[tuple[str, int, int]] = [
     ("visual-detail", 10, 15),
     ("mixed", 15, 20),
 ]
+
+
+def _pers_stratum(s: Scenario) -> str:
+    """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
+    return getattr(s, "expected_task_type", None) or "unknown"
 
 
 async def run_personalization_group(
@@ -140,8 +146,7 @@ async def run_personalization_group(
 
     # 清理中间 checkpoint（实验完成后只需最终 results JSONL）
     checkpoint_path = output_path.with_suffix(".checkpoint.jsonl")
-    if checkpoint_path.exists():
-        checkpoint_path.unlink()
+    await asyncio.to_thread(checkpoint_path.unlink, missing_ok=True)
 
     # 写 weight_history + metrics 到侧车文件
     summary_path = output_path.with_suffix(".summary.json")
