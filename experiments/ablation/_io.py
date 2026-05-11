@@ -46,10 +46,10 @@ async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
 
 
 async def write_summary(path: Path, data: dict[str, Any]) -> None:
-    """写 JSON 总结文件。包含 timestamp + 状态。"""
+    """写 JSON 总结文件。timestamp 始终由系统生成，不受 data 中同名键覆盖。"""
     record: dict[str, Any] = {
-        "timestamp": datetime.now(tz=UTC).isoformat(),
         **data,
+        "timestamp": datetime.now(tz=UTC).isoformat(),
     }
     await write_json_atomic(path, record)
 
@@ -151,6 +151,7 @@ async def dump_variant_results_jsonl(
                 )
         tmp_path.replace(path)
     except OSError:
+        logger.exception("JSONL 写入失败: %s", path)
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
         raise
