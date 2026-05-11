@@ -16,13 +16,13 @@ include = ["app/storage/toml_store.py"]
 rules = { "invalid-argument-type" = "ignore" }  # cast(Callable[[], T], dict) — dict 为合法 default_factory
 
 [[overrides]]
-include = ["tests/test_memory_bank.py"]
+include = ["tests/memory/test_memory_bank.py"]
 rules = { "invalid-assignment" = "ignore" }  # mock 替换 _index.load 时类型不匹配
 
 [[overrides]]
-include = ["tests/test_llm_json_validation.py"]
+include = ["tests/agents/test_llm_json_validation.py"]
 rules = { "invalid-assignment" = "ignore" }  # mock 替换 _call_llm_json 时类型不匹配
 
 [[overrides]]
-include = ["tests/test_chat.py"]
+include = ["tests/models/test_chat.py"]
 rules = { "invalid-assignment" = "ignore", "unresolved-attribute" = "ignore" }  # mock 替换 generate 时类型不匹配
