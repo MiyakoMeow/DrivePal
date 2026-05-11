@@ -26,9 +26,7 @@ exclude = [".agents/**"]
 "app/memory/memory_bank/llm.py" = [
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
 ]
-"app/api/resolvers/mutation.py" = [
-    "ARG002",  # close_session current_user 参数保留——Strawberry mutation 签名一致性
-]
+
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 data_dir.mkdir()/ 操作，ruff 误判
 

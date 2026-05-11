@@ -126,6 +126,7 @@ class MemoryBankStore:
             if result.ok:
                 self._loaded = True
             else:
+                self._loaded = True
                 logger.error(
                     "FaissIndex load failed — index file corrupted and deleted. "
                     "Re-ingest data to recover."

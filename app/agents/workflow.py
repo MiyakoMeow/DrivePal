@@ -729,7 +729,9 @@ class AgentWorkflow:
         if pending_id:
             done_data["status"] = "pending"
             done_data["pending_reminder_id"] = pending_id
-        elif state.get("result") and "取消" in str(state.get("result")):
+        elif state.get("result") and any(
+            kw in str(state.get("result")) for kw in ("取消", "抑制")
+        ):
             done_data["status"] = "suppressed"
             done_data["reason"] = state.get("result")
         else:
