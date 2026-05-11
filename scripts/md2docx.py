@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import os
 import re
@@ -64,13 +65,14 @@ _CITATION_RE = re.compile(r"\[\d+(?:,\d+)*\]")
 # ── Markdown 解析 ─────────────────────────────────
 
 
-def parse(filepath: Path) -> list[dict]:
+async def parse(filepath: Path) -> list[dict]:
     """解析 markdown 文件为 token 字典列表。"""
     from markdown_it import MarkdownIt
 
     md = MarkdownIt()
     try:
-        tokens = md.parse(filepath.read_text(encoding="utf-8"))
+        content = await asyncio.to_thread(filepath.read_text, encoding="utf-8")
+        tokens = md.parse(content)
     except Exception as e:  # 宽捕获：任何解析失败均终止并退出，无需细分
         sys.exit(f"markdown 解析失败: {e}")
 
@@ -87,7 +89,7 @@ def parse(filepath: Path) -> list[dict]:
     return result
 
 
-# ── Mermaid 渲染 ─────────────────────────────────
+# ── 图片缓存校验 ─────────────────────────────────
 
 
 def _mermaid_hash(code: str) -> str:
@@ -110,19 +112,30 @@ def _is_valid_png(path: Path) -> bool:
     return True
 
 
-def render_mermaid(code: str, cache_dir: Path) -> Path | None:
+# ── Mermaid / LaTeX 渲染 ─────────────────────────────────
+
+
+async def _mkdir_cache(cache_dir: Path) -> None:
+    """异步创建缓存目录。"""
+    await asyncio.to_thread(cache_dir.mkdir, parents=True, exist_ok=True)
+
+
+async def _write_cache(cache_path: Path, data: bytes) -> None:
+    """异步写入缓存文件。"""
+    await asyncio.to_thread(cache_path.write_bytes, data)
+
+
+async def render_mermaid(code: str, cache_dir: Path, client) -> Path | None:
     """将 mermaid 代码渲染为 PNG，缓存至 cache_dir。"""
     import json
     import zlib
     from base64 import urlsafe_b64encode
 
-    import httpx
-
     payload = json.dumps({"code": code, "mermaid": '{"theme":"default"}'})
     data = zlib.compress(payload.encode(), level=9)
     encoded = urlsafe_b64encode(data).decode().rstrip("=")
 
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    await _mkdir_cache(cache_dir)
     cache_path = cache_dir / f"{_mermaid_hash(code)}.png"
     if cache_path.exists() and _is_valid_png(cache_path):
         return cache_path
@@ -130,59 +143,58 @@ def render_mermaid(code: str, cache_dir: Path) -> Path | None:
     url = f"{MERMAID_API}pako:{encoded}?type=png"
     for attempt in range(2):
         try:
-            response = httpx.get(url, timeout=MERMAID_TIMEOUT)
+            response = await client.get(url, timeout=MERMAID_TIMEOUT)
             response.raise_for_status()
-            # 校验 PNG magic bytes，防止缓存损坏内容（如 rate-limit 页面）
             if response.content[:8] != b"\x89PNG\r\n\x1a\n":
                 msg = "响应非 PNG 格式"
                 raise ValueError(msg)
-            cache_path.write_bytes(response.content)
+            await _write_cache(cache_path, response.content)
             print(f"  [mermaid] 渲染成功 → {cache_path.name}")
             return cache_path
-        except (httpx.HTTPError, ValueError) as e:
+        except Exception as e:
             if attempt == 0:
                 continue  # 一次重试
             print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
             return None
-    return None  # 所有路径应已返回，此处仅为类型检查器完备
+    return None
 
 
-def render_latex(latex: str, cache_dir: Path, *, display: bool = False) -> Path | None:
+async def render_latex(
+    latex: str, cache_dir: Path, client, *, display: bool = False
+) -> Path | None:
     """将 LaTeX 公式渲染为 PNG，缓存至 cache_dir。"""
     import urllib.parse
-
-    import httpx
 
     encoded = urllib.parse.quote(latex)
     extra = r"\dpi{200}" if display else r"\dpi{150}"
     url = f"{LATEX_API}{extra}{encoded}"
 
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    await _mkdir_cache(cache_dir)
     cache_path = cache_dir / f"{_mermaid_hash(latex + str(display))}.png"
     if cache_path.exists() and _is_valid_png(cache_path):
         return cache_path
 
     try:
-        response = httpx.get(url, timeout=MERMAID_TIMEOUT)
+        response = await client.get(url, timeout=MERMAID_TIMEOUT)
         response.raise_for_status()
         if response.content[:8] != b"\x89PNG\r\n\x1a\n":
             msg = "公式渲染响应非 PNG 格式"
             raise ValueError(msg)
-        cache_path.write_bytes(response.content)
+        await _write_cache(cache_path, response.content)
         return cache_path
-    except (httpx.HTTPError, ValueError) as e:
+    except Exception as e:
         print(f"  [latex] 渲染失败: {e}", file=sys.stderr)
         return None
 
 
-def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
+async def preprocess_tokens(tokens: list[dict], cache_dir: Path, client) -> list[dict]:
     """扫描 token 流，将 mermaid fence 替换为 image token。"""
     result: list[dict] = []
     i = 0
     while i < len(tokens):
         t = tokens[i]
         if t["type"] == "fence" and t.get("info", "").strip() == "mermaid":
-            png_path = render_mermaid(t["content"], cache_dir)
+            png_path = await render_mermaid(t["content"], cache_dir, client)
             if png_path:
                 alt = ""
                 peek = i + 1
@@ -201,8 +213,6 @@ def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
                     }
                 )
             i += 1
-            # 仅当紧跟的是图注段落（paragraph_open + inline(**图X-X) + paragraph_close）
-            # 时才整体跳过。非图注段落保留，避免 token 流配对破坏。
             peek = i
             if (
                 peek < len(tokens)
@@ -213,7 +223,6 @@ def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
                 and tokens[peek + 2]["type"] == "paragraph_close"
                 and tokens[peek + 1].get("content", "").strip().startswith("**图")
             ):
-                # 跳过 paragraph_open + inline(**图X-X) + paragraph_close
                 i += 3
             continue
         result.append(t)
@@ -224,45 +233,46 @@ def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
 # ── docx 构建 ─────────────────────────────────
 
 
-def _check_font_warning() -> None:
+async def _check_font_warning() -> None:
     """检测中文字体可用性，缺失时警告。"""
     import platform
 
-    system = platform.system()
-    if system == "Linux":
-        font_dirs = ["/usr/share/fonts", "/usr/local/share/fonts"]
-    elif system == "Darwin":
-        font_dirs = ["/System/Library/Fonts", "/Library/Fonts"]
-    else:
-        return  # Windows 假设字体存在
+    def _scan() -> None:
+        system = platform.system()
+        if system == "Linux":
+            font_dirs = ["/usr/share/fonts", "/usr/local/share/fonts"]
+        elif system == "Darwin":
+            font_dirs = ["/System/Library/Fonts", "/Library/Fonts"]
+        else:
+            return
 
-    for font_name, label in [(FONT_BODY, "正文"), (FONT_HEADING, "标题")]:
-        found = False
-        for fd in font_dirs:
-            if not os.path.isdir(fd):
-                continue
-            for root, _dirs, files in os.walk(fd):
-                if any(font_name.lower() in f.lower() for f in files):
-                    found = True
+        for font_name, label in [(FONT_BODY, "正文"), (FONT_HEADING, "标题")]:
+            found = False
+            for fd in font_dirs:
+                if not os.path.isdir(fd):
+                    continue
+                for _root, _dirs, files in os.walk(fd):
+                    if any(font_name.lower() in f.lower() for f in files):
+                        found = True
+                        break
+                if found:
                     break
-            if found:
-                break
-        if not found:
-            print(
-                f"警告: 字体 '{font_name}'（{label}）未在系统中找到，将使用 Calibri 回退",
-                file=sys.stderr,
-            )
+            if not found:
+                print(
+                    f"警告: 字体 '{font_name}'（{label}）未在系统中找到，将使用 Calibri 回退",
+                    file=sys.stderr,
+                )
+
+    await asyncio.to_thread(_scan)
 
 
 def _setup_document(doc: Document) -> None:
-    """配置页面边距、默认字体，检测中文字体可用性。"""
+    """配置页面边距、默认字体。字体警告由调用方异步执行。"""
     for section in doc.sections:
         section.top_margin = MARGIN_TOP
         section.bottom_margin = MARGIN_BOTTOM
         section.left_margin = MARGIN_LEFT
         section.right_margin = MARGIN_RIGHT
-
-    _check_font_warning()
 
     style = doc.styles["Normal"]
     font = style.font
@@ -365,14 +375,12 @@ def _extract_plain_text(md_content: str) -> str:
 # ── 正文处理 ──
 
 
-def _render_inline_content(
-    paragraph, content: str, *, font_size: Pt = SIZE_BODY
+async def _render_inline_content(
+    paragraph, content: str, *, client, font_size: Pt = SIZE_BODY
 ) -> None:
     """将 inline markdown 文本渲染为 paragraph 中的 runs。
 
-    支持：**bold**/__bold__、*italic*/_italic_、`code`、[N] 上标引用。
-    粗斜体内嵌 [N] 引用通过递归 _render_citations 处理。
-    简易逐字符状态机，不处理嵌套粗斜体格式。
+    支持：**bold**/__bold__、*italic*/_italic_、`code`、[N] 上标引用、$...$ 行内公式。
     """
     i = 0
     n = len(content)
@@ -396,7 +404,6 @@ def _render_inline_content(
                 continue
         # 斜体 *...* 或 _..._（需排除 __ 情况）
         if content[i] in "*_":
-            # 跳过 __ 粗体标记
             if content[i] == "_" and i + 1 < n and content[i + 1] == "_":
                 _add_run(paragraph, content[i], font_size=font_size)
                 i += 1
@@ -425,7 +432,7 @@ def _render_inline_content(
             end = content.find("$", i + 1)
             if end != -1:
                 latex = content[i + 1 : end]
-                png_path = render_latex(latex, LATEX_CACHE_DIR)
+                png_path = await render_latex(latex, LATEX_CACHE_DIR, client)
                 if png_path:
                     run = paragraph.add_run()
                     run.add_picture(str(png_path), height=Inches(0.22))
@@ -454,11 +461,7 @@ def _render_inner_with_citations(
     italic: bool = False,
     font_size: Pt = SIZE_BODY,
 ) -> None:
-    """渲染粗/斜体内部文本，同时解析其中的 [N] 引用上标。
-
-    将文本按 _CITATION_RE 分割，对引用部分附加 superscript，
-    普通文本附加 bold/italic。
-    """
+    """渲染粗/斜体内部文本，同时解析其中的 [N] 引用上标。"""
     parts = _CITATION_RE.split(text)
     citations = _CITATION_RE.findall(text)
     for k, part in enumerate(parts):
@@ -475,15 +478,15 @@ def _render_inner_with_citations(
             )
 
 
-def _add_body_paragraph(
-    doc: Document, content: str, *, use_ref_font: bool = False
+async def _add_body_paragraph(
+    doc: Document, content: str, *, client, use_ref_font: bool = False
 ) -> None:
-    """添加正文段落，处理粗斜体和 [N] 上标引用。"""
+    """添加正文段落，处理粗斜体、[N] 引用和公式。"""
     # 块级公式 $$...$$：整段替换为居中图片
     stripped = content.strip()
     if stripped.startswith("$$") and stripped.endswith("$$"):
         latex = stripped[2:-2].strip()
-        png_path = render_latex(latex, LATEX_CACHE_DIR, display=True)
+        png_path = await render_latex(latex, LATEX_CACHE_DIR, client, display=True)
         if png_path:
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -498,7 +501,7 @@ def _add_body_paragraph(
     p = doc.add_paragraph()
     p.paragraph_format.line_spacing = LINE_SPACING
     p.paragraph_format.first_line_indent = FIRST_LINE_INDENT
-    _render_inline_content(p, content, font_size=font_size)
+    await _render_inline_content(p, content, client=client, font_size=font_size)
 
 
 # ── 代码块 ──
@@ -521,7 +524,6 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
     if not rows or not rows[0]:
         return
 
-    # 列数不一致时补齐空字符串，防止内容错列
     expected_cols = len(rows[0])
     for row_data in rows:
         while len(row_data) < expected_cols:
@@ -532,17 +534,16 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
 
     for i, row_data in enumerate(rows):
         row = table.rows[i]
-        is_header = i == 0  # 首行为表头
+        is_header = i == 0
         for j, cell_text in enumerate(row_data):
             if j >= len(row.cells):
-                break  # 防御：列数不一致时截断
+                break
             cell = row.cells[j]
             cell.text = ""
             p = cell.paragraphs[0]
             _add_run(p, cell_text, font_size=SIZE_CODE, bold=is_header)
             p.paragraph_format.line_spacing = 1.0
 
-    # 三线表边框
     tbl = table._tbl
     tblPr = tbl.tblPr if tbl.tblPr is not None else tbl.makeelement(qn("w:tblPr"), {})
     borders = tblPr.makeelement(qn("w:tblBorders"), {})
@@ -578,14 +579,18 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
 # ── 列表 ──
 
 
-def _add_list_item(doc: Document, content: str, is_ordered: bool, counter: int) -> None:
+async def _add_list_item(
+    doc: Document, content: str, client, is_ordered: bool, counter: int
+) -> None:
     """添加列表项段落。"""
     prefix = f"{counter}. " if is_ordered else "\u2022 "
     p = doc.add_paragraph()
     p.paragraph_format.line_spacing = LINE_SPACING
     p.paragraph_format.first_line_indent = Cm(0)
     p.paragraph_format.left_indent = Cm(0.85)
-    _render_inline_content(p, prefix + content, font_size=SIZE_BODY)
+    await _render_inline_content(
+        p, prefix + content, client=client, font_size=SIZE_BODY
+    )
 
 
 # ── 目录和页码 ──
@@ -663,7 +668,7 @@ def _add_page_numbers(doc: Document) -> None:
 # ── 主构建函数 ──
 
 
-def build_docx(tokens: list[dict], output_path: Path) -> None:
+async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
     """主建文档函数。遍历 token 流构建 docx。"""
     doc = Document()
     _setup_document(doc)
@@ -678,8 +683,8 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
     in_table = False
     table_rows: list[list[str]] = []
     current_row: list[str] = []
-    in_cell = False  # 跟踪 td/th 内部，处理多行单元格
-    current_cell: list[str] = []  # 累积同一单元格内的多段 inline
+    in_cell = False
+    current_cell: list[str] = []
     in_list = False
     ordered_list = False
     list_counter = 0
@@ -711,13 +716,15 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
         # ── 图片（mermaid 预处理后） ──
         if tp == "image":
             png_path = Path(t["path"])
-            if png_path.exists():
+            if await asyncio.to_thread(png_path.exists):
                 p = doc.add_paragraph()
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 run = p.add_run()
                 run.add_picture(str(png_path), width=Inches(6))
             else:
-                _add_body_paragraph(doc, f"[图片缺失: {png_path.name}]")
+                await _add_body_paragraph(
+                    doc, f"[图片缺失: {png_path.name}]", client=client
+                )
             continue
 
         # ── 代码块（非 mermaid） ──
@@ -783,7 +790,7 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
             pending_list_item = False
             continue
         if tp == "inline" and in_list and pending_list_item:
-            _add_list_item(doc, t["content"], ordered_list, list_counter)
+            await _add_list_item(doc, t["content"], client, ordered_list, list_counter)
             pending_list_item = False
             continue
 
@@ -793,7 +800,9 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
         if tp == "paragraph_close":
             continue
         if tp == "inline":
-            _add_body_paragraph(doc, t["content"], use_ref_font=in_references)
+            await _add_body_paragraph(
+                doc, t["content"], client=client, use_ref_font=in_references
+            )
             continue
         if tp in ("hardbreak", "softbreak"):
             continue
@@ -801,17 +810,23 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
     # 页码
     _add_page_numbers(doc)
 
-    if output_path.exists():
+    if await asyncio.to_thread(output_path.exists):
         print(f"覆盖已有文件: {output_path}", file=sys.stderr)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    doc.save(str(output_path))
+
+    def _save() -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.save(str(output_path))
+
+    await asyncio.to_thread(_save)
     print(f"输出: {output_path}")
 
 
 # ── 入口 ──
 
 
-def main() -> None:
+async def main() -> None:
+    import httpx
+
     parser = argparse.ArgumentParser(description="Markdown 论文 → docx 转换器")
     parser.add_argument(
         "-i", "--input", type=Path, default=DEFAULT_INPUT, help="输入 markdown 文件路径"
@@ -824,17 +839,20 @@ def main() -> None:
     if not args.input.exists():
         sys.exit(f"输入文件不存在: {args.input}")
 
-    print(f"解析: {args.input}")
-    tokens = parse(args.input)
-    print(f"  获得 {len(tokens)} 个 token")
+    async with httpx.AsyncClient() as client:
+        await _check_font_warning()
 
-    print("渲染 Mermaid 图表...")
-    tokens = preprocess_tokens(tokens, MERMAID_CACHE_DIR)
-    print(f"  预处理后 {len(tokens)} 个 token")
+        print(f"解析: {args.input}")
+        tokens = await parse(args.input)
+        print(f"  获得 {len(tokens)} 个 token")
 
-    print("构建 docx...")
-    build_docx(tokens, args.output)
+        print("渲染 Mermaid 图表...")
+        tokens = await preprocess_tokens(tokens, MERMAID_CACHE_DIR, client)
+        print(f"  预处理后 {len(tokens)} 个 token")
+
+        print("构建 docx...")
+        await build_docx(tokens, args.output, client)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
