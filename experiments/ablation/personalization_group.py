@@ -30,10 +30,10 @@ _CONVERGENCE_TOLERANCE = 0.05
 _CONSECUTIVE_FOR_CONVERGENCE = 3
 
 STAGES: list[tuple[str, int, int]] = [
-    ("high-freq", 0, 5),
-    ("silent", 5, 10),
-    ("visual-detail", 10, 15),
-    ("mixed", 15, 20),
+    ("high-freq", 0, 8),
+    ("silent", 8, 16),
+    ("visual-detail", 16, 24),
+    ("mixed", 24, 32),
 ]
 
 
@@ -50,12 +50,12 @@ async def run_personalization_group(
     *,
     judge: Judge,
 ) -> GroupResult:
-    """个性化组实验。20 轮，4 阶段偏好切换。
+    """个性化组实验。32 轮，4 阶段偏好切换。
 
-    场景不足 20 时通过取模循环复用（i % len），保证每轮有场景可用。
+    场景不足 32 时通过取模循环复用（i % len），保证每轮有场景可用。
     """
     rng = random.Random(seed)
-    personalization_scenarios = scenarios[:20]
+    personalization_scenarios = scenarios[:32]
 
     if not personalization_scenarios:
         msg = "no personalization scenarios available"
@@ -106,21 +106,22 @@ async def run_personalization_group(
                     include_modifications=True,
                 )
 
-                if variant == Variant.FULL and vr.event_id:
-                    try:
-                        action = simulate_feedback(vr.decision, stage_name, rng)
-                        task_type = _extract_task_type(vr.stages)
-                        await update_feedback_weight(
-                            runner.base_user_id,
-                            vr.event_id,
-                            action,
-                            task_type=task_type,
-                        )
-                    except Exception:
-                        logger.exception(
-                            "Feedback update failed for round %d, skipping",
-                            i + 1,
-                        )
+                if variant == Variant.FULL:
+                    task_type = _extract_task_type(vr.stages)
+                    if task_type:
+                        try:
+                            action = simulate_feedback(vr.decision, stage_name, rng)
+                            await update_feedback_weight(
+                                runner.base_user_id,
+                                vr.event_id,
+                                action,
+                                task_type=task_type,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Feedback update failed for round %d, skipping",
+                                i + 1,
+                            )
 
             snapshot = await _read_weights(runner.base_user_id)
             weight_history.append(
@@ -200,24 +201,32 @@ def simulate_feedback(
     return "ignore"
 
 
+_KNOWN_TASK_TYPES: frozenset[str] = frozenset(
+    {"meeting", "travel", "shopping", "contact", "other"}
+)
+
+
 def _extract_task_type(stages: dict) -> str | None:
     """从 stages.task 提取任务类型。
 
     LLM 输出的 key 名不一致——可能为 task_type / task_attribution。
-    不探测 "task" 键——该值通常是任务描述文本而非类型枚举。
+    返回值仅接受已知类型集合，过滤无效值。
     """
     task_stage = stages.get("task", {})
     if isinstance(task_stage, dict):
         for key in ("task_type", "task_attribution"):
             val = task_stage.get(key)
             if isinstance(val, str) and val.strip():
-                return val.strip()
+                stripped = val.strip()
+                if stripped in _KNOWN_TASK_TYPES:
+                    return stripped
+                logger.debug("task_type=%r 不在已知类型集合中，跳过反馈", stripped)
     return None
 
 
 async def update_feedback_weight(
     user_id: str,
-    event_id: str,
+    event_id: str | None,
     action: Literal["accept", "ignore"],
     *,
     task_type: str | None = None,
@@ -231,9 +240,10 @@ async def update_feedback_weight(
         logger.debug(
             "task_type 未从 stages 提取（event_id=%s），回退 MemoryBank 查询", event_id
         )
-        mm = get_memory_module()
-        mode = MemoryMode.MEMORY_BANK
-        event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
+        if event_id:
+            mm = get_memory_module()
+            mode = MemoryMode.MEMORY_BANK
+            event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
     if not event_type:
         return
     ud = user_data_dir(user_id)

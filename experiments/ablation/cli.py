@@ -281,7 +281,7 @@ def _prepare_group_scenarios(
     if "personalization" in groups_to_run:
         group_scenarios["personalization"] = sample_scenarios(
             all_scenarios,
-            20,
+            32,
             safety_only=False,
             exclude_ids=used_ids,
             stratify_key=pers_stratum,
@@ -387,7 +387,7 @@ async def main(argv: list[str] | None = None) -> None:
         )
 
         if args.synthesize_only:
-            n = await synthesize_scenarios(data_dir / "scenarios.jsonl", count=200)
+            n = await synthesize_scenarios(data_dir / "scenarios.jsonl", count=260)
             print(f"合成完成: {n} 场景")
             return
 
