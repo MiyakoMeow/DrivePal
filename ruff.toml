@@ -62,7 +62,7 @@ exclude = [".agents/**"]
     "T201",  # _verify() 调试入口 print 合理
     "TC003",  # Path 用于类型注解但实际运行时 path.open()/exists() 操作，ruff 误判
     "PLR0913",  # sample_scenarios 参数多（分层采样配置），功能聚合合理
-    "EM101", "EM102", "TRY003",  # 消融实验 CLI 使用中文错误消息，自定义异常类过度设计
+    "EM101", "EM102", "TRY003",  # 消融实验代码使用中文错误消息，自定义异常类过度设计
 ]
 "experiments/ablation/cli.py" = [
     "T201",  # CLI 入口用 print 输出进度，非生产日志

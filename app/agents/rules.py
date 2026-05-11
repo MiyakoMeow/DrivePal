@@ -56,6 +56,11 @@ def _get_fatigue_threshold() -> float:
     return value
 
 
+def get_fatigue_threshold() -> float:
+    """获取疲劳阈值（公开接口）。"""
+    return _get_fatigue_threshold()
+
+
 def reset_fatigue_threshold_cache() -> None:
     """重置疲劳阈值缓存（供测试使用）。"""
     global _cached_fatigue_threshold

@@ -4,7 +4,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from app.agents.rules import _get_fatigue_threshold
+from app.agents.rules import get_fatigue_threshold
 
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
@@ -20,7 +20,7 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
-_FATIGUE_THRESHOLD = _get_fatigue_threshold()
+_FATIGUE_THRESHOLD = get_fatigue_threshold()
 
 
 def _safety_stratum(s: Scenario) -> str:
@@ -31,6 +31,7 @@ def _safety_stratum(s: Scenario) -> str:
     try:
         fatigue = float(fatigue_raw)
     except (TypeError, ValueError):
+        logger.warning("无效的疲劳度值 %r，回退为 0.0", fatigue_raw)
         fatigue = 0.0
     workload = driver.get("workload", "")
     parts: list[str] = [scenario]

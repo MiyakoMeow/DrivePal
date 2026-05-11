@@ -15,7 +15,7 @@ import aiofiles
 
 from app.memory.singleton import close_memory_module
 
-from ._io import safe_event_id, write_config, write_scores_json, write_step_summary
+from ._io import variant_result_from_dict, write_config, write_scores_json, write_step_summary
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     _arch_stratum,
@@ -44,7 +44,6 @@ from .types import (
     GroupResult,
     JudgeScores,
     Scenario,
-    Variant,
     VariantResult,
 )
 
@@ -208,20 +207,7 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                 continue
             try:
                 d = json.loads(stripped)
-                variant = Variant(d["variant"])
-                results.append(
-                    VariantResult(
-                        scenario_id=d["scenario_id"],
-                        variant=variant,
-                        decision=d.get("decision", {}),
-                        result_text=d.get("result_text") or "",
-                        event_id=safe_event_id(d),
-                        stages=d.get("stages", {}),
-                        latency_ms=d.get("latency_ms", 0),
-                        modifications=d.get("modifications", []),
-                        round_index=d.get("round_index", 0),
-                    )
-                )
+                results.append(variant_result_from_dict(d))
             except json.JSONDecodeError, KeyError, ValueError:
                 logger.warning("跳过无效行: %s", stripped[:80])
     return results

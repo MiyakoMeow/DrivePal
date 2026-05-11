@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -31,10 +32,12 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
-from ._io import safe_event_id
+from ._io import variant_result_from_dict
 from .types import Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
+
+_VARIANT_TIMEOUT_SECONDS = int(os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300"))
 
 
 class AblationRunner:
@@ -188,7 +191,7 @@ class AblationRunner:
             async with sem:
                 uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
                 try:
-                    async with asyncio.timeout(300):
+                    async with asyncio.timeout(_VARIANT_TIMEOUT_SECONDS):
                         vr = await self.run_variant(
                             scenario, variant, user_id=uid
                         )
@@ -236,19 +239,7 @@ async def _load_checkpoint(
                 try:
                     d = json.loads(stripped)
                     ids.add((d["scenario_id"], d["variant"]))
-                    results.append(
-                        VariantResult(
-                            scenario_id=d["scenario_id"],
-                            variant=Variant(d["variant"]),
-                            decision=d.get("decision", {}),
-                            result_text=d.get("result_text") or "",
-                            event_id=safe_event_id(d),
-                            stages=d.get("stages", {}),
-                            latency_ms=d.get("latency_ms", 0),
-                            modifications=d.get("modifications", []),
-                            round_index=d.get("round_index", 0),
-                        )
-                    )
+                    results.append(variant_result_from_dict(d))
                 except json.JSONDecodeError, KeyError, ValueError:
                     logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                     continue

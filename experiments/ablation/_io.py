@@ -12,11 +12,13 @@ from typing import TYPE_CHECKING, Any
 
 import aiofiles
 
+from .types import Variant, VariantResult
+
 if TYPE_CHECKING:
     import argparse
     from pathlib import Path
 
-    from .types import GroupResult, JudgeScores, VariantResult
+    from .types import GroupResult, JudgeScores
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,21 @@ def safe_event_id(record: dict[str, Any]) -> str | None:
     """从 JSON dict 安全读取 event_id，过滤非法类型。"""
     eid = record.get("event_id")
     return eid if isinstance(eid, (str, type(None))) else None
+
+
+def variant_result_from_dict(d: dict[str, Any]) -> VariantResult:
+    """从 JSON dict 重建 VariantResult，兼容旧 checkpoint 缺失字段。"""
+    return VariantResult(
+        scenario_id=d["scenario_id"],
+        variant=Variant(d["variant"]),
+        decision=d.get("decision", {}),
+        result_text=d.get("result_text") or "",
+        event_id=safe_event_id(d),
+        stages=d.get("stages", {}),
+        latency_ms=d.get("latency_ms", 0),
+        modifications=d.get("modifications", []),
+        round_index=d.get("round_index", 0),
+    )
 
 
 async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
