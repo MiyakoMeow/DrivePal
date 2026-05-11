@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 
@@ -63,11 +64,93 @@ def parse(filepath: Path) -> list[dict]:
         d: dict = {"type": t.type, "tag": t.tag, "content": t.content}
         if t.attrs:
             d["attrs"] = dict(t.attrs)
+        # fence token 的 info 在 t.info 而非 attrs
+        if hasattr(t, "info") and t.info:
+            d["info"] = t.info
         if t.children:
             d["children"] = [
                 {"type": c.type, "content": c.content} for c in t.children
             ]
         result.append(d)
+    return result
+
+
+def _mermaid_hash(code: str) -> str:
+    """用 mermaid 代码内容的 SHA256 前 16 位作缓存文件名。"""
+    return hashlib.sha256(code.encode()).hexdigest()[:16]
+
+
+def render_mermaid(code: str, cache_dir: Path) -> Path | None:
+    """将 mermaid 代码渲染为 PNG，缓存至 cache_dir。"""
+    import json
+    import zlib
+    from base64 import urlsafe_b64encode
+
+    import httpx
+
+    payload = json.dumps({"code": code, "mermaid": '{"theme":"default"}'})
+    data = zlib.compress(payload.encode(), level=9)
+    encoded = urlsafe_b64encode(data).decode().rstrip("=")
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"{_mermaid_hash(code)}.png"
+    if cache_path.exists():
+        return cache_path
+
+    url = f"{MERMAID_API}pako:{encoded}?type=png"
+    try:
+        response = httpx.get(url, timeout=MERMAID_TIMEOUT)
+        response.raise_for_status()
+        cache_path.write_bytes(response.content)
+        print(f"  [mermaid] 渲染成功 → {cache_path.name}")
+        return cache_path
+    except httpx.HTTPError as e:
+        print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
+        return None
+
+
+def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
+    """扫描 token 流，将 mermaid fence 替换为 image token。"""
+    result: list[dict] = []
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        if t["type"] == "fence" and t.get("info", "").strip() == "mermaid":
+            png_path = render_mermaid(t["content"], cache_dir)
+            if png_path:
+                # 提取紧跟图注段落的文本作 alt
+                alt = ""
+                peek = i + 1
+                if peek < len(tokens) and tokens[peek]["type"] == "paragraph_open":
+                    peek += 1
+                if peek < len(tokens) and tokens[peek]["type"] == "inline":
+                    next_content = tokens[peek].get("content", "")
+                    if next_content.strip().startswith("**图"):
+                        alt = next_content.strip().strip("*")
+                result.append({"type": "image", "path": str(png_path), "alt": alt})
+            else:
+                result.append({
+                    "type": "paragraph",
+                    "content": f'[图表渲染失败，请手动处理]\n```mermaid\n{t["content"]}\n```',
+                })
+            i += 1
+            # 跳过紧跟的图注段落
+            # token 序列: paragraph_open → inline(含 **图X-X ...**) → paragraph_close
+            skipped = 0
+            if i < len(tokens) and tokens[i]["type"] == "paragraph_open":
+                skipped += 1
+                i += 1
+            if i < len(tokens) and tokens[i]["type"] == "inline":
+                next_content = tokens[i].get("content", "")
+                if next_content.strip().startswith("**图"):
+                    skipped += 1
+                    i += 1
+            # 跳过 paragraph_close
+            if i < len(tokens) and tokens[i]["type"] == "paragraph_close":
+                i += 1
+            continue
+        result.append(t)
+        i += 1
     return result
 
 
@@ -85,6 +168,10 @@ def main() -> None:
     print(f"解析: {args.input}")
     tokens = parse(args.input)
     print(f"  获得 {len(tokens)} 个 token")
+
+    print("渲染 Mermaid 图表...")
+    tokens = preprocess_tokens(tokens, MERMAID_CACHE_DIR)
+    print(f"  预处理后 {len(tokens)} 个 token")
 
 
 if __name__ == "__main__":
