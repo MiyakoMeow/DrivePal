@@ -40,7 +40,7 @@ STAGES: list[tuple[str, int, int]] = [
 
 def _build_stages(
     total: int,
-) -> tuple[list[tuple[str, int, int]], list[Scenario]]:
+) -> tuple[list[tuple[str, int, int]], int]:
     """按 total 构建 4 阶段切片，返回 (stages, scenarios)。"""
     available = min(total, 32)
     if available < _MIN_STAGES:
