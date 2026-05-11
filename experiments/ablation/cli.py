@@ -166,7 +166,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
                     summary_path,
                 )
                 metrics = {}
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError, TypeError:
                 logger.warning(
                     "个性化组 results.summary.json 解析失败（%s），指标将为空。",
                     summary_path,
