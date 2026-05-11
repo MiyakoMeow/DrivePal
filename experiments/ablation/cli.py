@@ -257,16 +257,26 @@ def _prepare_group_scenarios(
                 "增加 --synthesize-only count=200 可扩充池。",
                 len(arch_pool),
             )
-        group_scenarios["architecture"] = sample_scenarios(
-            arch_pool,
-            50,
-            safety_only=False,
-            exclude_ids=used_ids,
-            stratify_key=arch_stratum,
-            min_per_stratum=1,
-            seed=seed + 1,
-        )
-        used_ids |= {s.id for s in group_scenarios["architecture"]}
+        try:
+            group_scenarios["architecture"] = sample_scenarios(
+                arch_pool,
+                50,
+                safety_only=False,
+                exclude_ids=used_ids,
+                stratify_key=arch_stratum,
+                min_per_stratum=1,
+                seed=seed + 1,
+            )
+        except ValueError:
+            logger.warning(
+                "架构组经 exclude_ids 排除后无可用场景，跳过架构组实验。"
+                "可用池 %d 场景，已用 %d。",
+                len(arch_pool),
+                len(used_ids),
+            )
+            group_scenarios["architecture"] = []
+        if group_scenarios["architecture"]:
+            used_ids |= {s.id for s in group_scenarios["architecture"]}
 
     if "personalization" in groups_to_run:
         group_scenarios["personalization"] = sample_scenarios(

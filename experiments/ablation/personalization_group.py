@@ -203,11 +203,12 @@ def simulate_feedback(
 def _extract_task_type(stages: dict) -> str | None:
     """从 stages.task 提取任务类型。
 
-    LLM 输出的 key 名不一致——可能为 task_type / task_attribution / task。
+    LLM 输出的 key 名不一致——可能为 task_type / task_attribution。
+    不探测 "task" 键——该值通常是任务描述文本而非类型枚举。
     """
     task_stage = stages.get("task", {})
     if isinstance(task_stage, dict):
-        for key in ("task_type", "task_attribution", "task"):
+        for key in ("task_type", "task_attribution"):
             val = task_stage.get(key)
             if isinstance(val, str) and val.strip():
                 return val.strip()
@@ -325,9 +326,10 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
 
 
 def _compute_convergence_speed(weight_history: list[dict]) -> float:
-    """收敛速度：最高权重类型首次距终值 ±0.05 内且持续 ≥3 轮的轮次号（归一化）。
+    """收敛速度：最高权重类型最长稳定段的起始轮次（归一化）。
 
-    返回值 ∈ [0, 1] 表示收敛速度（越小越快），-1.0 表示未收敛。
+    追踪权重在终值 ±0.05 范围内最长的连续稳定段（≥3 轮），
+    返回该段起始轮次 / 总轮数。返回值 ∈ [0, 1]（越小越快），-1.0 表示未收敛。
     """
     if not weight_history or len(weight_history) < _MIN_HISTORY_LEN:
         return -1.0
@@ -341,7 +343,7 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     target_types = sorted(t for t, w in final_weights.items() if w == max_w)
     target_type = target_types[0]
     if len(target_types) > 1:
-        logger.info(
+        logger.debug(
             "最终最高权重类型并列（%s），取 %s 计算收敛速度",
             target_types,
             target_type,
@@ -349,20 +351,24 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
     target_final = final_weights[target_type]
 
     consecutive = 0
-    first_stable_round = -1
+    best_start = -1
+    best_len = 0
+    current_start = 0
     for i, wh in enumerate(weight_history):
         current_weight = wh.get("weights", {}).get(target_type, 0.5)
         if abs(current_weight - target_final) <= _CONVERGENCE_TOLERANCE:
+            if consecutive == 0:
+                current_start = i
             consecutive += 1
-            if consecutive >= _CONSECUTIVE_FOR_CONVERGENCE and first_stable_round < 0:
-                first_stable_round = i - (_CONSECUTIVE_FOR_CONVERGENCE - 1)
+            if consecutive >= _CONSECUTIVE_FOR_CONVERGENCE and consecutive > best_len:
+                best_start = current_start
+                best_len = consecutive
         else:
             consecutive = 0
-            first_stable_round = -1  # 偏离终值后需重新收敛
 
-    if first_stable_round < 0:
+    if best_start < 0:
         return -1.0  # 未收敛
-    return first_stable_round / len(weight_history)
+    return best_start / len(weight_history)
 
 
 def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float:

@@ -159,7 +159,10 @@ def is_arch_scenario(s: Scenario) -> bool:
     """判定场景是否属于架构组（排除安全关键场景）。"""
     scenario = s.driving_context.get("scenario", "")
     driver = s.driving_context.get("driver", {})
-    fatigue = driver.get("fatigue_level", 0)
+    try:
+        fatigue = float(driver.get("fatigue_level", 0))
+    except TypeError, ValueError:
+        fatigue = 0.0
     workload = driver.get("workload", "")
     return (
         scenario != "highway"
