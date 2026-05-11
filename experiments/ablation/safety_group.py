@@ -30,7 +30,7 @@ def _safety_stratum(s: Scenario) -> str:
     fatigue_raw = driver.get("fatigue_level", 0)
     try:
         fatigue = float(fatigue_raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         logger.warning("无效的疲劳度值 %r，回退为 0.0", fatigue_raw)
         fatigue = 0.0
     workload = driver.get("workload", "")

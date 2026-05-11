@@ -38,9 +38,7 @@ from .types import Scenario, Variant, VariantResult
 logger = logging.getLogger(__name__)
 
 try:
-    _VARIANT_TIMEOUT_SECONDS = int(
-        os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300")
-    )
+    _VARIANT_TIMEOUT_SECONDS = int(os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300"))
 except ValueError:
     _VARIANT_TIMEOUT_SECONDS = 300
 
@@ -197,9 +195,7 @@ class AblationRunner:
                 uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
                 try:
                     async with asyncio.timeout(_VARIANT_TIMEOUT_SECONDS):
-                        vr = await self.run_variant(
-                            scenario, variant, user_id=uid
-                        )
+                        vr = await self.run_variant(scenario, variant, user_id=uid)
                 except TimeoutError:
                     logger.warning(
                         "Variant timeout after %ds: %s %s",

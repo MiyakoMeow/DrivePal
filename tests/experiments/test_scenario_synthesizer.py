@@ -79,10 +79,7 @@ def test_sample_scenarios_all():
 
 def test_sample_scenarios_stratified():
     """分层抽样应保证每层至少 min_per_stratum 个样本。"""
-    scenarios = [
-        _sc(f"s{i}", {"type": "a" if i < 3 else "b"})
-        for i in range(6)
-    ]
+    scenarios = [_sc(f"s{i}", {"type": "a" if i < 3 else "b"}) for i in range(6)]
     sampled = sample_scenarios(
         scenarios,
         4,
@@ -117,10 +114,7 @@ def test_sample_scenarios_empty_pool_raises():
 
 def test_sample_scenarios_min_per_stratum_too_large():
     """min_per_stratum 总和超过 n 时应抛出 ValueError。"""
-    scenarios = [
-        _sc(f"s{i}", {"type": f"t{i}"})
-        for i in range(5)
-    ]
+    scenarios = [_sc(f"s{i}", {"type": f"t{i}"}) for i in range(5)]
     with pytest.raises(ValueError, match="无法满足 min_per_stratum"):
         sample_scenarios(
             scenarios,
