@@ -266,7 +266,7 @@ def load_scenarios(path: Path) -> list[Scenario]:
     return scenarios
 
 
-def sample_scenarios(  # noqa: PLR0913
+def sample_scenarios(
     scenarios: list[Scenario],
     n: int,
     *,
@@ -289,6 +289,9 @@ def sample_scenarios(  # noqa: PLR0913
     if exclude_ids:
         pool = [s for s in pool if s.id not in exclude_ids]
 
+    if not pool:
+        raise ValueError("过滤/排除后无可用的场景")
+
     if not stratify_key or len(pool) <= n:
         return rng.sample(pool, min(n, len(pool)))
 
@@ -296,6 +299,13 @@ def sample_scenarios(  # noqa: PLR0913
     for s in pool:
         key = stratify_key(s)
         strata.setdefault(key, []).append(s)
+
+    required = len(strata) * min_per_stratum
+    if required > n:
+        raise ValueError(
+            f"无法满足 min_per_stratum={min_per_stratum}，"
+            f"共 {len(strata)} 层需要 {required} 个样本，但仅请求 {n} 个"
+        )
 
     result: list[Scenario] = []
     sampled_ids: set[str] = set()

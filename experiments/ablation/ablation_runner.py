@@ -192,7 +192,7 @@ class AblationRunner:
                         timeout=300,
                     )
                 except TimeoutError:
-                    logger.exception(
+                    logger.error(
                         "Variant timeout after 5min: %s %s", scenario.id, variant.value
                     )
                     raise
@@ -211,7 +211,8 @@ class AblationRunner:
         new_results = await asyncio.gather(*tasks, return_exceptions=True)
         failures = [r for r in new_results if isinstance(r, Exception)]
         if failures:
-            msg = f"{len(failures)} variant runs failed. First: {failures[0]}"
+            failure_msgs = "; ".join(str(f) for f in failures[:5])
+            msg = f"{len(failures)} variant runs failed: {failure_msgs}"
             raise RuntimeError(msg)
         return results + [r for r in new_results if isinstance(r, VariantResult)]
 

@@ -38,7 +38,8 @@ FATIGUE_THRESHOLD: float = _get_fatigue_threshold()
 def _arch_stratum(s: Scenario) -> str:
     """架构组分层键——按 scenario × task_type 组合分组，保证覆盖。"""
     scenario = s.driving_context.get("scenario", "unknown")
-    return f"{scenario}:{s.expected_task_type}"
+    task_type = getattr(s, "expected_task_type", "unknown")
+    return f"{scenario}:{task_type}"
 
 
 async def run_architecture_group(

@@ -39,7 +39,7 @@ STAGES: list[tuple[str, int, int]] = [
 
 def _pers_stratum(s: Scenario) -> str:
     """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
-    return s.expected_task_type
+    return getattr(s, "expected_task_type", "unknown")
 
 
 async def run_personalization_group(

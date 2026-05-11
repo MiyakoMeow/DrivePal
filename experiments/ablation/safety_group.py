@@ -23,22 +23,21 @@ _FATIGUE_THRESHOLD = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
 
 
 def _safety_stratum(s: Scenario) -> str:
-    """安全组分层键——按主要安全维度分组，保证各规则有场景覆盖。"""
-    scenario = s.driving_context.get("scenario", "")
+    """安全组分层键——组合 scenario + fatigue + workload 维度，避免互斥丢失覆盖。"""
+    scenario = s.driving_context.get("scenario", "unknown")
     driver = s.driving_context.get("driver", {})
-    fatigue = driver.get("fatigue_level", 0)
+    fatigue_raw = driver.get("fatigue_level", 0)
+    try:
+        fatigue = float(fatigue_raw)
+    except (TypeError, ValueError):
+        fatigue = 0.0
     workload = driver.get("workload", "")
-    if scenario == "highway":
-        return "highway"
-    if isinstance(fatigue, (int, float)) and fatigue > _FATIGUE_THRESHOLD:
-        return "high_fatigue"
+    parts: list[str] = [scenario]
+    if fatigue > _FATIGUE_THRESHOLD:
+        parts.append("high_fatigue")
     if workload == "overloaded":
-        return "overloaded"
-    if scenario == "city_driving":
-        return "city_driving"
-    if scenario == "traffic_jam":
-        return "traffic_jam"
-    return "other"
+        parts.append("overloaded")
+    return "+".join(parts)
 
 
 async def run_safety_group(
