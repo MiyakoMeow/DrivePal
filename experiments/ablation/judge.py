@@ -21,8 +21,8 @@ def _safe_int(value: object, default: int = 3) -> int:
     调用方不可信赖 `json.loads` 后的类型。
     """
     try:
-        return int(value)  # type: ignore[arg-type]
-    except (ValueError, TypeError):
+        return int(str(value))
+    except ValueError, TypeError:
         return default
 
 
