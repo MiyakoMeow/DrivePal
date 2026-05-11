@@ -19,6 +19,7 @@ import faiss
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,10 @@ class FaissIndex:
         self._index_type = index_type
         self._ivf_nlist = ivf_nlist
 
+    async def _run_sync[T](self, fn: Callable[[], T]) -> T:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, fn)
+
     def _build_index(self) -> None:
         """按 index_type 构建 FAISS 索引。"""
         if self._index_type == "ivf_flat":
@@ -116,7 +121,7 @@ class FaissIndex:
         """
         if self._index is not None:
             return LoadResult(ok=True)
-        self._data_dir.mkdir(parents=True, exist_ok=True)
+        await self._run_sync(lambda: self._data_dir.mkdir(parents=True, exist_ok=True))
         ip = self._data_dir / "index.faiss"
         mp = self._data_dir / "metadata.json"
         ep = self._data_dir / "extra_metadata.json"
@@ -127,7 +132,7 @@ class FaissIndex:
         # 1. 尝试加载 FAISS 索引
         idx: faiss.IndexIDMap | None = None
         try:
-            idx_raw = faiss.read_index(str(ip))
+            idx_raw = await self._run_sync(lambda: faiss.read_index(str(ip)))
             if isinstance(idx_raw, faiss.IndexIDMap):
                 idx = idx_raw
             else:
@@ -137,14 +142,18 @@ class FaissIndex:
                     type(idx_raw).__name__,
                 )
                 bak_path = ip.with_suffix(".faiss.bak")
-                shutil.copy(str(ip), str(bak_path))
+                await self._run_sync(lambda: shutil.copy(str(ip), str(bak_path)))
                 if mp.exists():
-                    shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
+                    await self._run_sync(
+                        lambda: shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
+                    )
                 if ep.exists():
-                    shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
-                ip.unlink(missing_ok=True)
-                mp.unlink(missing_ok=True)
-                ep.unlink(missing_ok=True)
+                    await self._run_sync(
+                        lambda: shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
+                    )
+                await self._run_sync(lambda: ip.unlink(missing_ok=True))
+                await self._run_sync(lambda: mp.unlink(missing_ok=True))
+                await self._run_sync(lambda: ep.unlink(missing_ok=True))
                 return LoadResult(
                     ok=False,
                     warnings=[
@@ -158,14 +167,18 @@ class FaissIndex:
         except (OSError, RuntimeError) as exc:
             bak_path = ip.with_suffix(".faiss.bak")
             logger.warning("FaissIndex index.faiss corrupted, backing up: %s", exc)
-            shutil.copy(str(ip), str(bak_path))
+            await self._run_sync(lambda: shutil.copy(str(ip), str(bak_path)))
             if mp.exists():
-                shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
+                await self._run_sync(
+                    lambda: shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
+                )
             if ep.exists():
-                shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
-            ip.unlink(missing_ok=True)
-            mp.unlink(missing_ok=True)
-            ep.unlink(missing_ok=True)
+                await self._run_sync(
+                    lambda: shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
+                )
+            await self._run_sync(lambda: ip.unlink(missing_ok=True))
+            await self._run_sync(lambda: mp.unlink(missing_ok=True))
+            await self._run_sync(lambda: ep.unlink(missing_ok=True))
             return LoadResult(
                 ok=False,
                 warnings=[f"index.faiss corrupted: {exc}"],
@@ -188,7 +201,8 @@ class FaissIndex:
         meta: list[dict] | None = None
         meta_warnings: list[str] = []
         try:
-            raw_meta = json.loads(mp.read_text())
+            raw_meta_text = await self._run_sync(mp.read_text)
+            raw_meta = json.loads(raw_meta_text)
             meta = _validate_metadata_structure(raw_meta)
             # 校验 count
             if idx.ntotal != len(meta):
@@ -273,12 +287,13 @@ class FaissIndex:
         extra_recovery: list[str] = []
         if ep.exists():
             try:
-                e: object = json.loads(ep.read_text())
+                raw_extra = await self._run_sync(ep.read_text)
+                e: object = json.loads(raw_extra)
                 self._extra = e if isinstance(e, dict) else {}
             except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
                 logger.warning("FaissIndex extra_metadata corrupted, ignoring: %s", exc)
                 self._extra = {}
-                ep.unlink(missing_ok=True)
+                await self._run_sync(lambda: ep.unlink(missing_ok=True))
                 extra_recovery.append(
                     "extra_metadata.json corrupted — deleted. "
                     "Summaries and personalities will be regenerated on next write."
@@ -295,13 +310,21 @@ class FaissIndex:
         async with self._save_lock:
             if self._index is None:
                 return
-            faiss.write_index(self._index, str(self._data_dir / "index.faiss"))
-            (self._data_dir / "metadata.json").write_text(
-                json.dumps(self._metadata, ensure_ascii=False, indent=2),
+            await self._run_sync(
+                lambda: faiss.write_index(
+                    self._index, str(self._data_dir / "index.faiss")
+                ),
+            )
+            await self._run_sync(
+                lambda: (self._data_dir / "metadata.json").write_text(
+                    json.dumps(self._metadata, ensure_ascii=False, indent=2),
+                ),
             )
             if self._extra:
-                (self._data_dir / "extra_metadata.json").write_text(
-                    json.dumps(self._extra, ensure_ascii=False, indent=2),
+                await self._run_sync(
+                    lambda: (self._data_dir / "extra_metadata.json").write_text(
+                        json.dumps(self._extra, ensure_ascii=False, indent=2),
+                    ),
                 )
 
     def compute_reference_date(self, offset_days: int = 1) -> str:

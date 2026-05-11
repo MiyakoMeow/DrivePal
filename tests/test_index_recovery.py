@@ -1,5 +1,6 @@
 """FaissIndex 降级恢复测试。"""
 
+import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -94,3 +95,25 @@ async def test_compute_reference_date_empty():
         await idx.load()
         ref = idx.compute_reference_date()
         assert ref  # 任意非空字符串
+
+
+@pytest.mark.asyncio
+async def test_load_does_not_block_event_loop():
+    """load() 不阻塞事件循环——call_soon 回调查看 yield 点。"""
+    loop_interleaved = False
+
+    def mark_interleaved():
+        nonlocal loop_interleaved
+        loop_interleaved = True
+
+    with tempfile.TemporaryDirectory() as tmp:
+        idx = FaissIndex(Path(tmp))
+        await idx.load()
+        await idx.add_vector("x", [0.1] * 1536, "2024-06-15T00:00:00", {})
+        await idx.save()
+
+        idx2 = FaissIndex(Path(tmp))
+        loop = asyncio.get_running_loop()
+        loop.call_soon(mark_interleaved)
+        await idx2.load()
+        assert loop_interleaved, "事件循环被阻塞——load() 未让出控制权"
