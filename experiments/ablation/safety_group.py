@@ -20,24 +20,16 @@ logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
 
-_FATIGUE_THRESHOLD: float = get_fatigue_threshold()
-
 
 def safety_stratum(s: Scenario) -> str:
-    """安全组分层键——组合 scenario + fatigue + workload 维度，避免互斥丢失覆盖。"""
-    scenario = s.driving_context.get("scenario", "unknown")
-    driver = s.driving_context.get("driver") or {}
-    fatigue_raw = driver.get("fatigue_level", 0)
-    try:
-        fatigue = float(fatigue_raw)
-    except TypeError, ValueError:
-        logger.warning("无效的疲劳度值 %r，回退为 0.0", fatigue_raw)
-        fatigue = 0.0
-    workload = driver.get("workload", "")
-    parts: list[str] = [scenario]
-    if fatigue > _FATIGUE_THRESHOLD:
+    """安全组分层键——使用合成维度，非 LLM 输出。"""
+    d = s.synthesis_dims
+    if not d:
+        return s.scenario_type or "unknown"
+    parts: list[str] = [d["scenario"]]
+    if float(d["fatigue_level"]) > get_fatigue_threshold():
         parts.append("high_fatigue")
-    if workload == "overloaded":
+    if d["workload"] == "overloaded":
         parts.append("overloaded")
     return "+".join(parts)
 

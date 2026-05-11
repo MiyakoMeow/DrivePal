@@ -19,15 +19,13 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-FATIGUE_THRESHOLD: float = get_fatigue_threshold()
-"""与 scenario_synthesizer.FATIGUE_SAFETY_THRESHOLD 同源（同一环境变量），此处用于架构组场景过滤。"""
-
 
 def arch_stratum(s: Scenario) -> str:
-    """架构组分层键——按 scenario × task_type 组合分组，保证覆盖。"""
-    scenario = s.driving_context.get("scenario", "unknown")
-    task_type = getattr(s, "expected_task_type", None) or "unknown"
-    return f"{scenario}:{task_type}"
+    """架构组分层键——使用合成维度。"""
+    d = s.synthesis_dims
+    if not d:
+        return f"{s.scenario_type}:{s.expected_task_type}"
+    return f"{d['scenario']}:{d['task_type']}"
 
 
 async def run_architecture_group(
@@ -156,16 +154,12 @@ async def _aggregate_full_stage_scores(
 
 
 def is_arch_scenario(s: Scenario) -> bool:
-    """判定场景是否属于架构组（排除安全关键场景）。"""
-    scenario = s.driving_context.get("scenario", "")
-    driver = s.driving_context.get("driver", {})
-    try:
-        fatigue = float(driver.get("fatigue_level", 0))
-    except TypeError, ValueError:
-        fatigue = 0.0
-    workload = driver.get("workload", "")
+    """判定场景是否属于架构组——使用合成维度。"""
+    d = s.synthesis_dims
+    if not d:
+        return False
     return (
-        scenario != "highway"
-        and fatigue <= FATIGUE_THRESHOLD
-        and workload != "overloaded"
+        d["scenario"] != "highway"
+        and float(d["fatigue_level"]) <= get_fatigue_threshold()
+        and d["workload"] != "overloaded"
     )
