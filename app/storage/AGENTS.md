@@ -31,12 +31,18 @@ data/
 - **锁机制**：`_LOCK_REGISTRY` 全局字典，每个文件独立 `asyncio.Lock`
 - **列表存储**：TOML 不支持顶层数组，用 `_list` 键包裹
 - **None 处理**：`_clean_for_toml()` 递归将 `None` 转空字符串（含日志警告）
-- **异常**：`AppendError`（非列表调 append）/ `UpdateError`（非字典调 update）
 - **API**：
   - `read()` → T
   - `write(data: T)`
   - `append(item)` — 仅列表存储
   - `update(key, value)` — 仅字典存储
+
+## 错误处理
+
+| 异常类 | 触发条件 |
+|--------|----------|
+| `AppendError` | 非列表存储调用 `append()` |
+| `UpdateError` | 非字典存储调用 `update()` |
 
 ## JSONLinesStore
 

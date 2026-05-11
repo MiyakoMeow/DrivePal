@@ -10,12 +10,12 @@
 |------|------|------|
 | App 核心 | `app/AGENTS.md` | 各子模块索引与概述 |
 | Agent 系统 | `app/agents/AGENTS.md` | Agent工作流、规则引擎、概率推断 |
-| API 层 | `app/api/AGENTS.md` | GraphQL API、服务入口与生命周期 |
-| 记忆系统 | `app/memory/AGENTS.md` | MemoryBank、记忆基础设施、隐私保护 |
-| 模型封装 | `app/models/AGENTS.md` | LLM调用特性 |
+| API 层 | `app/api/AGENTS.md` | GraphQL API、服务入口与生命周期、错误处理 |
+| 记忆系统 | `app/memory/AGENTS.md` | MemoryBank、记忆基础设施、隐私保护、错误处理与阈值 |
+| 模型封装 | `app/models/AGENTS.md` | LLM调用特性、错误处理与阈值 |
 | 模式定义 | `app/schemas/AGENTS.md` | 上下文数据模型 |
-| 数据存储 | `app/storage/AGENTS.md` | TOML/JSONL 存储引擎 |
-| 模型配置 | `config/AGENTS.md` | 模型配置格式、环境变量 |
+| 数据存储 | `app/storage/AGENTS.md` | TOML/JSONL 存储引擎、错误处理 |
+| 模型配置 | `config/AGENTS.md` | 模型配置格式、环境变量、完整配置项 |
 | 测试 | `tests/AGENTS.md` | 测试运行命令、CI 工作流 |
 | 实验 | `experiments/AGENTS.md` | 消融实验设计 |
 | 论文 | `archive/AGENTS.md` | 论文参考文献 |
@@ -99,49 +99,31 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 - **测试**：一测试一事。Given → When → Then。名含场景+期望，描述用中文
 - **设计原则**：单一职责、开闭、依赖倒置、接口隔离、迪米特。OOP 附加里氏替换
 
+## 工作树
+
+`.worktrees/` 用于隔离开发。已在 `.gitignore`，内容不入仓库。
+```
+git worktree add .worktrees/<分支名> -b <分支名>
+```
+
 ## 错误处理模式
 
-项目使用分层异常设计：
+各层异常定义见对应模块文档：
 
-| 层 | 异常类 | 触发条件 |
-|----|--------|----------|
-| GraphQL | `InternalServerError` | 未预期的服务器错误 |
-| GraphQL | `GraphQLInvalidActionError` | feedback action 非 accept/ignore |
-| GraphQL | `GraphQLEventNotFoundError` | 事件 ID 不存在 |
-| 记忆 | `MemoryBankError` → `TransientError`/`FatalError` | MemoryBank 异常基类（三层） |
-| 记忆 | `LLMCallFailedError` | LLM API 调用失败（瞬态，可重试） |
-| 记忆 | `SummarizationEmpty` | LLM 返回空内容（哨兵异常，非错误） |
-| 记忆 | `ConfigError` | 配置错误（永久） |
-| 记忆 | `IndexIntegrityError` | 数据损坏（永久） |
-| 记忆 | `InvalidActionError` | FeedbackData action 校验失败 |
-| 存储 | `AppendError` / `UpdateError` | TOMLStore 类型不匹配 |
-| 模型 | `ProviderNotFoundError` | 引用字符串中 provider 未配置 |
-| 模型 | `ModelGroupNotFoundError` | 引用字符串中 model_group 未配置 |
+- **API 层**：GraphQL 异常 → [app/api/AGENTS.md](app/api/AGENTS.md)
+- **记忆系统**：MemoryBank 分层异常 → [app/memory/AGENTS.md](app/memory/AGENTS.md)
+- **数据存储**：`AppendError` / `UpdateError` → [app/storage/AGENTS.md](app/storage/AGENTS.md)
+- **模型封装**：`ProviderNotFoundError` / `ModelGroupNotFoundError` → [app/models/AGENTS.md](app/models/AGENTS.md)
 
-GraphQL 异常继承 `graphql.error.GraphQLError`，自动转为标准 GraphQL error response。
-其余异常由上层调用方处理，不跨层泄露实现细节。
-
-反馈学习机制见 [app/api/AGENTS.md](app/api/AGENTS.md)。
+原则：异常由上层调用方处理，不跨层泄露实现细节。反馈学习机制见 [app/api/AGENTS.md](app/api/AGENTS.md)。
 
 ## 关键阈值速查
 
-| 阈值 | 值 | 位置 |
-|------|-----|------|
-| SOFT_FORGET_THRESHOLD | 0.3 | memory_bank/config.py |
-| FORGET_INTERVAL_SECONDS | 300 | memory_bank/config.py |
-| FORGETTING_TIME_SCALE | 1 | memory_bank/config.py |
-| EMBEDDING_MIN_SIMILARITY | 0.3 | memory_bank/config.py |
-| COARSE_SEARCH_FACTOR | 4 | memory_bank/config.py |
-| DEFAULT_CHUNK_SIZE | 1500（自适应回退值） | memory_bank/config.py |
-| CHUNK_SIZE_MIN | 200 | memory_bank/config.py |
-| CHUNK_SIZE_MAX | 8192 | memory_bank/config.py |
-| HTTP read timeout | 12h | _http.py |
-| Embedding batch size | 100 | embedding.py |
-| Embedding retry | 3次 | embedding.py |
-| SAVE_INTERVAL_SECONDS | 30 | memory_bank/config.py |
-| LLM_TEMPERATURE (摘要) | 0.3 | summarizer.py |
-| LLM_MAX_TOKENS (摘要) | 400 | summarizer.py |
-| REFERENCE_DATE_OFFSET | 1天 | index.py |
+各模块关键阈值见对应文档：
+
+- **记忆系统**：MemoryBank 阈值（遗忘/检索/摘要/分块）→ [app/memory/AGENTS.md](app/memory/AGENTS.md)
+- **模型封装**：HTTP timeout / embedding 参数 → [app/models/AGENTS.md](app/models/AGENTS.md)
+- **完整环境变量**（含全部 MemoryBank 可配置项）→ [config/AGENTS.md](config/AGENTS.md)
 
 ## Benchmark
 

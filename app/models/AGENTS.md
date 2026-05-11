@@ -23,3 +23,18 @@
 | `types.py` | 基础类型定义（ModelConfig、ProviderConfig 等） |
 | `exceptions.py` | 模型层异常（ProviderNotFoundError、ModelGroupNotFoundError） |
 | `_http.py` | 底层 HTTP 客户端，12h read timeout、连接池管理 |
+
+## 错误处理
+
+| 异常类 | 触发条件 |
+|--------|----------|
+| `ProviderNotFoundError` | 引用字符串中 provider 未配置 |
+| `ModelGroupNotFoundError` | 引用字符串中 model_group 未配置 |
+
+## 关键阈值
+
+| 阈值 | 值 | 位置 |
+|------|-----|------|
+| HTTP read timeout | 12h | `_http.py` |
+| Embedding batch size | 100 | `embedding.py` |
+| Embedding retry | 3 次（指数退避） | `embedding.py` |

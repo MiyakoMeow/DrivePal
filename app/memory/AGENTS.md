@@ -107,6 +107,38 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 - 启动时批量遗忘 → 每次搜索前清理已遗忘条目
 - 无级联删除 summary → 保留所有 summary 更安全
 
+## 错误处理
+
+记忆层异常采用分层设计，`MemoryBankError` 为基类：
+
+| 异常类 | 触发条件 | 性质 |
+|--------|----------|------|
+| `MemoryBankError` → `TransientError` / `FatalError` | MemoryBank 异常基类（三层） | 基类 |
+| `LLMCallFailedError` | LLM API 调用失败 | 瞬态，可重试 |
+| `SummarizationEmpty` | LLM 返回空内容 | 哨兵异常，非错误 |
+| `ConfigError` | 配置错误 | 永久 |
+| `IndexIntegrityError` | 数据损坏 | 永久 |
+| `InvalidActionError` | FeedbackData action 校验失败 | 永久 |
+
+## 关键阈值
+
+| 阈值 | 值 | 位置 |
+|------|-----|------|
+| `SOFT_FORGET_THRESHOLD` | 0.3 | `memory_bank/config.py` |
+| `FORGET_INTERVAL_SECONDS` | 300 | `memory_bank/config.py` |
+| `FORGETTING_TIME_SCALE` | 1 | `memory_bank/config.py` |
+| `EMBEDDING_MIN_SIMILARITY` | 0.3 | `memory_bank/config.py` |
+| `COARSE_SEARCH_FACTOR` | 4 | `memory_bank/config.py` |
+| `DEFAULT_CHUNK_SIZE` | 1500（自适应回退值） | `memory_bank/config.py` |
+| `CHUNK_SIZE_MIN` | 200 | `memory_bank/config.py` |
+| `CHUNK_SIZE_MAX` | 8192 | `memory_bank/config.py` |
+| `SAVE_INTERVAL_SECONDS` | 30 | `memory_bank/config.py` |
+| `LLM_TEMPERATURE` (摘要) | 0.3 | `memory_bank/summarizer.py` |
+| `LLM_MAX_TOKENS` (摘要) | 400 | `memory_bank/summarizer.py` |
+| `REFERENCE_DATE_OFFSET` | 1 天 | `memory_bank/index.py` |
+
+完整配置项及环境变量见 `config/AGENTS.md` 的环境变量表。
+
 ## 记忆模块基础设施
 
 ### MemoryModule 单例
