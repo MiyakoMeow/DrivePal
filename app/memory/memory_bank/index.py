@@ -98,6 +98,7 @@ class FaissIndex:
         self._id_to_meta: dict[int, int] = {}
         self._all_speakers: set[str] = set()
         self._save_lock = asyncio.Lock()
+        self._load_lock = asyncio.Lock()
 
         self._index_type = index_type
         self._ivf_nlist = ivf_nlist
@@ -119,29 +120,62 @@ class FaissIndex:
             LoadResult 含 ok / warnings / recovery_actions。
 
         """
-        if self._index is not None:
-            return LoadResult(ok=True)
         await self._run_sync(lambda: self._data_dir.mkdir(parents=True, exist_ok=True))
-        ip = self._data_dir / "index.faiss"
-        mp = self._data_dir / "metadata.json"
-        ep = self._data_dir / "extra_metadata.json"
+        async with self._load_lock:
+            if self._index is not None:
+                return LoadResult(ok=True)
+            ip = self._data_dir / "index.faiss"
+            mp = self._data_dir / "metadata.json"
+            ep = self._data_dir / "extra_metadata.json"
 
-        if not ip.exists() or not mp.exists():
-            return LoadResult(ok=True)
+            exists = await self._run_sync(ip.exists)
+            if not exists:
+                exists2 = await self._run_sync(mp.exists)
+                if not exists2:
+                    return LoadResult(ok=True)
 
-        # 1. 尝试加载 FAISS 索引
-        idx: faiss.IndexIDMap | None = None
-        try:
-            idx_raw = await self._run_sync(lambda: faiss.read_index(str(ip)))
-            if isinstance(idx_raw, faiss.IndexIDMap):
-                idx = idx_raw
-            else:
-                logger.warning(
-                    "FaissIndex loaded index is not IndexIDMap (type=%s), "
-                    "rebuilding empty index",
-                    type(idx_raw).__name__,
-                )
+            # 1. 尝试加载 FAISS 索引
+            idx: faiss.IndexIDMap | None = None
+            try:
+                idx_raw = await self._run_sync(lambda: faiss.read_index(str(ip)))
+                if isinstance(idx_raw, faiss.IndexIDMap):
+                    idx = idx_raw
+                else:
+                    logger.warning(
+                        "FaissIndex loaded index is not IndexIDMap (type=%s), "
+                        "rebuilding empty index",
+                        type(idx_raw).__name__,
+                    )
+                    bak_path = ip.with_suffix(".faiss.bak")
+                    await self._run_sync(lambda: shutil.copy(str(ip), str(bak_path)))
+                    if mp.exists():
+                        await self._run_sync(
+                            lambda: shutil.copy(
+                                str(mp), str(mp.with_suffix(".json.bak"))
+                            )
+                        )
+                    if ep.exists():
+                        await self._run_sync(
+                            lambda: shutil.copy(
+                                str(ep), str(ep.with_suffix(".json.bak"))
+                            )
+                        )
+                    await self._run_sync(lambda: ip.unlink(missing_ok=True))
+                    await self._run_sync(lambda: mp.unlink(missing_ok=True))
+                    await self._run_sync(lambda: ep.unlink(missing_ok=True))
+                    return LoadResult(
+                        ok=False,
+                        warnings=[
+                            f"index.faiss is not IndexIDMap (type={type(idx_raw).__name__})"
+                        ],
+                        recovery_actions=[
+                            f"index.faiss backed up to {bak_path}. "
+                            "Rebuilding empty index — re-run data ingestion to recover."
+                        ],
+                    )
+            except (OSError, RuntimeError) as exc:
                 bak_path = ip.with_suffix(".faiss.bak")
+                logger.warning("FaissIndex index.faiss corrupted, backing up: %s", exc)
                 await self._run_sync(lambda: shutil.copy(str(ip), str(bak_path)))
                 if mp.exists():
                     await self._run_sync(
@@ -156,154 +190,131 @@ class FaissIndex:
                 await self._run_sync(lambda: ep.unlink(missing_ok=True))
                 return LoadResult(
                     ok=False,
-                    warnings=[
-                        f"index.faiss is not IndexIDMap (type={type(idx_raw).__name__})"
-                    ],
+                    warnings=[f"index.faiss corrupted: {exc}"],
                     recovery_actions=[
                         f"index.faiss backed up to {bak_path}. "
                         "Rebuilding empty index — re-run data ingestion to recover."
                     ],
                 )
-        except (OSError, RuntimeError) as exc:
-            bak_path = ip.with_suffix(".faiss.bak")
-            logger.warning("FaissIndex index.faiss corrupted, backing up: %s", exc)
-            await self._run_sync(lambda: shutil.copy(str(ip), str(bak_path)))
-            if mp.exists():
-                await self._run_sync(
-                    lambda: shutil.copy(str(mp), str(mp.with_suffix(".json.bak")))
-                )
-            if ep.exists():
-                await self._run_sync(
-                    lambda: shutil.copy(str(ep), str(ep.with_suffix(".json.bak")))
-                )
-            await self._run_sync(lambda: ip.unlink(missing_ok=True))
-            await self._run_sync(lambda: mp.unlink(missing_ok=True))
-            await self._run_sync(lambda: ep.unlink(missing_ok=True))
-            return LoadResult(
-                ok=False,
-                warnings=[f"index.faiss corrupted: {exc}"],
-                recovery_actions=[
-                    f"index.faiss backed up to {bak_path}. "
-                    "Rebuilding empty index — re-run data ingestion to recover."
-                ],
-            )
 
-        # 防御：加载路径不变量——idx 到达此处必定非 None
-        # （非 IndexIDMap 或异常已在前面提前返回）
-        if idx is None:
-            msg = (
-                "FaissIndex.load: internal invariant violated — "
-                "idx is None after successful read_index"
-            )
-            raise RuntimeError(msg)
+            # 防御：加载路径不变量——idx 到达此处必定非 None
+            # （非 IndexIDMap 或异常已在前面提前返回）
+            if idx is None:
+                msg = (
+                    "FaissIndex.load: internal invariant violated — "
+                    "idx is None after successful read_index"
+                )
+                raise RuntimeError(msg)
 
-        # 2. 尝试加载 metadata
-        meta: list[dict] | None = None
-        meta_warnings: list[str] = []
-        try:
-            raw_meta_text = await self._run_sync(mp.read_text)
-            raw_meta = await self._run_sync(lambda: json.loads(raw_meta_text))
-            meta = _validate_metadata_structure(raw_meta)
-            # 校验 count
-            if idx.ntotal != len(meta):
+            # 2. 尝试加载 metadata
+            meta: list[dict] | None = None
+            meta_warnings: list[str] = []
+            try:
+                raw_meta_text = await self._run_sync(mp.read_text)
+                raw_meta = await self._run_sync(lambda: json.loads(raw_meta_text))
+                meta = _validate_metadata_structure(raw_meta)
+                # 校验 count
+                if idx.ntotal != len(meta):
+                    logger.warning(
+                        "FaissIndex count mismatch: ntotal=%d, metadata=%d. "
+                        "Rebuilding metadata skeleton from index.",
+                        idx.ntotal,
+                        len(meta),
+                    )
+                    # 以 index 为权威——为缺失 ID 补骨架。
+                    # 从 FAISS IndexIDMap.id_map 提取实际标签（而非假设连续 ID）。
+                    orig_meta_len = len(meta)
+                    existing_ids = {m["faiss_id"] for m in meta}
+                    try:
+                        id_array = faiss.vector_to_array(idx.id_map)
+                        actual_ids: list[int] = id_array.astype(int).tolist()
+                    except AttributeError, TypeError, ValueError:
+                        # 降级：无法提取实际 ID，从 0 连续分配
+                        actual_ids = list(range(idx.ntotal))
+                        meta_warnings.append(
+                            f"Cannot extract FAISS id_map — assuming contiguous IDs "
+                            f"(0..{idx.ntotal - 1}). Metadata may be misaligned."
+                        )
+                    for fid in actual_ids:
+                        if fid not in existing_ids:
+                            meta.append(
+                                {
+                                    "faiss_id": fid,
+                                    "text": "",
+                                    "timestamp": "",
+                                    "memory_strength": 1,
+                                    "last_recall_date": "",
+                                    "corrupted": True,
+                                }
+                            )
+                    meta.sort(key=lambda m: m["faiss_id"])
+                    meta_warnings.append(
+                        f"count mismatch ({orig_meta_len} vs {idx.ntotal}). "
+                        "Added skeleton entries for missing metadata."
+                    )
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                # metadata 损坏但 index 正常——从 index 重建骨架
                 logger.warning(
-                    "FaissIndex count mismatch: ntotal=%d, metadata=%d. "
-                    "Rebuilding metadata skeleton from index.",
-                    idx.ntotal,
-                    len(meta),
+                    "FaissIndex metadata.json corrupted: %s. "
+                    "Rebuilding metadata skeleton from FAISS index.",
+                    exc,
                 )
-                # 以 index 为权威——为缺失 ID 补骨架。
-                # 从 FAISS IndexIDMap.id_map 提取实际标签（而非假设连续 ID）。
-                orig_meta_len = len(meta)
-                existing_ids = {m["faiss_id"] for m in meta}
+                # 提取实际 FAISS 标签（非假设连续 ID）
                 try:
                     id_array = faiss.vector_to_array(idx.id_map)
                     actual_ids: list[int] = id_array.astype(int).tolist()
                 except AttributeError, TypeError, ValueError:
-                    # 降级：无法提取实际 ID，从 0 连续分配
                     actual_ids = list(range(idx.ntotal))
-                    meta_warnings.append(
-                        f"Cannot extract FAISS id_map — assuming contiguous IDs "
-                        f"(0..{idx.ntotal - 1}). Metadata may be misaligned."
-                    )
-                for fid in actual_ids:
-                    if fid not in existing_ids:
-                        meta.append(
-                            {
-                                "faiss_id": fid,
-                                "text": "",
-                                "timestamp": "",
-                                "memory_strength": 1,
-                                "last_recall_date": "",
-                                "corrupted": True,
-                            }
-                        )
-                meta.sort(key=lambda m: m["faiss_id"])
+                meta = [
+                    {
+                        "faiss_id": fid,
+                        "text": "",
+                        "timestamp": "",
+                        "memory_strength": 1,
+                        "last_recall_date": "",
+                        "corrupted": True,
+                    }
+                    for fid in actual_ids
+                ]
                 meta_warnings.append(
-                    f"count mismatch ({orig_meta_len} vs {idx.ntotal}). "
-                    "Added skeleton entries for missing metadata."
-                )
-        except (json.JSONDecodeError, TypeError, ValueError) as exc:
-            # metadata 损坏但 index 正常——从 index 重建骨架
-            logger.warning(
-                "FaissIndex metadata.json corrupted: %s. "
-                "Rebuilding metadata skeleton from FAISS index.",
-                exc,
-            )
-            # 提取实际 FAISS 标签（非假设连续 ID）
-            try:
-                id_array = faiss.vector_to_array(idx.id_map)
-                actual_ids: list[int] = id_array.astype(int).tolist()
-            except AttributeError, TypeError, ValueError:
-                actual_ids = list(range(idx.ntotal))
-            meta = [
-                {
-                    "faiss_id": fid,
-                    "text": "",
-                    "timestamp": "",
-                    "memory_strength": 1,
-                    "last_recall_date": "",
-                    "corrupted": True,
-                }
-                for fid in actual_ids
-            ]
-            meta_warnings.append(
-                f"metadata.json corrupted ({exc}). "
-                f"Rebuilt {len(meta)} skeleton entries from FAISS index. "
-                "Search results will lack text content — re-ingest data to recover."
-            )
-
-        if meta is None:
-            return LoadResult(ok=True)
-
-        self._index = idx
-        self._dim = idx.d
-        self._metadata = meta
-        self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
-        self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
-        self._rebuild_speakers_cache()
-
-        # 3. 加载 extra_metadata（损坏仅警告，不阻塞）
-        extra_recovery: list[str] = []
-        if ep.exists():
-            try:
-                raw_extra = await self._run_sync(ep.read_text)
-                e: object = await self._run_sync(lambda: json.loads(raw_extra))
-                self._extra = e if isinstance(e, dict) else {}
-            except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
-                logger.warning("FaissIndex extra_metadata corrupted, ignoring: %s", exc)
-                self._extra = {}
-                await self._run_sync(lambda: ep.unlink(missing_ok=True))
-                extra_recovery.append(
-                    "extra_metadata.json corrupted — deleted. "
-                    "Summaries and personalities will be regenerated on next write."
+                    f"metadata.json corrupted ({exc}). "
+                    f"Rebuilt {len(meta)} skeleton entries from FAISS index. "
+                    "Search results will lack text content — re-ingest data to recover."
                 )
 
-        return LoadResult(
-            ok=True,
-            warnings=meta_warnings,
-            recovery_actions=extra_recovery,
-        )
+            if meta is None:
+                return LoadResult(ok=True)
+
+            self._index = idx
+            self._dim = idx.d
+            self._metadata = meta
+            self._next_id = (max(m["faiss_id"] for m in meta) + 1) if meta else 0
+            self._id_to_meta = {m["faiss_id"]: i for i, m in enumerate(meta)}
+            self._rebuild_speakers_cache()
+
+            # 3. 加载 extra_metadata（损坏仅警告，不阻塞）
+            extra_recovery: list[str] = []
+            if ep.exists():
+                try:
+                    raw_extra = await self._run_sync(ep.read_text)
+                    e: object = await self._run_sync(lambda: json.loads(raw_extra))
+                    self._extra = e if isinstance(e, dict) else {}
+                except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+                    logger.warning(
+                        "FaissIndex extra_metadata corrupted, ignoring: %s", exc
+                    )
+                    self._extra = {}
+                    await self._run_sync(lambda: ep.unlink(missing_ok=True))
+                    extra_recovery.append(
+                        "extra_metadata.json corrupted — deleted. "
+                        "Summaries and personalities will be regenerated on next write."
+                    )
+
+            return LoadResult(
+                ok=True,
+                warnings=meta_warnings,
+                recovery_actions=extra_recovery,
+            )
 
     async def save(self) -> None:
         """将索引与元数据持久化到磁盘（协程安全——内部持有 asyncio.Lock）。"""

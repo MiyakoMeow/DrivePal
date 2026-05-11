@@ -716,10 +716,14 @@ class AgentWorkflow:
             state.update(updates)
             yield {"event": "context_done", "data": {"context": state["context"]}}
         except Exception as e:
+            logger.warning(
+                "run_stream %s stage failed: %s", "context", e, exc_info=True
+            )
             yield {
                 "event": "error",
                 "data": {"code": "CONTEXT_FAILED", "message": str(e)},
             }
+            self._log_conversation_turn(state, session_id, user_input)
             return
 
         # Stage 2: Task
@@ -729,7 +733,9 @@ class AgentWorkflow:
             state.update(updates)
             yield {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
         except Exception as e:
+            logger.warning("run_stream %s stage failed: %s", "task", e, exc_info=True)
             yield {"event": "error", "data": {"code": "TASK_FAILED", "message": str(e)}}
+            self._log_conversation_turn(state, session_id, user_input)
             return
 
         # Stage 3: Strategy
@@ -743,10 +749,14 @@ class AgentWorkflow:
                 "data": {"should_remind": decision.get("should_remind")},
             }
         except Exception as e:
+            logger.warning(
+                "run_stream %s stage failed: %s", "strategy", e, exc_info=True
+            )
             yield {
                 "event": "error",
                 "data": {"code": "STRATEGY_FAILED", "message": str(e)},
             }
+            self._log_conversation_turn(state, session_id, user_input)
             return
 
         # Stage 4: Execution
@@ -757,10 +767,14 @@ class AgentWorkflow:
             done_data = self._build_done_data(state, session_id)
             yield {"event": "done", "data": done_data}
         except Exception as e:
+            logger.warning(
+                "run_stream %s stage failed: %s", "execution", e, exc_info=True
+            )
             yield {
                 "event": "error",
                 "data": {"code": "EXECUTION_FAILED", "message": str(e)},
             }
+            self._log_conversation_turn(state, session_id, user_input)
             return
 
         self._log_conversation_turn(state, session_id, user_input)
