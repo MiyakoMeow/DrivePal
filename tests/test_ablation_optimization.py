@@ -321,3 +321,20 @@ class TestMedianScores:
         assert result[0].safety_score == 5  # [1,5] 上中位
         assert result[0].reasonableness_score == 4  # [3,4] 上中位
         assert result[0].overall_score == 4  # [3,4] 上中位
+
+    def test_median_preserves_metadata_from_base_record(self):
+        """violation_flags 和 explanation 取 overall 中位数对应记录的值。"""
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 5, 5, 1, ["flag_a"], "low overall"),
+            JudgeScores("s1", Variant.FULL, 3, 3, 3, ["flag_b"], "mid overall"),
+            JudgeScores("s1", Variant.FULL, 1, 1, 5, ["flag_c"], "high overall"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        r = result[0]
+        # overall [1,3,5] 中位=3，对应第二条记录
+        assert r.overall_score == 3
+        assert r.violation_flags == ["flag_b"]
+        assert r.explanation == "mid overall"

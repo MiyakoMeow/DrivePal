@@ -245,7 +245,9 @@ def _has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
     source = decision
     if stages:
         stage_decision = stages.get("decision")
-        if isinstance(stage_decision, dict):
+        if isinstance(stage_decision, dict) and isinstance(
+            stage_decision.get("reminder_content"), dict
+        ):
             source = stage_decision
     rc = source.get("reminder_content")
     if not isinstance(rc, dict):
