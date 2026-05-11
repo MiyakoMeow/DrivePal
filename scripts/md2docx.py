@@ -266,6 +266,7 @@ def _add_heading(doc: Document, text: str, level: int) -> None:
         spacing=LINE_SPACING,
     )
     p.paragraph_format.space_after = spacing_after.get(level, Pt(6))
+    # 学校提交格式要求每章另起一页
     if level == 2:
         p.paragraph_format.page_break_before = True
 
@@ -383,7 +384,7 @@ def _add_code_block(doc: Document, code: str) -> None:
 
 
 def _render_table(doc: Document, rows: list[list[str]]) -> None:
-    """将二维数据渲染为三线表。"""
+    """将二维数据渲染为三线表。首行（表头）加粗。"""
     if not rows or not rows[0]:
         return
     table = doc.add_table(rows=len(rows), cols=len(rows[0]))
@@ -391,13 +392,14 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
 
     for i, row_data in enumerate(rows):
         row = table.rows[i]
+        is_header = (i == 0)  # 首行为表头
         for j, cell_text in enumerate(row_data):
             if j >= len(row.cells):
                 break  # 防御：列数不一致时截断
             cell = row.cells[j]
             cell.text = ""
             p = cell.paragraphs[0]
-            _add_run(p, cell_text, font_size=SIZE_CODE)
+            _add_run(p, cell_text, font_size=SIZE_CODE, bold=is_header)
             p.paragraph_format.line_spacing = 1.0
 
     # 三线表边框

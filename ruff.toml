@@ -17,7 +17,7 @@ ignore = [
     "RUF002",  # docstring全角字符检查（中文项目无需修改）
     "RUF003",  # 注释全角字符检查（中文项目无需修改）
 ]
-exclude = [".agents/**", "scripts/**"]
+exclude = [".agents/**"]
 
 [lint.per-file-ignores]
 "app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
@@ -164,4 +164,4 @@ exclude = [".agents/**", "scripts/**"]
 ]
 
 [format]
-exclude = [".agents/**", "scripts/**"]
+exclude = [".agents/**"]
