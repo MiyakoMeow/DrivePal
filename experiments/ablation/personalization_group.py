@@ -227,6 +227,9 @@ async def update_feedback_weight(
     """
     event_type = task_type
     if not event_type:
+        logger.debug(
+            "task_type 未从 stages 提取（event_id=%s），回退 MemoryBank 查询", event_id
+        )
         mm = get_memory_module()
         mode = MemoryMode.MEMORY_BANK
         event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
@@ -349,6 +352,7 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
                 first_stable_round = i - 2
         else:
             consecutive = 0
+            first_stable_round = -1  # 偏离终值后需重新收敛
 
     if first_stable_round < 0:
         return -1.0  # 未收敛

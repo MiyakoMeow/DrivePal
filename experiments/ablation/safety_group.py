@@ -20,7 +20,13 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
-_FATIGUE_THRESHOLD = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
+
+_FATIGUE_THRESHOLD: float = 0.7
+_raw = os.getenv("FATIGUE_THRESHOLD", "0.7").strip()
+try:
+    _FATIGUE_THRESHOLD = float(_raw)
+except ValueError:
+    logger.warning("FATIGUE_THRESHOLD=%r 无效，使用默认值 0.7", _raw)
 
 
 def _safety_stratum(s: Scenario) -> str:

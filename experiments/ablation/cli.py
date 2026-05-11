@@ -199,6 +199,10 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             metrics=metrics,
         )
         print(f"{group_name} 组重新评分完成: {len(scores)} 评分")
+        # 检查 Judge 退化并给出控制台警告
+        degradation = metrics.get("_judge_degradation", {})
+        if degradation.get("degraded"):
+            print(f"  ⚠ {degradation.get('warning', 'Judge 评分退化')}")
 
     await render_report(all_group_results, run_dir)
 
@@ -241,7 +245,12 @@ def _prepare_group_scenarios(
         used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
+        # 先按 _is_arch_scenario 预过滤池，再分层采样。
+        # arch_pool 中的场景已排除 highway / 高疲劳 / 过载，
+        # 故 safety_only=False 虽语义冗余但不会误选安全关键场景。
         arch_pool = [s for s in all_scenarios if _is_arch_scenario(s)]
+        # exclude_ids 还会进一步减少可用数（安全性组已占场景），
+        # 此处仅报告预过滤池大小作为预警下限。
         if len(arch_pool) < 50:
             logger.warning(
                 "架构组可用场景仅 %d（不足 50），将使用所有可用场景。"
