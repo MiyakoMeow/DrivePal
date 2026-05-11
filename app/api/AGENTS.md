@@ -4,29 +4,37 @@
 
 **Query:**
 ```graphql
-history(limit, memoryMode): [MemoryEvent]
-scenarioPresets: [ScenarioPreset]
+history(limit, memoryMode, currentUser): [MemoryEvent]
+scenarioPresets(currentUser): [ScenarioPreset]
+experimentResults: ExperimentResults
 ```
 
 **Mutation:**
 ```graphql
-processQuery(input: {query, memoryMode, context, currentUser}): {result, eventId, stages}
-submitFeedback(input: {eventId, action, memoryMode, currentUser}): {status}
+processQuery(input: {query, memoryMode, context, currentUser, sessionId}): {result, eventId, stages}
+submitFeedback(input: {eventId, action, memoryMode, currentUser, modifiedContent}): {status}
 saveScenarioPreset(input): ScenarioPreset
-deleteScenarioPreset(id): Boolean
+deleteScenarioPreset(presetId, currentUser): Boolean
 exportData(currentUser): ExportDataResult
 deleteAllData(currentUser): Boolean
+pollPendingReminders(currentUser, contextInput): PollResult
+cancelPendingReminder(reminderId, currentUser): Boolean
+getPendingReminders(currentUser): [PendingReminderGQL]
+closeSession(sessionId, currentUser): Boolean
 ```
 
 反馈学习：submitFeedback 接受时对应类型权重 +0.1（上限 1.0），忽略时 -0.1（下限 0.1），不存在类型初始 0.5。权重存入 `strategies.toml` 的 `reminder_weights`，Strategy Agent prompt 中注入偏好高权重类型。
 
 **枚举：** `MemoryModeEnum`, `EmotionEnum`, `WorkloadEnum`, `CongestionLevelEnum`, `ScenarioEnum`
 
-**输入类型（9个）：** `GeoLocationInput`, `DriverStateInput`, `SpatioTemporalContextInput`, `TrafficConditionInput`, `DrivingContextInput`, `ProcessQueryInput`, `FeedbackInput`, `ScenarioPresetInput`, `DeleteDataInput`
+**输入类型（8个）：** `GeoLocationInput`, `DriverStateInput`, `SpatioTemporalContextInput`, `TrafficConditionInput`, `DrivingContextInput`, `ProcessQueryInput`, `FeedbackInput`, `ScenarioPresetInput`
 
-**输出类型（11个）：** `GeoLocationGQL`, `DriverStateGQL`, `TrafficConditionGQL`, `SpatioTemporalContextGQL`, `DrivingContextGQL`, `WorkflowStagesGQL`, `ProcessQueryResult`, `MemoryEventGQL`, `ScenarioPresetGQL`, `FeedbackResult`, `ExportDataResult`
+**输出类型（16个）：** `GeoLocationGQL`, `DriverStateGQL`, `TrafficConditionGQL`, `SpatioTemporalContextGQL`, `DrivingContextGQL`, `WorkflowStagesGQL`, `ProcessQueryResult`, `MemoryEventGQL`, `ScenarioPresetGQL`, `FeedbackResult`, `ExportDataResult`, `ExperimentResult`, `ExperimentResults`, `PendingReminderGQL`, `TriggeredReminderGQL`, `PollResult`
 
 **自定义标量：** `JSON`（WorkflowStages 各阶段输出）
+
+**SSE 流式端点：**
+- `POST /query/stream` — SSE 流式返回工作流各阶段结果，逐 event 推送（`event: stage_start/context_done/task_done/decision/done/error`，其中 stage_start 的 data.stage 含 context/task/strategy/execution），`Content-Type: text/event-stream`
 
 **错误类：**
 - `InternalServerError` — 内部服务器错误
@@ -42,8 +50,8 @@ deleteAllData(currentUser): Boolean
 **入口：** `uv run uvicorn app.api.main:app`
 
 **Lifespan 事件：**
-- **启动：** `init_storage()` 初始化数据目录（首次运行时迁移旧平铺结构至 `data/users/default/`）
-- **关闭：** `MemoryModule.close()` 关闭 MemoryBank（FAISS 索引落盘 + 后台任务取消等待）
+- **启动：** `init_storage()` 初始化数据目录（首次运行时迁移旧平铺结构至 `data/users/default/`）；启动 `_periodic_cleanup` 后台任务每 300s 清理过期会话
+- **关闭：** `MemoryModule.close()` 关闭 MemoryBank（FAISS 索引落盘 + 后台任务取消等待）；`close_client_cache()` 关闭 Chat 客户端缓存
 
 **中间件：** CORS（当前 `allow_origins=["*"]`，开发用）
 

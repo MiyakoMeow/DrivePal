@@ -22,7 +22,7 @@ data/
 └── experiment_benchmark.toml  # 实验对比数据（全局共享）
 ```
 
-旧平铺结构（`data/*.jsonl`）通过 `init_storage()` 中的 `_migrate_legacy()` 幂等迁移至 `data/users/default/`。
+旧平铺结构（`data/*.{jsonl,toml}`）通过 `init_storage()` 调用的模块级函数 `_migrate_legacy()` 幂等迁移至 `data/users/default/`。
 
 ## TOMLStore
 
@@ -38,6 +38,27 @@ data/
   - `append(item)` — 仅列表存储
   - `update(key, value)` — 仅字典存储
 
-## JSONLStore
+## JSONLinesStore
 
-`app/storage/jsonl_store.py`。JSONL 追加写，用于 events/interactions/feedback/experiment_results 等高频写入数据。
+`app/storage/jsonl_store.py`。JSONL 追加写，用于 events/interactions/feedback 等高频写入数据。
+
+- **API**：
+  - `append(obj: dict)` — 追加一行
+  - `read_all()` → `list[dict]` — 读取所有行
+  - `count()` → `int` — 文件行数（近似记录数）
+
+## init_data
+
+`app/storage/init_data.py`。数据目录初始化与默认数据填充。
+
+- `init_storage()` — 调用 `_migrate_legacy()` + `init_user_dir("default")`（lifespan 使用）
+- `init_user_dir(user_id)` → `Path` — 初始化指定用户的完整目录结构（3 个 jsonl + 4 个 toml 文件）并写入默认值
+- `_migrate_legacy()` → `bool` — 调用 `_migrate_text_files()` + `_migrate_memorybank()`，将平铺旧结构迁移至 `data/users/default/`。幂等
+- `_migrate_text_files(default_dir, old_root)` → `bool` — 迁移 3 个 jsonl + 4 个 toml 文件至 default_dir
+- `_migrate_memorybank(default_dir, old_root)` — 迁移 `data/memorybank/` 和 `data/user_*/` 目录至 `data/users/{user_id}/` 结构
+
+## experiment_store
+
+`app/storage/experiment_store.py`。实验基准数据只读存储。通过 TOML 文件读取，无写入接口。
+
+- `read_benchmark()` → `dict[str, Any]` — 读取 `experiment_benchmark.toml`，不存在返空 dict
