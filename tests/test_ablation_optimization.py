@@ -233,3 +233,29 @@ class TestBuildStages:
 
         with pytest.raises(ValueError, match="≥4"):
             _build_stages(3)
+
+
+class TestFormatRulesForJudge:
+    """Judge 规则动态生成."""
+
+    def test_generates_rule_descriptions(self):
+        from app.agents.rules import SAFETY_RULES
+        from experiments.ablation.judge import format_rules_for_judge
+
+        text = format_rules_for_judge(SAFETY_RULES)
+        assert "规则1" in text
+        assert "priority=" in text
+        assert "fatigue" in text.lower()
+        assert "highway" in text.lower()
+
+    def test_empty_rules_returns_empty(self):
+        from experiments.ablation.judge import format_rules_for_judge
+
+        assert format_rules_for_judge([]) == ""
+
+    def test_rule_count_matches_safety_rules(self):
+        from app.agents.rules import SAFETY_RULES
+        from experiments.ablation.judge import format_rules_for_judge
+
+        text = format_rules_for_judge(SAFETY_RULES)
+        assert text.count("规则") == len(SAFETY_RULES)
