@@ -563,11 +563,16 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
             cell = row.cells[j]
             cell.text = ""
             p = cell.paragraphs[0]
-            _add_run(p, cell_text, font_size=SIZE_CODE, bold=is_header)
+            # 剥离表格单元格内 Markdown 标记符（粗斜体/代码/引用等）
+            plain = _extract_plain_text(cell_text)
+            _add_run(p, plain, font_size=SIZE_CODE, bold=is_header)
             p.paragraph_format.line_spacing = 1.0
 
     tbl = table._tbl
-    tblPr = tbl.tblPr if tbl.tblPr is not None else tbl.makeelement(qn("w:tblPr"), {})
+    tblPr = tbl.tblPr
+    if tblPr is None:
+        tblPr = tbl.makeelement(qn("w:tblPr"), {})
+        tbl.insert(0, tblPr)  # w:tblPr 须为 w:tbl 首个子元素
     # 移除样式可能预设的 tblBorders，避免重复元素
     for existing in tblPr.findall(qn("w:tblBorders")):
         tblPr.remove(existing)
