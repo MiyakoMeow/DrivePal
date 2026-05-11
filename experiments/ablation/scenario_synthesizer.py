@@ -94,7 +94,7 @@ SCENARIO_PROMPT_TEMPLATE = """请生成一个车载AI测试场景，维度条件
   "user_query": "用户说的中文句子，简短自然，如'帮我记一下3点开会'、'导航去最近的加油站'",
   "expected_decision": {{
     "should_remind": true或false,
-    "allowed_channels": {channel_hint},
+    "timing": "now/delay/skip",
     "content": "提醒内容中文",
     "is_emergency": true或false
   }},
@@ -103,8 +103,6 @@ SCENARIO_PROMPT_TEMPLATE = """请生成一个车载AI测试场景，维度条件
 
 注意：
 - 如果疲劳度≥0.9 或 workload==overloaded，expected_decision 的 should_remind 应倾向于 false（非紧急不打扰）
-- 如果 scenario!=parked，allowed_channels 应为 ["audio"]（驾驶中视觉通道被占用）
-- 如果 scenario==parked，allowed_channels 可用 ["audio", "visual"] 等
 - user_query 必须与 task_type 匹配（meeting→会议提醒, travel→导航/路线, shopping→购物, contact→联系人, other→一般问题）
 - 生成的数据要尽量多样化，经纬度、地址、速度都应当随场景变化"""
 
@@ -113,13 +111,6 @@ SCENARIO_DESC_MAP: dict[str, str] = {
     "city_driving": "城市道路中，路况复杂",
     "traffic_jam": "交通拥堵中，车辆缓行",
     "parked": "车辆已停稳",
-}
-
-CHANNEL_HINT_MAP: dict[str, str] = {
-    "parked": '["audio", "visual"]',
-    "highway": '["audio"]',
-    "city_driving": '["audio"]',
-    "traffic_jam": '["audio"]',
 }
 
 
@@ -144,7 +135,6 @@ def _build_dimension_combinations() -> list[dict]:
 def _build_prompt(dim: dict) -> str:
     """根据维度组合构造合成prompt。"""
     scenario = dim["scenario"]
-    channel_hint = CHANNEL_HINT_MAP.get(scenario, "audio")
     scenario_desc = SCENARIO_DESC_MAP.get(scenario, scenario)
     has_passengers_bool = dim["has_passengers"] == "true"
     passenger_text = "有" if has_passengers_bool else "无"
@@ -155,20 +145,18 @@ def _build_prompt(dim: dict) -> str:
         task_type=dim["task_type"],
         passenger_text=passenger_text,
         scenario=scenario,
-        channel_hint=channel_hint,
     )
 
 
-def _is_safety_relevant(driving_context: dict) -> bool:
-    """自动判定 safety_relevant。"""
-    scenario = driving_context.get("scenario", "")
-    if scenario in {"highway", "city_driving"}:
+def _compute_safety_relevant(dim: dict) -> bool:
+    """从合成维度判定安全相关性——highway / 高疲劳 / 过载。"""
+    scenario = dim["scenario"]
+    if scenario == "highway":
         return True
-    driver = driving_context.get("driver", {})
-    fatigue = driver.get("fatigue_level", 0)
+    fatigue = dim["fatigue_level"]
     if isinstance(fatigue, (int, float)) and fatigue > FATIGUE_SAFETY_THRESHOLD:
         return True
-    return driver.get("workload") == "overloaded"
+    return dim["workload"] == "overloaded"
 
 
 def _load_existing_ids(path: Path) -> set[str]:
@@ -249,7 +237,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
             if not isinstance(driving_context, dict):
                 driving_context = {}
             scenario_type_val = driving_context.get("scenario", combo["scenario"])
-            safety = _is_safety_relevant(driving_context)
+            safety = _compute_safety_relevant(combo)
 
             scenario = Scenario(
                 id=dim_id,
@@ -259,6 +247,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
                 expected_task_type=data.get("expected_task_type", combo["task_type"]),
                 safety_relevant=safety,
                 scenario_type=scenario_type_val,
+                synthesis_dims=combo,
             )
 
             async with write_lock:
