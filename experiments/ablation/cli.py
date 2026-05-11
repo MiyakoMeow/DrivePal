@@ -215,7 +215,11 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                         variant=variant,
                         decision=d.get("decision", {}),
                         result_text=d.get("result_text", ""),
-                        event_id=d.get("event_id"),
+                        event_id=(
+                            d.get("event_id")
+                            if isinstance(d.get("event_id"), (str, type(None)))
+                            else None
+                        ),
                         stages=d.get("stages", {}),
                         latency_ms=d.get("latency_ms", 0),
                         modifications=d.get("modifications", []),
@@ -225,6 +229,53 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
             except json.JSONDecodeError, KeyError, ValueError:
                 logger.warning("跳过无效行: %s", stripped[:80])
     return results
+
+
+def _prepare_group_scenarios(
+    all_scenarios: list[Scenario],
+    groups_to_run: list[str],
+    *,
+    seed: int,
+) -> dict[str, list[Scenario]]:
+    """预采样：组间互斥 + 分层，避免同一场景进入多组实验。"""
+    used_ids: set[str] = set()
+    group_scenarios: dict[str, list[Scenario]] = {}
+
+    if "safety" in groups_to_run:
+        group_scenarios["safety"] = sample_scenarios(
+            all_scenarios,
+            50,
+            safety_only=True,
+            stratify_key=_safety_stratum,
+            min_per_stratum=2,
+            seed=seed,
+        )
+        used_ids |= {s.id for s in group_scenarios["safety"]}
+
+    if "architecture" in groups_to_run:
+        group_scenarios["architecture"] = sample_scenarios(
+            all_scenarios,
+            50,
+            safety_only=False,
+            exclude_ids=used_ids,
+            stratify_key=_arch_stratum,
+            min_per_stratum=1,
+            seed=seed + 1,
+        )
+        used_ids |= {s.id for s in group_scenarios["architecture"]}
+
+    if "personalization" in groups_to_run:
+        group_scenarios["personalization"] = sample_scenarios(
+            all_scenarios,
+            20,
+            safety_only=False,
+            exclude_ids=used_ids,
+            stratify_key=_pers_stratum,
+            min_per_stratum=2,
+            seed=seed + 2,
+        )
+
+    return group_scenarios
 
 
 async def _run_safety_experiment(
@@ -355,43 +406,9 @@ async def main(argv: list[str] | None = None) -> None:
 
         await write_config(run_dir / "config.json", args)
 
-        # 预采样：组间互斥 + 分层，避免同一场景进入多组实验
-        used_ids: set[str] = set()
-        group_scenarios: dict[str, list[Scenario]] = {}
-
-        if "safety" in groups_to_run:
-            group_scenarios["safety"] = sample_scenarios(
-                all_scenarios,
-                50,
-                safety_only=True,
-                stratify_key=_safety_stratum,
-                min_per_stratum=2,
-                seed=args.seed,
-            )
-            used_ids |= {s.id for s in group_scenarios["safety"]}
-
-        if "architecture" in groups_to_run:
-            group_scenarios["architecture"] = sample_scenarios(
-                all_scenarios,
-                50,
-                safety_only=False,
-                exclude_ids=used_ids,
-                stratify_key=_arch_stratum,
-                min_per_stratum=1,
-                seed=args.seed + 1,
-            )
-            used_ids |= {s.id for s in group_scenarios["architecture"]}
-
-        if "personalization" in groups_to_run:
-            group_scenarios["personalization"] = sample_scenarios(
-                all_scenarios,
-                20,
-                safety_only=False,
-                exclude_ids=used_ids,
-                stratify_key=_pers_stratum,
-                min_per_stratum=2,
-                seed=args.seed + 2,
-            )
+        group_scenarios = _prepare_group_scenarios(
+            all_scenarios, groups_to_run, seed=args.seed
+        )
 
         all_group_results: dict[str, GroupResult] = {}
         failures: list[str] = []

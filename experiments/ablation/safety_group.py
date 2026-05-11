@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
-import os
 from pathlib import Path
+
+from app.agents.rules import _get_fatigue_threshold
 
 from ._io import dump_variant_results_jsonl
 from .ablation_runner import AblationRunner
@@ -19,7 +20,7 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
-_FATIGUE_THRESHOLD = float(os.getenv("FATIGUE_THRESHOLD", "0.7"))
+_FATIGUE_THRESHOLD = _get_fatigue_threshold()
 
 
 def _safety_stratum(s: Scenario) -> str:

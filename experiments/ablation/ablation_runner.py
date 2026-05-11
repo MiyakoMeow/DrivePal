@@ -187,12 +187,12 @@ class AblationRunner:
             async with sem:
                 uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
                 try:
-                    vr = await asyncio.wait_for(
-                        self.run_variant(scenario, variant, user_id=uid),
-                        timeout=300,
-                    )
+                    async with asyncio.timeout(300):
+                        vr = await self.run_variant(
+                            scenario, variant, user_id=uid
+                        )
                 except TimeoutError:
-                    logger.error(
+                    logger.warning(
                         "Variant timeout after 5min: %s %s", scenario.id, variant.value
                     )
                     raise
@@ -213,7 +213,7 @@ class AblationRunner:
         if failures:
             failure_msgs = "; ".join(str(f) for f in failures[:5])
             msg = f"{len(failures)} variant runs failed: {failure_msgs}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from failures[0]
         return results + [r for r in new_results if isinstance(r, VariantResult)]
 
 
@@ -241,7 +241,11 @@ async def _load_checkpoint(
                             variant=Variant(d["variant"]),
                             decision=d.get("decision", {}),
                             result_text=d.get("result_text", ""),
-                            event_id=d.get("event_id"),
+                            event_id=(
+                                d.get("event_id")
+                                if isinstance(d.get("event_id"), (str, type(None)))
+                                else None
+                            ),
                             stages=d.get("stages", {}),
                             latency_ms=d.get("latency_ms", 0),
                             modifications=d.get("modifications", []),
