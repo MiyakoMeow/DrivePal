@@ -30,7 +30,6 @@ from .architecture_group import (
 )
 from .judge import Judge
 from .personalization_group import (
-    STAGES,
     compute_preference_metrics,
     pers_stratum,
     run_personalization_group,
@@ -185,9 +184,28 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
                 metrics = {}
             else:
                 weight_history = raw.get("weight_history", [])
-                metrics = compute_preference_metrics(
-                    variant_results, weight_history, STAGES, scores=scores
-                )
+                if weight_history:
+                    stage_names: list[str] = []
+                    seen: set[str] = set()
+                    for wh in weight_history:
+                        s = wh.get("stage", "")
+                        if s and s not in seen:
+                            stage_names.append(s)
+                            seen.add(s)
+                    total_rounds = len(weight_history)
+                    stage_size = total_rounds // len(stage_names) if stage_names else 8
+                    rebuilt_stages = [
+                        (name, idx * stage_size, (idx + 1) * stage_size)
+                        for idx, name in enumerate(stage_names)
+                    ]
+                    metrics = compute_preference_metrics(
+                        variant_results,
+                        weight_history,
+                        rebuilt_stages,
+                        scores=scores,
+                    )
+                else:
+                    metrics = {}
         else:
             msg = f"未知组: {group_name}"
             raise ValueError(msg)

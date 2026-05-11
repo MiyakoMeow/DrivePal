@@ -28,9 +28,7 @@ DIMENSIONS: dict[str, list] = {
 
 _NUM_DIM_FIELDS = 4
 
-_KNOWN_SCENARIOS: frozenset[str] = frozenset(
-    {"highway", "city_driving", "traffic_jam", "parked"}
-)
+_KNOWN_SCENARIOS: frozenset[str] = frozenset(DIMENSIONS["scenario"])
 
 
 def _parse_dims_from_id(dim_id: str) -> dict:
@@ -346,22 +344,3 @@ def sample_scenarios(
 
     rng.shuffle(result)
     return result[:n]
-
-
-async def _verify() -> None:
-    """快速验证入口：检查函数定义和导入。"""
-    print(
-        f"load_scenarios signature: {load_scenarios.__name__}(path) -> list[Scenario]"
-    )
-    print(
-        f"sample_scenarios signature: {sample_scenarios.__name__}(scenarios, n, ...) -> list[Scenario]"
-    )
-    print(
-        f"synthesize_scenarios signature: {synthesize_scenarios.__name__}(output_path, count) -> int"
-    )
-    print(f"dimension combos count: {len(_build_dimension_combinations())}")
-    print("Import OK")
-
-
-if __name__ == "__main__":
-    asyncio.run(_verify())

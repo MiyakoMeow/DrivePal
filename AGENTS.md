@@ -637,7 +637,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | **因变量** | 偏好匹配率、权重收敛速度、收敛稳定性、过拟合程度 |
 | **变体** | Full（动态权重，初始 0.5，±0.1/反馈）/ -Feedback（固定权重 0.5） |
 | **实验设计** | 32 轮（4 阶段 × 8 轮），场景不足时按比例截断 |
-| **无关变量控制** | 同一 LLM（默认模型组）、固定场景集（每阶段复用 5 场景）、同一 MemoryBank 状态（独立 user_id，清空启动）、固定随机种子（`ABLATION_SEED`） |
+| **无关变量控制** | 同一 LLM（默认模型组）、固定场景集（32 独立场景，按 task_type 分层）、同一 MemoryBank 状态（独立 user_id，清空启动）、固定随机种子（`ABLATION_SEED`） |
 
 **评价指标**：
 

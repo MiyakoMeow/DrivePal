@@ -151,9 +151,7 @@ def compute_comparison(
         }
 
     for variant, variant_data in comparison.items():
-        variant_scores_list = [
-            s.overall_score for s in scores if s.variant.value == variant
-        ]
+        variant_scores_list = variant_scores.get(variant, [])
         if variant_scores_list and baseline_overalls:
             variant_data["bootstrap_ci"] = bootstrap_ci(
                 variant_scores_list, baseline_overalls

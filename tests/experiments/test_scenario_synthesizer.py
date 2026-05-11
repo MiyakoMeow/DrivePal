@@ -20,6 +20,7 @@ def _sc(
     driving_context: dict | None = None,
     *,
     safety_relevant: bool = False,
+    synthesis_dims: dict | None = None,
 ) -> Scenario:
     """快速构造测试 Scenario，减少重复参数。"""
     return Scenario(
@@ -30,6 +31,7 @@ def _sc(
         expected_task_type="",
         safety_relevant=safety_relevant,
         scenario_type="",
+        synthesis_dims=synthesis_dims or {},
     )
 
 
@@ -130,7 +132,14 @@ def test_safety_stratum_combined_keys():
     from experiments.ablation.safety_group import safety_stratum
 
     # fatigue=1.0 始终 > 任何合理阈值（0~1），不依赖模块级 _FATIGUE_THRESHOLD 值
-    s = _sc("x", {"driver": {"fatigue_level": 1.0, "workload": "overloaded"}})
+    s = _sc(
+        "x",
+        synthesis_dims={
+            "scenario": "unknown",
+            "fatigue_level": "1.0",
+            "workload": "overloaded",
+        },
+    )
     assert safety_stratum(s) == "unknown+high_fatigue+overloaded"
 
 
