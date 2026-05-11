@@ -209,7 +209,15 @@ def simulate_feedback(
     实验简写版：直接操作 strategies.toml 的 reminder_weights，
     不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
 
+    Args:
+        decision: 最终决策 dict（可能已被规则引擎修改）。
+        stage: 当前实验阶段名。
+        rng: 随机数生成器。
+        stages: AgentWorkflow 各阶段原始输出。visual-detail 阶段优先从此读取
+            LLM 原始意图（规则引擎前的 reminder_content）。
+
     TODO: 可选集成正式 submitFeedback API。
+
     """
     if stage == "high-freq":
         return "accept" if decision.get("should_remind") else "ignore"

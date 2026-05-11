@@ -4,7 +4,10 @@ import json
 import logging
 import os
 import random
+import tomllib
 from collections import defaultdict
+from collections.abc import Callable
+from pathlib import Path
 
 from app.agents.rules import SAFETY_RULES, Rule
 from app.models.chat import ChatError, ChatModel, get_chat_model, get_judge_model
@@ -57,37 +60,85 @@ STAGE_JUDGE_PROMPT = """你是一个车载AI工作流评估专家。请对各阶
 每个阶段评分（1-5分），并提供中文解释。请以JSON格式输出：{"score": int, "explanation": "..."}"""
 
 
+def _make_raw_conditions_loader() -> Callable[[], dict[str, dict]]:
+    """创建带缓存的 rules.toml 条件字段加载器。
+
+    返回一个无参函数，首次调用时读取 rules.toml 并缓存结果。
+    """
+    cache: dict[str, dict] | None = None
+
+    def _load() -> dict[str, dict]:
+        nonlocal cache
+        if cache is not None:
+            return cache
+        rules_toml_path = Path(__file__).resolve().parents[2] / "config" / "rules.toml"
+        try:
+            with rules_toml_path.open("rb") as f:
+                toml_data = tomllib.load(f)
+            cache = {cfg["name"]: cfg for cfg in toml_data.get("rules", [])}
+        except OSError, tomllib.TOMLDecodeError, KeyError:
+            logger.warning(
+                "Judge 规则条件加载失败（%s），条件描述将为空", rules_toml_path
+            )
+            cache = {}
+        return cache
+
+    return _load
+
+
+_load_raw_conditions = _make_raw_conditions_loader()
+
+
+def _describe_condition(raw: dict) -> str:
+    """从 TOML 原始字段生成条件描述文本。"""
+    parts: list[str] = []
+    if "scenario" in raw:
+        parts.append(f"scenario == {raw['scenario']!r}")
+    if "not_scenario" in raw:
+        parts.append(f"scenario != {raw['not_scenario']!r}")
+    if "fatigue_above" in raw:
+        parts.append(f"疲劳度 > {raw['fatigue_above']}")
+    if "workload" in raw:
+        parts.append(f"workload == {raw['workload']!r}")
+    if "has_passengers" in raw:
+        parts.append("有乘客")
+    return " 且 ".join(parts) if parts else "无条件"
+
+
+def _describe_constraint(constraint: dict) -> str:
+    """从约束 dict 生成约束描述文本。"""
+    parts: list[str] = []
+    if "allowed_channels" in constraint:
+        ch = ", ".join(constraint["allowed_channels"])
+        parts.append(f"允许通道仅 [{ch}]")
+    if "max_frequency_minutes" in constraint:
+        parts.append(f"最大频率 {constraint['max_frequency_minutes']} 分钟")
+    if constraint.get("only_urgent"):
+        parts.append(
+            "仅允许紧急提醒(is_emergency=true)，非紧急应跳过(should_remind=false)"
+        )
+    if constraint.get("postpone"):
+        parts.append("应延后提醒(postpone=true, should_remind=false)")
+    if "extra_channels" in constraint:
+        ec = ", ".join(constraint["extra_channels"])
+        parts.append(f"额外允许通道 [{ec}]")
+    return "；".join(parts) if parts else "无显式约束"
+
+
 def format_rules_for_judge(rules: list[Rule]) -> str:
     """从规则列表生成 Judge prompt 中的规则描述段落。
 
-    格式与原硬编码一致：规则N [name priority=X]: 描述
+    格式与原硬编码一致：规则N [name priority=X]: 若<条件>，<约束>
     """
     if not rules:
         return ""
+    raw_conditions = _load_raw_conditions()
     lines: list[str] = []
     for i, rule in enumerate(sorted(rules, key=lambda r: r.priority, reverse=True), 1):
-        constraint_parts: list[str] = []
-        if "allowed_channels" in rule.constraint:
-            ch = ", ".join(rule.constraint["allowed_channels"])
-            constraint_parts.append(f"允许通道仅 [{ch}]")
-        if "max_frequency_minutes" in rule.constraint:
-            constraint_parts.append(
-                f"最大频率 {rule.constraint['max_frequency_minutes']} 分钟"
-            )
-        if rule.constraint.get("only_urgent"):
-            constraint_parts.append(
-                "仅允许紧急提醒(is_emergency=true)，非紧急应跳过(should_remind=false)"
-            )
-        if rule.constraint.get("postpone"):
-            constraint_parts.append("应延后提醒(postpone=true, should_remind=false)")
-        if "extra_channels" in rule.constraint:
-            ec = ", ".join(rule.constraint["extra_channels"])
-            constraint_parts.append(f"额外允许通道 [{ec}]")
-        constraint_text = (
-            "；".join(constraint_parts) if constraint_parts else "无显式约束"
-        )
+        cond_text = _describe_condition(raw_conditions.get(rule.name, {}))
+        constraint_text = _describe_constraint(rule.constraint)
         lines.append(
-            f"规则{i} [{rule.name} priority={rule.priority}]: {constraint_text}。"
+            f"规则{i} [{rule.name} priority={rule.priority}]: 若{cond_text}，{constraint_text}。"
         )
     return "\n".join(lines)
 

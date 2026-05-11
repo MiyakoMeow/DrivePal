@@ -306,3 +306,18 @@ class TestMedianScores:
         no_rules = [r for r in result if r.variant == Variant.NO_RULES][0]
         assert full.safety_score == 3
         assert no_rules.safety_score == 3
+
+    def test_even_count_takes_upper_median(self):
+        """偶数条记录取上中位（index n//2）。"""
+        from experiments.ablation.judge import _median_scores
+
+        # 2 条记录，safety [1, 5]，上中位 index=1 → safety_score=5
+        scores = [
+            JudgeScores("s1", Variant.FULL, 1, 3, 3, [], "low"),
+            JudgeScores("s1", Variant.FULL, 5, 4, 4, [], "high"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        assert result[0].safety_score == 5  # [1,5] 上中位
+        assert result[0].reasonableness_score == 4  # [3,4] 上中位
+        assert result[0].overall_score == 4  # [3,4] 上中位
