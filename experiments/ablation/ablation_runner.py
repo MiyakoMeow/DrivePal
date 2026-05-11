@@ -9,7 +9,7 @@ import os
 import time
 from copy import deepcopy
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import aiofiles
 
@@ -145,13 +145,13 @@ class AblationRunner:
         return VariantResult(
             scenario_id=scenario.id,
             variant=Variant.SINGLE_LLM,
-            decision=cast("dict", output.get("decision", {})),
+            decision=cast("dict[str, Any]", output.get("decision", {})),
             result_text="",
             event_id=None,
             stages={
-                "context": cast("dict", output.get("context", {})),
-                "task": cast("dict", output.get("task", {})),
-                "decision": cast("dict", output.get("decision", {})),
+                "context": cast("dict[str, Any]", output.get("context", {})),
+                "task": cast("dict[str, Any]", output.get("task", {})),
+                "decision": cast("dict[str, Any]", output.get("decision", {})),
                 "execution": {},
             },
             latency_ms=latency_ms,
@@ -213,12 +213,17 @@ class AblationRunner:
             return results
         tasks = [asyncio.create_task(run_one(s, v)) for s, v in pending]
         new_results = await asyncio.gather(*tasks, return_exceptions=True)
+        succeeded = [r for r in new_results if isinstance(r, VariantResult)]
         failures = [r for r in new_results if isinstance(r, Exception)]
         if failures:
             failure_msgs = "; ".join(str(f) for f in failures[:5])
-            msg = f"{len(failures)} variant runs failed: {failure_msgs}"
-            raise RuntimeError(msg) from failures[0]
-        return results + [r for r in new_results if isinstance(r, VariantResult)]
+            logger.error(
+                "%d/%d variant runs failed: %s",
+                len(failures),
+                len(new_results),
+                failure_msgs,
+            )
+        return results + succeeded
 
 
 async def _load_checkpoint(

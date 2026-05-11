@@ -214,6 +214,8 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
                 return 0
 
             driving_context = data.get("driving_context", {})
+            if not isinstance(driving_context, dict):
+                driving_context = {}
             scenario_type_val = driving_context.get("scenario", combo["scenario"])
             safety = _is_safety_relevant(driving_context)
 
