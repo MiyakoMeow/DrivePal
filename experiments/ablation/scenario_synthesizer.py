@@ -29,6 +29,37 @@ DIMENSIONS: dict[str, list] = {
     "has_passengers": ["true", "false"],
 }
 
+_NUM_DIM_FIELDS = 4
+
+_KNOWN_SCENARIOS: frozenset[str] = frozenset(
+    {"highway", "city_driving", "traffic_jam", "parked"}
+)
+
+
+def _parse_dims_from_id(dim_id: str) -> dict:
+    """从场景 id 解析合成维度（旧数据兼容）。
+
+    id 格式: {scenario}_{fatigue}_{workload}_{task_type}_{has_passengers}
+    scenario 含下划线（city_driving），需用已知值前缀匹配。
+    """
+    for s in _KNOWN_SCENARIOS:
+        prefix = s + "_"
+        if dim_id.startswith(prefix):
+            rest = dim_id[len(prefix) :].split("_")
+            if len(rest) >= _NUM_DIM_FIELDS:
+                try:
+                    return {
+                        "scenario": s,
+                        "fatigue_level": float(rest[0]),
+                        "workload": rest[1],
+                        "task_type": rest[2],
+                        "has_passengers": rest[3],
+                    }
+                except ValueError, IndexError:
+                    pass
+    return {}
+
+
 SYSTEM_PROMPT = """你是车载AI测试场景生成器。根据给定的驾驶维度条件，生成一个真实的中文车载交互测试场景。
 你必须仅返回合法的 JSON 对象，不要包含其他任何文本。"""
 
@@ -262,6 +293,8 @@ def load_scenarios(path: Path) -> list[Scenario]:
                 continue
             try:
                 d = json.loads(stripped)
+                if "synthesis_dims" not in d or not d["synthesis_dims"]:
+                    d["synthesis_dims"] = _parse_dims_from_id(d.get("id", ""))
                 scenarios.append(Scenario(**d))
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning("跳过无效场景行: %s", e)
