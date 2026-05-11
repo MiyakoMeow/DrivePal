@@ -85,7 +85,7 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 
 ### ty 配置
 
-`ty.toml`，rules all=error，faiss 替换为 Any。
+`ty.toml`，rules all=error，faiss/docx 替换为 Any。
 
 ## 代码规范
 
@@ -109,10 +109,10 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 | GraphQL | `GraphQLInvalidActionError` | feedback action 非 accept/ignore |
 | GraphQL | `GraphQLEventNotFoundError` | 事件 ID 不存在 |
 | 记忆 | `MemoryBankError` → `TransientError`/`FatalError` | MemoryBank 异常基类（三层） |
-| 记忆 | `LLMCallFailed` | LLM API 调用失败（瞬态，可重试） |
+| 记忆 | `LLMCallFailedError` | LLM API 调用失败（瞬态，可重试） |
 | 记忆 | `SummarizationEmpty` | LLM 返回空内容（哨兵异常，非错误） |
-| 记忆 | `EmbeddingFailed` | 嵌入 API 调用失败（瞬态） |
-| 记忆 | `MetadataCorrupted` / `IndexIntegrityError` | 数据损坏（永久） |
+| 记忆 | `ConfigError` | 配置错误（永久） |
+| 记忆 | `IndexIntegrityError` | 数据损坏（永久） |
 | 记忆 | `InvalidActionError` | FeedbackData action 校验失败 |
 | 存储 | `AppendError` / `UpdateError` | TOMLStore 类型不匹配 |
 | 模型 | `ProviderNotFoundError` | 引用字符串中 provider 未配置 |
@@ -127,27 +127,25 @@ GraphQL 异常继承 `graphql.error.GraphQLError`，自动转为标准 GraphQL e
 
 | 阈值 | 值 | 位置 |
 |------|-----|------|
-| SOFT_FORGET_THRESHOLD | 0.3 | config.py |
-| FORGET_INTERVAL_SECONDS | 300 | config.py |
-| FORGETTING_TIME_SCALE | 1 | config.py |
-| EMBEDDING_MIN_SIMILARITY | 0.3 | config.py |
-| COARSE_SEARCH_FACTOR | 4 | retrieval.py |
-| AGGREGATION_SIMILARITY_THRESHOLD | 0.8 | retrieval.py |
-| OVERLAP_RATIO_THRESHOLD | 0.45 | retrieval.py |
-| DEFAULT_CHUNK_SIZE | 1500（自适应回退值） | retrieval.py |
-| CHUNK_SIZE_MIN | 200 | config.py |
-| CHUNK_SIZE_MAX | 8192 | config.py |
+| SOFT_FORGET_THRESHOLD | 0.3 | memory_bank/config.py |
+| FORGET_INTERVAL_SECONDS | 300 | memory_bank/config.py |
+| FORGETTING_TIME_SCALE | 1 | memory_bank/config.py |
+| EMBEDDING_MIN_SIMILARITY | 0.3 | memory_bank/config.py |
+| COARSE_SEARCH_FACTOR | 4 | memory_bank/config.py |
+| DEFAULT_CHUNK_SIZE | 1500（自适应回退值） | memory_bank/config.py |
+| CHUNK_SIZE_MIN | 200 | memory_bank/config.py |
+| CHUNK_SIZE_MAX | 8192 | memory_bank/config.py |
 | HTTP read timeout | 12h | _http.py |
 | Embedding batch size | 100 | embedding.py |
 | Embedding retry | 3次 | embedding.py |
-| SAVE_INTERVAL_SECONDS | 30 | config.py |
+| SAVE_INTERVAL_SECONDS | 30 | memory_bank/config.py |
 | LLM_TEMPERATURE (摘要) | 0.3 | summarizer.py |
 | LLM_MAX_TOKENS (摘要) | 400 | summarizer.py |
 | REFERENCE_DATE_OFFSET | 1天 | index.py |
 
 ## Benchmark
 
-基准测试已从本仓库移除（commit `fbe453b`），独立为外部项目 MiyakoMeow/VehicleMemBench。
+基准测试已从本仓库移除，独立为外部项目 MiyakoMeow/VehicleMemBench。
 
 VehicleMemBench 提供：
 - 50 组数据集（`benchmark/qa_data/qa_{1..50}.json` + `benchmark/history/history_{1..50}.txt`）

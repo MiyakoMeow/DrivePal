@@ -22,4 +22,4 @@
 - **schemas/** — 数据模型：驾驶上下文 Pydantic 模型
 - **storage/** — 持久化引擎：TOML 异步存储、JSONL 追加写入
 
-`app/config.py` 为应用级配置（阈值常量、数据目录路径等），无独立 AGENTS.md。
+`app/config.py` 为应用级配置（数据目录路径等），无独立 AGENTS.md。
