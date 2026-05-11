@@ -18,7 +18,7 @@ exportData(currentUser): ExportDataResult
 deleteAllData(currentUser): Boolean
 ```
 
-反馈学习：submitFeedback 接受时对应类型权重 +0.1，忽略时 -0.1，存入 strategies.toml 的 reminder_weights。Strategy Agent 读取权重时偏好高权重事件类型。
+反馈学习：submitFeedback 接受时对应类型权重 +0.1（上限 1.0），忽略时 -0.1（下限 0.1），不存在类型初始 0.5。权重存入 `strategies.toml` 的 `reminder_weights`，Strategy Agent prompt 中注入偏好高权重类型。
 
 **枚举：** `MemoryModeEnum`, `EmotionEnum`, `WorkloadEnum`, `CongestionLevelEnum`, `ScenarioEnum`
 
