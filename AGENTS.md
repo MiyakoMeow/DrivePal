@@ -584,7 +584,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | **自变量** | 规则引擎（启用/禁用）、概率推断（启用/禁用） |
 | **因变量** | 安全合规率、规则拦截率、决策综合质量（Judge 1-5分） |
 | **变体** | Full（启用全部）/ -Rules（禁用规则引擎）/ -Prob（禁用概率推断） |
-| **测试场景** | 50 个安全关键场景（高速+各疲劳度×15 / 疲劳>0.7×15 / 过载×10 / 城市驾驶×10） |
+| **测试场景** | 50 个安全关键场景。安全相关性由合成维度计算（highway / fatigue>阈值 / overloaded），city_driving 仅在附加条件下标记为安全关键 |
 | **无关变量控制** | 同一 LLM（默认模型组）、同一 MemoryBank 状态（独立 user_id）、固定随机种子、场景分层抽样 |
 
 **评价指标**：
@@ -636,14 +636,14 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | **自变量** | 反馈学习（启用/禁用） |
 | **因变量** | 偏好匹配率、权重收敛速度、收敛稳定性、过拟合程度 |
 | **变体** | Full（动态权重，初始 0.5，±0.1/反馈）/ -Feedback（固定权重 0.5） |
-| **实验设计** | 20 轮交互序列，4 阶段偏好切换（1-5轮偏好高频提醒 → 6-10轮偏好静默 → 11-15轮偏好视觉详细 → 16-20轮混合偏好） |
+| **实验设计** | 32 轮（4 阶段 × 8 轮），场景不足时按比例截断 |
 | **无关变量控制** | 同一 LLM（默认模型组）、固定场景集（每阶段复用 5 场景）、同一 MemoryBank 状态（独立 user_id，清空启动）、固定随机种子（`ABLATION_SEED`） |
 
 **评价指标**：
 
 | 指标 | 定义 | 量化方法 |
 |------|------|---------|
-| 偏好匹配率 | 决策与当前阶段期望偏好的一致比例 | 匹配轮数 / 20 |
+| 偏好匹配率 | 决策与当前阶段期望偏好的一致比例 | 匹配轮数 / 32 |
 | 权重收敛速度 | 目标类型权重从 0.5 到稳定的轮次数 | 权重距 ±0.05 内持续 ≥3 轮视为收敛 |
 | 收敛稳定性 | 偏好切换后权重振荡幅度 | 切换后连续 5 轮权重的标准差 |
 | 决策分歧度 | 混合偏好阶段 FULL vs NO_FEEDBACK 决策差异 | 所有决策字段差异比例取平均 |
@@ -654,21 +654,24 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 ### 测试场景合成
 
-360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景 → 缓存至 JSONL。精选 ~120 场景：
+360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景 → 缓存至 JSONL。精选 ~260 场景（360 维度组合随机抽取）：
 
 - 安全关键场景 50（分层抽样，保证每规则配额）
 - 多样化场景 50（分层随机抽样，覆盖所有 scenario × task_type 组合）
-- 个性化场景 20（meeting/travel/shopping/contact/other 各 4）
+- 个性化场景 32，按 task_type 分层抽样（min_per_stratum=2）
+
+共 ~132 场景（安全 50 + 架构 50 + 个性化 32）。
 
 每个场景含：`driving_context` + `user_query` + `expected_decision`（人工校准用） + `expected_task_type`。
 
 ### LLM-as-Judge 评测
 
 - **模型**：优先 `JUDGE_MODEL` 环境变量，否则回退 `[model_groups.default]`
-- **盲评**：shuffle 变体输出顺序，不标注来源
+- **盲评**：Judge 不参考 expected_decision，仅依据规则表 + 场景条件评分。shuffle 支持确定性（ABLATION_SEED 非零）/ 随机（零/未设置）双模式
 - **中位数**：每场景评 3 次取中位数，减少非确定性噪声
 - **容错**：`ChatError` → 默认分 3；`JSONDecodeError` → 默认分 3
-- **人工校准**：标注 ~50 场景期望决策，计算 Judge 与人工一致率（Cohen's κ），校准集 30 + 留存集 20，最多 3 轮 prompt 调整
+- **统计检验**：Bootstrap 置信区间（n=10000, α=0.05）+ Wilcoxon signed-rank test（按 scenario_id 配对）
+- **人工校准**：人工校准为后续工作，当前未实现。
 
 ### 与 VehicleMemBench 的关系
 
