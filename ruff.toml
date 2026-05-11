@@ -163,6 +163,7 @@ exclude = [".agents/**"]
     "D101",  # 测试类无需 docstring
     "D102",  # 测试方法无需 docstring
     "D103",  # 测试函数无需 docstring
+    "D104",  # 测试包无需 docstring
     "D403",  # 测试 docstring 首词大写非强制
     "ERA001",  # 测试中公式注释合理
     "F401",  # 测试 fixtures 中导入为 pytest 发现机制需要
