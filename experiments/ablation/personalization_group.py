@@ -181,8 +181,6 @@ def simulate_feedback(
     不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
 
     TODO: 可选集成正式 submitFeedback API。
-
-    #126 后策略 Agent 输出 is_emergency（非 is_urgent），allowed_channels 列表（非 channel 字符串）。
     """
     if stage == "high-freq":
         return "accept" if decision.get("should_remind") else "ignore"
@@ -193,12 +191,29 @@ def simulate_feedback(
             else "ignore"
         )
     if stage == "visual-detail":
-        return (
-            "accept" if "visual" in decision.get("allowed_channels", []) else "ignore"
-        )
+        # 检测 LLM 意图而非最终 allowed_channels——后者受规则引擎硬约束。
+        # display_text / detailed 是 LLM 自由决定详略的字段，可通过反馈塑造。
+        return "accept" if _has_visual_content(decision) else "ignore"
     if stage == "mixed":
         return "accept" if rng.random() < _SIMULATED_ACCEPT_PROB else "ignore"
     return "ignore"
+
+
+def _has_visual_content(decision: dict) -> bool:
+    """判断 LLM 是否意图生成视觉内容。
+
+    通过 reminder_content 中的 display_text 和 detailed 字段推断——
+    此二字段由 LLM 自由决定详略，不受规则引擎后处理约束。
+    """
+    rc = decision.get("reminder_content")
+    if not isinstance(rc, dict):
+        return False
+    display = rc.get("display_text")
+    detailed = rc.get("detailed")
+    return bool(
+        (isinstance(display, str) and display.strip())
+        or (isinstance(detailed, str) and detailed.strip())
+    )
 
 
 _KNOWN_TASK_TYPES: frozenset[str] = frozenset(
@@ -331,7 +346,7 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
             decision.get("is_emergency")
         )
     if stage == "visual-detail":
-        return "visual" in decision.get("allowed_channels", [])
+        return _has_visual_content(decision)
     return True
 
 
