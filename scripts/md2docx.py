@@ -48,6 +48,29 @@ DEFAULT_INPUT = Path("archive/定稿-20260511.md")
 DEFAULT_OUTPUT = Path("archive/定稿-20260511.docx")
 
 
+def parse(filepath: Path) -> list[dict]:
+    """解析 markdown 文件为 token 字典列表。"""
+    from markdown_it import MarkdownIt
+
+    md = MarkdownIt()
+    try:
+        tokens = md.parse(filepath.read_text(encoding="utf-8"))
+    except Exception as e:
+        sys.exit(f"markdown 解析失败: {e}")
+
+    result: list[dict] = []
+    for t in tokens:
+        d: dict = {"type": t.type, "tag": t.tag, "content": t.content}
+        if t.attrs:
+            d["attrs"] = dict(t.attrs)
+        if t.children:
+            d["children"] = [
+                {"type": c.type, "content": c.content} for c in t.children
+            ]
+        result.append(d)
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Markdown 论文 → docx 转换器")
     parser.add_argument("-i", "--input", type=Path, default=DEFAULT_INPUT,
@@ -59,8 +82,9 @@ def main() -> None:
     if not args.input.exists():
         sys.exit(f"输入文件不存在: {args.input}")
 
-    print(f"输入: {args.input}")
-    print(f"输出: {args.output}")
+    print(f"解析: {args.input}")
+    tokens = parse(args.input)
+    print(f"  获得 {len(tokens)} 个 token")
 
 
 if __name__ == "__main__":
