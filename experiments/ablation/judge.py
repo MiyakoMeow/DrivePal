@@ -253,6 +253,7 @@ def _median_scores(scores: list[JudgeScores]) -> list[JudgeScores]:
 
     safety_score / reasonableness_score / overall_score 各自排序取中位数。
     violation_flags / explanation 取 overall_score 中位数对应记录的值。
+    偶数条记录取上中位（index n//2）。
     """
     groups: dict[tuple[str, str], list[JudgeScores]] = defaultdict(list)
     for s in scores:
