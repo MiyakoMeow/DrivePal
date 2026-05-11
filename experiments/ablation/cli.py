@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import UTC, datetime
@@ -40,6 +41,9 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
+_RUN_ID_RE = re.compile(r"^[a-zA-Z0-9][-a-zA-Z0-9_.]*$")
+"""run_id 只允许字母/数字/连字符/下划线/点号，首字符必须为字母或数字。"""
 
 
 def _find_latest_run(runs_dir: Path) -> Path | None:
@@ -299,6 +303,14 @@ async def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir)
+
+    if args.run_id is not None and not _RUN_ID_RE.fullmatch(args.run_id):
+        print(
+            f"无效 run_id（仅允许字母/数字/连字符/下划线/点号）: {args.run_id}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     old_seed = os.environ.get("ABLATION_SEED")
     os.environ["ABLATION_SEED"] = str(args.seed)
     try:
