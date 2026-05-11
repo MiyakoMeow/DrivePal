@@ -248,6 +248,7 @@ async def _append_checkpoint(
     path: Path, vr: VariantResult, *, include_modifications: bool = False
 ) -> None:
     """追加写单条 VariantResult 到 checkpoint JSONL。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
     record: dict[str, object] = {
         "scenario_id": vr.scenario_id,
         "variant": vr.variant.value,
