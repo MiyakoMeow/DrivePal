@@ -1,8 +1,8 @@
 """LLM-as-Judge 评分模块."""
 
-import hashlib
 import json
 import logging
+import os
 import random
 from collections import defaultdict
 
@@ -83,7 +83,6 @@ class Judge:
                 "scenario": {
                     "user_query": scenario.user_query,
                     "driving_context": scenario.driving_context,
-                    "expected_decision": scenario.expected_decision,
                 },
                 "variant_output": {
                     "decision": result.decision,
@@ -153,9 +152,8 @@ class Judge:
         results: list[VariantResult],
     ) -> list[JudgeScores]:
         """盲评多个变体——shuffle 顺序后逐个评分。每场景评 3 次取中位数。"""
-        rng = random.Random(
-            int(hashlib.sha256(scenario.id.encode()).hexdigest(), 16) % 2**32
-        )
+        seed = int(os.environ.get("ABLATION_SEED", "0"))
+        rng = random.Random(seed or None)
         all_scores: list[JudgeScores] = []
         for _ in range(3):
             shuffled = list(results)
@@ -228,66 +226,6 @@ def _median_scores(scores: list[JudgeScores]) -> list[JudgeScores]:
         mid = len(sorted_scores) // 2
         result.append(sorted_scores[mid])
     return result
-
-
-def compute_cohens_kappa(
-    judge_scores: list[JudgeScores],
-    human_labels: dict[str, dict[str, int]],
-) -> float:
-    """Quadratic weighted Cohen's κ。
-
-    judge_scores: Judge 为各场景各变体的评分列表
-    human_labels: {scenario_id: {"overall_score": int}} 人工标注
-
-    对每个 scenario_id 取 Judge 评分中位数，与人工标注计算加权 κ。
-    权重矩阵：w_ij = ((i - j) / (k - 1))²，k=5（1-5 分）。
-    """
-    k = 5
-
-    by_scenario: dict[str, list[int]] = defaultdict(list)
-    for js in judge_scores:
-        by_scenario[js.scenario_id].append(js.overall_score)
-
-    judge_median: dict[str, int] = {}
-    for sid, score_list in by_scenario.items():
-        sorted_scores = sorted(score_list)
-        mid = len(sorted_scores) // 2
-        judge_median[sid] = sorted_scores[mid]
-
-    obs = [[0] * k for _ in range(k)]
-    for sid, hl in human_labels.items():
-        if sid not in judge_median:
-            continue
-        m = judge_median[sid]
-        s = hl.get("overall_score", 0)
-        if not (
-            isinstance(m, int) and isinstance(s, int) and 1 <= m <= k and 1 <= s <= k
-        ):
-            logger.warning("评分越界，跳过 sid=%s m=%s s=%s", sid, m, s)
-            continue
-        obs[m - 1][s - 1] += 1
-
-    total = sum(sum(row) for row in obs)
-    if total == 0:
-        return 0.0  # 无有效样本，无法评估一致性
-
-    weights = [[((i - j) / (k - 1)) ** 2 for j in range(k)] for i in range(k)]
-
-    weighted_sum = sum(weights[i][j] * obs[i][j] for i in range(k) for j in range(k))
-    po = 1.0 - weighted_sum / total
-
-    row_sums = [sum(row) for row in obs]
-    col_sums = [sum(obs[i][j] for i in range(k)) for j in range(k)]
-    pe_weighted = sum(
-        weights[i][j] * row_sums[i] * col_sums[j] / total
-        for i in range(k)
-        for j in range(k)
-    )
-    pe = 1.0 - pe_weighted / total
-
-    if pe == 1.0:
-        return 1.0
-    return (po - pe) / (1.0 - pe)
 
 
 DEGRADATION_THRESHOLD = 0.5

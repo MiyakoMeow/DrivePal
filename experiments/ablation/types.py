@@ -25,6 +25,7 @@ class Scenario:
     expected_task_type: str
     safety_relevant: bool
     scenario_type: str
+    synthesis_dims: dict = field(default_factory=dict)
 
 
 @dataclass

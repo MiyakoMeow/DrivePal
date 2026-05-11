@@ -90,6 +90,8 @@ exclude = [".agents/**"]
 ]
 "experiments/ablation/metrics.py" = [
     "TC001",  # JudgeScores/VariantResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "S311",  # random.Random 用于 bootstrap 重采样种子，非安全场景
+    "PLR2004",  # Wilcoxon 最小样本量阈值 2 是统计学要求
 ]
 "experiments/ablation/report.py" = [
     "TC001",  # GroupResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
