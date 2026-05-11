@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import time
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
@@ -91,7 +92,7 @@ class AblationRunner:
         )
         result, event_id, stages = await workflow.run_with_stages(
             scenario.user_query,
-            driving_context=scenario.driving_context,
+            driving_context=deepcopy(scenario.driving_context),
         )
         latency_ms = (time.perf_counter() - t0) * 1000
         return VariantResult(
@@ -260,4 +261,4 @@ async def _append_checkpoint(
     if include_modifications:
         record["modifications"] = vr.modifications
     async with aiofiles.open(path, "a", encoding="utf-8") as f:
-        await f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        await f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
