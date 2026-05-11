@@ -28,6 +28,7 @@ _MIN_HISTORY_LEN = 2
 _INITIAL_WEIGHT_TOLERANCE = 0.01
 _CONVERGENCE_TOLERANCE = 0.05
 _CONSECUTIVE_FOR_CONVERGENCE = 3
+_MIN_STAGES = 4
 
 STAGES: list[tuple[str, int, int]] = [
     ("high-freq", 0, 8),
@@ -35,6 +36,23 @@ STAGES: list[tuple[str, int, int]] = [
     ("visual-detail", 16, 24),
     ("mixed", 24, 32),
 ]
+
+
+def _build_stages(
+    total: int,
+) -> tuple[list[tuple[str, int, int]], list[Scenario]]:
+    """按 total 构建 4 阶段切片，返回 (stages, scenarios)。"""
+    available = min(total, 32)
+    if available < _MIN_STAGES:
+        msg = f"personalization requires ≥{_MIN_STAGES} scenarios, got {total}"
+        raise ValueError(msg)
+    s = available // _MIN_STAGES
+    return [
+        ("high-freq", 0, s),
+        ("silent", s, s * 2),
+        ("visual-detail", s * 2, s * 3),
+        ("mixed", s * 3, available),
+    ], available
 
 
 def pers_stratum(s: Scenario) -> str:
@@ -50,25 +68,28 @@ async def run_personalization_group(
     *,
     judge: Judge,
 ) -> GroupResult:
-    """个性化组实验。32 轮，4 阶段偏好切换。
+    """个性化组实验。动态轮数，4 阶段偏好切换。
 
-    场景不足 32 时通过取模循环复用（i % len），保证每轮有场景可用。
+    场景不足 32 时按比例缩小每阶段轮数（总轮数 = 场景数），
+    至少需要 4 个场景（每阶段 1 轮）。
     """
     rng = random.Random(seed)
-    personalization_scenarios = scenarios[:32]
-
-    if not personalization_scenarios:
-        msg = "no personalization scenarios available"
-        raise ValueError(msg)
-
-    stages = STAGES[:]  # 浅拷贝防止调用方修改
+    stages, available = _build_stages(len(scenarios))
+    personalization_scenarios = scenarios[:available]
 
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []
 
     for stage_name, start, end in stages:
         for i in range(start, end):
-            scenario = personalization_scenarios[i % len(personalization_scenarios)]
+            if i >= len(personalization_scenarios):
+                logger.warning(
+                    "轮次 %d 超出场景数 %d，跳过",
+                    i + 1,
+                    len(personalization_scenarios),
+                )
+                continue
+            scenario = personalization_scenarios[i]
 
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
                 # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
