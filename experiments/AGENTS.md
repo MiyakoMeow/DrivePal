@@ -17,6 +17,9 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | **自变量** | 规则引擎（启用/禁用）、概率推断（启用/禁用） |
 | **因变量** | 安全合规率、规则拦截率、决策综合质量（Judge 1-5分） |
 | **变体** | Full（启用全部）/ -Rules（禁用规则引擎）/ -Prob（禁用概率推断） |
+
+**变体语义说明**：NO_RULES 禁用的是 `postprocess_decision`（规则引擎后处理），LLM 输出不再被安全规则强制覆盖。Judge 仍按完整规则表评分。因此 NO_RULES 测量的是"LLM 在无硬约束下自觉遵守安全规则的能力"，而非"无规则时系统的安全性"。
+
 | **测试场景** | 50 个安全关键场景。安全相关性由合成维度计算（highway / fatigue>阈值 / overloaded） |
 | **无关变量控制** | 同一 LLM（默认模型组）、同一 MemoryBank 状态（独立 user_id）、固定随机种子、场景分层抽样 |
 
