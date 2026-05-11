@@ -1,5 +1,6 @@
 """个性化组实验——反馈学习机制的个性化效果."""
 
+import dataclasses
 import json
 import logging
 import random
@@ -91,7 +92,7 @@ async def run_personalization_group(
                         round_index=i + 1,
                     )
                 else:
-                    vr.round_index = i + 1
+                    vr = dataclasses.replace(vr, round_index=i + 1)
                 all_results.append(vr)
                 await _append_checkpoint(
                     output_path.with_suffix(".checkpoint.jsonl"),

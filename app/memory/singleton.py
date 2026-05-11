@@ -31,12 +31,15 @@ async def close_memory_module() -> None:
     """关闭记忆模块单例（若已初始化）。
 
     幂等——未初始化时无操作。CLI 退出前调用以确保 FAISS 索引落盘。
+
+    持锁原子读-清-释放，再异步关闭释放锁避免阻塞。
     """
-    mm = _memory_module_state[0]
-    if mm is not None:
-        try:
-            await mm.close()
-        except Exception:
-            logger.exception("Failed to close MemoryModule")
-        finally:
-            _memory_module_state[0] = None
+    with _memory_module_lock:
+        mm = _memory_module_state[0]
+        if mm is None:
+            return
+        _memory_module_state[0] = None
+    try:
+        await mm.close()
+    except Exception:
+        logger.exception("Failed to close MemoryModule")
