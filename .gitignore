@@ -51,3 +51,5 @@ result
 
 # md2docx mermaid cache
 archive/mermaid/
+# md2docx latex cache
+archive/latex/

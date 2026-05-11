@@ -46,8 +46,12 @@ MARGIN_RIGHT = Cm(3.17)
 
 # mermaid
 MERMAID_API = "https://mermaid.ink/img/"
-MERMAID_TIMEOUT = 10  # 秒
+MERMAID_TIMEOUT = 60  # 秒
 MERMAID_CACHE_DIR = Path("archive/mermaid")
+
+# LaTeX 公式渲染（codecogs API）
+LATEX_API = "https://latex.codecogs.com/png.latex?"
+LATEX_CACHE_DIR = Path("archive/latex")
 
 # 默认路径
 DEFAULT_INPUT = Path("archive/定稿-20260511.md")
@@ -128,6 +132,34 @@ def render_mermaid(code: str, cache_dir: Path) -> Path | None:
             print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
             return None
     return None  # 所有路径应已返回，此处仅为类型检查器完备
+
+
+def render_latex(latex: str, cache_dir: Path, *, display: bool = False) -> Path | None:
+    """将 LaTeX 公式渲染为 PNG，缓存至 cache_dir。"""
+    import urllib.parse
+
+    import httpx
+
+    encoded = urllib.parse.quote(latex)
+    extra = r"\dpi{200}" if display else r"\dpi{150}"
+    url = f"{LATEX_API}{extra}{encoded}"
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"{_mermaid_hash(latex + str(display))}.png"
+    if cache_path.exists():
+        return cache_path
+
+    try:
+        response = httpx.get(url, timeout=MERMAID_TIMEOUT)
+        response.raise_for_status()
+        if response.content[:8] != b"\x89PNG\r\n\x1a\n":
+            msg = "公式渲染响应非 PNG 格式"
+            raise ValueError(msg)
+        cache_path.write_bytes(response.content)
+        return cache_path
+    except (httpx.HTTPError, ValueError) as e:
+        print(f"  [latex] 渲染失败: {e}", file=sys.stderr)
+        return None
 
 
 def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
@@ -338,9 +370,22 @@ def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY
                          font_name=FONT_CODE, font_size=SIZE_CODE)
                 i = end + 1
                 continue
+        # 行内公式 $...$（不匹配 $$ 块级公式）
+        if content[i] == "$" and (i + 1 >= n or content[i + 1] != "$"):
+            end = content.find("$", i + 1)
+            if end != -1:
+                latex = content[i + 1 : end]
+                png_path = render_latex(latex, LATEX_CACHE_DIR)
+                if png_path:
+                    run = paragraph.add_run()
+                    run.add_picture(str(png_path), height=Inches(0.22))
+                else:
+                    _add_run(paragraph, f"[公式:{latex}]", font_size=SIZE_CODE)
+                i = end + 1
+                continue
         # 普通文本
         j = i
-        while j < n and content[j] not in "*[_`":
+        while j < n and content[j] not in "*[_`$":
             j += 1
         if j > i:
             _add_run(paragraph, content[i:j], font_size=font_size)
@@ -370,6 +415,21 @@ def _render_inner_with_citations(paragraph, text: str, *, bold: bool = False,
 
 def _add_body_paragraph(doc: Document, content: str, *, use_ref_font: bool = False) -> None:
     """添加正文段落，处理粗斜体和 [N] 上标引用。"""
+    # 块级公式 $$...$$：整段替换为居中图片
+    stripped = content.strip()
+    if stripped.startswith("$$") and stripped.endswith("$$"):
+        latex = stripped[2:-2].strip()
+        png_path = render_latex(latex, LATEX_CACHE_DIR, display=True)
+        if png_path:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.add_run().add_picture(str(png_path), width=Inches(5.5))
+        else:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _add_run(p, f"[公式渲染失败: {latex}]", font_size=SIZE_CODE)
+        return
+
     font_size = SIZE_REF if use_ref_font else SIZE_BODY
     p = doc.add_paragraph()
     p.paragraph_format.line_spacing = LINE_SPACING
