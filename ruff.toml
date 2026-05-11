@@ -137,6 +137,9 @@ exclude = [".agents/**"]
     "D103",     # main() docstring 由 script header 替代
     "TRY300",   # render_mermaid 中 return 在 else 块偏离成功路径
     "PTH112",   # os.path.isdir 在 _check_font_warning 中跨平台兼容
+    "EM101",    # 异常消息内联（CLI 工具，非库代码）
+    "TRY003",   # 异常消息直接使用字符串字面量（CLI 工具，非库代码）
+    "TRY301",   # try 内 raise 用于 mermaid 重试逻辑，无需提取
 ]
 
 "tests/**" = [

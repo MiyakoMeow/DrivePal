@@ -115,10 +115,14 @@ def render_mermaid(code: str, cache_dir: Path) -> Path | None:
         try:
             response = httpx.get(url, timeout=MERMAID_TIMEOUT)
             response.raise_for_status()
+            # 校验 PNG magic bytes，防止缓存损坏内容（如 rate-limit 页面）
+            if response.content[:8] != b"\x89PNG\r\n\x1a\n":
+                msg = "响应非 PNG 格式"
+                raise ValueError(msg)
             cache_path.write_bytes(response.content)
             print(f"  [mermaid] 渲染成功 → {cache_path.name}")
             return cache_path
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, ValueError) as e:
             if attempt == 0:
                 continue  # 一次重试
             print(f"  [mermaid] 渲染失败: {e}", file=sys.stderr)
@@ -524,6 +528,7 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
     in_table = False
     table_rows: list[list[str]] = []
     current_row: list[str] = []
+    in_cell = False  # 跟踪 td/th 内部，处理多行单元格
     in_list = False
     ordered_list = False
     list_counter = 0
@@ -573,6 +578,7 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
         if tp == "table_open":
             in_table = True
             table_rows = []
+            in_cell = False
             continue
         if tp == "table_close":
             in_table = False
@@ -588,13 +594,13 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
             current_row = []
             continue
         if tp in ("th_open", "td_open"):
+            in_cell = True
             continue
         if tp in ("th_close", "td_close"):
+            in_cell = False
             continue
-        if tp == "inline" and in_table:
-            prev = tokens[idx - 1] if idx > 0 else None
-            if prev and prev["type"] in ("th_open", "td_open"):
-                current_row.append(t["content"])
+        if tp == "inline" and in_table and in_cell:
+            current_row.append(t["content"])
             continue
 
         # ── 列表 ──
