@@ -146,15 +146,14 @@ def preprocess_tokens(tokens: list[dict], cache_dir: Path) -> list[dict]:
                     "content": f'[图表渲染失败，请手动处理]\n```mermaid\n{t["content"]}\n```',
                 })
             i += 1
-            # 跳过紧跟的图注段落
-            if i < len(tokens) and tokens[i]["type"] == "paragraph_open":
-                i += 1
-            if i < len(tokens) and tokens[i]["type"] == "inline":
-                next_content = tokens[i].get("content", "")
-                if next_content.strip().startswith("**图"):
-                    i += 1
-            if i < len(tokens) and tokens[i]["type"] == "paragraph_close":
-                i += 1
+            # 仅当紧跟的是图注段落（paragraph_open + inline(**图X-X) + paragraph_close）
+            # 时才整体跳过。非图注段落保留，避免 token 流配对破坏。
+            peek = i
+            if (peek < len(tokens) and tokens[peek]["type"] == "paragraph_open"
+                and peek + 1 < len(tokens) and tokens[peek + 1]["type"] == "inline"
+                and tokens[peek + 1].get("content", "").strip().startswith("**图")):
+                # 跳过 paragraph_open + inline(**图X-X) + paragraph_close
+                i += 3
             continue
         result.append(t)
         i += 1
@@ -285,8 +284,9 @@ def _extract_plain_text(md_content: str) -> str:
 def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY) -> None:
     """将 inline markdown 文本渲染为 paragraph 中的 runs。
 
-    支持：**bold**、*italic*、`code`、[N] 上标引用。
-    简易逐字符状态机，不处理嵌套格式。
+    支持：**bold**/__bold__、*italic*/_italic_、`code`、[N] 上标引用。
+    粗斜体内嵌 [N] 引用通过递归 _render_citations 处理。
+    简易逐字符状态机，不处理嵌套粗斜体格式。
     """
     i = 0
     n = len(content)
@@ -298,31 +298,39 @@ def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY
                 _add_run(paragraph, m.group(), superscript=True, font_size=font_size)
                 i = m.end()
                 continue
-        # 粗体 **...**
-        if i + 1 < n and content[i:i + 2] == "**":
-            end = content.find("**", i + 2)
+        # 粗体 **...** 或 __...__
+        if i + 1 < n and content[i : i + 2] in ("**", "__"):
+            marker = content[i : i + 2]
+            end = content.find(marker, i + 2)
             if end != -1:
-                _add_run(paragraph, content[i + 2:end], bold=True, font_size=font_size)
+                _render_inner_with_citations(paragraph, content[i + 2 : end],
+                                             bold=True, font_size=font_size)
                 i = end + 2
                 continue
-        # 斜体 *...*
-        if content[i] == "*":
-            end = content.find("*", i + 1)
+        # 斜体 *...* 或 _..._（需排除 __ 情况）
+        if content[i] in "*_":
+            # 跳过 __ 粗体标记
+            if content[i] == "_" and i + 1 < n and content[i + 1] == "_":
+                _add_run(paragraph, content[i], font_size=font_size)
+                i += 1
+                continue
+            end = content.find(content[i], i + 1)
             if end != -1:
-                _add_run(paragraph, content[i + 1:end], italic=True, font_size=font_size)
+                _render_inner_with_citations(paragraph, content[i + 1 : end],
+                                             italic=True, font_size=font_size)
                 i = end + 1
                 continue
         # 行内代码 `...`
         if content[i] == "`":
             end = content.find("`", i + 1)
             if end != -1:
-                _add_run(paragraph, content[i + 1:end],
+                _add_run(paragraph, content[i + 1 : end],
                          font_name=FONT_CODE, font_size=SIZE_CODE)
                 i = end + 1
                 continue
         # 普通文本
         j = i
-        while j < n and content[j] not in "*[`":
+        while j < n and content[j] not in "*[_`":
             j += 1
         if j > i:
             _add_run(paragraph, content[i:j], font_size=font_size)
@@ -331,6 +339,23 @@ def _render_inline_content(paragraph, content: str, *, font_size: Pt = SIZE_BODY
         # 未匹配的特殊字符
         _add_run(paragraph, content[i], font_size=font_size)
         i += 1
+
+
+def _render_inner_with_citations(paragraph, text: str, *, bold: bool = False,
+                                  italic: bool = False, font_size: Pt = SIZE_BODY) -> None:
+    """渲染粗/斜体内部文本，同时解析其中的 [N] 引用上标。
+
+    将文本按 _CITATION_RE 分割，对引用部分附加 superscript，
+    普通文本附加 bold/italic。
+    """
+    parts = _CITATION_RE.split(text)
+    citations = _CITATION_RE.findall(text)
+    for k, part in enumerate(parts):
+        if part:
+            _add_run(paragraph, part, bold=bold, italic=italic, font_size=font_size)
+        if k < len(citations):
+            _add_run(paragraph, citations[k], bold=bold, italic=italic,
+                     superscript=True, font_size=font_size)
 
 
 def _add_body_paragraph(doc: Document, content: str, *, use_ref_font: bool = False) -> None:
@@ -367,6 +392,8 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
     for i, row_data in enumerate(rows):
         row = table.rows[i]
         for j, cell_text in enumerate(row_data):
+            if j >= len(row.cells):
+                break  # 防御：列数不一致时截断
             cell = row.cells[j]
             cell.text = ""
             p = cell.paragraphs[0]
@@ -427,7 +454,11 @@ def _collect_headings(tokens: list[dict]) -> list[tuple[int, str]]:
 
 
 def _add_toc(doc: Document, headings: list[tuple[int, str]]) -> None:
-    """插入静态目录页。"""
+    """插入静态目录页。
+
+    仅含标题与缩进，不含页码。python-docx 不支持 TOC 域代码，
+    静态目录为已知限制——转换后在 Word 中手动补页码或插入自动目录。
+    """
     p = _new_paragraph(doc, "目录", bold=True, font_name=FONT_HEADING,
                        font_size=SIZE_H2, alignment=WD_ALIGN_PARAGRAPH.CENTER)
     p.paragraph_format.space_after = Pt(18)
@@ -453,7 +484,8 @@ def _add_page_numbers(doc: Document) -> None:
         fldChar1 = run._element.makeelement(qn("w:fldChar"), {qn("w:fldCharType"): "begin"})
         run._element.append(fldChar1)
         run2 = p.add_run()
-        instrText = run2._element.makeelement(qn("w:instrText"), {})
+        instrText = run2._element.makeelement(
+            qn("w:instrText"), {qn("xml:space"): "preserve"})
         instrText.text = " PAGE "
         run2._element.append(instrText)
         run3 = p.add_run()
