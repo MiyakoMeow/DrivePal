@@ -181,7 +181,11 @@ async def run_personalization_group(
     async with aiofiles.open(summary_path, "w") as f:
         await f.write(
             json.dumps(
-                {"weight_history": weight_history, "metrics": metrics},
+                {
+                    "weight_history": weight_history,
+                    "metrics": metrics,
+                    "stages": stages,
+                },
                 ensure_ascii=False,
             )
             + "\n"

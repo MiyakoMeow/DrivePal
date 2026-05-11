@@ -136,7 +136,7 @@ def test_safety_stratum_combined_keys():
         "x",
         synthesis_dims={
             "scenario": "unknown",
-            "fatigue_level": "1.0",
+            "fatigue_level": 1.0,
             "workload": "overloaded",
         },
     )

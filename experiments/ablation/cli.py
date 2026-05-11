@@ -30,6 +30,7 @@ from .architecture_group import (
 )
 from .judge import Judge
 from .personalization_group import (
+    _build_stages,
     compute_preference_metrics,
     pers_stratum,
     run_personalization_group,
@@ -184,20 +185,19 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
                 metrics = {}
             else:
                 weight_history = raw.get("weight_history", [])
-                if weight_history:
-                    stage_names: list[str] = []
-                    seen: set[str] = set()
-                    for wh in weight_history:
-                        s = wh.get("stage", "")
-                        if s and s not in seen:
-                            stage_names.append(s)
-                            seen.add(s)
+                persisted_stages = raw.get("stages")
+                if weight_history and persisted_stages:
+                    # 从实验输出直接恢复 stages，保证边界精确一致
+                    metrics = compute_preference_metrics(
+                        variant_results,
+                        weight_history,
+                        [tuple(s) for s in persisted_stages],
+                        scores=scores,
+                    )
+                elif weight_history:
+                    # fallback：summary 无 stages 字段时用 _build_stages 重建
                     total_rounds = len(weight_history)
-                    stage_size = total_rounds // len(stage_names) if stage_names else 8
-                    rebuilt_stages = [
-                        (name, idx * stage_size, (idx + 1) * stage_size)
-                        for idx, name in enumerate(stage_names)
-                    ]
+                    rebuilt_stages, _ = _build_stages(total_rounds)
                     metrics = compute_preference_metrics(
                         variant_results,
                         weight_history,
