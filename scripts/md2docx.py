@@ -95,6 +95,21 @@ def _mermaid_hash(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()[:16]
 
 
+def _is_valid_png(path: Path) -> bool:
+    """校验文件是否为有效 PNG。损坏则删除并返回 False。"""
+    try:
+        if path.stat().st_size < 8:
+            path.unlink(missing_ok=True)
+            return False
+        with path.open("rb") as f:
+            if f.read(8) != b"\x89PNG\r\n\x1a\n":
+                path.unlink(missing_ok=True)
+                return False
+    except OSError:
+        return False
+    return True
+
+
 def render_mermaid(code: str, cache_dir: Path) -> Path | None:
     """将 mermaid 代码渲染为 PNG，缓存至 cache_dir。"""
     import json
@@ -109,7 +124,7 @@ def render_mermaid(code: str, cache_dir: Path) -> Path | None:
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{_mermaid_hash(code)}.png"
-    if cache_path.exists():
+    if cache_path.exists() and _is_valid_png(cache_path):
         return cache_path
 
     url = f"{MERMAID_API}pako:{encoded}?type=png"
@@ -144,7 +159,7 @@ def render_latex(latex: str, cache_dir: Path, *, display: bool = False) -> Path 
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{_mermaid_hash(latex + str(display))}.png"
-    if cache_path.exists():
+    if cache_path.exists() and _is_valid_png(cache_path):
         return cache_path
 
     try:
@@ -664,6 +679,7 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
     table_rows: list[list[str]] = []
     current_row: list[str] = []
     in_cell = False  # 跟踪 td/th 内部，处理多行单元格
+    current_cell: list[str] = []  # 累积同一单元格内的多段 inline
     in_list = False
     ordered_list = False
     list_counter = 0
@@ -714,6 +730,7 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
             in_table = True
             table_rows = []
             in_cell = False
+            current_cell = []
             continue
         if tp == "table_close":
             in_table = False
@@ -730,12 +747,15 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
             continue
         if tp in ("th_open", "td_open"):
             in_cell = True
+            current_cell = []
             continue
         if tp in ("th_close", "td_close"):
             in_cell = False
+            current_row.append("".join(current_cell))
+            current_cell = []
             continue
         if tp == "inline" and in_table and in_cell:
-            current_row.append(t["content"])
+            current_cell.append(t["content"])
             continue
 
         # ── 列表 ──
@@ -783,6 +803,7 @@ def build_docx(tokens: list[dict], output_path: Path) -> None:
 
     if output_path.exists():
         print(f"覆盖已有文件: {output_path}", file=sys.stderr)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
     print(f"输出: {output_path}")
 

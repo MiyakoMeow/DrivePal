@@ -1147,6 +1147,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
+    { name = "markdown-it-py" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-timeout" },
@@ -1175,6 +1177,8 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "markdown-it-py", specifier = ">=4.0.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=0.25.0" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
