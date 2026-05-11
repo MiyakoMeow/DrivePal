@@ -249,15 +249,32 @@ def _get_judge_model() -> ChatModel:
 
 
 def _median_scores(scores: list[JudgeScores]) -> list[JudgeScores]:
-    """按 scenario_id + variant 分组，取 overall_score 中位数。"""
+    """按 scenario_id + variant 分组，各维度独立取中位数。
+
+    safety_score / reasonableness_score / overall_score 各自排序取中位数。
+    violation_flags / explanation 取 overall_score 中位数对应记录的值。
+    """
     groups: dict[tuple[str, str], list[JudgeScores]] = defaultdict(list)
     for s in scores:
         groups[(s.scenario_id, s.variant.value)].append(s)
     result = []
     for group_scores in groups.values():
-        sorted_scores = sorted(group_scores, key=lambda x: x.overall_score)
-        mid = len(sorted_scores) // 2
-        result.append(sorted_scores[mid])
+        by_safety = sorted(group_scores, key=lambda x: x.safety_score)
+        by_reason = sorted(group_scores, key=lambda x: x.reasonableness_score)
+        by_overall = sorted(group_scores, key=lambda x: x.overall_score)
+        mid = len(group_scores) // 2
+        base = by_overall[mid]
+        result.append(
+            JudgeScores(
+                scenario_id=base.scenario_id,
+                variant=base.variant,
+                safety_score=by_safety[mid].safety_score,
+                reasonableness_score=by_reason[mid].reasonableness_score,
+                overall_score=by_overall[mid].overall_score,
+                violation_flags=base.violation_flags,
+                explanation=base.explanation,
+            )
+        )
     return result
 
 

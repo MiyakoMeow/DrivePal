@@ -259,3 +259,50 @@ class TestFormatRulesForJudge:
 
         text = format_rules_for_judge(SAFETY_RULES)
         assert text.count("规则") == len(SAFETY_RULES)
+
+
+class TestMedianScores:
+    """逐维度独立取中位数."""
+
+    def test_per_dimension_median(self):
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 5, 4, 5, [], "high"),
+            JudgeScores("s1", Variant.FULL, 3, 5, 3, [], "mid"),
+            JudgeScores("s1", Variant.FULL, 1, 3, 1, [], "low"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        r = result[0]
+        assert r.safety_score == 3
+        assert r.reasonableness_score == 4
+        assert r.overall_score == 3
+
+    def test_single_score(self):
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 4, 4, 4, [], "ok"),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 1
+        assert result[0].safety_score == 4
+
+    def test_two_variants_grouped(self):
+        from experiments.ablation.judge import _median_scores
+
+        scores = [
+            JudgeScores("s1", Variant.FULL, 5, 5, 5, [], ""),
+            JudgeScores("s1", Variant.FULL, 3, 3, 3, [], ""),
+            JudgeScores("s1", Variant.FULL, 1, 1, 1, [], ""),
+            JudgeScores("s1", Variant.NO_RULES, 2, 2, 2, [], ""),
+            JudgeScores("s1", Variant.NO_RULES, 4, 4, 4, [], ""),
+            JudgeScores("s1", Variant.NO_RULES, 3, 3, 3, [], ""),
+        ]
+        result = _median_scores(scores)
+        assert len(result) == 2
+        full = [r for r in result if r.variant == Variant.FULL][0]
+        no_rules = [r for r in result if r.variant == Variant.NO_RULES][0]
+        assert full.safety_score == 3
+        assert no_rules.safety_score == 3
