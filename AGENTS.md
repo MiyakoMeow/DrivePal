@@ -4,22 +4,6 @@
 
 > 本文档为项目根总览。各模块详细文档已拆分至各自目录的 `AGENTS.md`。
 
-## 文档索引
-
-| 模块 | 路径 | 内容 |
-|------|------|------|
-| App 核心 | `app/AGENTS.md` | 各子模块索引与概述 |
-| Agent 系统 | `app/agents/AGENTS.md` | Agent工作流、规则引擎、概率推断 |
-| API 层 | `app/api/AGENTS.md` | GraphQL API、服务入口与生命周期、错误处理 |
-| 记忆系统 | `app/memory/AGENTS.md` | MemoryBank、记忆基础设施、隐私保护、错误处理与阈值 |
-| 模型封装 | `app/models/AGENTS.md` | LLM调用特性、错误处理与阈值 |
-| 模式定义 | `app/schemas/AGENTS.md` | 上下文数据模型 |
-| 数据存储 | `app/storage/AGENTS.md` | TOML/JSONL 存储引擎、错误处理 |
-| 模型配置 | `config/AGENTS.md` | 模型配置格式、环境变量、完整配置项 |
-| 测试 | `tests/AGENTS.md` | 测试运行命令、CI 工作流 |
-| 实验 | `experiments/AGENTS.md` | 消融实验设计 |
-| 论文 | `archive/AGENTS.md` | 论文参考文献 |
-
 ## 项目配置
 
 Python 3.14 + `uv`。
@@ -51,19 +35,19 @@ Python 3.14 + `uv`。
 
 ```
 app/
-├── agents/            # Agent核心模块 → app/agents/AGENTS.md
-├── api/               # GraphQL API层 → app/api/AGENTS.md
-├── models/            # AI模型封装 → app/models/AGENTS.md
-├── memory/            # 记忆模块 → app/memory/AGENTS.md
-├── schemas/           # 数据模型 → app/schemas/AGENTS.md
-├── storage/           # 存储引擎 → app/storage/AGENTS.md
+├── agents/            # Agent工作流、规则引擎、概率推断 → app/agents/AGENTS.md
+├── api/               # GraphQL API、服务入口与生命周期、错误处理 → app/api/AGENTS.md
+├── models/            # LLM调用特性、错误处理与阈值 → app/models/AGENTS.md
+├── memory/            # MemoryBank、记忆基础设施、隐私保护、错误处理与阈值 → app/memory/AGENTS.md
+├── schemas/           # 上下文数据模型 → app/schemas/AGENTS.md
+├── storage/           # TOML/JSONL 存储引擎、错误处理 → app/storage/AGENTS.md
 ├── config.py          # 应用级配置
-tests/                 # 测试 → tests/AGENTS.md
-config/                # 模型/规则配置 → config/AGENTS.md
+tests/                 # 测试运行命令、CI 工作流 → tests/AGENTS.md
+config/                # 模型配置格式、环境变量、完整配置项 → config/AGENTS.md
 data/                  # 运行时数据
 webui/                 # 模拟测试工作台
-archive/               # 归档卷 → archive/AGENTS.md
-experiments/           # 消融实验 → experiments/AGENTS.md
+archive/               # 论文参考文献 → archive/AGENTS.md
+experiments/           # 消融实验设计 → experiments/AGENTS.md
 ```
 
 ## 检查流程
