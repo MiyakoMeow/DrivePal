@@ -237,7 +237,7 @@ async def _load_checkpoint(
                             round_index=d.get("round_index", 0),
                         )
                     )
-                except json.JSONDecodeError, KeyError, ValueError:
+                except json.JSONDecodeError, KeyError, ValueError, TypeError, AttributeError:
                     logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                     continue
     except FileNotFoundError:

@@ -220,14 +220,13 @@ class MemoryBankStore:
         date_key = datetime.now(UTC).strftime("%Y-%m-%d")
         async with self._source_index_lock:
             event_ids = list(self._source_event_index.get(date_key, []))
-        if not event_ids:
-            # 回退：进程启动后当日尚无 write()，全量扫描 metadata
-            for m in self._index.get_metadata():
-                if m.get("source") == date_key and m.get("type") != "daily_summary":
-                    fid = m.get("faiss_id")
-                    if fid is not None:
-                        event_ids.append(str(fid))
-            async with self._source_index_lock:
+            if not event_ids:
+                # 回退：进程启动后当日尚无 write()，全量扫描 metadata
+                for m in self._index.get_metadata():
+                    if m.get("source") == date_key and m.get("type") != "daily_summary":
+                        fid = m.get("faiss_id")
+                        if fid is not None:
+                            event_ids.append(str(fid))
                 self._source_event_index[date_key] = event_ids
         for eid in event_ids:
             if eid not in self._interaction_map:

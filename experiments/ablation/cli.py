@@ -166,7 +166,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
                     summary_path,
                 )
                 metrics = {}
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 logger.warning(
                     "个性化组 results.summary.json 解析失败（%s），指标将为空。",
                     summary_path,
@@ -216,7 +216,7 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
                         round_index=d.get("round_index", 0),
                     )
                 )
-            except json.JSONDecodeError, KeyError, ValueError:
+            except json.JSONDecodeError, KeyError, ValueError, TypeError, AttributeError:
                 logger.warning("跳过无效行: %s", stripped[:80])
     return results
 

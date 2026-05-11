@@ -155,7 +155,7 @@ def _load_existing_ids(path: Path) -> set[str]:
                 obj = json.loads(stripped)
                 if "id" in obj:
                     existing.add(obj["id"])
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 continue
     return existing
 
@@ -205,7 +205,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 120) -> int:
                     prompt=prompt, system_prompt=SYSTEM_PROMPT, json_mode=True
                 )
                 data = json.loads(raw)
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, AttributeError):
                 logger.warning("Failed to parse JSON for combo %s", dim_id)
                 return 0
             except ChatError:

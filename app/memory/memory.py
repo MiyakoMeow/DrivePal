@@ -208,11 +208,15 @@ class MemoryModule:
     async def close(self) -> None:
         """关闭所有 store，清理资源。
 
-        成功关闭的 store 立即释放引用；失败的保留以便调试，
-        但不会阻止其他 store 的清理。
+        持锁取快照并清空字典，释放锁后异步关闭各 store。
+        关闭单个失败仅记录日志，不阻止其他 store 清理。
         """
+        async with self._stores_lock:
+            stores_snapshot = list(self._stores.items())
+            self._stores.clear()
+
         failed: list[str] = []
-        for key, store in list(self._stores.items()):
+        for key, store in stores_snapshot:
             closer = getattr(store, "close", None)
             if closer is None:
                 continue
@@ -221,11 +225,9 @@ class MemoryModule:
             except Exception:
                 logger.exception("Failed to close store %s", key)
                 failed.append(key)
-            else:
-                del self._stores[key]
         if failed:
             logger.warning(
-                "%d store(s) failed to close, references retained: %s",
+                "%d store(s) failed to close: %s",
                 len(failed),
                 failed,
             )

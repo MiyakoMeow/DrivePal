@@ -171,12 +171,16 @@ class Judge:
                 continue
             try:
                 scores = json.loads(response)
-                stage_scores[stage_name] = {
-                    "score": _safe_int(scores.get("score")),
-                    "explanation": scores.get("explanation", ""),
-                }
             except json.JSONDecodeError, TypeError, ValueError:
                 stage_scores[stage_name] = {"score": 3, "explanation": "评分失败"}
+            else:
+                if not isinstance(scores, dict):
+                    stage_scores[stage_name] = {"score": 3, "explanation": "评分失败"}
+                else:
+                    stage_scores[stage_name] = {
+                        "score": _safe_int(scores.get("score")),
+                        "explanation": scores.get("explanation", ""),
+                    }
         return stage_scores
 
 
