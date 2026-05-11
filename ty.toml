@@ -2,7 +2,7 @@
 exclude = [".agents/**"]
 
 [analysis]
-replace-imports-with-any = ["faiss"]
+replace-imports-with-any = ["faiss", "docx"]
 
 [rules]
 all = "error"
