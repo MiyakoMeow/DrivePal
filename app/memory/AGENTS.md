@@ -8,7 +8,7 @@
 
 ### 文件结构
 
-```
+```text
 memory/memory_bank/
 ├── __init__.py        # 模块初始化
 ├── config.py         # 集中配置（pydantic-settings，MEMORYBANK_ 前缀）
