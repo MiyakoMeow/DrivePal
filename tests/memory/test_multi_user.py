@@ -13,7 +13,7 @@ from app.storage.jsonl_store import JSONLinesStore
 
 
 def _make_embedding_mock():
-    """构造 mock embedding 模型。"""
+    """构造 mock embedding 模型."""
     emb = AsyncMock(spec=["encode", "batch_encode"])
 
     async def _encode(text):
@@ -32,7 +32,7 @@ def _make_embedding_mock():
 
 @pytest.mark.asyncio
 async def test_two_users_faiss_data_isolated():
-    """两个用户各写数据到 FAISS，互相不可见。"""
+    """两个用户各写数据到 FAISS，互相不可见."""
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
         s_a = MemoryBankStore(
@@ -58,7 +58,7 @@ async def test_two_users_faiss_data_isolated():
 
 @pytest.mark.asyncio
 async def test_single_user_store_write_and_close():
-    """单用户 store 写入后 close 不抛异常。"""
+    """单用户 store 写入后 close 不抛异常."""
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
         store = MemoryBankStore(base, embedding_model=_make_embedding_mock())
@@ -71,7 +71,7 @@ async def test_single_user_store_write_and_close():
 
 @pytest.mark.asyncio
 async def test_users_jsonl_data_isolated(tmp_path, monkeypatch):
-    """两个用户各自写入 JSONL，读取互不干扰。"""
+    """两个用户各自写入 JSONL，读取互不干扰."""
     monkeypatch.setattr("app.config.DATA_DIR", tmp_path)
 
     init_user_dir("alice")
@@ -93,7 +93,7 @@ async def test_users_jsonl_data_isolated(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_init_user_dir_creates_all_files(tmp_path, monkeypatch):
-    """init_user_dir 创建完整目录结构。"""
+    """init_user_dir 创建完整目录结构."""
     monkeypatch.setattr("app.config.DATA_DIR", tmp_path)
 
     u_dir = init_user_dir("testuser")
@@ -104,7 +104,7 @@ async def test_init_user_dir_creates_all_files(tmp_path, monkeypatch):
 
 
 def test_migrate_legacy_moves_files(tmp_path, monkeypatch):
-    """_migrate_legacy 将平铺文件迁至 data/users/default/。"""
+    """_migrate_legacy 将平铺文件迁至 data/users/default/."""
     from app.storage.init_data import _migrate_legacy
 
     monkeypatch.setattr("app.config.DATA_DIR", tmp_path)
@@ -118,7 +118,7 @@ def test_migrate_legacy_moves_files(tmp_path, monkeypatch):
 
 
 def test_user_data_dir_path(tmp_path, monkeypatch):
-    """user_data_dir 返回正确的 per-user 路径。"""
+    """user_data_dir 返回正确的 per-user 路径."""
     monkeypatch.setattr("app.config.DATA_DIR", tmp_path / "data")
     u_dir = user_data_dir("alice")
     assert u_dir.name == "alice"

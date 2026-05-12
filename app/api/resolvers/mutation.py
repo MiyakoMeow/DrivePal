@@ -325,5 +325,5 @@ class Mutation:
         session_id: str,
         current_user: str = "default",
     ) -> bool:
-        """关闭指定会话（校验用户归属）。"""
+        """关闭指定会话（校验用户归属）."""
         return _conversation_manager.close(session_id, user_id=current_user)

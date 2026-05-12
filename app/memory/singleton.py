@@ -28,7 +28,7 @@ def get_memory_module() -> MemoryModule:
 
 
 async def close_memory_module() -> None:
-    """关闭记忆模块单例（若已初始化）。
+    """关闭记忆模块单例（若已初始化）.
 
     幂等——未初始化时无操作。CLI 退出前调用以确保 FAISS 索引落盘。
 

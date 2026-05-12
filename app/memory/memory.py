@@ -16,7 +16,7 @@ class UnknownModeError(ValueError):
     MSG = "Unknown mode: {mode}"
 
     def __init__(self, mode: MemoryMode) -> None:
-        """初始化未知模式异常。
+        """初始化未知模式异常.
 
         Args:
             mode: 无法识别的记忆模式。
@@ -66,7 +66,7 @@ class MemoryModule:
         embedding_model: EmbeddingModel | None = None,
         chat_model: ChatModel | None = None,
     ) -> None:
-        """初始化 MemoryModule。
+        """初始化 MemoryModule.
 
         Args:
             data_dir: 数据根目录。
@@ -120,7 +120,7 @@ class MemoryModule:
     def get_metrics(
         self, user_id: str = "default", mode: MemoryMode | None = None
     ) -> dict[str, Any] | None:
-        """获取指定用户的指标快照。store 未初始化则返回 None。"""
+        """获取指定用户的指标快照。store 未初始化则返回 None."""
         resolved = self._resolve_mode(mode)
         key = _make_store_key(resolved, user_id)
         store = self._stores.get(key)
@@ -138,7 +138,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> str:
-        """写入事件到存储后端。"""
+        """写入事件到存储后端."""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.write(event)
 
@@ -152,7 +152,7 @@ class MemoryModule:
         user_id: str = "default",
         **kwargs: object,
     ) -> InteractionResult:
-        """写入交互记录到存储后端。"""
+        """写入交互记录到存储后端."""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         if not getattr(store, "supports_interaction", False):
             msg = f"Store '{store.store_name}' does not support write_interaction"
@@ -167,7 +167,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> list[SearchResult]:
-        """搜索记忆。"""
+        """搜索记忆."""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.search(query, top_k=top_k)
 
@@ -178,7 +178,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> list[MemoryEvent]:
-        """获取最近历史事件。"""
+        """获取最近历史事件."""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.get_history(limit)
 
@@ -189,7 +189,7 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> str | None:
-        """按 event_id 查找事件类型。"""
+        """按 event_id 查找事件类型."""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         return await store.get_event_type(event_id)
 
@@ -201,12 +201,12 @@ class MemoryModule:
         mode: MemoryMode | None = None,
         user_id: str = "default",
     ) -> None:
-        """更新用户反馈。"""
+        """更新用户反馈."""
         store = await self._get_store(self._resolve_mode(mode), user_id)
         await store.update_feedback(event_id, feedback)
 
     async def close(self) -> None:
-        """关闭所有 store，清理资源。
+        """关闭所有 store，清理资源.
 
         成功关闭的 store 立即释放引用；失败的保留以便调试，
         但不会阻止其他 store 的清理。

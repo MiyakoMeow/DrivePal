@@ -1,4 +1,4 @@
-"""遗忘曲线与判定测试。"""
+"""遗忘曲线与判定测试."""
 
 import math
 from unittest.mock import AsyncMock, MagicMock
@@ -183,7 +183,7 @@ class TestIngestionForget:
         assert ids == []
 
     def test_deterministic_high_strength_no_forgetting(self):
-        """确定性模式高记忆强度条目不应被遗忘。"""
+        """确定性模式高记忆强度条目不应被遗忘."""
         config = MemoryBankConfig(forget_mode="deterministic", seed=42)
         meta = [
             {
@@ -200,11 +200,11 @@ class TestIngestionForget:
 
 
 class TestUpdateFeedbackConcurrency:
-    """update_feedback 并发安全与上限约束测试。"""
+    """update_feedback 并发安全与上限约束测试."""
 
     @pytest.mark.asyncio
     async def test_update_feedback_concurrent_safe(self):
-        """并发 10 次 accept，验证锁必要性——无锁时读-改-写竞争会丢更新，有锁时准确 = 21.0。"""
+        """并发 10 次 accept，验证锁必要性——无锁时读-改-写竞争会丢更新，有锁时准确 = 21.0."""
         import asyncio
 
         index = MagicMock()
@@ -234,7 +234,7 @@ class TestUpdateFeedbackConcurrency:
 
     @pytest.mark.asyncio
     async def test_update_feedback_respects_max_strength(self):
-        """max_memory_strength=5，3 次 accept → 最终 5.0。"""
+        """max_memory_strength=5，3 次 accept → 最终 5.0."""
         index = MagicMock()
         meta = {
             "faiss_id": 0,
@@ -258,7 +258,7 @@ class TestUpdateFeedbackConcurrency:
 
     @pytest.mark.asyncio
     async def test_update_feedback_ignore_never_below_one(self):
-        """5 次 ignore → 最终 1.0。"""
+        """5 次 ignore → 最终 1.0."""
         index = MagicMock()
         meta = {
             "faiss_id": 0,

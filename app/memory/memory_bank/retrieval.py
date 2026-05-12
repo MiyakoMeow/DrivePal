@@ -1,4 +1,4 @@
-"""四阶段检索管道。
+"""四阶段检索管道.
 
 从 VehicleMemBench memorybank.py 移植并适配：
 - 阶段 1: query embedding + FAISS 粗排
@@ -34,7 +34,7 @@ INITIAL_MEMORY_STRENGTH = 1
 
 
 def _tokenize(text: str) -> list[str]:
-    """中英文分词：中文按字符切分，英文按空格切分。"""
+    """中英文分词：中文按字符切分，英文按空格切分."""
     tokens: list[str] = []
     for chunk in re.split(r"([\u4e00-\u9fff]+)", text.lower()):
         if not chunk:
@@ -60,7 +60,7 @@ def _get_effective_chunk_size(
     metadata: list[dict],
     config: MemoryBankConfig,
 ) -> int:
-    """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size。
+    """基于 metadata 中文本长度的 P90 ×3 动态校准 chunk_size.
 
     config.chunk_size 显式设置时直接使用该值。
     metadata 不足 10 条时回退 DEFAULT_CHUNK_SIZE。
@@ -106,7 +106,7 @@ def _strip_source_prefix(text: str, date_part: str) -> str:
 
 
 def _build_overlap_groups(merging: list[dict]) -> dict[int, list[int]]:
-    """用并查集将重叠结果分组为连通分量。"""
+    """用并查集将重叠结果分组为连通分量."""
     idx_owners: dict[int, list[int]] = defaultdict(list)
     for ri, r in enumerate(merging):
         for idx in r["_merged_indices"]:
@@ -136,7 +136,7 @@ def _build_overlap_groups(merging: list[dict]) -> dict[int, list[int]]:
 
 
 def _merge_result_group(merging: list[dict], members: list[int]) -> dict | None:
-    """合并单个分组（一组重叠结果 → 一条结果）。"""
+    """合并单个分组（一组重叠结果 → 一条结果）."""
     if len(members) == 1:
         return merging[members[0]]
 
@@ -257,7 +257,7 @@ def _update_memory_strengths(
     config: MemoryBankConfig,
     reference_date: str | None = None,
 ) -> bool:
-    """更新命中条目的记忆强度，返回是否有修改。
+    """更新命中条目的记忆强度，返回是否有修改.
 
     记忆强度受 max_memory_strength 上限约束，防止无限回忆强化。
     """
@@ -291,7 +291,7 @@ def _update_memory_strengths(
 def _gather_neighbor_indices(
     metadata: list[dict], meta_idx: int, source: str
 ) -> list[int]:
-    """收集同 source 的邻居索引（包含原始命中点）。"""
+    """收集同 source 的邻居索引（包含原始命中点）."""
     neighbor_indices: list[int] = [meta_idx]
     pos = meta_idx + 1
     while pos < len(metadata) and metadata[pos].get("source") == source:
@@ -313,7 +313,7 @@ def _trim_to_chunk_size(
     meta_idx: int,
     max_chars: int,
 ) -> list[int]:
-    """从两端裁剪邻居列表，使总文本不超过 max_chars。"""
+    """从两端裁剪邻居列表，使总文本不超过 max_chars."""
     queue = deque(neighbor_indices)
     total = sum(len(metadata[i].get("text", "")) for i in queue)
     while len(queue) > 1 and total > max_chars:
@@ -330,7 +330,7 @@ def _build_neighbor_result(
     meta_idx: int,
     score: float,
 ) -> dict:
-    """构建合并后的邻居结果字典。"""
+    """构建合并后的邻居结果字典."""
     parts: list[str] = []
     for idx in neighbor_indices:
         t = metadata[idx].get("text", "")
@@ -374,7 +374,7 @@ def _word_in_text(word: str, text: str) -> bool:
 
 
 class RetrievalPipeline:
-    """四阶段检索管道。
+    """四阶段检索管道.
 
     阶段 1: query embedding + FAISS 粗排
     阶段 2: 邻居合并（同 source 连续条目）
@@ -392,7 +392,7 @@ class RetrievalPipeline:
         config: MemoryBankConfig,
         metrics: MemoryBankMetrics | None = None,
     ) -> None:
-        """初始化检索管道。"""
+        """初始化检索管道."""
         self._index = index
         self._embedding_client = embedding_client
         self._config = config
@@ -405,7 +405,7 @@ class RetrievalPipeline:
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
     ) -> tuple[list[dict], bool]:
-        """执行四阶段检索管道。
+        """执行四阶段检索管道.
 
         Returns:
             (results, updated): results 是检索结果列表，updated 指示是否有
@@ -464,7 +464,7 @@ class RetrievalPipeline:
         metadata: list[dict],
         coarse_k: int,
     ) -> list[dict]:
-        """BM25 稀疏检索回退：FAISS 密集检索失效时的兜底。
+        """BM25 稀疏检索回退：FAISS 密集检索失效时的兜底.
 
         当 FAISS 最高分低于阈值时，重建 BM25 索引并补充检索结果。
         """
@@ -573,7 +573,7 @@ class RetrievalPipeline:
         metadata: list[dict],
         reference_date: str | None = None,
     ) -> list[dict]:
-        """对检索结果应用 Ebbinghaus 保留率加权。
+        """对检索结果应用 Ebbinghaus 保留率加权.
 
         公式: adjusted = α × max(score, 0.0) + (1-α) × retention
         其中 retention = e^(-days / (time_scale × strength))
@@ -609,7 +609,7 @@ class RetrievalPipeline:
         return results
 
     def _rebuild_bm25_index(self) -> None:
-        """从 metadata 重建 BM25 索引（仅包含未被遗忘条目）。"""
+        """从 metadata 重建 BM25 索引（仅包含未被遗忘条目）."""
         metadata = self._index.get_metadata()
         self._bm25_corpus = []
         self._bm25_meta_indices = []
@@ -624,7 +624,7 @@ class RetrievalPipeline:
             self._bm25_index = None
 
     async def invalidate_bm25(self) -> None:
-        """标记 BM25 索引失效，下次搜索时重建。"""
+        """标记 BM25 索引失效，下次搜索时重建."""
         async with self._bm25_lock:
             self._bm25_index = None
             self._bm25_corpus = []

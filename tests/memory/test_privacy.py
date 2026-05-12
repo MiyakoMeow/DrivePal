@@ -25,13 +25,13 @@ def test_address_no_comma_preserved():
 
 
 def test_sanitize_context_handles_none():
-    """无 spatial 字段的 context 原样返回。"""
+    """无 spatial 字段的 context 原样返回."""
     assert sanitize_context({}) == {}
     assert sanitize_context({"scenario": "highway"}) == {"scenario": "highway"}
 
 
 def test_sanitize_context_truncates_locations():
-    """spatial 中的 current_location 和 destination 均被脱敏。"""
+    """spatial 中的 current_location 和 destination 均被脱敏."""
     ctx = {
         "spatial": {
             "current_location": {

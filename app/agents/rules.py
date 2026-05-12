@@ -57,12 +57,12 @@ def _get_fatigue_threshold() -> float:
 
 
 def get_fatigue_threshold() -> float:
-    """获取疲劳阈值（公开接口）。"""
+    """获取疲劳阈值（公开接口）."""
     return _get_fatigue_threshold()
 
 
 def reset_fatigue_threshold_cache() -> None:
-    """重置疲劳阈值缓存（供测试使用）。"""
+    """重置疲劳阈值缓存（供测试使用）."""
     global _cached_fatigue_threshold
     _cached_fatigue_threshold = None
 
@@ -73,12 +73,12 @@ _ablation_disable_rules: contextvars.ContextVar[bool] = contextvars.ContextVar(
 
 
 def set_ablation_disable_rules(v: bool) -> None:
-    """设置消融实验标记：禁用规则引擎后处理。ContextVar 自动任务隔离。"""
+    """设置消融实验标记：禁用规则引擎后处理。ContextVar 自动任务隔离."""
     _ablation_disable_rules.set(v)
 
 
 def get_ablation_disable_rules() -> bool:
-    """读取消融实验标记（当前 Context 的值）。"""
+    """读取消融实验标记（当前 Context 的值）."""
     return _ablation_disable_rules.get()
 
 
@@ -113,7 +113,7 @@ _FALLBACK_RULES: list[Rule] = [
 
 
 def _build_condition(rule_cfg: dict) -> Callable[[dict], bool]:
-    """从 TOML 配置项构造 Rule.condition 闭包。各条件 AND 组合。"""
+    """从 TOML 配置项构造 Rule.condition 闭包。各条件 AND 组合."""
     checks: list[Callable[[dict], bool]] = []
 
     if "scenario" in rule_cfg:
@@ -161,7 +161,7 @@ _CONSTRAINT_FIELDS = frozenset(
 
 
 def load_rules(path: Path) -> list[Rule]:
-    """从 TOML 文件加载规则列表。失败时回退到默认规则。"""
+    """从 TOML 文件加载规则列表。失败时回退到默认规则."""
     try:
         with path.open("rb") as f:
             data = tomllib.load(f)
@@ -261,7 +261,7 @@ def format_constraints(constraints: dict[str, Any]) -> str:
 def postprocess_decision(
     decision: dict, driving_context: dict
 ) -> tuple[dict, list[str]]:
-    """在 LLM 决策后强制应用安全规则，不可绕过。
+    """在 LLM 决策后强制应用安全规则，不可绕过.
 
     Returns:
         (修改后的决策, 被修改的字段列表)

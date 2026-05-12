@@ -39,7 +39,7 @@ def test_compute_comparison():
 
 
 def test_architecture_metrics_includes_comparison():
-    """架构组 compute_quality_metrics 应包含 _comparison 键。"""
+    """架构组 compute_quality_metrics 应包含 _comparison 键."""
     from experiments.ablation.architecture_group import compute_quality_metrics
     from experiments.ablation.types import VariantResult
 

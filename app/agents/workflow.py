@@ -37,12 +37,12 @@ _ablation_disable_feedback: contextvars.ContextVar[bool] = contextvars.ContextVa
 
 
 def set_ablation_disable_feedback(v: bool) -> None:
-    """设置消融实验标记：禁用反馈权重。ContextVar 自动任务隔离。"""
+    """设置消融实验标记：禁用反馈权重。ContextVar 自动任务隔离."""
     _ablation_disable_feedback.set(v)
 
 
 def get_ablation_disable_feedback() -> bool:
-    """读取消融实验标记（当前 Context 的值）。"""
+    """读取消融实验标记（当前 Context 的值）."""
     return _ablation_disable_feedback.get()
 
 
@@ -122,14 +122,14 @@ class StrategyOutput(BaseModel):
 
 
 class ReminderContent(BaseModel):
-    """提醒内容校验模型。"""
+    """提醒内容校验模型."""
 
     text: str = ""
     content: str = ""
 
     @classmethod
     def from_decision(cls, decision: dict) -> str:
-        """从 decision dict 中提取提醒内容，多处 key 兜底。"""
+        """从 decision dict 中提取提醒内容，多处 key 兜底."""
         for key in ("reminder_content", "remind_content", "content"):
             val = decision.get(key)
             if isinstance(val, str) and val.strip():
@@ -151,7 +151,7 @@ def _format_time_for_display(time_str: str) -> str:
 
 
 def _extract_location_target(_decision: dict, driving_ctx: dict | None) -> dict:
-    """从 driving_context 中提取目标位置经纬度。_decision 参数预留，当前未使用。"""
+    """从 driving_context 中提取目标位置经纬度。_decision 参数预留，当前未使用."""
     if driving_ctx:
         spatial = driving_ctx.get("spatial", {}) or {}
         dest = spatial.get("destination", {}) or {}
@@ -245,7 +245,7 @@ class AgentWorkflow:
         return LLMJsonResponse.from_llm(result)
 
     async def _safe_memory_search(self, user_input: str) -> list[dict] | None:
-        """搜索相关记忆，失败或结果为空返回 None。"""
+        """搜索相关记忆，失败或结果为空返回 None."""
         try:
             events = await self.memory_module.search(
                 user_input,
@@ -258,7 +258,7 @@ class AgentWorkflow:
         return None
 
     async def _safe_memory_history(self) -> list[dict]:
-        """获取最近历史记录，失败返回空列表。"""
+        """获取最近历史记录，失败返回空列表."""
         try:
             history = await self.memory_module.get_history(
                 mode=self._memory_mode,
@@ -273,7 +273,7 @@ class AgentWorkflow:
         self,
         user_input: str,
     ) -> list[dict]:
-        """搜索相关记忆，失败时回退到最近历史记录。"""
+        """搜索相关记忆，失败时回退到最近历史记录."""
         if not user_input:
             return await self._safe_memory_history()
         events = await self._safe_memory_search(user_input)
@@ -462,14 +462,14 @@ class AgentWorkflow:
 
     @staticmethod
     def _extract_content(decision: dict) -> str:
-        """从决策 dict 中提取提醒内容。"""
+        """从决策 dict 中提取提醒内容."""
         return ReminderContent.from_decision(decision)
 
     async def _check_frequency_guard(
         self,
         driving_ctx: dict | None,
     ) -> str | None:
-        """检查频次约束，返回抑制消息或 None。"""
+        """检查频次约束，返回抑制消息或 None."""
         if not driving_ctx:
             return None
         constraints = apply_rules(driving_ctx)
@@ -720,7 +720,7 @@ class AgentWorkflow:
 
     @staticmethod
     def _build_done_data(state: AgentState, session_id: str | None) -> dict:
-        """构建 done 事件 data 字典。"""
+        """构建 done 事件 data 字典."""
         done_data: dict[str, object] = {
             "event_id": state.get("event_id"),
             "session_id": session_id,
@@ -756,7 +756,7 @@ class AgentWorkflow:
         driving_context: dict | None = None,
         session_id: str | None = None,
     ) -> AsyncGenerator[dict]:
-        """SSE 流式方法，逐阶段 yield 事件。
+        """SSE 流式方法，逐阶段 yield 事件.
 
         每个阶段完成后立即 yield，不等待全部阶段结束。
         """

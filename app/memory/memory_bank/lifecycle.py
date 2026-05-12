@@ -1,4 +1,4 @@
-"""记忆生命周期管理：写入、遗忘、摘要编排。"""
+"""记忆生命周期管理：写入、遗忘、摘要编排."""
 
 import asyncio
 import logging
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryLifecycle:
-    """写入、遗忘、摘要编排。不处理检索。"""
+    """写入、遗忘、摘要编排。不处理检索."""
 
     def __init__(
         self,
@@ -35,7 +35,7 @@ class MemoryLifecycle:
         config: MemoryBankConfig,
         metrics: MemoryBankMetrics | None = None,
     ) -> None:
-        """初始化 MemoryLifecycle。
+        """初始化 MemoryLifecycle.
 
         Args:
             index: FAISS 索引。
@@ -55,7 +55,7 @@ class MemoryLifecycle:
         self._feedback_lock = asyncio.Lock()
 
     async def purge_forgotten(self, metadata: list[dict]) -> bool:
-        """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）。
+        """对达到遗忘阈值的条目硬删除（从 FAISS 索引移除）.
 
         Returns:
             True 表示实际执行了删除；节流跳过时返回 False。
@@ -81,7 +81,7 @@ class MemoryLifecycle:
         return resolve_reference_date(self._config, self._index)
 
     async def _forget_at_ingestion(self) -> None:
-        """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）。"""
+        """摄入时遗忘：对新数据写入后已有旧条目执行遗忘（对齐 VehicleMemBench）."""
         today = self._resolve_reference_date()
         ids = compute_ingestion_forget_ids(
             self._index.get_metadata(),
@@ -99,7 +99,7 @@ class MemoryLifecycle:
     def _build_pair_texts(
         event: MemoryEvent, date_key: str
     ) -> tuple[list[str], list[dict]]:
-        """解析事件内容，返回 (pair_texts, pair_metas)。"""
+        """解析事件内容，返回 (pair_texts, pair_metas)."""
         lines = [line.strip() for line in event.content.split("\n") if line.strip()]
         parsed_pairs: list[tuple[str | None, str]] = [
             FaissIndex.parse_speaker_line(ln) for ln in lines
@@ -149,7 +149,7 @@ class MemoryLifecycle:
         return pair_texts, pair_metas
 
     async def write(self, event: MemoryEvent) -> str:
-        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析。
+        """写入事件。支持多行 "Speaker: content" 格式的多说话人解析.
 
         多说话人场景返回最后一条记录的 FAISS ID（对齐 VehicleMemBench）。
         嵌入编码使用批量 API 以降低往返延迟。
@@ -181,7 +181,7 @@ class MemoryLifecycle:
         return str(fid) if fid is not None else ""
 
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
-        """批量写入，返回 faiss_id 列表（每事件最后一条记录的 ID）。不触发摘要/遗忘。
+        """批量写入，返回 faiss_id 列表（每事件最后一条记录的 ID）。不触发摘要/遗忘.
 
         多说话人事件可能产生多条 pair_text，仅返回最后一条的 faiss_id（对齐 write() 行为）。
         """
@@ -233,7 +233,7 @@ class MemoryLifecycle:
         event_type: str = "reminder",
         **kwargs: object,
     ) -> InteractionResult:
-        """记录一次交互到记忆库。
+        """记录一次交互到记忆库.
 
         索引加载由 store 层 _ensure_loaded() 负责，此处不再重复加载。
         """
@@ -261,7 +261,7 @@ class MemoryLifecycle:
         return InteractionResult(event_id=str(fid))
 
     async def update_feedback(self, event_id: str, feedback: FeedbackData) -> None:
-        """根据用户反馈修改记忆强度。
+        """根据用户反馈修改记忆强度.
 
         accept → memory_strength += 2（主动确认高于被动回忆 +1）
         ignore → memory_strength = max(1, strength - 1)
@@ -299,7 +299,7 @@ class MemoryLifecycle:
             await self._index.save()
 
     async def _finalize_date_summary(self, date_key: str) -> None:
-        """为单个日期生成 daily_summary + daily_personality。"""
+        """为单个日期生成 daily_summary + daily_personality."""
         if not self._summarizer:
             return
         try:
@@ -331,7 +331,7 @@ class MemoryLifecycle:
             )
 
     async def finalize(self) -> None:
-        """遍历所有日期，串行生成缺失摘要/人格，执行摄入遗忘，保存。
+        """遍历所有日期，串行生成缺失摘要/人格，执行摄入遗忘，保存.
 
         应在批量写入完成后调用（对应 VMB 一次性串行调用模式）。
         """
@@ -376,7 +376,7 @@ class MemoryLifecycle:
         await self._index.save()
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
-        """获取历史事件。索引加载由 store 层 _ensure_loaded() 负责。"""
+        """获取历史事件。索引加载由 store 层 _ensure_loaded() 负责."""
         entries = [
             m for m in self._index.get_metadata() if m.get("type") != "daily_summary"
         ]
@@ -391,7 +391,7 @@ class MemoryLifecycle:
         ]
 
     async def get_event_type(self, event_id: str) -> str | None:
-        """按 event_id 查找事件类型。索引加载由 store 层 _ensure_loaded() 负责。"""
+        """按 event_id 查找事件类型。索引加载由 store 层 _ensure_loaded() 负责."""
         try:
             fid = int(event_id)
         except ValueError, TypeError:

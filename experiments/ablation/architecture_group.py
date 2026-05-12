@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def arch_stratum(s: Scenario) -> str:
-    """架构组分层键——使用合成维度。"""
+    """架构组分层键——使用合成维度."""
     d = s.synthesis_dims
     if not d:
         return f"{s.scenario_type}:{s.expected_task_type}"
@@ -35,7 +35,7 @@ async def run_architecture_group(
     scenarios: list[Scenario],
     output_path: Path,
 ) -> GroupResult:
-    """架构组实验。
+    """架构组实验.
 
     变体: FULL, SINGLE_LLM
     场景: 非安全关键场景（排除 highway 及高疲劳/过载的 city_driving）
@@ -79,7 +79,7 @@ async def run_architecture_group(
 def compute_quality_metrics(
     scores: list[JudgeScores], results: list[VariantResult]
 ) -> dict:
-    """计算决策质量指标（评分均值、P50/P90 延迟）。"""
+    """计算决策质量指标（评分均值、P50/P90 延迟）."""
     by_variant: dict[str, list[JudgeScores]] = {}
     for s in scores:
         by_variant.setdefault(s.variant.value, []).append(s)
@@ -120,7 +120,7 @@ def compute_quality_metrics(
 async def _aggregate_full_stage_scores(
     judge: Judge, full_results: list[VariantResult]
 ) -> dict[str, float]:
-    """聚合所有 Full 变体的中间阶段平均评分（并发）。"""
+    """聚合所有 Full 变体的中间阶段平均评分（并发）."""
 
     async def _score_one(fr: VariantResult) -> dict:
         try:
@@ -156,7 +156,7 @@ async def _aggregate_full_stage_scores(
 
 
 def is_arch_scenario(s: Scenario) -> bool:
-    """判定场景是否属于架构组——使用合成维度。"""
+    """判定场景是否属于架构组——使用合成维度."""
     d = s.synthesis_dims
     if not d:
         return False

@@ -9,7 +9,7 @@ from .types import JudgeScores
 
 
 def cohens_d(group_a: list[float], group_b: list[float]) -> float:
-    """Cohen's d 效应量。
+    """Cohen's d 效应量.
 
     当两组方差均为 0（所有值相同）时：
     - 均值相等 → 返回 0.0（无效应）
@@ -45,7 +45,7 @@ def bootstrap_ci(
     alpha: float = 0.05,
     seed: int = 42,
 ) -> dict[str, float | bool]:
-    """Bootstrap 置信区间——对均值差做重采样。
+    """Bootstrap 置信区间——对均值差做重采样.
 
     返回 {ci_lower, ci_upper, significant, observed_diff}。
     significant = True 当 CI 不含 0。
@@ -84,7 +84,7 @@ def wilcoxon_test(
     scores: list[JudgeScores],
     baseline: str = "full",
 ) -> dict[str, dict]:
-    """Wilcoxon signed-rank test——按 scenario_id 配对。
+    """Wilcoxon signed-rank test——按 scenario_id 配对.
 
     返回 {variant: {statistic, p_value, n_pairs}}。
     """
@@ -125,7 +125,7 @@ def compute_comparison(
     scores: list[JudgeScores],
     baseline: str = "full",
 ) -> dict:
-    """计算基线 vs 各变体的对比指标。
+    """计算基线 vs 各变体的对比指标.
 
     Returns: {variant: {mean_score, mean_diff, cohens_d, n}}
     """
@@ -163,7 +163,7 @@ def compute_comparison(
 
 
 def compute_safety_comparison(scores: list[JudgeScores]) -> dict:
-    """安全性组专用对比。包含安全合规率、拦截率、违规类型分布。"""
+    """安全性组专用对比。包含安全合规率、拦截率、违规类型分布."""
     comparison = compute_comparison(scores)
     for variant_group in _group_by_variant(scores).values():
         variant = variant_group[0].variant.value

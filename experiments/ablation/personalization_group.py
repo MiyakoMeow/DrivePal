@@ -41,7 +41,7 @@ STAGES: list[tuple[str, int, int]] = [
 def _build_stages(
     total: int,
 ) -> tuple[list[tuple[str, int, int]], int]:
-    """按 total 构建 4 阶段切片，返回 (stages, scenarios)。"""
+    """按 total 构建 4 阶段切片，返回 (stages, scenarios)."""
     available = min(total, 32)
     if available < _MIN_STAGES:
         msg = f"personalization requires ≥{_MIN_STAGES} scenarios, got {total}"
@@ -56,7 +56,7 @@ def _build_stages(
 
 
 def pers_stratum(s: Scenario) -> str:
-    """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
+    """个性化组分层键——按任务类型分组，保证各类型有场景覆盖."""
     return getattr(s, "expected_task_type", None) or "unknown"
 
 
@@ -68,7 +68,7 @@ async def run_personalization_group(
     *,
     judge: Judge,
 ) -> GroupResult:
-    """个性化组实验。动态轮数，4 阶段偏好切换。
+    """个性化组实验。动态轮数，4 阶段偏好切换.
 
     场景不足 32 时按比例缩小每阶段轮数（总轮数 = 场景数），
     至少需要 4 个场景（每阶段 1 轮）。
@@ -204,7 +204,7 @@ async def run_personalization_group(
 def simulate_feedback(
     decision: dict, stage: str, rng: random.Random, *, stages: dict | None = None
 ) -> Literal["accept", "ignore"]:
-    """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
+    """模拟用户反馈——根据阶段偏好决定 accept 或 ignore.
 
     实验简写版：直接操作 strategies.toml 的 reminder_weights，
     不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
@@ -237,7 +237,7 @@ def simulate_feedback(
 
 
 def _has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
-    """判断 LLM 是否意图生成视觉内容。
+    """判断 LLM 是否意图生成视觉内容.
 
     优先从 stages["decision"]（规则引擎前的 LLM 原始输出）读取，
     stages 无数据时 fallback 到 decision（可能已被规则引擎修改）。
@@ -266,7 +266,7 @@ _KNOWN_TASK_TYPES: frozenset[str] = frozenset(
 
 
 def _extract_task_type(stages: dict) -> str | None:
-    """从 stages.task 提取任务类型。
+    """从 stages.task 提取任务类型.
 
     LLM 输出的 key 名不一致——可能为 task_type / task_attribution。
     返回值仅接受已知类型集合，过滤无效值。
@@ -290,7 +290,7 @@ async def update_feedback_weight(
     *,
     task_type: str | None = None,
 ) -> None:
-    """模拟反馈写入 strategies.toml，更新 reminder_weights。
+    """模拟反馈写入 strategies.toml，更新 reminder_weights.
 
     优先使用显式传入的 task_type；否则回退 MemoryBank 查询。
     """
@@ -336,7 +336,7 @@ def compute_preference_metrics(
     *,
     scores: list[JudgeScores] | None = None,
 ) -> dict:
-    """计算个性化组四个量化指标。"""
+    """计算个性化组四个量化指标."""
     rounds = len(weight_history)
     preference_matching_rate = _compute_matching_rate(results, weight_history)
     convergence_speed = _compute_convergence_speed(weight_history)
@@ -360,7 +360,7 @@ def _compute_matching_rate(
     results: list[VariantResult],
     weight_history: list[dict],
 ) -> dict[str, float]:
-    """偏好匹配率：每阶段 FULL 变体决策与阶段偏好的吻合度。"""
+    """偏好匹配率：每阶段 FULL 变体决策与阶段偏好的吻合度."""
     full_results = [r for r in results if r.variant == Variant.FULL]
 
     # 以 round_index 建映射，消除对列表序的依赖
@@ -385,7 +385,7 @@ def _compute_matching_rate(
 
 
 def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
-    """单条决策是否匹配阶段偏好。mixed 阶段返回 None 表示不适用。"""
+    """单条决策是否匹配阶段偏好。mixed 阶段返回 None 表示不适用."""
     if stage == "mixed":
         return None
     if stage == "high-freq":
@@ -400,7 +400,7 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
 
 
 def _compute_convergence_speed(weight_history: list[dict]) -> float:
-    """收敛速度：最高权重类型最长稳定段的起始轮次（归一化）。
+    """收敛速度：最高权重类型最长稳定段的起始轮次（归一化）.
 
     追踪权重在终值 ±0.05 范围内最长的连续稳定段（≥3 轮），
     返回该段起始轮次 / 总轮数。返回值 ∈ [0, 1]（越小越快），-1.0 表示未收敛。
@@ -451,7 +451,7 @@ def _compute_convergence_speed(weight_history: list[dict]) -> float:
 
 
 def _compute_stability(weight_history: list[dict], stages: list[tuple]) -> float:
-    """偏好切换后目标类型权重的平均标准差。
+    """偏好切换后目标类型权重的平均标准差.
 
     对每个切换点（high-freq→silent, silent→visual-detail, visual-detail→mixed）：
     1. 取上一阶段最后一轮最高权重类型（目标类型）
@@ -501,7 +501,7 @@ def _compute_decision_divergence(
     results: list[VariantResult],
     weight_history: list[dict],
 ) -> float:
-    """FULL vs NO_FEEDBACK 在 mixed 阶段的决策分歧度。
+    """FULL vs NO_FEEDBACK 在 mixed 阶段的决策分歧度.
 
     对每个 mixed 轮次，比较两个变体的 decision dict 差异字段比例，
     取所有轮次的平均。越高说明 FULL 学偏了。

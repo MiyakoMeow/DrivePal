@@ -1,4 +1,4 @@
-"""四阶段检索管道单元测试——mock FaissIndex + EmbeddingClient。"""
+"""四阶段检索管道单元测试——mock FaissIndex + EmbeddingClient."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,7 +32,7 @@ def pipeline(mock_index, mock_embedding):
 
 @pytest.mark.asyncio
 async def test_empty_index_returns_empty(pipeline, mock_index):
-    """total==0 时返回空列表。"""
+    """total==0 时返回空列表."""
     mock_index.total = 0
     results, updated = await pipeline.search("query")
     assert results == []
@@ -41,7 +41,7 @@ async def test_empty_index_returns_empty(pipeline, mock_index):
 
 @pytest.mark.asyncio
 async def test_top_k_zero_returns_empty(pipeline):
-    """top_k<=0 直接返回空。"""
+    """top_k<=0 直接返回空."""
     results, updated = await pipeline.search("query", top_k=0)
     assert results == []
     assert not updated
@@ -49,7 +49,7 @@ async def test_top_k_zero_returns_empty(pipeline):
 
 @pytest.mark.asyncio
 async def test_single_result_no_neighbors(pipeline, mock_index, mock_embedding):
-    """单条命中无邻居 → 1 条结果。"""
+    """单条命中无邻居 → 1 条结果."""
     mock_index.total = 5
     mock_index.get_metadata.return_value = [
         {
@@ -82,7 +82,7 @@ async def test_single_result_no_neighbors(pipeline, mock_index, mock_embedding):
 
 @pytest.mark.asyncio
 async def test_merge_neighbors_same_source(pipeline, mock_index, mock_embedding):
-    """同 source 连续 3 条，命中中间 → 合并为 1 条。"""
+    """同 source 连续 3 条，命中中间 → 合并为 1 条."""
     meta = []
     for i in range(3):
         meta.append(
@@ -121,7 +121,7 @@ async def test_merge_neighbors_same_source(pipeline, mock_index, mock_embedding)
 async def test_speaker_filter_downweights_positive(
     pipeline, mock_index, mock_embedding
 ):
-    """query 提及 Alice，结果 speakers=["Bob"] → 其他结果含 Alice 激活过滤器 → Bob 被降权。"""
+    """query 提及 Alice，结果 speakers=["Bob"] → 其他结果含 Alice 激活过滤器 → Bob 被降权."""
     meta = [
         {
             "faiss_id": 0,
@@ -180,7 +180,7 @@ async def test_speaker_filter_downweights_positive(
 async def test_updated_flag_on_memory_strength_change(
     pipeline, mock_index, mock_embedding
 ):
-    """检索命中应触发 memory_strength 更新 → updated=True。"""
+    """检索命中应触发 memory_strength 更新 → updated=True."""
     meta = [
         {
             "faiss_id": 0,
@@ -214,7 +214,7 @@ async def test_updated_flag_on_memory_strength_change(
 
 @pytest.mark.asyncio
 async def test_strength_capped_at_max(mock_index, mock_embedding):
-    """memory_strength 不超过 max_memory_strength。"""
+    """memory_strength 不超过 max_memory_strength."""
     config = MemoryBankConfig(max_memory_strength=5)
     pipeline = RetrievalPipeline(mock_index, mock_embedding, config)
     mock_index.total = 10
@@ -248,7 +248,7 @@ async def test_strength_capped_at_max(mock_index, mock_embedding):
 
 @pytest.mark.asyncio
 async def test_retention_weighting_reranks(mock_index, mock_embedding):
-    """保留率加权后新鲜条目排到前面。"""
+    """保留率加权后新鲜条目排到前面."""
     config = MemoryBankConfig(retrieval_alpha=0.7)
     pipeline = RetrievalPipeline(mock_index, mock_embedding, config)
     mock_index.total = 10
@@ -303,7 +303,7 @@ async def test_retention_weighting_reranks(mock_index, mock_embedding):
 
 @pytest.mark.asyncio
 async def test_bm25_fallback_triggered_on_low_faiss_score(mock_index, mock_embedding):
-    """FAISS 最高分 < bm25_fallback_threshold 时触发 BM25 回退"""
+    """FAISS 最高分 < bm25_fallback_threshold 时触发 BM25 回退."""
     config = MemoryBankConfig(bm25_fallback_enabled=True, bm25_fallback_threshold=0.5)
     pipeline = RetrievalPipeline(mock_index, mock_embedding, config)
     mock_index.total = 10
@@ -336,7 +336,7 @@ async def test_bm25_fallback_triggered_on_low_faiss_score(mock_index, mock_embed
 
 
 def test_merge_dropped_tracks_count():
-    """合并丢弃时 metrics.forget_count 应递增。"""
+    """合并丢弃时 metrics.forget_count 应递增."""
     from app.memory.memory_bank.retrieval import (
         _build_overlap_groups,
         _merge_overlapping_results,

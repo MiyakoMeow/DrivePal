@@ -1,4 +1,4 @@
-"""Summarizer 单元测试（mock LLM）。"""
+"""Summarizer 单元测试（mock LLM）."""
 
 import tempfile
 from pathlib import Path
@@ -16,7 +16,7 @@ TEST_EMBEDDING = [0.1] * 1536
 
 @pytest.mark.asyncio
 async def test_get_daily_summary_returns_text():
-    """验证 get_daily_summary 返回摘要文本。"""
+    """验证 get_daily_summary 返回摘要文本."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -37,7 +37,7 @@ async def test_get_daily_summary_returns_text():
 
 @pytest.mark.asyncio
 async def test_get_daily_summary_returns_none_when_exists():
-    """验证已有摘要时返回 None。"""
+    """验证已有摘要时返回 None."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -55,7 +55,7 @@ async def test_get_daily_summary_returns_none_when_exists():
 
 @pytest.mark.asyncio
 async def test_get_daily_summary_none_on_empty_llm():
-    """验证 LLM 返回空时结果为 None。"""
+    """验证 LLM 返回空时结果为 None."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -71,7 +71,7 @@ async def test_get_daily_summary_none_on_empty_llm():
 
 @pytest.mark.asyncio
 async def test_summarize_prompt_includes_user_focus():
-    """验证摘要 prompt 包含按姓名追踪偏好引导。"""
+    """验证摘要 prompt 包含按姓名追踪偏好引导."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -96,7 +96,7 @@ async def test_summarize_prompt_includes_user_focus():
 
 @pytest.mark.asyncio
 async def test_overall_summary_skips_when_exists():
-    """extra 已有 overall_summary → 返回 None（不调 LLM）。"""
+    """extra 已有 overall_summary → 返回 None（不调 LLM）."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -116,7 +116,7 @@ async def test_overall_summary_skips_when_exists():
 
 @pytest.mark.asyncio
 async def test_overall_personality_skips_when_exists():
-    """extra 已有 overall_personality → 返回 None。"""
+    """extra 已有 overall_personality → 返回 None."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -135,7 +135,7 @@ async def test_overall_personality_skips_when_exists():
 
 @pytest.mark.asyncio
 async def test_llm_call_failed_propagates():
-    """LLMCallFailedError 应上抛（不被 Summarizer 吞）。"""
+    """LLMCallFailedError 应上抛（不被 Summarizer 吞）."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -154,7 +154,7 @@ async def test_llm_call_failed_propagates():
 
 @pytest.mark.asyncio
 async def test_overall_summary_empty_sets_sentinel():
-    """LLM 空返回 → overall_summary 置为 GENERATION_EMPTY，方法返回 None。"""
+    """LLM 空返回 → overall_summary 置为 GENERATION_EMPTY，方法返回 None."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -174,7 +174,7 @@ async def test_overall_summary_empty_sets_sentinel():
 
 @pytest.mark.asyncio
 async def test_daily_personality_skips_when_exists():
-    """extra daily_personalities 已有日期键 → 返回 None。"""
+    """extra daily_personalities 已有日期键 → 返回 None."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -194,7 +194,7 @@ async def test_daily_personality_skips_when_exists():
 
 @pytest.mark.asyncio
 async def test_daily_summary_prefix_format():
-    """摘要文本含预期前缀格式。"""
+    """摘要文本含预期前缀格式."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -216,7 +216,7 @@ async def test_daily_summary_prefix_format():
 
 @pytest.mark.asyncio
 async def test_daily_personality_stored_in_extra():
-    """daily_personality 存入 extra['daily_personalities'][date_key]。"""
+    """daily_personality 存入 extra['daily_personalities'][date_key]."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -237,7 +237,7 @@ async def test_daily_personality_stored_in_extra():
 
 @pytest.mark.asyncio
 async def test_overall_personality_aggregates_daily():
-    """overall_personality prompt 包含所有 daily_personality 文本。"""
+    """overall_personality prompt 包含所有 daily_personality 文本."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()

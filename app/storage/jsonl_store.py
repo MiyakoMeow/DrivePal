@@ -13,21 +13,21 @@ logger = logging.getLogger(__name__)
 
 
 class JSONLinesStore:
-    """JSON Lines 文件存储，追加写 O(1)，进程安全（O_APPEND）。"""
+    """JSON Lines 文件存储，追加写 O(1)，进程安全（O_APPEND）."""
 
     def __init__(self, user_dir: Path, filename: str) -> None:
         """初始化存储实例，指定用户目录和文件名."""
         self.filepath = user_dir / filename
 
     async def append(self, obj: dict[str, Any]) -> None:
-        """追加写入一条 JSON 对象（新行）。"""
+        """追加写入一条 JSON 对象（新行）."""
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(obj, ensure_ascii=False) + "\n"
         async with aiofiles.open(self.filepath, "a", encoding="utf-8") as f:
             await f.write(line)
 
     async def read_all(self) -> list[dict[str, Any]]:
-        """读取所有行，每行解析为 dict。文件不存在或为空返回 []。"""
+        """读取所有行，每行解析为 dict。文件不存在或为空返回 []."""
         if not self.filepath.exists():
             return []
         result: list[dict[str, Any]] = []
@@ -42,7 +42,7 @@ class JSONLinesStore:
         return result
 
     async def count(self) -> int:
-        """返回文件行数（近似于记录数）。"""
+        """返回文件行数（近似于记录数）."""
         if not self.filepath.exists():
             return 0
         count = 0

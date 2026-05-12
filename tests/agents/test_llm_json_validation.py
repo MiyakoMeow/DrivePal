@@ -119,7 +119,7 @@ class TestStrategyOutput:
 class TestWorkflowValidationPath:
     @pytest.mark.asyncio
     async def test_context_node_validation_success(self, tmp_path):
-        """LLM 返回合法 JSON 时走 validate 分支，不抛异常。"""
+        """LLM 返回合法 JSON 时走 validate 分支，不抛异常."""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         workflow._call_llm_json = AsyncMock(
             return_value=LLMJsonResponse(
@@ -145,7 +145,7 @@ class TestWorkflowValidationPath:
 
     @pytest.mark.asyncio
     async def test_task_node_validation_success(self, tmp_path):
-        """Task 节点 validate 分支不抛异常。"""
+        """Task 节点 validate 分支不抛异常."""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         workflow._call_llm_json = AsyncMock(
             return_value=LLMJsonResponse(
@@ -169,7 +169,7 @@ class TestWorkflowValidationPath:
 
     @pytest.mark.asyncio
     async def test_strategy_node_validation_success(self, tmp_path):
-        """Strategy 节点 validate 分支不抛异常。"""
+        """Strategy 节点 validate 分支不抛异常."""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         workflow._call_llm_json = AsyncMock(
             return_value=LLMJsonResponse(

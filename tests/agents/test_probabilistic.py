@@ -7,7 +7,7 @@ from app.memory.schemas import SearchResult
 
 
 def make_search_result(event_type: str, score: float) -> SearchResult:
-    """构造 SearchResult mock。"""
+    """构造 SearchResult mock."""
     return SearchResult(
         event={"type": event_type, "content": "test event"},
         score=score,
@@ -16,10 +16,10 @@ def make_search_result(event_type: str, score: float) -> SearchResult:
 
 
 class MockStore:
-    """Mock MemoryBankStore，仅实现 search 方法。"""
+    """Mock MemoryBankStore，仅实现 search 方法."""
 
     def __init__(self) -> None:
-        """初始化 mock 存储。"""
+        """初始化 mock 存储."""
         self._results: list[SearchResult] = []
 
     def set_results(self, results: list[SearchResult]) -> None:
@@ -31,7 +31,7 @@ class MockStore:
 
 @pytest.mark.asyncio
 async def test_infer_intent_aggregates_by_type():
-    """多个同 type 事件的 score 聚合——meeting 为主意图。"""
+    """多个同 type 事件的 score 聚合——meeting 为主意图."""
     store = MockStore()
     store.set_results(
         [
@@ -47,7 +47,7 @@ async def test_infer_intent_aggregates_by_type():
 
 @pytest.mark.asyncio
 async def test_cold_start_uniform():
-    """检索无结果时所有 type 等概率。"""
+    """检索无结果时所有 type 等概率."""
     store = MockStore()
     store.set_results([])
     result = await infer_intent("明天开会", store)
@@ -57,7 +57,7 @@ async def test_cold_start_uniform():
 
 
 def test_interrupt_risk_calculation():
-    """打断风险加权公式——验证数值计算。"""
+    """打断风险加权公式——验证数值计算."""
     ctx = {
         "driver": {"fatigue_level": 0.7, "workload": "normal"},
         "scenario": "city_driving",
@@ -69,7 +69,7 @@ def test_interrupt_risk_calculation():
 
 
 def test_interrupt_risk_scenario_none_fallback():
-    """scenario 缺失时 scenario_risk 取 0.5。"""
+    """scenario 缺失时 scenario_risk 取 0.5."""
     ctx = {"driver": {"fatigue_level": 0.5, "workload": "low"}}
     risk = compute_interrupt_risk(ctx)
     # 0.4*0.5 + 0.3*0.1 + 0.2*0.5 + 0.1*0.0 = 0.20+0.03+0.10 = 0.33
@@ -77,7 +77,7 @@ def test_interrupt_risk_scenario_none_fallback():
 
 
 def test_interrupt_risk_overloaded_warning(caplog):
-    """overloaded 且 risk ≥ 0.36 时输出日志。"""
+    """overloaded 且 risk ≥ 0.36 时输出日志."""
     import logging
 
     caplog.set_level(logging.INFO)
@@ -92,7 +92,7 @@ def test_interrupt_risk_overloaded_warning(caplog):
 
 
 def test_interrupt_risk_bounds():
-    """风险分数始终在 [0, 1] 范围内。"""
+    """风险分数始终在 [0, 1] 范围内."""
     # 空 context：0.4*0 + 0.3*0.3 + 0.2*0.5 + 0.1*0 = 0.19
     assert compute_interrupt_risk({}) == pytest.approx(0.19, abs=0.01)
     ctx_max = {
@@ -104,12 +104,12 @@ def test_interrupt_risk_bounds():
 
 
 def test_is_enabled_default():
-    """默认情况下概率推断启用。"""
+    """默认情况下概率推断启用."""
     assert is_enabled() is True
 
 
 def test_speed_factor():
-    """各速度区间的 speed_factor。"""
+    """各速度区间的 speed_factor."""
     from app.agents.probabilistic import _speed_factor
 
     assert _speed_factor(0) == 0.0

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 async def _clean_cache() -> AsyncIterator[None]:
-    """每个测试前后清理客户端缓存"""
+    """每个测试前后清理客户端缓存."""
     clear_semaphore_cache()
     yield
     await close_client_cache()
@@ -31,7 +31,7 @@ async def _clean_cache() -> AsyncIterator[None]:
 
 @pytest.mark.asyncio
 async def test_cached_client_reuse():
-    """同 base_url+api_key 返回同一 AsyncOpenAI 实例"""
+    """同 base_url+api_key 返回同一 AsyncOpenAI 实例."""
     provider = LLMProviderConfig(
         provider=PCfg(model="m", base_url="http://x", api_key="k"), concurrency=4
     )
@@ -42,7 +42,7 @@ async def test_cached_client_reuse():
 
 @pytest.mark.asyncio
 async def test_cached_client_different_keys():
-    """不同 api_key 返回不同实例"""
+    """不同 api_key 返回不同实例."""
     p1 = LLMProviderConfig(
         provider=PCfg(model="m", base_url="http://x", api_key="k1"), concurrency=4
     )
@@ -56,7 +56,7 @@ async def test_cached_client_different_keys():
 
 @pytest.mark.asyncio
 async def test_close_client_cache():
-    """close_client_cache 清理所有缓存客户端"""
+    """close_client_cache 清理所有缓存客户端."""
     provider = LLMProviderConfig(
         provider=PCfg(model="m", base_url="http://x", api_key="k"), concurrency=4
     )
@@ -70,7 +70,7 @@ async def test_close_client_cache():
 
 @pytest.mark.asyncio
 async def test_batch_generate_uses_provider_semaphore():
-    """batch_generate 应通过 provider semaphore 控制并发。"""
+    """batch_generate 应通过 provider semaphore 控制并发."""
     provider = LLMProviderConfig(
         provider=PCfg(model="test-model", base_url="http://test", api_key="test"),
         temperature=0.0,

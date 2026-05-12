@@ -22,7 +22,7 @@ class InterruptLevel(Enum):
 
 @dataclass
 class MultiFormatContent:
-    """多格式提醒内容。
+    """多格式提醒内容.
 
     与 workflow.py 中的 ReminderContent (Pydantic, 用于内容提取) 区分——
     此类为输出路由的最终结果类型，供 SSE / API 返回。
@@ -35,7 +35,7 @@ class MultiFormatContent:
     interrupt_level: InterruptLevel  # 打断级别
 
     def model_dump(self) -> dict:
-        """将 MultiFormatContent 序列化为 JSON 友好的 dict。"""
+        """将 MultiFormatContent 序列化为 JSON 友好的 dict."""
         return {
             "speakable_text": self.speakable_text,
             "display_text": self.display_text,
@@ -46,7 +46,7 @@ class MultiFormatContent:
 
 
 class OutputRouter:
-    """决策 → MultiFormatContent 路由。
+    """决策 → MultiFormatContent 路由.
 
     处理 speakable_text/display_text fallback 和通道/打断级别决策。
     """
@@ -82,7 +82,7 @@ class OutputRouter:
         decision: dict,
         rules_result: dict,
     ) -> MultiFormatContent:
-        """将 LLM 决策路由为 MultiFormatContent。
+        """将 LLM 决策路由为 MultiFormatContent.
 
         Args:
             decision: Strategy Agent 输出的决策 dict。

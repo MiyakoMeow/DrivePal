@@ -28,7 +28,7 @@ def _get_client_cache_lock() -> asyncio.Lock:
 
 
 def _make_client(provider: LLMProviderConfig) -> openai.AsyncOpenAI:
-    """创建 openai 异步客户端（模块级工厂函数）。"""
+    """创建 openai 异步客户端（模块级工厂函数）."""
     kwargs: dict = {
         "api_key": provider.provider.api_key or "not-needed",
         "timeout": _CLIENT_TIMEOUT,
@@ -41,7 +41,7 @@ def _make_client(provider: LLMProviderConfig) -> openai.AsyncOpenAI:
 async def _get_cached_client(
     provider: LLMProviderConfig,
 ) -> openai.AsyncOpenAI:
-    """获取或创建缓存的 AsyncOpenAI 客户端，按 (base_url, api_key) 去重。"""
+    """获取或创建缓存的 AsyncOpenAI 客户端，按 (base_url, api_key) 去重."""
     cache_key = (
         provider.provider.base_url or "",
         hashlib.sha256((provider.provider.api_key or "").encode()).hexdigest(),
@@ -53,7 +53,7 @@ async def _get_cached_client(
 
 
 async def close_client_cache() -> None:
-    """关闭所有缓存的客户端（lifespan 关闭时调用）。"""
+    """关闭所有缓存的客户端（lifespan 关闭时调用）."""
     async with _get_client_cache_lock():
         clients = list(_client_cache.values())
         _client_cache.clear()
@@ -63,7 +63,7 @@ async def close_client_cache() -> None:
 
 
 def clear_semaphore_cache() -> None:
-    """清理 provider semaphore 缓存和客户端缓存（供测试使用）。
+    """清理 provider semaphore 缓存和客户端缓存（供测试使用）.
 
     注意：此函数不关闭缓存的 AsyncOpenAI 客户端。
     测试应在 teardown 中使用 close_client_cache() 清理连接，
@@ -175,7 +175,7 @@ class ChatModel:
         content_parts: list[str],
         tool_calls_acc: dict[int, dict],
     ) -> None:
-        """累积流式块中的 reasoning_content、content、tool_calls 到各累加器。"""
+        """累积流式块中的 reasoning_content、content、tool_calls 到各累加器."""
         reasoning = getattr(delta, "reasoning_content", None)
         if reasoning:
             reasoning_parts.append(reasoning)
@@ -209,7 +209,7 @@ class ChatModel:
         messages: list[ChatCompletionMessageParam] | None = None,
         **kwargs: object,
     ) -> str:
-        """异步生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode。
+        """异步生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode.
 
         响应详情（含 reasoning_content、tool_calls）通过 self.last_message 访问（仅最后一次调用有效）。
         """
@@ -246,7 +246,7 @@ class ChatModel:
         messages: list[ChatCompletionMessageParam] | None = None,
         **kwargs: object,
     ) -> AsyncIterator[str]:
-        """流式生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode。
+        """流式生成回复。kwargs 中支持 json_mode=True 以使用 JSON mode.
 
         支持 DeepSeek 思考模式（reasoning_content 存于 self.last_message）和工具调用分块累积.
         """
@@ -307,7 +307,7 @@ class ChatModel:
         prompts: list[str],
         system_prompt: str | None = None,
     ) -> list[str]:
-        """并行批量生成，使用首个 provider 的 semaphore 控制并发。"""
+        """并行批量生成，使用首个 provider 的 semaphore 控制并发."""
         if not prompts:
             return []
         sem = await self._acquire_slot(self.providers[0])

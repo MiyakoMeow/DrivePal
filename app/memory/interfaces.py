@@ -50,5 +50,5 @@ class MemoryStore(Protocol):
         ...
 
     async def close(self) -> None:
-        """优雅关闭：释放连接、取消后台任务、持久化。"""
+        """优雅关闭：释放连接、取消后台任务、持久化."""
         ...

@@ -15,7 +15,7 @@ class ShortcutResolver:
     """加载 shortcuts.toml 并匹配用户输入."""
 
     def __init__(self) -> None:
-        """加载 shortcuts.toml 并初始化匹配器。"""
+        """加载 shortcuts.toml 并初始化匹配器."""
         self._shortcuts: list[dict] = []
         self._load()
 

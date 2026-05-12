@@ -56,11 +56,11 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 _RUN_ID_RE = re.compile(r"^[a-zA-Z0-9][-a-zA-Z0-9_.]*$")
-"""run_id 只允许字母/数字/连字符/下划线/点号，首字符必须为字母或数字。"""
+"""run_id 只允许字母/数字/连字符/下划线/点号，首字符必须为字母或数字."""
 
 
 def _find_latest_run(runs_dir: Path) -> Path | None:
-    """按目录名降序取最新运行目录。
+    """按目录名降序取最新运行目录.
 
     假设 run_id 为 {timestamp}_{seed} 格式（ISO 基本时间戳），
     该格式下字典序等同时间序。
@@ -75,7 +75,7 @@ def _find_latest_run(runs_dir: Path) -> Path | None:
 
 
 def _print_step_summary(result: GroupResult, elapsed: float) -> None:
-    """控制台输出步骤摘要。"""
+    """控制台输出步骤摘要."""
     group = result.group
     n = len(result.variant_results)
     m = len(result.judge_scores)
@@ -99,7 +99,7 @@ def _print_step_summary(result: GroupResult, elapsed: float) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建消融实验命令行参数解析器。"""
+    """构建消融实验命令行参数解析器."""
     parser = argparse.ArgumentParser(description="DrivePal-2 消融实验")
     parser.add_argument(
         "--group",
@@ -125,7 +125,7 @@ async def _score_group(
     scenarios_for_results: dict[str, list[VariantResult]],
     scenario_by_id: dict[str, Scenario],
 ) -> list[JudgeScores]:
-    """对一组结果的各场景并发评分并汇总。"""
+    """对一组结果的各场景并发评分并汇总."""
 
     async def score_one(sid: str, vrs: list[VariantResult]) -> list[JudgeScores]:
         scenario = scenario_by_id.get(sid)
@@ -145,7 +145,7 @@ async def _score_group(
 
 
 async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> None:
-    """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出。"""
+    """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出."""
     all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
     if not all_scenarios:
         print("无场景数据，请先运行 --synthesize-only")
@@ -233,7 +233,7 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
 
 
 async def _load_variant_results(path: Path) -> list[VariantResult]:
-    """从 JSONL 重建 VariantResult 列表。"""
+    """从 JSONL 重建 VariantResult 列表."""
     results: list[VariantResult] = []
     async with aiofiles.open(path, encoding="utf-8") as f:
         async for line in f:
@@ -254,7 +254,7 @@ def _prepare_group_scenarios(
     *,
     seed: int,
 ) -> dict[str, list[Scenario]]:
-    """预采样：组间互斥 + 分层，避免同一场景进入多组实验。"""
+    """预采样：组间互斥 + 分层，避免同一场景进入多组实验."""
     used_ids: set[str] = set()
     group_scenarios: dict[str, list[Scenario]] = {}
 
@@ -320,7 +320,7 @@ def _prepare_group_scenarios(
 async def _run_safety_experiment(
     scenarios: list[Scenario], run_dir: Path
 ) -> GroupResult:
-    """运行安全性组实验。"""
+    """运行安全性组实验."""
     runner = AblationRunner(base_user_id="experiment-safety")
     judge = Judge()
     return await run_safety_group(
@@ -331,7 +331,7 @@ async def _run_safety_experiment(
 async def _run_architecture_experiment(
     scenarios: list[Scenario], run_dir: Path
 ) -> GroupResult:
-    """运行架构组实验。"""
+    """运行架构组实验."""
     runner = AblationRunner(base_user_id="experiment-arch")
     judge = Judge()
     return await run_architecture_group(
@@ -342,7 +342,7 @@ async def _run_architecture_experiment(
 async def _run_personalization_experiment(
     scenarios: list[Scenario], seed: int, run_dir: Path
 ) -> GroupResult:
-    """运行个性化组实验。"""
+    """运行个性化组实验."""
     runner = AblationRunner(base_user_id="experiment-personalization")
     judge = Judge()
     return await run_personalization_group(
@@ -360,7 +360,7 @@ async def _run_and_summarize(
     seed: int,
     run_dir: Path,
 ) -> tuple[str, GroupResult]:
-    """运行一组实验并写 step-summary + 控制台输出。"""
+    """运行一组实验并写 step-summary + 控制台输出."""
     t0 = time.perf_counter()
     print(f"\n=== 运行 {group} 组 ===\n")
     if group == "safety":
@@ -390,7 +390,7 @@ async def _run_and_summarize(
 
 
 async def main(argv: list[str] | None = None) -> None:
-    """消融实验主入口。"""
+    """消融实验主入口."""
     parser = build_parser()
     args = parser.parse_args(argv)
     data_dir = Path(args.data_dir)

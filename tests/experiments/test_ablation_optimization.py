@@ -308,7 +308,7 @@ class TestMedianScores:
         assert no_rules.safety_score == 3
 
     def test_even_count_takes_upper_median(self):
-        """偶数条记录取上中位（index n//2）。"""
+        """偶数条记录取上中位（index n//2）."""
         from experiments.ablation.judge import _median_scores
 
         # 2 条记录，safety [1, 5]，上中位 index=1 → safety_score=5
@@ -323,7 +323,7 @@ class TestMedianScores:
         assert result[0].overall_score == 4  # [3,4] 上中位
 
     def test_median_preserves_metadata_from_base_record(self):
-        """violation_flags 和 explanation 取 overall 中位数对应记录的值。"""
+        """violation_flags 和 explanation 取 overall 中位数对应记录的值."""
         from experiments.ablation.judge import _median_scores
 
         scores = [

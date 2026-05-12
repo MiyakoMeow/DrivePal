@@ -1,4 +1,4 @@
-"""后台任务管理器，封装 asyncio.Task 生命周期。"""
+"""后台任务管理器，封装 asyncio.Task 生命周期."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 class BackgroundTaskRunner:
-    """管理后台 asyncio.Task 集合，支持优雅关闭。"""
+    """管理后台 asyncio.Task 集合，支持优雅关闭."""
 
     def __init__(self, config: MemoryBankConfig) -> None:
-        """初始化后台任务管理器。
+        """初始化后台任务管理器.
 
         Args:
             config: MemoryBank 配置。
@@ -29,7 +29,7 @@ class BackgroundTaskRunner:
         self._tasks: set[asyncio.Task[None]] = set()
 
     def spawn(self, coro: Coroutine[None, None, None]) -> asyncio.Task[None]:
-        """创建后台任务并追踪。失败时日志告警。"""
+        """创建后台任务并追踪。失败时日志告警."""
         task = asyncio.create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._on_task_done)
@@ -37,7 +37,7 @@ class BackgroundTaskRunner:
 
     @property
     def pending_count(self) -> int:
-        """未完成任务数。"""
+        """未完成任务数."""
         return len(self._tasks)
 
     def _on_task_done(self, task: asyncio.Task[None]) -> None:
@@ -48,7 +48,7 @@ class BackgroundTaskRunner:
                 logger.warning("Background task failed: %s", exc)
 
     async def shutdown(self) -> None:
-        """取消所有未完成任务，等待完成（超时取自 config）。"""
+        """取消所有未完成任务，等待完成（超时取自 config）."""
         if not self._tasks:
             return
         for t in self._tasks:

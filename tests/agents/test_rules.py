@@ -318,7 +318,7 @@ def rules_toml_7(tmp_path):
 
 
 def test_load_rules_from_toml(rules_toml_7):
-    """从 TOML 文件加载 7 条规则。"""
+    """从 TOML 文件加载 7 条规则."""
     rules = load_rules(rules_toml_7)
     assert len(rules) == 7
     names = {r.name for r in rules}
@@ -327,7 +327,7 @@ def test_load_rules_from_toml(rules_toml_7):
 
 
 def test_load_rules_fallback(tmp_path, caplog):
-    """TOML 缺失时回退到 4 条默认规则并日志警告。"""
+    """TOML 缺失时回退到 4 条默认规则并日志警告."""
     import logging
 
     caplog.set_level(logging.WARNING)
@@ -337,7 +337,7 @@ def test_load_rules_fallback(tmp_path, caplog):
 
 
 def test_city_driving_rule(rules_toml_7):
-    """city_driving 场景匹配并限制 audio+15min。"""
+    """city_driving 场景匹配并限制 audio+15min."""
     rules = load_rules(rules_toml_7)
     ctx: dict[str, object] = {"scenario": "city_driving"}
     result = apply_rules(ctx, rules)
@@ -346,7 +346,7 @@ def test_city_driving_rule(rules_toml_7):
 
 
 def test_passenger_extra_channels(rules_toml_7):
-    """乘客在场 + city_driving → channels 含 visual（extra 追加）。"""
+    """乘客在场 + city_driving → channels 含 visual（extra 追加）."""
     rules = load_rules(rules_toml_7)
     ctx: dict[str, object] = {"scenario": "city_driving", "passengers": ["张三"]}
     result = apply_rules(ctx, rules)
@@ -355,7 +355,7 @@ def test_passenger_extra_channels(rules_toml_7):
 
 
 def test_passenger_not_on_highway(rules_toml_7):
-    """highway 场景排除乘客规则（not_scenario）。"""
+    """highway 场景排除乘客规则（not_scenario）."""
     rules = load_rules(rules_toml_7)
     ctx: dict[str, object] = {"scenario": "highway", "passengers": ["张三"]}
     matched = [r for r in rules if r.condition(ctx)]
@@ -363,7 +363,7 @@ def test_passenger_not_on_highway(rules_toml_7):
 
 
 def test_not_scenario_missing_ctx(rules_toml_7):
-    """scenario 缺失时 not_scenario 规则不触发。"""
+    """scenario 缺失时 not_scenario 规则不触发."""
     rules = load_rules(rules_toml_7)
     ctx: dict[str, object] = {}  # 无 scenario 字段
     matched = [r for r in rules if r.condition(ctx)]
@@ -371,7 +371,7 @@ def test_not_scenario_missing_ctx(rules_toml_7):
 
 
 def test_max_frequency_merge_takes_min(rules_toml_7):
-    """多规则含 max_frequency 时取最小值。"""
+    """多规则含 max_frequency 时取最小值."""
     rules = load_rules(rules_toml_7)
     ctx: dict[str, object] = {"scenario": "traffic_jam"}
     extra_rule = Rule(
@@ -385,7 +385,7 @@ def test_max_frequency_merge_takes_min(rules_toml_7):
 
 
 def test_extra_channels_appended_in_intersection(rules_toml_7):
-    """extra_channels 不影响取交结果，仅追加。"""
+    """extra_channels 不影响取交结果，仅追加."""
     rules = load_rules(rules_toml_7)
     # city_driving(audio) + passenger(extra=visual)
     ctx: dict[str, object] = {"scenario": "city_driving", "passengers": ["张三"]}
@@ -394,7 +394,7 @@ def test_extra_channels_appended_in_intersection(rules_toml_7):
 
 
 def test_only_urgent_preserved_with_city_driving(rules_toml_7):
-    """city_driving + fatigue → fatigue 的 only_urgent 保留。"""
+    """city_driving + fatigue → fatigue 的 only_urgent 保留."""
     rules = load_rules(rules_toml_7)
     ctx: dict[str, object] = {
         "scenario": "city_driving",
@@ -406,7 +406,7 @@ def test_only_urgent_preserved_with_city_driving(rules_toml_7):
 
 
 def test_disable_rules_skips_postprocess() -> None:
-    """set_ablation_disable_rules(True) 使 postprocess_decision 跳过修改"""
+    """set_ablation_disable_rules(True) 使 postprocess_decision 跳过修改."""
     from app.agents.rules import postprocess_decision, set_ablation_disable_rules
 
     set_ablation_disable_rules(True)
@@ -421,7 +421,7 @@ def test_disable_rules_skips_postprocess() -> None:
 
 
 def test_shortcut_decision_marked_postprocessed():
-    """shortcut 路径的 decision 应标记 _postprocessed。"""
+    """shortcut 路径的 decision 应标记 _postprocessed."""
     decision = {"should_remind": True, "_postprocessed": True}
     driving_ctx = {"scenario": "highway"}
     result, mods = postprocess_decision(decision, driving_ctx)
@@ -430,7 +430,7 @@ def test_shortcut_decision_marked_postprocessed():
 
 
 def test_fatigue_threshold_cached(monkeypatch):
-    """_get_fatigue_threshold 首次读 env 后缓存，改 env 不生效"""
+    """_get_fatigue_threshold 首次读 env 后缓存，改 env 不生效."""
     from app.agents.rules import _get_fatigue_threshold, reset_fatigue_threshold_cache
 
     reset_fatigue_threshold_cache()

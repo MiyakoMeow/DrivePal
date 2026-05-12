@@ -180,7 +180,7 @@ async def test_feedback_success_updates_strategy_weight(
 
 @pytest.mark.integration
 def test_process_query_without_context(isolated_app: TestClient) -> None:
-    """测试不带上下文的 processQuery mutation（需要 LLM）。"""
+    """测试不带上下文的 processQuery mutation（需要 LLM）."""
     result = _graphql_query(
         isolated_app,
         """
@@ -201,7 +201,7 @@ def test_process_query_without_context(isolated_app: TestClient) -> None:
 
 @pytest.mark.integration
 def test_process_query_with_context(isolated_app: TestClient) -> None:
-    """测试带上下文的 processQuery mutation（验证规则引擎）。"""
+    """测试带上下文的 processQuery mutation（验证规则引擎）."""
     result = _graphql_query(
         isolated_app,
         """

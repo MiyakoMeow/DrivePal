@@ -1,4 +1,4 @@
-"""Markdown 论文 → docx 转换器。一次性工具，用于学校提交格式转换。
+"""Markdown 论文 → docx 转换器。一次性工具，用于学校提交格式转换.
 
 用法: uv run python scripts/md2docx.py [-i input.md] [-o output.docx]
 """
@@ -66,7 +66,7 @@ _CITATION_RE = re.compile(r"\[\d+(?:,\d+)*\]")
 
 
 async def parse(filepath: Path) -> list[dict]:
-    """解析 markdown 文件为 token 字典列表。"""
+    """解析 markdown 文件为 token 字典列表."""
     from markdown_it import MarkdownIt
 
     md = MarkdownIt()
@@ -93,12 +93,12 @@ async def parse(filepath: Path) -> list[dict]:
 
 
 def _mermaid_hash(code: str) -> str:
-    """用 mermaid 代码内容的 SHA256 前 16 位作缓存文件名。"""
+    """用 mermaid 代码内容的 SHA256 前 16 位作缓存文件名."""
     return hashlib.sha256(code.encode()).hexdigest()[:16]
 
 
 def _is_valid_png(path: Path) -> bool:
-    """校验文件是否为有效 PNG。损坏则删除并返回 False。"""
+    """校验文件是否为有效 PNG。损坏则删除并返回 False."""
     try:
         if path.stat().st_size < 8:
             path.unlink(missing_ok=True)
@@ -116,22 +116,22 @@ def _is_valid_png(path: Path) -> bool:
 
 
 async def _mkdir_cache(cache_dir: Path) -> None:
-    """异步创建缓存目录。"""
+    """异步创建缓存目录."""
     await asyncio.to_thread(cache_dir.mkdir, parents=True, exist_ok=True)
 
 
 async def _write_cache(cache_path: Path, data: bytes) -> None:
-    """异步写入缓存文件。"""
+    """异步写入缓存文件."""
     await asyncio.to_thread(cache_path.write_bytes, data)
 
 
 async def _check_cache(cache_path: Path) -> bool:
-    """异步校验缓存 PNG 是否有效。"""
+    """异步校验缓存 PNG 是否有效."""
     return await asyncio.to_thread(_is_valid_png, cache_path)
 
 
 async def _http_fetch_with_retry(client, url: str):
-    """HTTP GET 带一次重试，仅对瞬态网络错误重试。"""
+    """HTTP GET 带一次重试，仅对瞬态网络错误重试."""
     import httpx
 
     for attempt in range(2):
@@ -156,7 +156,7 @@ async def _http_fetch_with_retry(client, url: str):
 
 
 async def render_mermaid(code: str, cache_dir: Path, client) -> Path | None:
-    """将 mermaid 代码渲染为 PNG，缓存至 cache_dir。"""
+    """将 mermaid 代码渲染为 PNG，缓存至 cache_dir."""
     import json
     import zlib
     from base64 import urlsafe_b64encode
@@ -184,7 +184,7 @@ async def render_mermaid(code: str, cache_dir: Path, client) -> Path | None:
 async def render_latex(
     latex: str, cache_dir: Path, client, *, display: bool = False
 ) -> Path | None:
-    """将 LaTeX 公式渲染为 PNG，缓存至 cache_dir。"""
+    """将 LaTeX 公式渲染为 PNG，缓存至 cache_dir."""
     import urllib.parse
 
     encoded = urllib.parse.quote(latex)
@@ -206,7 +206,7 @@ async def render_latex(
 
 
 async def preprocess_tokens(tokens: list[dict], cache_dir: Path, client) -> list[dict]:
-    """扫描 token 流，将 mermaid fence 替换为 image token。"""
+    """扫描 token 流，将 mermaid fence 替换为 image token."""
     result: list[dict] = []
     i = 0
     while i < len(tokens):
@@ -252,7 +252,7 @@ async def preprocess_tokens(tokens: list[dict], cache_dir: Path, client) -> list
 
 
 async def _check_font_warning() -> None:
-    """检测中文字体可用性，缺失时警告。"""
+    """检测中文字体可用性，缺失时警告."""
     import platform
 
     def _scan() -> None:
@@ -285,7 +285,7 @@ async def _check_font_warning() -> None:
 
 
 def _setup_document(doc: Document) -> None:
-    """配置页面边距、默认字体。字体警告由调用方异步执行。"""
+    """配置页面边距、默认字体。字体警告由调用方异步执行."""
     for section in doc.sections:
         section.top_margin = MARGIN_TOP
         section.bottom_margin = MARGIN_BOTTOM
@@ -314,7 +314,7 @@ def _add_run(
     font_size: Pt | None = None,
     superscript: bool = False,
 ) -> None:
-    """添加一个格式化的 run 到段落。"""
+    """添加一个格式化的 run 到段落."""
     run = paragraph.add_run(text)
     run.bold = bold
     run.italic = italic
@@ -343,7 +343,7 @@ def _new_paragraph(
     spacing: float | None = None,
     first_line_indent: Cm | None = None,
 ):
-    """创建新段落，可选设置对齐/字体/行距/首行缩进。"""
+    """创建新段落，可选设置对齐/字体/行距/首行缩进."""
     p = doc.add_paragraph()
     if alignment is not None:
         p.alignment = alignment
@@ -361,7 +361,7 @@ def _new_paragraph(
 
 
 def _add_heading(doc: Document, text: str, level: int) -> None:
-    """添加标题段落。"""
+    """添加标题段落."""
     sizes = {1: SIZE_H1, 2: SIZE_H2, 3: SIZE_H3, 4: SIZE_H4}
     alignments = {1: WD_ALIGN_PARAGRAPH.CENTER}
     spacing_after = {1: Pt(24), 2: Pt(18), 3: Pt(12), 4: Pt(8)}
@@ -382,7 +382,7 @@ def _add_heading(doc: Document, text: str, level: int) -> None:
 
 
 def _extract_plain_text(md_content: str) -> str:
-    """从 markdown inline 文本中提取纯文本（去除粗斜体标记）。"""
+    """从 markdown inline 文本中提取纯文本（去除粗斜体标记）."""
     from markdown_it import MarkdownIt
 
     md = MarkdownIt()
@@ -396,7 +396,7 @@ def _extract_plain_text(md_content: str) -> str:
 async def _render_inline_content(
     paragraph, content: str, *, client, font_size: Pt = SIZE_BODY
 ) -> None:
-    """将 inline markdown 文本渲染为 paragraph 中的 runs。
+    """将 inline markdown 文本渲染为 paragraph 中的 runs.
 
     支持：**bold**/__bold__、*italic*/_italic_、`code`、[N] 上标引用、$...$ 行内公式。
     """
@@ -483,7 +483,7 @@ def _render_inner_with_citations(
     italic: bool = False,
     font_size: Pt = SIZE_BODY,
 ) -> None:
-    """渲染粗/斜体内部文本，同时解析其中的 [N] 引用上标。"""
+    """渲染粗/斜体内部文本，同时解析其中的 [N] 引用上标."""
     parts = _CITATION_RE.split(text)
     citations = _CITATION_RE.findall(text)
     for k, part in enumerate(parts):
@@ -503,7 +503,7 @@ def _render_inner_with_citations(
 async def _add_body_paragraph(
     doc: Document, content: str, *, client, use_ref_font: bool = False
 ) -> None:
-    """添加正文段落，处理粗斜体、[N] 引用和公式。"""
+    """添加正文段落，处理粗斜体、[N] 引用和公式."""
     # 块级公式 $$...$$：整段替换为居中图片
     stripped = content.strip()
     if stripped.startswith("$$") and stripped.endswith("$$"):
@@ -530,7 +530,7 @@ async def _add_body_paragraph(
 
 
 def _add_code_block(doc: Document, code: str) -> None:
-    """添加等宽字体代码块段落。"""
+    """添加等宽字体代码块段落."""
     for line in code.split("\n"):
         p = doc.add_paragraph()
         p.paragraph_format.line_spacing = 1.0
@@ -542,7 +542,7 @@ def _add_code_block(doc: Document, code: str) -> None:
 
 
 def _render_table(doc: Document, rows: list[list[str]]) -> None:
-    """将二维数据渲染为三线表。首行（表头）加粗。"""
+    """将二维数据渲染为三线表。首行（表头）加粗."""
     if not rows or not rows[0]:
         return
 
@@ -612,7 +612,7 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
 async def _add_list_item(
     doc: Document, content: str, client, is_ordered: bool, counter: int
 ) -> None:
-    """添加列表项段落。"""
+    """添加列表项段落."""
     prefix = f"{counter}. " if is_ordered else "\u2022 "
     p = doc.add_paragraph()
     p.paragraph_format.line_spacing = LINE_SPACING
@@ -627,7 +627,7 @@ async def _add_list_item(
 
 
 def _collect_headings(tokens: list[dict]) -> list[tuple[int, str]]:
-    """收集所有 h2/h3 标题（层级, 文本）。"""
+    """收集所有 h2/h3 标题（层级, 文本）."""
     headings: list[tuple[int, str]] = []
     pending_level: int | None = None
     for t in tokens:
@@ -645,7 +645,7 @@ def _collect_headings(tokens: list[dict]) -> list[tuple[int, str]]:
 
 
 def _add_toc(doc: Document, headings: list[tuple[int, str]]) -> None:
-    """插入静态目录页。
+    """插入静态目录页.
 
     仅含标题与缩进，不含页码。python-docx 不支持 TOC 域代码，
     静态目录为已知限制——转换后在 Word 中手动补页码或插入自动目录。
@@ -671,7 +671,7 @@ def _add_toc(doc: Document, headings: list[tuple[int, str]]) -> None:
 
 
 def _add_page_numbers(doc: Document) -> None:
-    """在页脚居中添加页码。"""
+    """在页脚居中添加页码."""
     for section in doc.sections:
         footer = section.footer
         footer.is_linked_to_previous = False
@@ -699,7 +699,7 @@ def _add_page_numbers(doc: Document) -> None:
 
 
 async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
-    """主建文档函数。遍历 token 流构建 docx。"""
+    """主建文档函数。遍历 token 流构建 docx."""
     doc = Document()
     _setup_document(doc)
 

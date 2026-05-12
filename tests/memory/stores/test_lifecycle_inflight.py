@@ -1,4 +1,4 @@
-"""MemoryLifecycle finalize 测试。"""
+"""MemoryLifecycle finalize 测试."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,7 +18,7 @@ def _make_index() -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_finalize_generates_summaries():
-    """finalize 遍历 source，串行生成摘要/人格。"""
+    """finalize 遍历 source，串行生成摘要/人格."""
     index = _make_index()
     index.get_metadata.return_value = [
         {"source": "2024-06-15"},
@@ -49,7 +49,7 @@ async def test_finalize_generates_summaries():
 
 @pytest.mark.asyncio
 async def test_finalize_skips_existing_summaries():
-    """已有摘要的日期跳过生成。"""
+    """已有摘要的日期跳过生成."""
     index = _make_index()
     index.get_metadata.return_value = [
         {"source": "2024-06-15"},
@@ -82,7 +82,7 @@ async def test_finalize_skips_existing_summaries():
 
 @pytest.mark.asyncio
 async def test_finalize_without_summarizer_just_saves():
-    """无 summarizer 时仅保存。"""
+    """无 summarizer 时仅保存."""
     index = _make_index()
     embed = AsyncMock()
     forget = MagicMock()
@@ -95,7 +95,7 @@ async def test_finalize_without_summarizer_just_saves():
 
 @pytest.mark.asyncio
 async def test_finalize_with_forgetting():
-    """enable_forgetting=True 时 finalize 执行遗忘。"""
+    """enable_forgetting=True 时 finalize 执行遗忘."""
     index = _make_index()
     index.get_metadata.return_value = [
         {

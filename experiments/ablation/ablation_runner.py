@@ -1,4 +1,4 @@
-"""消融实验运行器——分发变体调用、收集结果。"""
+"""消融实验运行器——分发变体调用、收集结果."""
 
 from __future__ import annotations
 
@@ -44,10 +44,10 @@ except ValueError:
 
 
 class AblationRunner:
-    """消融实验运行器。分发变体调用、收集结果。"""
+    """消融实验运行器。分发变体调用、收集结果."""
 
     def __init__(self, base_user_id: str = "ablation") -> None:
-        """初始化运行器。
+        """初始化运行器.
 
         Args:
             base_user_id: 变体 uid 前缀。三组分别用 experiment-safety / experiment-arch / experiment-personalization。
@@ -61,7 +61,7 @@ class AblationRunner:
         variant: Variant,
         user_id: str | None = None,
     ) -> VariantResult:
-        """运行单个变体实验。user_id 传 None 则回退 base_user_id。"""
+        """运行单个变体实验。user_id 传 None 则回退 base_user_id."""
         uid = user_id or self.base_user_id
         t0 = time.perf_counter()
 
@@ -168,7 +168,7 @@ class AblationRunner:
         concurrency: int = 4,
         checkpoint_path: Path | None = None,
     ) -> list[VariantResult]:
-        """批量运行场景×变体笛卡尔积（并发）。
+        """批量运行场景×变体笛卡尔积（并发）.
 
         concurrency 控制 LLM 并发度（默认 4，匹配 provider concurrency）。
         每变体独立 user_id（{base_user_id}-{scenario.id}-{variant.value}），MemoryBank 无竞态。
@@ -233,7 +233,7 @@ class AblationRunner:
 async def _load_checkpoint(
     path: Path,
 ) -> tuple[set[tuple[str, str]], list[VariantResult]]:
-    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表)。
+    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表).
 
     用于续跑：将已有结果加载回内存，避免 `dump_variant_results_jsonl` 覆盖丢失。
     """
@@ -260,7 +260,7 @@ async def _load_checkpoint(
 async def _append_checkpoint(
     path: Path, vr: VariantResult, *, include_modifications: bool = False
 ) -> None:
-    """追加写单条 VariantResult 到 checkpoint JSONL。"""
+    """追加写单条 VariantResult 到 checkpoint JSONL."""
     path.parent.mkdir(parents=True, exist_ok=True)
     record: dict[str, object] = {
         "scenario_id": vr.scenario_id,

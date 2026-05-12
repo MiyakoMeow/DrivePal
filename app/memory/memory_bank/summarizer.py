@@ -1,4 +1,4 @@
-"""摘要与人格生成，不可变保护（一旦生成不覆盖）。"""
+"""摘要与人格生成，不可变保护（一旦生成不覆盖）."""
 
 import logging
 from typing import TYPE_CHECKING
@@ -17,7 +17,7 @@ _SUMMARY_DEFAULT_MAX_TOKENS = 400
 
 
 class Summarizer:
-    """摘要与人格生成器，不可变保护（一旦生成不覆盖）。"""
+    """摘要与人格生成器，不可变保护（一旦生成不覆盖）."""
 
     def __init__(
         self,
@@ -25,7 +25,7 @@ class Summarizer:
         index: IndexReader,
         config: MemoryBankConfig,
     ) -> None:
-        """初始化 Summarizer。
+        """初始化 Summarizer.
 
         Args:
             llm: LLM 客户端。
@@ -54,7 +54,7 @@ class Summarizer:
         )
 
     async def get_daily_summary(self, date_key: str) -> str | None:
-        """生成某天的对话摘要（已存在则不覆盖）。
+        """生成某天的对话摘要（已存在则不覆盖）.
 
         Raises:
             LLMCallFailedError: LLM API 调用失败（调用方决定降级）。
@@ -83,7 +83,7 @@ class Summarizer:
             return f"The summary of the conversation on {date_key} is: {result}"
 
     async def get_overall_summary(self) -> str | None:
-        """基于所有日常摘要生成总体摘要（已存在则不覆盖）。
+        """基于所有日常摘要生成总体摘要（已存在则不覆盖）.
 
         Raises:
             LLMCallFailedError: LLM API 调用失败。
@@ -118,7 +118,7 @@ class Summarizer:
             return result
 
     async def get_daily_personality(self, date_key: str) -> str | None:
-        """生成某天的人格画像（已存在则不覆盖）。
+        """生成某天的人格画像（已存在则不覆盖）.
 
         Raises:
             LLMCallFailedError: LLM API 调用失败。
@@ -152,7 +152,7 @@ class Summarizer:
             return result
 
     async def get_overall_personality(self) -> str | None:
-        """基于所有日常人格画像生成总体人格（已存在则不覆盖）。
+        """基于所有日常人格画像生成总体人格（已存在则不覆盖）.
 
         Raises:
             LLMCallFailedError: LLM API 调用失败。

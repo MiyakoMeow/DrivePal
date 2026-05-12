@@ -1,4 +1,4 @@
-"""FAISS 索引管理模块。
+"""FAISS 索引管理模块.
 
 FaissIndex 封装 FAISS 索引检索与元数据管理。
 Flat（IndexFlatIP）适用于 <100K 向量精确检索；
@@ -34,7 +34,7 @@ _IVF_NOT_SUPPORTED = (
 
 @dataclass
 class LoadResult:
-    """FaissIndex.load() 返回值，含恢复信息。"""
+    """FaissIndex.load() 返回值，含恢复信息."""
 
     ok: bool
     warnings: list[str] = field(default_factory=list)
@@ -42,7 +42,7 @@ class LoadResult:
 
 
 def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
-    """校验 metadata 为 list[dict]，每个 dict 含 faiss_id（int，无重复）。"""
+    """校验 metadata 为 list[dict]，每个 dict 含 faiss_id（int，无重复）."""
     if not isinstance(meta, list):
         msg = "metadata root is not list"
         raise TypeError(msg)
@@ -64,14 +64,14 @@ def _validate_metadata_structure(meta: object) -> list[dict[str, Any]]:
 
 
 def _validate_index_count(idx: faiss.Index, meta_len: int) -> None:
-    """校验索引条目数与 metadata 数一致。"""
+    """校验索引条目数与 metadata 数一致."""
     if idx.ntotal != meta_len:
         msg = f"count mismatch {idx.ntotal} vs {meta_len}"
         raise ValueError(msg)
 
 
 class FaissIndex:
-    """FAISS 索引包装器，支持 Flat/IVF 双模式向量检索与元数据管理。"""
+    """FAISS 索引包装器，支持 Flat/IVF 双模式向量检索与元数据管理."""
 
     def __init__(
         self,
@@ -80,7 +80,7 @@ class FaissIndex:
         index_type: Literal["flat", "ivf_flat"] = "flat",
         ivf_nlist: int = 128,
     ) -> None:
-        """初始化 FaissIndex。
+        """初始化 FaissIndex.
 
         Args:
             data_dir: 持久化目录（含 index.faiss / metadata.json）。
@@ -108,13 +108,13 @@ class FaissIndex:
         return await loop.run_in_executor(None, fn)
 
     def _build_index(self) -> None:
-        """按 index_type 构建 FAISS 索引。"""
+        """按 index_type 构建 FAISS 索引."""
         if self._index_type == "ivf_flat":
             raise RuntimeError(_IVF_NOT_SUPPORTED)
         self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self._dim))
 
     async def load(self) -> LoadResult:
-        """从磁盘加载索引与元数据；损坏时降级恢复，不直接丢弃向量。
+        """从磁盘加载索引与元数据；损坏时降级恢复，不直接丢弃向量.
 
         Returns:
             LoadResult 含 ok / warnings / recovery_actions。
@@ -317,7 +317,7 @@ class FaissIndex:
             )
 
     async def save(self) -> None:
-        """将索引与元数据持久化到磁盘（协程安全——内部持有 asyncio.Lock）。"""
+        """将索引与元数据持久化到磁盘（协程安全——内部持有 asyncio.Lock）."""
         async with self._save_lock:
             if self._index is None:
                 return
@@ -339,7 +339,7 @@ class FaissIndex:
                 )
 
     def compute_reference_date(self, offset_days: int = 1) -> str:
-        """扫描 metadata 找最大 timestamp，返回 +offset_days 的日期。
+        """扫描 metadata 找最大 timestamp，返回 +offset_days 的日期.
 
         若 metadata 为空或无可解析时间戳，返回 UTC 当天。
         """
@@ -360,7 +360,7 @@ class FaissIndex:
 
     @staticmethod
     def parse_speaker_line(line: str) -> tuple[str | None, str]:
-        """从 "Speaker: content" 格式解析说话人和内容。
+        """从 "Speaker: content" 格式解析说话人和内容.
 
         Returns:
             (speaker_name, content) — speaker_name 为 None 表示不可解析。
@@ -372,14 +372,14 @@ class FaissIndex:
         return None, line.strip()
 
     def _rebuild_speakers_cache(self) -> None:
-        """从 metadata 重建说话人缓存（在 load/add_vector 后调用）。"""
+        """从 metadata 重建说话人缓存（在 load/add_vector 后调用）."""
         self._all_speakers.clear()
         for m in self._metadata:
             for spk in m.get("speakers", []):
                 self._all_speakers.add(spk)
 
     def get_all_speakers(self) -> list[str]:
-        """返回所有已知说话人列表（若缓存为空则从 metadata 重建）。"""
+        """返回所有已知说话人列表（若缓存为空则从 metadata 重建）."""
         if not self._all_speakers and self._metadata:
             self._rebuild_speakers_cache()
         return sorted(self._all_speakers)
@@ -391,7 +391,7 @@ class FaissIndex:
         timestamp: str,
         extra_meta: dict | None = None,
     ) -> int:
-        """添加向量并关联文本与时间戳。
+        """添加向量并关联文本与时间戳.
 
         Args:
             text: 关联文本。
@@ -447,7 +447,7 @@ class FaissIndex:
         return fid
 
     async def search(self, query_emb: list[float], top_k: int) -> list[dict]:
-        """检索最相似的 top_k 条记忆。
+        """检索最相似的 top_k 条记忆.
 
         Args:
             query_emb: 查询向量。
@@ -475,7 +475,7 @@ class FaissIndex:
         return results
 
     async def update_metadata(self, faiss_id: int, updates: dict) -> None:
-        """更新指定 faiss_id 的元数据。
+        """更新指定 faiss_id 的元数据.
 
         Args:
             faiss_id: 目标 ID。
@@ -487,7 +487,7 @@ class FaissIndex:
             self._metadata[mi].update(updates)
 
     async def remove_vectors(self, faiss_ids: list[int]) -> None:
-        """从索引和元数据中移除指定向量。
+        """从索引和元数据中移除指定向量.
 
         Args:
             faiss_ids: 待移除的 ID 列表。
@@ -505,30 +505,30 @@ class FaissIndex:
         self._rebuild_speakers_cache()
 
     def get_metadata(self) -> list[dict]:
-        """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）。"""
+        """返回所有元数据（可变引用，调用方可修改条目用于遗忘/强化）."""
         return self._metadata
 
     def get_metadata_by_id(self, faiss_id: int) -> dict | None:
-        """O(1) 按 faiss_id 查找元数据条目。"""
+        """O(1) 按 faiss_id 查找元数据条目."""
         mi = self._id_to_meta.get(faiss_id)
         if mi is None:
             return None
         return self._metadata[mi]
 
     def get_extra(self) -> dict:
-        """返回额外元数据（总体摘要/人格）。"""
+        """返回额外元数据（总体摘要/人格）."""
         return self._extra if isinstance(self._extra, dict) else {}
 
     def set_extra(self, extra: dict) -> None:
-        """设置额外元数据。"""
+        """设置额外元数据."""
         self._extra = extra
 
     @property
     def total(self) -> int:
-        """索引中向量总数。"""
+        """索引中向量总数."""
         return self._index.ntotal if self._index else 0
 
     @property
     def next_id(self) -> int:
-        """下一个可用 faiss_id。"""
+        """下一个可用 faiss_id."""
         return self._next_id

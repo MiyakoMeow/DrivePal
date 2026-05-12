@@ -1,4 +1,4 @@
-"""MemoryBankStore Facade，MemoryStore Protocol 实现。"""
+"""MemoryBankStore Facade，MemoryStore Protocol 实现."""
 
 import asyncio
 import json
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryBankStore:
-    """基于 FAISS 的记忆存储，MemoryStore Protocol 实现。"""
+    """基于 FAISS 的记忆存储，MemoryStore Protocol 实现."""
 
     _SOURCE_INDEX_FILENAME = "source_event_index.json"
 
@@ -55,7 +55,7 @@ class MemoryBankStore:
         user_id: str = "default",
         **_kwargs: object,
     ) -> None:
-        """初始化 MemoryBankStore。
+        """初始化 MemoryBankStore.
 
         Args:
             data_dir: per-user 数据根目录。
@@ -116,7 +116,7 @@ class MemoryBankStore:
         self._ensure_loaded_lock = asyncio.Lock()
 
     async def _ensure_loaded(self) -> None:
-        """加载索引，消费 LoadResult 告警。"""
+        """加载索引，消费 LoadResult 告警."""
         if self._loaded:
             return
         async with self._ensure_loaded_lock:
@@ -141,7 +141,7 @@ class MemoryBankStore:
             await self._load_source_index()
 
     async def _load_source_index(self) -> None:
-        """从磁盘加载 source_event_index，损坏时回退空 dict。"""
+        """从磁盘加载 source_event_index，损坏时回退空 dict."""
         path = self._user_dir / self._SOURCE_INDEX_FILENAME
         if not path.exists():
             return
@@ -155,7 +155,7 @@ class MemoryBankStore:
             logger.warning("Failed to load source_event_index from %s: %s", path, exc)
 
     async def _save_source_index(self) -> None:
-        """持久化 source_event_index 到磁盘（tmp + os.replace 原子写入）。"""
+        """持久化 source_event_index 到磁盘（tmp + os.replace 原子写入）."""
         if not self._source_index_dirty:
             return
         async with self._source_index_lock:
@@ -181,7 +181,7 @@ class MemoryBankStore:
         return resolve_reference_date(self._config, self._index)
 
     async def _maybe_save(self) -> None:
-        """持久化节流：距上次保存 < save_interval_seconds 则跳过。"""
+        """持久化节流：距上次保存 < save_interval_seconds 则跳过."""
         now = time.monotonic()
         if now - self._last_save_time >= self._config.save_interval_seconds:
             await self._index.save()
@@ -191,7 +191,7 @@ class MemoryBankStore:
     # ── 委托方法 ──
 
     async def write(self, event: MemoryEvent) -> str:
-        """写入事件元数据到索引。"""
+        """写入事件元数据到索引."""
         await self._ensure_loaded()
         fid = await self._lifecycle.write(event)
         await self._retrieval.invalidate_bm25()
@@ -202,7 +202,7 @@ class MemoryBankStore:
         return fid
 
     async def write_batch(self, events: list[MemoryEvent]) -> list[str]:
-        """批量写入，返回 faiss_id 列表。不触发摘要/遗忘。"""
+        """批量写入，返回 faiss_id 列表。不触发摘要/遗忘."""
         await self._ensure_loaded()
         fids = await self._lifecycle.write_batch(events)
         await self._retrieval.invalidate_bm25()
@@ -219,7 +219,7 @@ class MemoryBankStore:
         event_type: str = "reminder",
         **kwargs: object,
     ) -> InteractionResult:
-        """写入交互记录并关联到当日事件。"""
+        """写入交互记录并关联到当日事件."""
         await self._ensure_loaded()
         result = await self._lifecycle.write_interaction(
             query,
@@ -249,7 +249,7 @@ class MemoryBankStore:
         return result
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
-        """搜索记忆。"""
+        """搜索记忆."""
         await self._ensure_loaded()
         self._metrics.search_count += 1
         if self._index.total == 0:
@@ -304,7 +304,7 @@ class MemoryBankStore:
         return out
 
     async def format_search_results(self, query: str, top_k: int = 5) -> str:
-        """返回人类可读的检索结果文本，用于 LLM prompt 注入。
+        """返回人类可读的检索结果文本，用于 LLM prompt 注入.
 
         按 source 分组，标注 memory_strength 和日期。
         触发完整检索管道（索引加载、遗忘判断、metrics 记录）。
@@ -349,7 +349,7 @@ class MemoryBankStore:
         return "\n\n".join(parts)
 
     async def get_history(self, limit: int = 10) -> list[MemoryEvent]:
-        """获取最近历史事件列表。"""
+        """获取最近历史事件列表."""
         await self._ensure_loaded()
         events = await self._lifecycle.get_history(limit)
         for ev in events:
@@ -359,7 +359,7 @@ class MemoryBankStore:
         return events
 
     async def get_event_type(self, event_id: str) -> str | None:
-        """按 event_id 查找事件类型。"""
+        """按 event_id 查找事件类型."""
         await self._ensure_loaded()
         return await self._lifecycle.get_event_type(event_id)
 
@@ -368,7 +368,7 @@ class MemoryBankStore:
         event_id: str,
         feedback: FeedbackData,
     ) -> None:
-        """记录用户反馈并更新记忆强度。"""
+        """记录用户反馈并更新记忆强度."""
         if self._feedback_store is None:
             self._feedback_store = JSONLinesStore(
                 user_dir=self._user_root,
@@ -390,17 +390,17 @@ class MemoryBankStore:
         await self._lifecycle.update_feedback(event_id, feedback)
 
     async def finalize_ingestion(self) -> None:
-        """摘要 + 遗忘 + 持久化。应在批量写入完成后调用。"""
+        """摘要 + 遗忘 + 持久化。应在批量写入完成后调用."""
         await self._ensure_loaded()
         await self._lifecycle.finalize()
 
     @property
     def metrics(self) -> MemoryBankMetrics:
-        """返回可观测性指标实例。"""
+        """返回可观测性指标实例."""
         return self._metrics
 
     async def close(self) -> None:
-        """持久化后关闭索引。"""
+        """持久化后关闭索引."""
         await self._save_source_index()
         try:
             await self.finalize_ingestion()

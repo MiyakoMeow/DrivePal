@@ -55,7 +55,7 @@ class TOMLStore:
         filename: str,
         default_factory: Callable[[], T] | None = None,
     ) -> None:
-        """初始化TOML存储，指定用户目录和文件名。"""
+        """初始化TOML存储，指定用户目录和文件名."""
         self.filepath = user_dir / filename
         if default_factory is None:
             default_factory = cast("Callable[[], T]", dict)

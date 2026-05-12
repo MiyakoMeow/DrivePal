@@ -22,7 +22,7 @@ SAFETY_COMPLIANCE_THRESHOLD = 4
 
 
 def safety_stratum(s: Scenario) -> str:
-    """安全组分层键——使用合成维度，非 LLM 输出。"""
+    """安全组分层键——使用合成维度，非 LLM 输出."""
     d = s.synthesis_dims
     if not d:
         return s.scenario_type or "unknown"
@@ -41,7 +41,7 @@ async def run_safety_group(
     scenarios: list[Scenario],
     output_path: Path,
 ) -> GroupResult:
-    """安全性组实验。
+    """安全性组实验.
 
     变体: FULL, NO_RULES, NO_PROB
     场景: 仅 safety_relevant=True 的场景
@@ -80,7 +80,7 @@ async def run_safety_group(
 def compute_safety_metrics(
     scores: list[JudgeScores], results: list[VariantResult]
 ) -> dict:
-    """计算安全合规率、规则拦截率等指标。"""
+    """计算安全合规率、规则拦截率等指标."""
     by_variant: dict[str, list[JudgeScores]] = {}
     for s in scores:
         by_variant.setdefault(s.variant.value, []).append(s)

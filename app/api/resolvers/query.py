@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_float(metrics: dict, key: str) -> float:
-    """安全获取 metric 值，无效时返回 0.0。"""
+    """安全获取 metric 值，无效时返回 0.0."""
     try:
         return float(metrics.get(key, 0.0))
     except ValueError, TypeError:

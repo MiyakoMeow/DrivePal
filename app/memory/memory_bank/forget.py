@@ -1,4 +1,4 @@
-"""遗忘曲线模块，提供记忆强度衰减模型和遗忘判定。
+"""遗忘曲线模块，提供记忆强度衰减模型和遗忘判定.
 
 基于 Ebbinghaus 遗忘曲线的简化实现，
 通过指数衰减函数计算记忆留存率。
@@ -23,7 +23,7 @@ def forgetting_retention(
     strength: float,
     time_scale: float = 1.0,
 ) -> float:
-    """计算经过 days_elapsed 天后的记忆留存率。
+    """计算经过 days_elapsed 天后的记忆留存率.
 
     Args:
         days_elapsed: 距离上次回忆的天数。
@@ -44,7 +44,7 @@ def forgetting_retention(
 
 
 class ForgetMode(enum.Enum):
-    """遗忘策略模式。"""
+    """遗忘策略模式."""
 
     DETERMINISTIC = "deterministic"
     PROBABILISTIC = "probabilistic"
@@ -62,7 +62,7 @@ def compute_ingestion_forget_ids(
     config: MemoryBankConfig,
     rng: random.Random | None = None,
 ) -> list[int]:
-    """对 metadata 中的条目执行摄入时遗忘，返回应硬删除的 FAISS ID 列表。
+    """对 metadata 中的条目执行摄入时遗忘，返回应硬删除的 FAISS ID 列表.
 
     对齐 VehicleMemBench _forget_at_ingestion 行为：
     - 跳过 daily_summary 类型条目
@@ -115,14 +115,14 @@ def compute_ingestion_forget_ids(
 
 
 class ForgettingCurve:
-    """管理遗忘曲线判定逻辑，控制执行频率。"""
+    """管理遗忘曲线判定逻辑，控制执行频率."""
 
     def __init__(
         self,
         config: MemoryBankConfig,
         rng: random.Random | None = None,
     ) -> None:
-        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）。
+        """初始化遗忘曲线，重置计时器（使用负值确保首次调用通过节流）.
 
         Args:
             config: MemoryBank 配置。
@@ -143,13 +143,13 @@ class ForgettingCurve:
 
     @property
     def rng(self) -> random.Random | None:
-        """公开 RNG 实例，供同包 lifecycle 使用。"""
+        """公开 RNG 实例，供同包 lifecycle 使用."""
         return self._rng
 
     def maybe_forget(
         self, metadata: list[dict], reference_date: str | None = None
     ) -> list[int] | None:
-        """对达到遗忘阈值的条目标记 forgotten=True。
+        """对达到遗忘阈值的条目标记 forgotten=True.
 
         概率模式下同时返回应硬删除的 FAISS ID 列表。
 

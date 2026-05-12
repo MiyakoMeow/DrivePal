@@ -1,4 +1,4 @@
-"""ChatModel 薄封装：4 消息序列 + 重试时自动截断 prompt 上下文。"""
+"""ChatModel 薄封装：4 消息序列 + 重试时自动截断 prompt 上下文."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ _LLM_EXHAUSTED_TEMPLATE = "LLM call failed — all {retries} attempts exhausted"
 
 
 class LlmClient:
-    """ChatModel 的薄封装，4 消息序列 + 上下文截断重试。"""
+    """ChatModel 的薄封装，4 消息序列 + 上下文截断重试."""
 
     def __init__(
         self,
@@ -50,7 +50,7 @@ class LlmClient:
         *,
         rng: random.Random | None = None,
     ) -> None:
-        """初始化 LlmClient。
+        """初始化 LlmClient.
 
         Args:
             chat_model: 实现 generate() 方法的 chat 模型。
@@ -63,7 +63,7 @@ class LlmClient:
         self._rng = rng
 
     async def call(self, prompt: str, *, system_prompt: str, **kwargs: object) -> str:
-        """调用 ChatModel.generate()，使用 4 消息序列。
+        """调用 ChatModel.generate()，使用 4 消息序列.
 
         消息序列：system → user（锚定）→ assistant（应承）→ user（实际 prompt）。
 

@@ -1,4 +1,4 @@
-"""MemoryBank 集中配置模型。"""
+"""MemoryBank 集中配置模型."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class MemoryBankConfig(BaseSettings):
-    """MemoryBank 全部可配置参数，环境变量前缀 MEMORYBANK_。"""
+    """MemoryBank 全部可配置参数，环境变量前缀 MEMORYBANK_."""
 
     model_config = SettingsConfigDict(env_prefix="MEMORYBANK_", case_sensitive=False)
 
@@ -185,7 +185,7 @@ class MemoryBankConfig(BaseSettings):
 
 
 def validate_settings(config: MemoryBankConfig | None = None) -> list[str]:
-    """校验配置参数，返回警告列表。值无效时 warn 不 raise。"""
+    """校验配置参数，返回警告列表。值无效时 warn 不 raise."""
     cfg = config or MemoryBankConfig()
     warnings: list[str] = []
     if not 0.0 < cfg.retrieval_alpha <= 1.0:
@@ -210,7 +210,7 @@ def resolve_reference_date(
     config: MemoryBankConfig,
     index: FaissIndex,
 ) -> str:
-    """参考日期解析。优先级：config.reference_date > auto 推算 > UTC 当天。"""
+    """参考日期解析。优先级：config.reference_date > auto 推算 > UTC 当天."""
     if config.reference_date:
         return config.reference_date
     if config.reference_date_auto:

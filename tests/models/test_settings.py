@@ -364,7 +364,7 @@ class TestEmbeddingModelFallback:
 
 
 def test_validate_settings_invalid_alpha():
-    """校验 retrieval_alpha=0 触发警告。"""
+    """校验 retrieval_alpha=0 触发警告."""
     from app.memory.memory_bank.config import MemoryBankConfig, validate_settings
 
     cfg = MemoryBankConfig.model_construct(retrieval_alpha=0.0)
@@ -374,7 +374,7 @@ def test_validate_settings_invalid_alpha():
 
 
 def test_validate_settings_ok():
-    """校验默认配置不触发警告。"""
+    """校验默认配置不触发警告."""
     from app.memory.memory_bank.config import MemoryBankConfig, validate_settings
 
     cfg = MemoryBankConfig()

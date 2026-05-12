@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_fatigue_threshold() -> float:
-    """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。
+    """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7.
 
     architecture_group / safety_group / scenario_synthesizer 共用此单点。
     薄封装 app.agents.rules.get_fatigue_threshold()——规则引擎是权威源。
@@ -35,13 +35,13 @@ def get_fatigue_threshold() -> float:
 
 
 def safe_event_id(record: dict[str, Any]) -> str | None:
-    """从 JSON dict 安全读取 event_id，过滤非法类型。"""
+    """从 JSON dict 安全读取 event_id，过滤非法类型."""
     eid = record.get("event_id")
     return eid if isinstance(eid, (str, type(None))) else None
 
 
 def variant_result_from_dict(d: dict[str, Any]) -> VariantResult:
-    """从 JSON dict 重建 VariantResult，兼容旧 checkpoint 缺失字段。"""
+    """从 JSON dict 重建 VariantResult，兼容旧 checkpoint 缺失字段."""
     return VariantResult(
         scenario_id=str(d["scenario_id"]),
         variant=Variant(d["variant"]),
@@ -56,7 +56,7 @@ def variant_result_from_dict(d: dict[str, Any]) -> VariantResult:
 
 
 async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
-    """异步原子写 JSON。先写临时文件，成功后再 rename 覆盖。
+    """异步原子写 JSON。先写临时文件，成功后再 rename 覆盖.
 
     含序列化降级容错：遇不可序列化值（如自定义类型）用 str() 兜底。
     """
@@ -80,7 +80,7 @@ async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
 
 
 async def write_summary(path: Path, data: dict[str, Any]) -> None:
-    """写 JSON 总结文件。timestamp 始终由系统生成，不受 data 中同名键覆盖。"""
+    """写 JSON 总结文件。timestamp 始终由系统生成，不受 data 中同名键覆盖."""
     record: dict[str, Any] = {
         **data,
         "timestamp": datetime.now(tz=UTC).isoformat(),
@@ -89,7 +89,7 @@ async def write_summary(path: Path, data: dict[str, Any]) -> None:
 
 
 async def write_config(path: Path, args: argparse.Namespace) -> None:
-    """写运行配置快照——CLI 参数 + 相关环境变量。"""
+    """写运行配置快照——CLI 参数 + 相关环境变量."""
     env_keys = [
         "ABLATION_SEED",
         "FATIGUE_THRESHOLD",
@@ -122,7 +122,7 @@ async def write_step_summary(
     *,
     duration_seconds: float,
 ) -> None:
-    """写一组实验的步骤总结。"""
+    """写一组实验的步骤总结."""
     await write_summary(
         path,
         {
@@ -141,7 +141,7 @@ async def write_step_summary(
 
 
 async def write_scores_json(path: Path, scores: list[JudgeScores]) -> None:
-    """写入 Judge 评分文件。全量运行和 judge-only 共用。"""
+    """写入 Judge 评分文件。全量运行和 judge-only 共用."""
     data: dict[str, Any] = {
         "scores": [
             {
@@ -164,7 +164,7 @@ async def dump_variant_results_jsonl(
     *,
     include_modifications: bool = False,
 ) -> None:
-    """将 VariantResult 列表写入 JSONL。先写临时文件，成功后再 rename 覆盖。"""
+    """将 VariantResult 列表写入 JSONL。先写临时文件，成功后再 rename 覆盖."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     try:

@@ -64,7 +64,7 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 
 ### ruff 配置
 
-`ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/COM812/E501/RUF001-003。
+`ruff.toml`，extend-select=ALL，忽略 D203/D213/D415/COM812/E501/RUF001-003。
 `tests/**` 豁免 S101/S311/SLF001 等测试常见模式。
 
 ### ty 配置

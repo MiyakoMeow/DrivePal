@@ -35,7 +35,7 @@ async def test_events_persist_across_instances(tmp_path: Path, monkeypatch) -> N
 
 
 async def test_ignore_feedback_decreases_weight(tmp_path: Path, monkeypatch) -> None:
-    """验证忽略反馈会降低对应策略权重——手动模拟权重更新路径。"""
+    """验证忽略反馈会降低对应策略权重——手动模拟权重更新路径."""
     monkeypatch.setattr("app.config.DATA_DIR", tmp_path)
     init_storage()
     u_dir = tmp_path / "users" / "default"
@@ -146,7 +146,7 @@ async def test_get_event_type_returns_none_for_missing(tmp_path: Path) -> None:
 
 
 def test_migration_skipped_with_flag(tmp_path: Path) -> None:
-    """存在迁移标记时跳过迁移。"""
+    """存在迁移标记时跳过迁移."""
     from app.storage.init_data import init_storage
 
     flag = tmp_path / ".migrated_flag"

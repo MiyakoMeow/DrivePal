@@ -49,7 +49,7 @@ class PendingReminder:
         trigger_text: str = "",
         ttl_seconds: int = 3600,
     ) -> PendingReminder:
-        """创建新的 PendingReminder 实例。"""
+        """创建新的 PendingReminder 实例."""
         return cls(
             id=f"pr_{uuid.uuid4().hex[:12]}",
             event_id=event_id,
@@ -70,7 +70,7 @@ class PendingReminderManager:
     """管理待触发提醒的增删查与轮询触发."""
 
     def __init__(self, user_dir: Path) -> None:
-        """初始化待触发提醒管理器。
+        """初始化待触发提醒管理器.
 
         Args:
             user_dir: 用户数据目录路径。
@@ -101,7 +101,7 @@ class PendingReminderManager:
         trigger_text: str = "",
         ttl_seconds: int | None = None,
     ) -> PendingReminder:
-        """添加一条待触发提醒。"""
+        """添加一条待触发提醒."""
         if ttl_seconds is None:
             if trigger_type == "time":
                 target_str = str(trigger_target.get("time", ""))
@@ -131,12 +131,12 @@ class PendingReminderManager:
         return pr
 
     async def list_pending(self) -> list[dict]:
-        """返回所有 status=pending 的提醒列表。"""
+        """返回所有 status=pending 的提醒列表."""
         all_rem = await self._read_all()
         return [r for r in all_rem if r.get("status") == "pending"]
 
     async def cancel(self, reminder_id: str) -> None:
-        """取消指定 ID 的待触发提醒。"""
+        """取消指定 ID 的待触发提醒."""
         async with self._lock:
             all_rem = await self._read_all()
             for r in all_rem:
@@ -145,7 +145,7 @@ class PendingReminderManager:
             await self._write_all(all_rem)
 
     async def cancel_last(self) -> bool:
-        """取消最近一条 pending reminder。返回是否成功取消。"""
+        """取消最近一条 pending reminder。返回是否成功取消."""
         async with self._lock:
             all_rem = await self._read_all()
             pending = [r for r in all_rem if r.get("status") == "pending"]
@@ -156,7 +156,7 @@ class PendingReminderManager:
         return True
 
     async def poll(self, driving_context: dict) -> list[dict]:
-        """返回满足触发条件的提醒列表，并将其标记为 triggered。"""
+        """返回满足触发条件的提醒列表，并将其标记为 triggered."""
         async with self._lock:
             all_rem = await self._read_all()
             triggered = []
@@ -201,7 +201,7 @@ class PendingReminderManager:
 
     @staticmethod
     def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """返回两点间距离（米）。"""
+        """返回两点间距离（米）."""
         earth_radius_m = 6371000
         phi1, phi2 = math.radians(lat1), math.radians(lat2)
         dphi = math.radians(lat2 - lat1)
@@ -252,7 +252,7 @@ class PendingReminderManager:
 
     @staticmethod
     def _check_context(reminder: dict, ctx: dict) -> bool:
-        """Context 触发：当前 scenario != 入队时的 scenario（场景切换）。"""
+        """Context 触发：当前 scenario != 入队时的 scenario（场景切换）."""
         target = reminder.get("trigger_target", {})
         prev = target.get("previous_scenario", "")
         current = ctx.get("scenario", "")
@@ -260,7 +260,7 @@ class PendingReminderManager:
 
 
 def parse_duration(s: str) -> int | None:
-    """解析中文时长字符串为秒数。支持 '10分钟' '半小时' '1小时' '5分'。"""
+    """解析中文时长字符串为秒数。支持 '10分钟' '半小时' '1小时' '5分'."""
     s = s.strip()
     if s == "半小时":
         return 1800

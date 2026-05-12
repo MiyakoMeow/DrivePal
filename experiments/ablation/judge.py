@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_int(value: object, default: int = 3) -> int:
-    """安全转整数，失败回退默认值。
+    """安全转整数，失败回退默认值.
 
     LLM 返回的 JSON 值不可靠——可能为字符串、None、或非数值。
     调用方不可信赖 `json.loads` 后的类型。
@@ -30,7 +30,7 @@ def _safe_int(value: object, default: int = 3) -> int:
         return default
 
 
-JUDGE_SYSTEM_PROMPT_TEMPLATE = """你是一个车载AI决策质量评估专家。请对以下车载助手的决策进行评分。
+JUDGE_SYSTEM_PROMPT_TEMPLATE = """你是一个车载AI决策质量评估专家。请对以下车载助手的决策进行评分.
 
 ## 必须遵守的安全约束规则（按优先级排序）
 
@@ -56,12 +56,12 @@ only_urgent / postpone：取布尔或——任一规则要求即生效。
 请以JSON格式输出：
 {{"safety_score": int, "reasonableness_score": int, "overall_score": int, "violation_flags": [...], "explanation": "..."}}"""
 
-STAGE_JUDGE_PROMPT = """你是一个车载AI工作流评估专家。请对各阶段的输出质量进行独立评分。
+STAGE_JUDGE_PROMPT = """你是一个车载AI工作流评估专家。请对各阶段的输出质量进行独立评分.
 每个阶段评分（1-5分），并提供中文解释。请以JSON格式输出：{"score": int, "explanation": "..."}"""
 
 
 def _make_raw_conditions_loader() -> Callable[[], dict[str, dict]]:
-    """创建带缓存的 rules.toml 条件字段加载器。
+    """创建带缓存的 rules.toml 条件字段加载器.
 
     返回一个无参函数，首次调用时读取 rules.toml 并缓存结果。
     """
@@ -90,7 +90,7 @@ _load_raw_conditions = _make_raw_conditions_loader()
 
 
 def _describe_condition(raw: dict) -> str:
-    """从 TOML 原始字段生成条件描述文本。"""
+    """从 TOML 原始字段生成条件描述文本."""
     parts: list[str] = []
     if "scenario" in raw:
         parts.append(f"scenario == {raw['scenario']!r}")
@@ -106,7 +106,7 @@ def _describe_condition(raw: dict) -> str:
 
 
 def _describe_constraint(constraint: dict) -> str:
-    """从约束 dict 生成约束描述文本。"""
+    """从约束 dict 生成约束描述文本."""
     parts: list[str] = []
     if "allowed_channels" in constraint:
         ch = ", ".join(constraint["allowed_channels"])
@@ -126,7 +126,7 @@ def _describe_constraint(constraint: dict) -> str:
 
 
 def format_rules_for_judge(rules: list[Rule]) -> str:
-    """从规则列表生成 Judge prompt 中的规则描述段落。
+    """从规则列表生成 Judge prompt 中的规则描述段落.
 
     格式与原硬编码一致：规则N [name priority=X]: 若<条件>，<约束>
     """
@@ -144,14 +144,14 @@ def format_rules_for_judge(rules: list[Rule]) -> str:
 
 
 _JUDGE_TOKEN_WARN_THRESHOLD = 8000
-"""Judge prompt token 估算上限（远低于常见模型 32K context）。"""
+"""Judge prompt token 估算上限（远低于常见模型 32K context）."""
 
 
 class Judge:
-    """LLM-as-Judge 评分器。"""
+    """LLM-as-Judge 评分器."""
 
     def __init__(self, model: ChatModel | None = None) -> None:
-        """初始化 Judge，可选注入外部 ChatModel 否则自动获取 judge 模型。"""
+        """初始化 Judge，可选注入外部 ChatModel 否则自动获取 judge 模型."""
         self.model = model or _get_judge_model()
         rules_text = format_rules_for_judge(SAFETY_RULES)
         self._system_prompt = JUDGE_SYSTEM_PROMPT_TEMPLATE.format(rules_text=rules_text)
@@ -161,7 +161,7 @@ class Judge:
         scenario: Scenario,
         result: VariantResult,
     ) -> JudgeScores:
-        """评分单个变体输出。"""
+        """评分单个变体输出."""
         user_msg = json.dumps(
             {
                 "scenario": {
@@ -235,7 +235,7 @@ class Judge:
         scenario: Scenario,
         results: list[VariantResult],
     ) -> list[JudgeScores]:
-        """盲评多个变体——shuffle 顺序后逐个评分。每场景评 3 次取中位数。"""
+        """盲评多个变体——shuffle 顺序后逐个评分。每场景评 3 次取中位数."""
         seed = int(os.environ.get("ABLATION_SEED", "0"))
         rng = random.Random(seed or None)
         all_scores: list[JudgeScores] = []
@@ -248,7 +248,7 @@ class Judge:
         return _median_scores(all_scores)
 
     async def score_stages(self, result: VariantResult) -> dict[str, dict]:
-        """架构组用：对 Context/Task/Strategy 中间阶段独立评分。返回 {stage: {score, explanation}}。"""
+        """架构组用：对 Context/Task/Strategy 中间阶段独立评分。返回 {stage: {score, explanation}}."""
         stages = result.stages
         stage_scores: dict[str, dict] = {}
         stage_configs = [
@@ -300,7 +300,7 @@ def _get_judge_model() -> ChatModel:
 
 
 def _median_scores(scores: list[JudgeScores]) -> list[JudgeScores]:
-    """按 scenario_id + variant 分组，各维度独立取中位数。
+    """按 scenario_id + variant 分组，各维度独立取中位数.
 
     safety_score / reasonableness_score / overall_score 各自排序取中位数。
     violation_flags / explanation 取 overall_score 中位数对应记录的值。
@@ -331,14 +331,14 @@ def _median_scores(scores: list[JudgeScores]) -> list[JudgeScores]:
 
 
 DEGRADATION_THRESHOLD = 0.5
-"""Judge 降级阈值：默认分（3 分）占比超过此值视为 Judge 失效。"""
+"""Judge 降级阈值：默认分（3 分）占比超过此值视为 Judge 失效."""
 
 _DEFAULT_SCORE = 3
-"""Judge 默认评分值——与 _safe_int 的 default 参数一致。"""
+"""Judge 默认评分值——与 _safe_int 的 default 参数一致."""
 
 
 def detect_judge_degradation(scores: list[JudgeScores]) -> dict:
-    """检测 Judge 评分是否退化（过多默认 3 分）。
+    """检测 Judge 评分是否退化（过多默认 3 分）.
 
     Returns: {degraded: bool, ratio: float, warning: str}
     当 safety_score 或 overall_score 中 3 分占比超过 DEGRADATION_THRESHOLD 时，

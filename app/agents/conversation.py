@@ -26,10 +26,10 @@ class ConversationTurn:
 
 
 class ConversationManager:
-    """管理会话生命周期和 turn 历史。纯内存，服务重启丢失。"""
+    """管理会话生命周期和 turn 历史。纯内存，服务重启丢失."""
 
     def __init__(self, ttl_minutes: int = 30) -> None:
-        """初始化会话管理器。
+        """初始化会话管理器.
 
         Args:
             ttl_minutes: 会话过期时间（分钟），默认 30。
@@ -39,7 +39,7 @@ class ConversationManager:
         self._ttl = ttl_minutes
 
     def create(self, user_id: str) -> str:
-        """创建新会话并返回会话 ID。"""
+        """创建新会话并返回会话 ID."""
         sid = f"s_{uuid.uuid4().hex[:12]}"
         now = datetime.now(UTC).isoformat()
         self._sessions[sid] = {
@@ -61,7 +61,7 @@ class ConversationManager:
         decision_snapshot: dict,
         response_summary: str = "",
     ) -> None:
-        """追加一轮对话。会话不存在则静默忽略。"""
+        """追加一轮对话。会话不存在则静默忽略."""
         if not self._exists(session_id):
             return
         session = self._sessions[session_id]
@@ -78,7 +78,7 @@ class ConversationManager:
         session["last_activity"] = datetime.now(UTC).isoformat()
 
     def get_history(self, session_id: str) -> list[ConversationTurn]:
-        """获取会话的对话历史，不存在或已过期返回空列表。"""
+        """获取会话的对话历史，不存在或已过期返回空列表."""
         if not self._exists(session_id):
             return []
         session = self._sessions[session_id]
@@ -98,7 +98,7 @@ class ConversationManager:
         return list(session["turns"])
 
     def close(self, session_id: str, user_id: str | None = None) -> bool:
-        """关闭指定会话。返回是否实际关闭。"""
+        """关闭指定会话。返回是否实际关闭."""
         session = self._sessions.get(session_id)
         if session is None:
             return False
@@ -108,7 +108,7 @@ class ConversationManager:
         return True
 
     def cleanup_expired(self) -> None:
-        """清理所有超时未活动的会话。"""
+        """清理所有超时未活动的会话."""
         now = datetime.now(UTC)
         expired = []
         for sid, session in list(self._sessions.items()):

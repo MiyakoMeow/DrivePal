@@ -1,4 +1,4 @@
-"""ForgettingCurve 单元测试。"""
+"""ForgettingCurve 单元测试."""
 
 import random
 from datetime import UTC, datetime
@@ -14,34 +14,34 @@ from app.memory.memory_bank.forget import (
 
 
 class TestForgettingRetention:
-    """遗忘留存率函数测试。"""
+    """遗忘留存率函数测试."""
 
     def test_zero_days_full_retention(self):
-        """验证 0 天经过留存率为 1.0。"""
+        """验证 0 天经过留存率为 1.0."""
         assert forgetting_retention(0, 1) == pytest.approx(1.0)
 
     def test_higher_strength_slows_forgetting(self):
-        """验证更高强度减缓遗忘。"""
+        """验证更高强度减缓遗忘."""
         assert forgetting_retention(5, 5) > forgetting_retention(5, 1)
 
     def test_longer_time_lower_retention(self):
-        """验证更长时间降低留存率。"""
+        """验证更长时间降低留存率."""
         assert forgetting_retention(1, 1) > forgetting_retention(10, 1)
 
     def test_negative_days_returns_one(self):
-        """验证负数天数返回 1.0。"""
+        """验证负数天数返回 1.0."""
         assert forgetting_retention(-1, 1) == pytest.approx(1.0)
 
     def test_zero_strength_returns_zero(self):
-        """验证零强度返回 0.0。"""
+        """验证零强度返回 0.0."""
         assert forgetting_retention(1, 0) == pytest.approx(0.0)
 
 
 class TestForgettingCurve:
-    """遗忘曲线判定逻辑测试。"""
+    """遗忘曲线判定逻辑测试."""
 
     def test_fresh_curve_no_forget(self):
-        """验证新条目不被遗忘。"""
+        """验证新条目不被遗忘."""
         fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
@@ -55,7 +55,7 @@ class TestForgettingCurve:
         assert entries[0].get("forgotten") is None
 
     def test_old_entry_marked_forgotten(self):
-        """验证旧条目被标记遗忘。"""
+        """验证旧条目被标记遗忘."""
         fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
@@ -69,7 +69,7 @@ class TestForgettingCurve:
         assert entries[0].get("forgotten") is True
 
     def test_daily_summary_exempt(self):
-        """验证每日摘要不被遗忘。"""
+        """验证每日摘要不被遗忘."""
         fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
@@ -83,7 +83,7 @@ class TestForgettingCurve:
         assert entries[0].get("forgotten") is None
 
     def test_throttle_skips_second_call(self):
-        """验证节流机制跳过短时间内重复遗忘（返回 None）。"""
+        """验证节流机制跳过短时间内重复遗忘（返回 None）."""
         fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
@@ -103,10 +103,10 @@ class TestForgettingCurve:
 
 
 class TestProbabilisticForgetting:
-    """概率性遗忘模式测试。"""
+    """概率性遗忘模式测试."""
 
     def test_probabilistic_maybe_forget_returns_ids(self):
-        """概率模式下 maybe_forget 返回被遗忘条目的 FAISS ID。"""
+        """概率模式下 maybe_forget 返回被遗忘条目的 FAISS ID."""
         config = MemoryBankConfig(forget_mode="probabilistic", seed=42)
         fc = ForgettingCurve(config)
         entries = [
@@ -130,7 +130,7 @@ class TestProbabilisticForgetting:
         assert entries[0].get("forgotten") is True
 
     def test_deterministic_returns_empty_ids(self):
-        """确定性模式 maybe_forget 返回空列表。"""
+        """确定性模式 maybe_forget 返回空列表."""
         fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
         entries = [
             {
@@ -144,7 +144,7 @@ class TestProbabilisticForgetting:
         assert ids == []
 
     def test_summary_exempt_in_probabilistic(self):
-        """概率模式下每日摘要豁免遗忘。"""
+        """概率模式下每日摘要豁免遗忘."""
         config = MemoryBankConfig(forget_mode="probabilistic", seed=42)
         fc = ForgettingCurve(config)
         entries = [
@@ -159,7 +159,7 @@ class TestProbabilisticForgetting:
         assert ids == []
 
     def test_probabilistic_reproducible_with_seed(self):
-        """固定 seed 产生可复现的遗忘结果。"""
+        """固定 seed 产生可复现的遗忘结果."""
         config1 = MemoryBankConfig(forget_mode="probabilistic", seed=42)
         config2 = MemoryBankConfig(forget_mode="probabilistic", seed=42)
         fc1 = ForgettingCurve(config1)
@@ -187,7 +187,7 @@ class TestProbabilisticForgetting:
         assert ids1 == ids2
 
     def test_external_rng_consistent_with_internal_seed(self):
-        """外部传入 RNG 与同 seed 内部构造 RNG 行为一致。"""
+        """外部传入 RNG 与同 seed 内部构造 RNG 行为一致."""
         rng = random.Random(42)
         config_ext = MemoryBankConfig(forget_mode="probabilistic")
         config_int = MemoryBankConfig(forget_mode="probabilistic", seed=42)
@@ -217,10 +217,10 @@ class TestProbabilisticForgetting:
 
 
 class TestIngestionForget:
-    """摄入时遗忘测试。"""
+    """摄入时遗忘测试."""
 
     def test_skip_daily_summary(self):
-        """daily_summary 类型条目不受遗忘影响。"""
+        """daily_summary 类型条目不受遗忘影响."""
         metadata = [
             {
                 "faiss_id": 0,
@@ -250,7 +250,7 @@ class TestIngestionForget:
         assert 1 not in ids
 
     def test_recent_entry_retained(self):
-        """近期条目不应被遗忘。"""
+        """近期条目不应被遗忘."""
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         metadata = [
             {
@@ -268,7 +268,7 @@ class TestIngestionForget:
         assert 0 not in ids
 
     def test_seeded_reproducible(self):
-        """相同 seed/RNG 产生相同结果。"""
+        """相同 seed/RNG 产生相同结果."""
         metadata = [
             {
                 "faiss_id": i,
@@ -297,10 +297,10 @@ class TestIngestionForget:
 
 
 class TestForgetBoundaries:
-    """遗忘边界条件测试。"""
+    """遗忘边界条件测试."""
 
     def test_compute_ingestion_deterministic_threshold(self):
-        """确定性模式 compute_ingestion_forget_ids 用 0.3 阈值判定。"""
+        """确定性模式 compute_ingestion_forget_ids 用 0.3 阈值判定."""
         metadata = [
             {
                 "faiss_id": 0,
@@ -318,7 +318,7 @@ class TestForgetBoundaries:
         assert 0 in ids
 
     def test_ingestion_skip_corrupted_date(self):
-        """格式错误的日期条目被跳过。"""
+        """格式错误的日期条目被跳过."""
         metadata = [
             {
                 "faiss_id": 0,

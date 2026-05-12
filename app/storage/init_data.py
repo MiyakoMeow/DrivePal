@@ -21,7 +21,7 @@ def _write_toml_data(filepath: Path, data: dict) -> None:
 
 
 def _migrate_text_files(default_dir: Path, old_root: Path) -> bool:
-    """迁移平铺 jsonl/toml 文件到 default_dir。返回是否有文件迁移。"""
+    """迁移平铺 jsonl/toml 文件到 default_dir。返回是否有文件迁移."""
     jsonl_files = [
         "events.jsonl",
         "interactions.jsonl",
@@ -45,7 +45,7 @@ def _migrate_text_files(default_dir: Path, old_root: Path) -> bool:
 
 
 def _migrate_memorybank(default_dir: Path, old_root: Path) -> None:
-    """迁移 data/memorybank/ 和 data/user_*/ 到 data/users/ 结构。"""
+    """迁移 data/memorybank/ 和 data/user_*/ 到 data/users/ 结构."""
     # 检查 data/memorybank/ 子目录（如果有的话）
     mb_dir = old_root / "memorybank"
     if mb_dir.exists():
@@ -77,7 +77,7 @@ def _migrate_memorybank(default_dir: Path, old_root: Path) -> None:
 
 
 def _migrate_legacy() -> bool:
-    """将平铺 data/*.jsonl 结构迁移至 data/users/default/。幂等。"""
+    """将平铺 data/*.jsonl 结构迁移至 data/users/default/。幂等."""
     default_dir = user_data_dir("default")
     if default_dir.exists():
         return False
@@ -88,7 +88,7 @@ def _migrate_legacy() -> bool:
 
 
 def init_user_dir(user_id: str) -> Path:
-    """初始化指定用户的完整目录结构。"""
+    """初始化指定用户的完整目录结构."""
     u_dir = user_data_dir(user_id)
     u_dir.mkdir(parents=True, exist_ok=True)
 
@@ -130,7 +130,7 @@ def init_user_dir(user_id: str) -> Path:
 
 
 def init_storage(data_dir: Path | None = None) -> None:
-    """初始化数据目录。存在标记时跳过迁移。"""
+    """初始化数据目录。存在标记时跳过迁移."""
     root = data_dir or DATA_DIR
     root.mkdir(parents=True, exist_ok=True)
     flag = root / _MIGRATED_FLAG

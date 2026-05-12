@@ -1,4 +1,4 @@
-"""BackgroundTaskRunner 单元测试。"""
+"""BackgroundTaskRunner 单元测试."""
 
 import asyncio
 
@@ -10,7 +10,7 @@ from app.memory.memory_bank.config import MemoryBankConfig
 
 @pytest.mark.asyncio
 async def test_spawn_and_shutdown():
-    """Given 后台任务运行器，When 提交协程后 shutdown，Then 任务被取消。"""
+    """Given 后台任务运行器，When 提交协程后 shutdown，Then 任务被取消."""
     config = MemoryBankConfig()
     runner = BackgroundTaskRunner(config)
     started = asyncio.Event()
@@ -32,7 +32,7 @@ async def test_spawn_and_shutdown():
 
 @pytest.mark.asyncio
 async def test_shutdown_no_tasks():
-    """Given 无后台任务，When shutdown，Then 正常完成不报错。"""
+    """Given 无后台任务，When shutdown，Then 正常完成不报错."""
     config = MemoryBankConfig()
     runner = BackgroundTaskRunner(config)
     await runner.shutdown()
@@ -40,7 +40,7 @@ async def test_shutdown_no_tasks():
 
 @pytest.mark.asyncio
 async def test_failed_task_warning(caplog):
-    """Given 后台任务抛异常，When 任务完成，Then 日志警告。"""
+    """Given 后台任务抛异常，When 任务完成，Then 日志警告."""
     config = MemoryBankConfig()
     runner = BackgroundTaskRunner(config)
 

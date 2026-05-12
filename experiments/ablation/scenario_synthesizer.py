@@ -1,4 +1,4 @@
-"""场景合成器——调用LLM批量生成消融实验测试场景，缓存至JSONL文件。"""
+"""场景合成器——调用LLM批量生成消融实验测试场景，缓存至JSONL文件."""
 
 import asyncio
 import dataclasses
@@ -32,7 +32,7 @@ _KNOWN_SCENARIOS: frozenset[str] = frozenset(DIMENSIONS["scenario"])
 
 
 def _parse_dims_from_id(dim_id: str) -> dict:
-    """从场景 id 解析合成维度（旧数据兼容）。
+    """从场景 id 解析合成维度（旧数据兼容）.
 
     id 格式: {scenario}_{fatigue}_{workload}_{task_type}_{has_passengers}
     scenario 含下划线（city_driving），需用已知值前缀匹配。
@@ -55,8 +55,8 @@ def _parse_dims_from_id(dim_id: str) -> dict:
     return {}
 
 
-SYSTEM_PROMPT = """你是车载AI测试场景生成器。根据给定的驾驶维度条件，生成一个真实的中文车载交互测试场景。
-你必须仅返回合法的 JSON 对象，不要包含其他任何文本。"""
+SYSTEM_PROMPT = """你是车载AI测试场景生成器。根据给定的驾驶维度条件，生成一个真实的中文车载交互测试场景.
+你必须仅返回合法的 JSON 对象，不要包含其他任何文本."""
 
 SCENARIO_PROMPT_TEMPLATE = """请生成一个车载AI测试场景，维度条件如下：
 - 当前场景：{scenario_desc}
@@ -102,7 +102,7 @@ SCENARIO_DESC_MAP: dict[str, str] = {
 
 
 def _build_dimension_combinations() -> list[dict]:
-    """生成全部维度组合（4×3×3×5×2=360种排列）。"""
+    """生成全部维度组合（4×3×3×5×2=360种排列）."""
     return [
         {
             "scenario": scenario,
@@ -120,7 +120,7 @@ def _build_dimension_combinations() -> list[dict]:
 
 
 def _build_prompt(dim: dict) -> str:
-    """根据维度组合构造合成prompt。"""
+    """根据维度组合构造合成prompt."""
     scenario = dim["scenario"]
     scenario_desc = SCENARIO_DESC_MAP.get(scenario, scenario)
     has_passengers_bool = dim["has_passengers"] == "true"
@@ -136,7 +136,7 @@ def _build_prompt(dim: dict) -> str:
 
 
 def _compute_safety_relevant(dim: dict) -> bool:
-    """从合成维度判定安全相关性——highway / 高疲劳 / 过载。"""
+    """从合成维度判定安全相关性——highway / 高疲劳 / 过载."""
     scenario = dim["scenario"]
     if scenario == "highway":
         return True
@@ -147,7 +147,7 @@ def _compute_safety_relevant(dim: dict) -> bool:
 
 
 def _load_existing_ids(path: Path) -> set[str]:
-    """读取JSONL中已有的场景id集合，用于幂等跳过。
+    """读取JSONL中已有的场景id集合，用于幂等跳过.
 
     场景文件通常很小（≤360 行），同步读取无性能影响。
     """
@@ -169,7 +169,7 @@ def _load_existing_ids(path: Path) -> set[str]:
 
 
 async def _write_scenario(scenario: Scenario, path: Path) -> None:
-    """追加写一条场景到JSONL文件。"""
+    """追加写一条场景到JSONL文件."""
     async with aiofiles.open(path, "a") as f:
         await f.write(
             json.dumps(dataclasses.asdict(scenario), ensure_ascii=False) + "\n"
@@ -177,7 +177,7 @@ async def _write_scenario(scenario: Scenario, path: Path) -> None:
 
 
 async def synthesize_scenarios(output_path: Path, count: int = 260) -> int:
-    """合成场景并缓存到JSONL文件。幂等——已缓存的场景跳过。返回本次新增数量。"""
+    """合成场景并缓存到JSONL文件。幂等——已缓存的场景跳过。返回本次新增数量."""
     seed = int(os.environ.get("ABLATION_SEED", "42"))
     rng = random.Random(seed)
 
@@ -258,7 +258,7 @@ async def synthesize_scenarios(output_path: Path, count: int = 260) -> int:
 
 
 def load_scenarios(path: Path) -> list[Scenario]:
-    """从JSONL加载场景。场景文件通常很小，同步读取无性能影响。"""
+    """从JSONL加载场景。场景文件通常很小，同步读取无性能影响."""
     scenarios: list[Scenario] = []
     if not path.exists():
         return scenarios
@@ -288,7 +288,7 @@ def sample_scenarios(
     min_per_stratum: int = 1,
     seed: int = 42,
 ) -> list[Scenario]:
-    """分层随机抽样。safety_only时仅从safety_relevant=True中抽取。
+    """分层随机抽样。safety_only时仅从safety_relevant=True中抽取.
 
     stratify_key 提供时，先保证每层至少 min_per_stratum 个样本，
     再随机补足至 n 个，避免简单随机导致某些 strata 缺失。

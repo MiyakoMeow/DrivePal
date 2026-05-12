@@ -1,4 +1,4 @@
-"""RetrievalPipeline 单元测试。"""
+"""RetrievalPipeline 单元测试."""
 
 import os
 import tempfile
@@ -24,7 +24,7 @@ from app.memory.memory_bank.retrieval import (
 
 @pytest.fixture
 def mock_embedding():
-    """Mock EmbeddingModel fixture。"""
+    """Mock EmbeddingModel fixture."""
     m = AsyncMock()
     m.encode.return_value = [0.1] * 1536
     return m
@@ -32,7 +32,7 @@ def mock_embedding():
 
 @pytest.mark.asyncio
 async def test_search_empty_index_returns_empty_list(mock_embedding):
-    """空索引时 search 应返回空列表。"""
+    """空索引时 search 应返回空列表."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -46,7 +46,7 @@ async def test_search_empty_index_returns_empty_list(mock_embedding):
 
 @pytest.mark.asyncio
 async def test_search_returns_results(mock_embedding):
-    """有数据时 search 应返回结果。"""
+    """有数据时 search 应返回结果."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -66,7 +66,7 @@ async def test_search_returns_results(mock_embedding):
 
 
 def test_merge_overlapping_dedup():
-    """并查集重叠消除。"""
+    """并查集重叠消除."""
     results = [
         {
             "_merged_indices": [0, 1, 2],
@@ -89,7 +89,7 @@ def test_merge_overlapping_dedup():
 
 
 def test_merge_overlapping_non_overlapping_passthrough():
-    """无重叠结果应透传。"""
+    """无重叠结果应透传."""
     results = [
         {
             "_merged_indices": [0, 1],
@@ -111,7 +111,7 @@ def test_merge_overlapping_non_overlapping_passthrough():
 
 
 def test_merge_overlapping_no_merge_items_untouched():
-    """无合并项的输入应原样返回。"""
+    """无合并项的输入应原样返回."""
     results = [
         {"score": 0.9, "text": "hello", "speakers": []},
         {"_merged_indices": [0], "score": 0.8, "text": "world", "speakers": []},
@@ -121,7 +121,7 @@ def test_merge_overlapping_no_merge_items_untouched():
 
 
 def test_strip_source_prefix_removes_english_prefix():
-    """应去除英文前缀标记。"""
+    """应去除英文前缀标记."""
     assert (
         _strip_source_prefix(
             "Conversation content on 2024-06-15:Hello world", "2024-06-15"
@@ -131,18 +131,18 @@ def test_strip_source_prefix_removes_english_prefix():
 
 
 def test_strip_source_prefix_no_prefix_returns_original():
-    """无前缀时应返回原文。"""
+    """无前缀时应返回原文."""
     assert _strip_source_prefix("Hello world", "2024-06-15") == "Hello world"
 
 
 def test_word_in_text_boundary_matching():
-    """单词边界匹配检测。"""
+    """单词边界匹配检测."""
     assert _word_in_text("seat", "I like seat 45") is True
     assert _word_in_text("seat", "theseats") is False
 
 
 def test_clean_search_result_removes_internal_keys():
-    """应移除内部字段并解码分隔符。"""
+    """应移除内部字段并解码分隔符."""
     r = {
         "_merged_indices": [0, 1],
         "_meta_idx": 0,
@@ -158,14 +158,14 @@ def test_clean_search_result_removes_internal_keys():
 
 
 def test_clean_search_result_no_delimiter_unchanged():
-    """无分隔符时 text 不变。"""
+    """无分隔符时 text 不变."""
     r = {"text": "hello world", "score": 0.9}
     _clean_search_result(r)
     assert r["text"] == "hello world"
 
 
 def test_adaptive_chunk_few_entries_returns_default():
-    """不足 10 条时回退 DEFAULT_CHUNK_SIZE=1500。"""
+    """不足 10 条时回退 DEFAULT_CHUNK_SIZE=1500."""
     popped = os.environ.pop("MEMORYBANK_CHUNK_SIZE", None)
     try:
         meta = [{"text": "hello"}] * 5
@@ -179,7 +179,7 @@ def test_adaptive_chunk_few_entries_returns_default():
 
 
 def test_update_memory_strength_refreshes_recall_date():
-    """验证检索命中后 last_recall_date 被刷新。"""
+    """验证检索命中后 last_recall_date 被刷新."""
     meta = [
         {
             "faiss_id": 0,
@@ -197,7 +197,7 @@ def test_update_memory_strength_refreshes_recall_date():
 
 
 def test_memory_strength_capped():
-    """验证记忆强度受 max_memory_strength 上限约束。"""
+    """验证记忆强度受 max_memory_strength 上限约束."""
     meta = [
         {
             "faiss_id": 0,
@@ -223,7 +223,7 @@ def test_memory_strength_capped():
 
 @pytest.mark.asyncio
 async def test_pipeline_returns_results_without_retention_weight():
-    """验证移除 retention weight 后检索管道仍正常返回结果。"""
+    """验证移除 retention weight 后检索管道仍正常返回结果."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -258,7 +258,7 @@ async def test_pipeline_returns_results_without_retention_weight():
 
 
 def test_adaptive_chunk_many_entries_uses_p90():
-    """10 条以上时基于 P90 ×3 计算。"""
+    """10 条以上时基于 P90 ×3 计算."""
     popped = os.environ.pop("MEMORYBANK_CHUNK_SIZE", None)
     try:
         meta = [{"text": "x" * n} for n in range(1, 101)]
@@ -270,7 +270,7 @@ def test_adaptive_chunk_many_entries_uses_p90():
 
 
 def test_speaker_filter_negative_score_penalty():
-    """负分时惩罚应加重（绝对值增大），非缩小。"""
+    """负分时惩罚应加重（绝对值增大），非缩小."""
     pipe = RetrievalPipeline.__new__(RetrievalPipeline)
     results = [
         {
@@ -290,7 +290,7 @@ def test_speaker_filter_negative_score_penalty():
 
 
 def test_speaker_filter_first_name_matching():
-    """Query 中 first name 应匹配全名说话人。"""
+    """Query 中 first name 应匹配全名说话人."""
     pipe = RetrievalPipeline.__new__(RetrievalPipeline)
     results = [
         {
@@ -315,7 +315,7 @@ def test_speaker_filter_first_name_matching():
 
 @pytest.mark.asyncio
 async def test_all_below_similarity_threshold():
-    """全低于相似度阈值 → 返回空。"""
+    """全低于相似度阈值 → 返回空."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -338,7 +338,7 @@ async def test_all_below_similarity_threshold():
 
 @pytest.mark.asyncio
 async def test_no_speaker_in_query_no_discount(mock_embedding):
-    """query 中无说话人时无条目被降权。"""
+    """query 中无说话人时无条目被降权."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -361,7 +361,7 @@ async def test_no_speaker_in_query_no_discount(mock_embedding):
 
 @pytest.mark.asyncio
 async def test_pipeline_filters_forgotten_entries(mock_embedding):
-    """forgotten=True 条目被检索管道过滤。"""
+    """forgotten=True 条目被检索管道过滤."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()

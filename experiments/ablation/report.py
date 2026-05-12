@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
-    """异步写全局 summary.json。"""
+    """异步写全局 summary.json."""
     summary: dict[str, Any] = {}
     for name, gr in results.items():
         summary[name] = {

@@ -5,7 +5,7 @@ import tomli_w
 
 
 def test_read_benchmark_empty(tmp_path, monkeypatch):
-    """文件不存在时返回空 dict。"""
+    """文件不存在时返回空 dict."""
     monkeypatch.setattr(
         "app.storage.experiment_store._BENCHMARK_FILE",
         tmp_path / "nonexistent.toml",
@@ -16,7 +16,7 @@ def test_read_benchmark_empty(tmp_path, monkeypatch):
 
 
 def test_read_benchmark_parses(tmp_path, monkeypatch):
-    """读取五策略对比数据。"""
+    """读取五策略对比数据."""
     data = {
         "strategies": {
             "memory_bank": {"exact_match": 0.5, "field_f1": 0.7, "value_f1": 0.6},

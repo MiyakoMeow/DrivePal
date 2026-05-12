@@ -15,7 +15,7 @@ from app.storage.toml_store import TOMLStore
 
 
 def strawberry_to_plain(obj: object) -> object:
-    """递归将 Strawberry 类型转普通 Python 对象（Enum→.value，dataclass→dict）。
+    """递归将 Strawberry 类型转普通 Python 对象（Enum→.value，dataclass→dict）.
 
     跳过 None 值字段，避免 Pydantic 对非 Optional 字段收到 None 引发验证错误。
     结果可直接喂给 Pydantic model_validate。
@@ -36,7 +36,7 @@ def strawberry_to_plain(obj: object) -> object:
 
 
 def input_to_context(input_obj: DrivingContextInput) -> DrivingContext:
-    """将 Strawberry GraphQL input 转为 Pydantic DrivingContext。"""
+    """将 Strawberry GraphQL input 转为 Pydantic DrivingContext."""
     data = cast("dict[str, Any]", strawberry_to_plain(input_obj))
     return DrivingContext.model_validate(
         {k: v for k, v in data.items() if v is not None},
@@ -44,13 +44,13 @@ def input_to_context(input_obj: DrivingContextInput) -> DrivingContext:
 
 
 def dict_to_gql_context(d: dict[str, Any]) -> DrivingContextGQL:
-    """将 dict 转为 DrivingContextGQL（通过 Pydantic→from_pydantic）。"""
+    """将 dict 转为 DrivingContextGQL（通过 Pydantic→from_pydantic）."""
     ctx = DrivingContext.model_validate(d)
     return DrivingContextGQL.from_pydantic(ctx)
 
 
 def preset_store(current_user: str = "default") -> TOMLStore:
-    """获取场景预设存储实例（per-user）。"""
+    """获取场景预设存储实例（per-user）."""
     return TOMLStore(
         user_dir=user_data_dir(current_user),
         filename="scenario_presets.toml",
@@ -59,7 +59,7 @@ def preset_store(current_user: str = "default") -> TOMLStore:
 
 
 def to_gql_preset(p: dict[str, Any]) -> ScenarioPresetGQL:
-    """将存储 dict 转为 ScenarioPresetGQL。"""
+    """将存储 dict 转为 ScenarioPresetGQL."""
     ctx_raw = p.get("context", {})
     safe = {k: v for k, v in ctx_raw.items() if k in DrivingContext.model_fields}
     sp = safe.get("spatial", {})

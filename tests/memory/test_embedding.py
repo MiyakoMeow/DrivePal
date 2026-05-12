@@ -18,7 +18,7 @@ SIMILARITY_THRESHOLD = 0.6
 
 
 def test_embedding_model_uses_batch_size():
-    """EmbeddingModel 接受 batch_size 参数并存储"""
+    """EmbeddingModel 接受 batch_size 参数并存储."""
     from app.models.embedding import EmbeddingModel
     from app.models.settings import EmbeddingProviderConfig
     from app.models.types import ProviderConfig
@@ -31,7 +31,7 @@ def test_embedding_model_uses_batch_size():
 
 
 def test_embedding_model_default_batch_size():
-    """默认 batch_size 为 32"""
+    """默认 batch_size 为 32."""
     from app.models.embedding import EmbeddingModel
     from app.models.settings import EmbeddingProviderConfig
     from app.models.types import ProviderConfig

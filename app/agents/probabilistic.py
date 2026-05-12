@@ -1,4 +1,4 @@
-"""概率推断模块：意图不确定性 + 打断风险评估。
+"""概率推断模块：意图不确定性 + 打断风险评估.
 
 PROBABILISTIC_INFERENCE_ENABLED 环境变量仅在模块导入时读取一次，
 用于初始化 _probabilistic_enabled ContextVar 的默认值。
@@ -20,12 +20,12 @@ _probabilistic_enabled: contextvars.ContextVar[bool] = contextvars.ContextVar(
 
 
 def set_probabilistic_enabled(v: bool) -> None:
-    """消融实验用：在当前 task 的 Context 中设值。"""
+    """消融实验用：在当前 task 的 Context 中设值."""
     _probabilistic_enabled.set(v)
 
 
 def get_probabilistic_enabled() -> bool:
-    """读取概率推断启用状态（当前 Context 的值）。"""
+    """读取概率推断启用状态（当前 Context 的值）."""
     return _probabilistic_enabled.get()
 
 
@@ -49,12 +49,12 @@ def _speed_factor(speed_kmh: float) -> float:
 
 
 def is_enabled() -> bool:
-    """检查概率推断是否启用。默认从环境变量 PROBABILISTIC_INFERENCE_ENABLED 读取，消融实验可通过 set_probabilistic_enabled() 覆盖。"""
+    """检查概率推断是否启用。默认从环境变量 PROBABILISTIC_INFERENCE_ENABLED 读取，消融实验可通过 set_probabilistic_enabled() 覆盖."""
     return _probabilistic_enabled.get()
 
 
 def aggregate_type_confidences(results: list) -> list[tuple[str, float]]:
-    """按事件 type 聚合相似度得分，返回降序 (type, confidence) 列表。"""
+    """按事件 type 聚合相似度得分，返回降序 (type, confidence) 列表."""
     type_scores: dict[str, float] = defaultdict(float)
     for r in results:
         event = r.event if hasattr(r, "event") else {}
@@ -75,7 +75,7 @@ async def infer_intent(
     memory_store: Any,
     user_id: str | None = None,
 ) -> dict:
-    """从 MemoryBank 检索相似事件，聚合 type 得分推断意图。
+    """从 MemoryBank 检索相似事件，聚合 type 得分推断意图.
 
     Args:
         query_text: 用户查询文本。
@@ -112,7 +112,7 @@ _OVERLOADED_SCORE = 0.9
 
 
 def compute_interrupt_risk(driving_context: dict) -> float:
-    """根据驾车状态计算打断风险 0~1。
+    """根据驾车状态计算打断风险 0~1.
 
     公式: 0.4×fatigue + 0.3×workload + 0.2×scenario + 0.1×speed
     scenario 缺失时 risk=0.5（保守防御）。

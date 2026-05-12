@@ -1,4 +1,4 @@
-"""FaissIndex 降级恢复测试。"""
+"""FaissIndex 降级恢复测试."""
 
 import asyncio
 import json
@@ -12,7 +12,7 @@ from app.memory.memory_bank.index import FaissIndex
 
 @pytest.mark.asyncio
 async def test_corrupted_metadata_rebuilds_skeleton_from_index():
-    """metadata.json 格式错但 index.faiss 正常 → 重建骨架，保留向量。"""
+    """metadata.json 格式错但 index.faiss 正常 → 重建骨架，保留向量."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -33,7 +33,7 @@ async def test_corrupted_metadata_rebuilds_skeleton_from_index():
 
 @pytest.mark.asyncio
 async def test_corrupted_index_backed_up_and_rebuilt():
-    """index.faiss 损坏 → 备份 .bak，重建空索引。"""
+    """index.faiss 损坏 → 备份 .bak，重建空索引."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -51,7 +51,7 @@ async def test_corrupted_index_backed_up_and_rebuilt():
 
 @pytest.mark.asyncio
 async def test_count_mismatch_adds_skeleton_entries():
-    """metadata 比 index 少条目 → 自动补齐骨架 entry。"""
+    """metadata 比 index 少条目 → 自动补齐骨架 entry."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -75,7 +75,7 @@ async def test_count_mismatch_adds_skeleton_entries():
 
 @pytest.mark.asyncio
 async def test_compute_reference_date_from_metadata():
-    """compute_reference_date 从 metadata 找最大时间戳 + offset。"""
+    """compute_reference_date 从 metadata 找最大时间戳 + offset."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -89,7 +89,7 @@ async def test_compute_reference_date_from_metadata():
 
 @pytest.mark.asyncio
 async def test_compute_reference_date_empty():
-    """空 metadata 返回 UTC 当天。"""
+    """空 metadata 返回 UTC 当天."""
     with tempfile.TemporaryDirectory() as tmp:
         idx = FaissIndex(Path(tmp))
         await idx.load()
@@ -99,7 +99,7 @@ async def test_compute_reference_date_empty():
 
 @pytest.mark.asyncio
 async def test_load_does_not_block_event_loop():
-    """load() 不阻塞事件循环——与 canary 协程并发验证 yield 点。"""
+    """load() 不阻塞事件循环——与 canary 协程并发验证 yield 点."""
     import time
 
     canary_started = False

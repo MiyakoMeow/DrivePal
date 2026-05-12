@@ -1,4 +1,4 @@
-"""EmbeddingModel 薄代理，添加维度一致性检测。"""
+"""EmbeddingModel 薄代理，添加维度一致性检测."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ if TYPE_CHECKING:
 
 
 class EmbeddingClient:
-    """EmbeddingModel 的薄代理，添加维度一致性检测。
+    """EmbeddingModel 的薄代理，添加维度一致性检测.
 
     重试逻辑由 EmbeddingModel 内部处理（3 次指数退避），
     此处不再冗余重试。
     """
 
     def __init__(self, embedding_model: EmbeddingModel, batch_size: int = 100) -> None:
-        """初始化 EmbeddingClient。
+        """初始化 EmbeddingClient.
 
         Args:
             embedding_model: 嵌入模型实例。
@@ -27,11 +27,11 @@ class EmbeddingClient:
         self._model.batch_size = batch_size
 
     async def encode(self, text: str) -> list[float]:
-        """编码单条文本。"""
+        """编码单条文本."""
         return await self._model.encode(text)
 
     async def encode_batch(self, texts: list[str]) -> list[list[float]]:
-        """批量编码，使用 EmbeddingModel.batch_encode 并检测维度一致性。"""
+        """批量编码，使用 EmbeddingModel.batch_encode 并检测维度一致性."""
         if not texts:
             return []
         results = await self._model.batch_encode(texts)

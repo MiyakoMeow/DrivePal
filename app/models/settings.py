@@ -168,7 +168,7 @@ class LLMSettings:
 
 
 def _resolve_api_key(provider_config: dict) -> str | None:
-    """从 provider 配置中解析 api_key。
+    """从 provider 配置中解析 api_key.
 
     优先读取 api_key_env 指向的环境变量；环境变量缺失或为空时抛 ValueError。
     无 api_key_env 时回退到直接读取 api_key 字段（可为 None）。
@@ -224,7 +224,7 @@ def _make_provider_config[T](
     d: dict[str, Any],
     defaults: dict[str, Any],
 ) -> T:
-    """泛型工厂：从字典构建 ProviderConfig 子类实例。
+    """泛型工厂：从字典构建 ProviderConfig 子类实例.
 
     Args:
         cls: ProviderConfig 子类。

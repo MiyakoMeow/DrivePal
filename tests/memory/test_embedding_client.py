@@ -1,4 +1,4 @@
-"""EmbeddingClient 单元测试。"""
+"""EmbeddingClient 单元测试."""
 
 from unittest.mock import AsyncMock
 
@@ -8,7 +8,7 @@ from app.memory.embedding_client import EmbeddingClient
 
 
 async def test_encode_delegates_to_model() -> None:
-    """Encode 直接委托 EmbeddingModel.encode。"""
+    """Encode 直接委托 EmbeddingModel.encode."""
     model = AsyncMock()
     model.encode.return_value = [0.1, 0.2, 0.3]
     client = EmbeddingClient(model)
@@ -18,7 +18,7 @@ async def test_encode_delegates_to_model() -> None:
 
 
 async def test_encode_batch_delegates_to_model() -> None:
-    """encode_batch 委托 EmbeddingModel.batch_encode。"""
+    """encode_batch 委托 EmbeddingModel.batch_encode."""
     model = AsyncMock()
     model.batch_encode = AsyncMock(return_value=[[0.1] * 4, [0.2] * 4])
     client = EmbeddingClient(model)
@@ -28,7 +28,7 @@ async def test_encode_batch_delegates_to_model() -> None:
 
 
 async def test_encode_batch_empty_returns_empty() -> None:
-    """空输入直接返回空列表，不调用模型。"""
+    """空输入直接返回空列表，不调用模型."""
     model = AsyncMock()
     client = EmbeddingClient(model)
     assert await client.encode_batch([]) == []
@@ -36,7 +36,7 @@ async def test_encode_batch_empty_returns_empty() -> None:
 
 
 async def test_encode_batch_dimension_mismatch_raises() -> None:
-    """返回向量维度不一致时抛出 RuntimeError。"""
+    """返回向量维度不一致时抛出 RuntimeError."""
     model = AsyncMock()
     model.batch_encode = AsyncMock(return_value=[[0.1] * 4, [0.2] * 8])
     client = EmbeddingClient(model)

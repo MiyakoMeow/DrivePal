@@ -30,7 +30,7 @@ _RETRYABLE_EXCEPTIONS = (
 
 
 def _finalize_background_task(task: asyncio.Task[object]) -> None:
-    """回收后台关闭 task 并消费异常，避免未检索异常告警。"""
+    """回收后台关闭 task 并消费异常，避免未检索异常告警."""
     _background_tasks.discard(task)
     with contextlib.suppress(asyncio.CancelledError):
         exc = task.exception()
@@ -61,7 +61,7 @@ def get_cached_embedding_model(embedding_batch_size: int = 100) -> EmbeddingMode
 
 
 def clear_embedding_model_cache() -> None:
-    """关闭所有缓存的客户端并清除缓存。"""
+    """关闭所有缓存的客户端并清除缓存."""
     if not _EMBEDDING_MODEL_CACHE:
         return
     models = list(_EMBEDDING_MODEL_CACHE.values())

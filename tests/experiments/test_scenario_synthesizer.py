@@ -22,7 +22,7 @@ def _sc(
     safety_relevant: bool = False,
     synthesis_dims: dict | None = None,
 ) -> Scenario:
-    """快速构造测试 Scenario，减少重复参数。"""
+    """快速构造测试 Scenario，减少重复参数."""
     return Scenario(
         id=sid,
         driving_context=driving_context or {},
@@ -80,7 +80,7 @@ def test_sample_scenarios_all():
 
 
 def test_sample_scenarios_stratified():
-    """分层抽样应保证每层至少 min_per_stratum 个样本。"""
+    """分层抽样应保证每层至少 min_per_stratum 个样本."""
     scenarios = [_sc(f"s{i}", {"type": "a" if i < 3 else "b"}) for i in range(6)]
     sampled = sample_scenarios(
         scenarios,
@@ -96,7 +96,7 @@ def test_sample_scenarios_stratified():
 
 
 def test_sample_scenarios_exclude_ids():
-    """exclude_ids 应排除指定场景。"""
+    """exclude_ids 应排除指定场景."""
     scenarios = [
         _sc("s1"),
         _sc("s2"),
@@ -108,14 +108,14 @@ def test_sample_scenarios_exclude_ids():
 
 
 def test_sample_scenarios_empty_pool_raises():
-    """排除后池为空应抛出 ValueError。"""
+    """排除后池为空应抛出 ValueError."""
     scenarios = [_sc("s1")]
     with pytest.raises(ValueError, match="无可用的场景"):
         sample_scenarios(scenarios, 1, exclude_ids={"s1"})
 
 
 def test_sample_scenarios_min_per_stratum_too_large():
-    """min_per_stratum 总和超过 n 时应抛出 ValueError。"""
+    """min_per_stratum 总和超过 n 时应抛出 ValueError."""
     scenarios = [_sc(f"s{i}", {"type": f"t{i}"}) for i in range(5)]
     with pytest.raises(ValueError, match="无法满足 min_per_stratum"):
         sample_scenarios(
@@ -128,7 +128,7 @@ def test_sample_scenarios_min_per_stratum_too_large():
 
 
 def test_safety_stratum_combined_keys():
-    """safety_stratum 应组合 scenario + fatigue + workload + task_type 维度。"""
+    """safety_stratum 应组合 scenario + fatigue + workload + task_type 维度."""
     from experiments.ablation.safety_group import safety_stratum
 
     # fatigue=1.0 始终 > 任何合理阈值（0~1），不依赖模块级 _FATIGUE_THRESHOLD 值
@@ -145,7 +145,7 @@ def test_safety_stratum_combined_keys():
 
 
 def test_safety_stratum_invalid_fatigue_fallback():
-    """safety_stratum 遇到无效疲劳度应回退为 0.0。"""
+    """safety_stratum 遇到无效疲劳度应回退为 0.0."""
     from experiments.ablation.safety_group import safety_stratum
 
     s = _sc("x", {"driver": {"fatigue_level": "bad", "workload": "normal"}})
