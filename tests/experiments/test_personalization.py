@@ -107,7 +107,7 @@ def test_decision_divergence_different_decisions_returns_positive():
 
 def test_has_visual_content_prefers_stages_over_decision():
     """给定 stages 中有视觉内容但 decision 中被清除，当检测视觉内容，则应返回 True。"""
-    from experiments.ablation.personalization_group import _has_visual_content
+    from experiments.ablation.feedback_simulator import _has_visual_content
 
     decision = {"should_remind": False, "reminder_content": ""}
     stages = {
@@ -123,7 +123,7 @@ def test_has_visual_content_prefers_stages_over_decision():
 
 def test_has_visual_content_falls_back_to_decision():
     """给定 stages 为空，当检测视觉内容，则应回退到 decision 检查。"""
-    from experiments.ablation.personalization_group import _has_visual_content
+    from experiments.ablation.feedback_simulator import _has_visual_content
 
     decision = {
         "reminder_content": {
@@ -135,6 +135,6 @@ def test_has_visual_content_falls_back_to_decision():
 
 def test_has_visual_content_no_visual_returns_false():
     """给定 stages 和 decision 均无视觉内容，当检测视觉内容，则应返回 False。"""
-    from experiments.ablation.personalization_group import _has_visual_content
+    from experiments.ablation.feedback_simulator import _has_visual_content
 
     assert not _has_visual_content({}, stages={})
