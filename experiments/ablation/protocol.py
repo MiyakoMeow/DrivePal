@@ -7,7 +7,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ._io import dump_variant_results_jsonl
-from .types import BatchResult, GroupResult, JudgeScores, Scenario, VariantResult
+from .types import (
+    BatchResult,
+    GroupResult,
+    JudgeScores,
+    Scenario,
+    Variant,
+    VariantResult,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -23,9 +30,9 @@ class GroupConfig:
     """一组实验的声明式配置."""
 
     group_name: str
-    variants: list
+    variants: list[Variant]
     scenario_filter: Callable[[Scenario], bool]
-    metrics_computer: Callable[..., dict]
+    metrics_computer: Callable[[list[JudgeScores], list[VariantResult]], dict]
     post_hook: (
         Callable[[GroupResult, Judge, list[Scenario]], Awaitable[GroupResult]] | None
     ) = None
@@ -43,7 +50,7 @@ async def run_group(
     batch: BatchResult = await runner.run_batch(
         filtered, config.variants, checkpoint_path=output_path
     )
-    scores = await _score_scenarios_concurrent(judge, filtered, batch.results)
+    scores = await score_scenarios_concurrent(judge, filtered, batch.results)
     await dump_variant_results_jsonl(
         output_path, batch.results, include_modifications=True
     )
@@ -64,7 +71,7 @@ async def run_group(
     return group_result
 
 
-async def _score_scenarios_concurrent(
+async def score_scenarios_concurrent(
     judge: Judge,
     scenarios: list[Scenario],
     results: list[VariantResult],

@@ -2,7 +2,7 @@
 
 import logging
 
-from .feedback_simulator import _has_visual_content
+from .feedback_simulator import has_visual_content
 from .judge import detect_judge_degradation
 from .types import JudgeScores, Variant, VariantResult
 
@@ -49,6 +49,7 @@ def _compute_matching_rate(
     full_results = [r for r in results if r.variant == Variant.FULL]
 
     # 以 round_index 建映射，消除对列表序的依赖
+    # 注意：round_index >= 1（1-based），round_index=0 表示未分配轮次
     full_by_round = {r.round_index: r for r in full_results if r.round_index > 0}
     stage_matches: dict[str, list[bool]] = {}
 
@@ -80,7 +81,7 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
             decision.get("is_emergency")
         )
     if stage == "visual-detail":
-        return _has_visual_content(decision)
+        return has_visual_content(decision)
     return True
 
 
@@ -197,6 +198,8 @@ def _compute_decision_divergence(
     if not mixed_rounds:
         return 0.0
 
+    # weight_history 索引为 0-based，VariantResult.round_index 为 1-based，
+    # 故 i+1 转换匹配
     mixed_indices = {i + 1 for i in mixed_rounds}
     full_mixed = [
         r

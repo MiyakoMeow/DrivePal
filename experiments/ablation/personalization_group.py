@@ -2,18 +2,15 @@
 
 import asyncio
 import dataclasses
-import json
 import logging
 import random
 from pathlib import Path
 
-import aiofiles
-
-from ._io import append_checkpoint, dump_variant_results_jsonl
+from ._io import append_checkpoint, dump_variant_results_jsonl, write_json_atomic
 from .ablation_runner import AblationRunner
 from .feedback_simulator import (
-    _extract_task_type,
-    _read_weights,
+    extract_task_type,
+    read_weights,
     simulate_feedback,
     update_feedback_weight,
 )
@@ -123,7 +120,7 @@ async def run_personalization_group(
                 )
 
                 if variant == Variant.FULL:
-                    task_type = _extract_task_type(vr.stages)
+                    task_type = extract_task_type(vr.stages)
                     if task_type:
                         try:
                             action = simulate_feedback(
@@ -145,7 +142,7 @@ async def run_personalization_group(
                                 i + 1,
                             )
 
-            snapshot = await _read_weights(runner.base_user_id)
+            snapshot = await read_weights(runner.base_user_id)
             weight_history.append(
                 {"round": i + 1, "stage": stage_name, "weights": snapshot}
             )
@@ -179,18 +176,15 @@ async def run_personalization_group(
 
     # 写 weight_history + metrics 到侧车文件
     summary_path = output_path.with_suffix(".summary.json")
-    async with aiofiles.open(summary_path, "w") as f:
-        await f.write(
-            json.dumps(
-                {
-                    "weight_history": weight_history,
-                    "metrics": metrics,
-                    "stages": stages,
-                },
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
+
+    await write_json_atomic(
+        summary_path,
+        {
+            "weight_history": weight_history,
+            "metrics": metrics,
+            "stages": stages,
+        },
+    )
 
     return GroupResult(
         group="personalization",

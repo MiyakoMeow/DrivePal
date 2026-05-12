@@ -35,7 +35,7 @@ from .personalization_group import (
     run_personalization_group,
 )
 from .preference_metrics import compute_preference_metrics
-from .protocol import run_group
+from .protocol import run_group, score_scenarios_concurrent
 from .report import render_report
 from .safety_group import (
     compute_safety_metrics,
@@ -127,30 +127,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def _score_group(
-    judge: Judge,
-    scenarios_for_results: dict[str, list[VariantResult]],
-    scenario_by_id: dict[str, Scenario],
-) -> list[JudgeScores]:
-    """对一组结果的各场景并发评分并汇总。"""
-
-    async def score_one(sid: str, vrs: list[VariantResult]) -> list[JudgeScores]:
-        scenario = scenario_by_id.get(sid)
-        if scenario is None:
-            return []
-        return await judge.score_batch(scenario, vrs)
-
-    tasks = [score_one(sid, vrs) for sid, vrs in scenarios_for_results.items()]
-    batches = await asyncio.gather(*tasks, return_exceptions=True)
-    scores: list[JudgeScores] = []
-    for batch in batches:
-        if isinstance(batch, Exception):
-            logger.error("Judge scoring failed: %s", batch)
-        elif isinstance(batch, list):
-            scores.extend(batch)
-    return scores
-
-
 async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> None:
     """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出。"""
     all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
@@ -180,7 +156,14 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             scores = existing_scores
             print(f"{group_name} 组复用已有评分: {len(scores)} 条")
         else:
-            scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
+            score_scenarios = [
+                scenario_by_id[sid]
+                for sid in scenarios_for_results
+                if sid in scenario_by_id
+            ]
+            scores = await score_scenarios_concurrent(
+                judge, score_scenarios, variant_results
+            )
             await write_scores_json(run_dir / group_name / "scores.json", scores)
 
         if group_name == "safety":

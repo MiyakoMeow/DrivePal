@@ -61,13 +61,13 @@ def simulate_feedback(
                 "规则引擎未修改 decision，反馈基于原始 LLM 输出 (scenario: %s)",
                 scenario_id,
             )
-        return "accept" if _has_visual_content(decision, stages=stages) else "ignore"
+        return "accept" if has_visual_content(decision, stages=stages) else "ignore"
     if stage == "mixed":
         return "accept" if rng.random() < _SIMULATED_ACCEPT_PROB else "ignore"
     return "ignore"
 
 
-def _has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
+def has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
     """判断 LLM 是否意图生成视觉内容。
 
     优先从 stages["decision"]（规则引擎前的 LLM 原始输出）读取，
@@ -91,7 +91,7 @@ def _has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
     )
 
 
-def _extract_task_type(stages: dict) -> str | None:
+def extract_task_type(stages: dict) -> str | None:
     """从 stages.task 提取任务类型。
 
     LLM 输出的 key 名不一致——可能为 task_type / task_attribution。
@@ -144,7 +144,8 @@ async def update_feedback_weight(
     await strategy_store.update("reminder_weights", weights)
 
 
-async def _read_weights(user_id: str) -> dict:
+async def read_weights(user_id: str) -> dict:
+    """读取用户的 reminder_weights 配置。"""
     ud = user_data_dir(user_id)
     store = TOMLStore(user_dir=ud, filename="strategies.toml", default_factory=dict)
     current = await store.read()
