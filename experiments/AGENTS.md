@@ -110,7 +110,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 - **容错**：`ChatError` → 默认分 3；`JSONDecodeError`/`TypeError`/`ValueError` → 默认分 3
 - **退化检测**：默认分 3 占比超过 50% 时标记 `degraded=True`；任一分数值占比超过 `CONCENTRATION_THRESHOLD`（0.8）时标记集中度退化。全量运行和 judge-only 两条路径均输出警告
 - **分数分布报告**：`summary.json` 中含 `score_distributions` 字段（各变体均值 + 各分数段比例），辅助 Judge 校准评估
- - **统计方法**：Bootstrap 置信区间（n=10000, α=0.05）+ Wilcoxon signed-rank test（按 scenario_id 配对）
+- **统计方法**：Bootstrap 置信区间（n=10000, α=0.05）+ Wilcoxon signed-rank test（按 scenario_id 配对）
 - **人工校准**：人工校准为后续工作，当前未实现。
 
 ## 与 VehicleMemBench 的关系
