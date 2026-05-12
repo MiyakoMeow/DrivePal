@@ -69,7 +69,7 @@ async def parse(filepath: Path) -> list[dict]:
     """解析 markdown 文件为 token 字典列表。"""
     from markdown_it import MarkdownIt
 
-    md = MarkdownIt()
+    md = MarkdownIt("default")  # "default" preset = GFM 风格，含表格支持
     try:
         content = await asyncio.to_thread(filepath.read_text, encoding="utf-8")
         tokens = md.parse(content)
@@ -541,8 +541,8 @@ def _add_code_block(doc: Document, code: str) -> None:
 # ── 表格 ──
 
 
-def _render_table(doc: Document, rows: list[list[str]]) -> None:
-    """将二维数据渲染为三线表。首行（表头）加粗。"""
+async def _render_table(doc: Document, rows: list[list[str]], client) -> None:
+    """将二维数据渲染为三线表。首行（表头）加粗。支持行内格式。"""
     if not rows or not rows[0]:
         return
 
@@ -563,10 +563,15 @@ def _render_table(doc: Document, rows: list[list[str]]) -> None:
             cell = row.cells[j]
             cell.text = ""
             p = cell.paragraphs[0]
-            # 剥离表格单元格内 Markdown 标记符（粗斜体/代码/引用等）
-            plain = _extract_plain_text(cell_text)
-            _add_run(p, plain, font_size=SIZE_CODE, bold=is_header)
             p.paragraph_format.line_spacing = 1.0
+            # 表格单元格支持粗斜体、引用上标等行内格式
+            font_size = SIZE_BODY
+            await _render_inline_content(
+                p, cell_text, client=client, font_size=font_size
+            )
+            if is_header:
+                for run in p.runs:
+                    run.bold = True
 
     tbl = table._tbl
     tblPr = tbl.tblPr
@@ -771,7 +776,7 @@ async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
             continue
         if tp == "table_close":
             in_table = False
-            _render_table(doc, table_rows)
+            await _render_table(doc, table_rows, client)
             table_rows = []
             continue
         if tp == "tr_open":
