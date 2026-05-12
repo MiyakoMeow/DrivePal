@@ -347,8 +347,10 @@ def sample_scenarios(
     if not pool:
         raise ValueError("过滤/排除后无可用的场景")
 
-    if not stratify_key or len(pool) <= n:
-        return rng.sample(pool, min(n, len(pool)))
+    if len(pool) <= n:
+        return list(pool)
+    if not stratify_key:
+        return rng.sample(pool, n)
 
     strata: dict[str, list[Scenario]] = {}
     for s in pool:
@@ -357,10 +359,13 @@ def sample_scenarios(
 
     required = sum(min(min_per_stratum, len(g)) for g in strata.values())
     if required > n:
-        raise ValueError(
-            f"无法满足 min_per_stratum={min_per_stratum}，"
-            f"实际需要 {required} 个样本（考虑各层容量），但仅请求 {n} 个"
+        logger.warning(
+            "分层抽样无法满足 min_per_stratum=%d（需要 %d，请求 %d），回退简单随机",
+            min_per_stratum,
+            required,
+            n,
         )
+        return rng.sample(pool, n)
 
     result: list[Scenario] = []
     sampled_ids: set[str] = set()

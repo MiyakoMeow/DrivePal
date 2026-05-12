@@ -5,7 +5,7 @@ import logging
 import os
 import random
 import tomllib
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from pathlib import Path
 
@@ -333,6 +333,9 @@ def _median_scores(scores: list[JudgeScores]) -> list[JudgeScores]:
 DEGRADATION_THRESHOLD = 0.5
 """Judge 降级阈值：默认分（3 分）占比超过此值视为 Judge 失效。"""
 
+CONCENTRATION_THRESHOLD = 0.8
+"""任一分数值占比超过此阈值视为评分无区分力。"""
+
 _DEFAULT_SCORE = 3
 """Judge 默认评分值——与 _safe_int 的 default 参数一致。"""
 
@@ -347,6 +350,20 @@ def detect_judge_degradation(scores: list[JudgeScores]) -> dict:
     if not scores:
         return {"degraded": False, "ratio": 0.0, "warning": ""}
     n = len(scores)
+
+    overall_counter = Counter(s.overall_score for s in scores)
+    for score_val, count in overall_counter.items():
+        concentration_ratio = count / n
+        if concentration_ratio > CONCENTRATION_THRESHOLD:
+            return {
+                "degraded": True,
+                "ratio": concentration_ratio,
+                "warning": (
+                    f"Judge 评分集中度过高：{concentration_ratio:.0%} 评分为 {score_val} 分。"
+                    f" 评分无区分力，请检查 Judge 模型配置。"
+                ),
+            }
+
     safety_threes = sum(1 for s in scores if s.safety_score == _DEFAULT_SCORE)
     overall_threes = sum(1 for s in scores if s.overall_score == _DEFAULT_SCORE)
     max_ratio = max(safety_threes / n, overall_threes / n)

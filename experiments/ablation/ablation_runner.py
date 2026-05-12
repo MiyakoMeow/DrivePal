@@ -18,7 +18,11 @@ from app.agents.probabilistic import (
     set_probabilistic_enabled,
 )
 from app.agents.prompts import SINGLE_LLM_SYSTEM_PROMPT
-from app.agents.rules import get_ablation_disable_rules, set_ablation_disable_rules
+from app.agents.rules import (
+    get_ablation_disable_rules,
+    postprocess_decision,
+    set_ablation_disable_rules,
+)
 from app.agents.workflow import (
     AgentWorkflow,
     get_ablation_disable_feedback,
@@ -144,19 +148,28 @@ class AblationRunner:
                 return cast("dict[str, Any]", val)
             return {}
 
+        decision = _safe_dict(output.get("decision", {}))
+        modifications: list[str] = []
+        driving_ctx = scenario.driving_context
+        if isinstance(driving_ctx, dict) and decision:
+            decision, modifications = postprocess_decision(
+                decision, deepcopy(driving_ctx)
+            )
+
         return VariantResult(
             scenario_id=scenario.id,
             variant=Variant.SINGLE_LLM,
-            decision=_safe_dict(output.get("decision", {})),
+            decision=decision,
             result_text="",
             event_id=None,
             stages={
                 "context": _safe_dict(output.get("context", {})),
                 "task": _safe_dict(output.get("task", {})),
-                "decision": _safe_dict(output.get("decision", {})),
+                "decision": decision,
                 "execution": {},
             },
             latency_ms=latency_ms,
+            modifications=modifications,
         )
 
     async def run_batch(
