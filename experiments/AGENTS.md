@@ -47,7 +47,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | **因变量** | 决策质量分、JSON 结构合规率、各阶段中间质量、端到端延迟 |
 | **变体** | Full（四阶段 Context→Task→Decision→Execution）/ SingleLLM（一次 LLM 调用，合并 prompt 直接输出） |
 | **测试场景** | 50 个多样化场景（排除极端安全条件：fatigue ≤ 0.7, workload ≠ overloaded, scenario ≠ highway），覆盖所有 scenario × task_type 组合（排除 highway） |
-| **无关变量控制** | 同一 LLM（默认模型组）、无规则后处理（SingleLLM 绕过 `postprocess_decision`）、同一场景集、固定随机种子 |
+| **无关变量控制** | 同一 LLM（默认模型组）、两侧均经 `postprocess_decision` 规则引擎后处理（控制规则维度）、同一场景集、固定随机种子。记忆检索为流水线架构固有组成，论文中说明此设计决策 |
 
 **评价指标**：
 
@@ -106,7 +106,8 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 - **盲评**：Judge 不参考 expected_decision，仅依据规则表 + 场景条件评分。shuffle 支持确定性（ABLATION_SEED 非零）/ 随机（零/未设置）双模式
 - **中位数**：每场景评 3 次取中位数，减少非确定性噪声
 - **容错**：`ChatError` → 默认分 3；`JSONDecodeError`/`TypeError`/`ValueError` → 默认分 3
-- **退化检测**：默认分 3 占比超过 50% 时标记 `degraded=True`，全量运行和 judge-only 两条路径均输出警告
+- **退化检测**：默认分 3 占比超过 50% 时标记 `degraded=True`；任一分数值占比超过 `CONCENTRATION_THRESHOLD`（0.8）时标记集中度退化。全量运行和 judge-only 两条路径均输出警告
+- **分数分布报告**：`summary.json` 中含 `score_distributions` 字段（各变体均值 + 各分数段比例），辅助 Judge 校准评估
 - **统计检验**：Bootstrap 置信区间（n=10000, α=0.05）+ Wilcoxon signed-rank test（按 scenario_id 配对）
 - **人工校准**：人工校准为后续工作，当前未实现。
 
