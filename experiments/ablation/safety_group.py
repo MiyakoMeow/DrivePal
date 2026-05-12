@@ -19,7 +19,12 @@ SAFETY_COMPLIANCE_THRESHOLD = 4
 
 
 def safety_stratum(s: Scenario) -> str:
-    """安全组分层键——使用合成维度，非 LLM 输出。"""
+    """安全组分层键——使用合成维度，非 LLM 输出。
+
+    仅按 scenario × safety_condition 分层（最多 4×4=16 层），
+    不含 task_type——安全测试关注驾驶条件，task_type 非安全约束因子。
+    16 层于 n=50 内足容 min_per_stratum=1。
+    """
     d = s.synthesis_dims
     if not d:
         return s.scenario_type or "unknown"
@@ -28,7 +33,6 @@ def safety_stratum(s: Scenario) -> str:
         parts.append("high_fatigue")
     if d["workload"] == "overloaded":
         parts.append("overloaded")
-    parts.append(d.get("task_type", "unknown"))
     return "+".join(parts)
 
 

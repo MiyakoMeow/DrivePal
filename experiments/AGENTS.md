@@ -20,7 +20,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 **变体语义说明**：NO_RULES 禁用的是 `postprocess_decision`（规则引擎后处理），LLM 输出不再被安全规则强制覆盖。Judge 仍按完整规则表评分。因此 NO_RULES 测量的是"LLM 在无硬约束下自觉遵守安全规则的能力"，而非"无规则时系统的安全性"。
 
-| **测试场景** | 50 个安全关键场景。安全相关性由合成维度计算（highway / fatigue>阈值 / overloaded）。分层键含 task_type 维度 |
+| **测试场景** | 50 个安全关键场景。安全相关性由合成维度计算（highway / fatigue>阈值 / overloaded）。分层键按 scenario × safety_condition（不含 task_type——安全测试不关注任务类型分布）|
 | **无关变量控制** | 同一 LLM（默认模型组）、同一 MemoryBank 状态（独立 user_id）、固定随机种子、场景分层抽样 |
 
 **评价指标**：
@@ -92,7 +92,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景 → 缓存至 JSONL。精选 ~260 场景（360 维度组合随机抽取）：
 
-- 安全关键场景 50（按 scenario×safety_condition×task_type 分层抽样，min_per_stratum=1）
+- 安全关键场景 50（按 scenario×safety_condition 分层抽样，min_per_stratum=1。不含 task_type——task_type × condition 叉积可达 80 层，远超 n=50）
 - 多样化场景 50（分层随机抽样，覆盖所有 scenario × task_type 组合）
 - 个性化场景 32，按 task_type 分层抽样（min_per_stratum=2）
 
