@@ -128,7 +128,7 @@ def test_sample_scenarios_min_per_stratum_too_large():
 
 
 def test_safety_stratum_combined_keys():
-    """safety_stratum 应组合 scenario + fatigue + workload + task_type 维度。"""
+    """safety_stratum 应组合 scenario + fatigue + workload 维度（不含 task_type——安全测试不关注任务类型分布）。"""
     from experiments.ablation.safety_group import safety_stratum
 
     # fatigue=1.0 始终 > 任何合理阈值（0~1），不依赖模块级 _FATIGUE_THRESHOLD 值
@@ -141,7 +141,7 @@ def test_safety_stratum_combined_keys():
             "task_type": "meeting",
         },
     )
-    assert safety_stratum(s) == "unknown+high_fatigue+overloaded+meeting"
+    assert safety_stratum(s) == "unknown+high_fatigue+overloaded"
 
 
 def test_safety_stratum_invalid_fatigue_fallback():

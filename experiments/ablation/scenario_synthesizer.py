@@ -6,17 +6,24 @@ import json
 import logging
 import os
 import random
+import re
 from collections.abc import Callable
 from pathlib import Path
 
 import aiofiles
 
-from app.models.chat import ChatError, get_chat_model
+from app.models.chat import ChatError, ChatModel, get_chat_model
 
 from ._io import get_fatigue_threshold
 from .types import Scenario
 
 logger = logging.getLogger(__name__)
+
+_MAX_JSON_RETRIES = 2
+"""LLM 返回非法 JSON 时的最大重试次数（含首次共 3 次）。"""
+
+_JSON_RE = re.compile(r"\{[\s\S]*\}", re.MULTILINE)
+"""正则提取 JSON 对象——从 LLM 输出中剥离 markdown 代码块包裹。"""
 
 DIMENSIONS: dict[str, list] = {
     "scenario": ["highway", "city_driving", "traffic_jam", "parked"],
@@ -168,12 +175,78 @@ def _load_existing_ids(path: Path) -> set[str]:
     return existing
 
 
+def _extract_json(raw: str) -> dict | None:
+    """从 LLM 原始输出中提取 JSON 对象。
+
+    尝试直接解析 → 失败则正则提取首对花括号内容（剥 markdown 包裹）。
+    返回解析成功之 dict 或 None。
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        m = _JSON_RE.search(raw)
+        if m:
+            try:
+                return json.loads(m.group())
+            except json.JSONDecodeError:
+                pass
+    return None
+
+
 async def _write_scenario(scenario: Scenario, path: Path) -> None:
     """追加写一条场景到JSONL文件。"""
     async with aiofiles.open(path, "a") as f:
         await f.write(
             json.dumps(dataclasses.asdict(scenario), ensure_ascii=False) + "\n"
         )
+
+
+def _build_dim_id(combo: dict) -> str:
+    """从维度组合构造场景 ID。"""
+    return f"{combo['scenario']}_{combo['fatigue_level']}_{combo['workload']}_{combo['task_type']}_{combo['has_passengers']}"
+
+
+async def _generate_json(
+    combo: dict,
+    chat_model: ChatModel,
+    dim_id: str,
+) -> dict | None:
+    """调用 LLM 生成 JSON，含重试 + 容错提取。返回解析成功之 dict 或 None。"""
+    prompt = _build_prompt(combo)
+    last_err: str | None = None
+    for attempt in range(_MAX_JSON_RETRIES + 1):
+        try:
+            raw = await chat_model.generate(
+                prompt=prompt, system_prompt=SYSTEM_PROMPT, json_mode=True
+            )
+        except ChatError:
+            logger.warning("LLM call failed for combo %s", dim_id, exc_info=True)
+            return None
+        data = _extract_json(raw)
+        if data is not None:
+            return data
+        last_err = f"JSON parse failed (attempt {attempt + 1}/{_MAX_JSON_RETRIES + 1})"
+    logger.warning(
+        "Failed to parse JSON for combo %s: %s", dim_id, last_err or "unknown"
+    )
+    return None
+
+
+def _build_scenario(combo: dict, data: dict, dim_id: str) -> Scenario:
+    """从 LLM 输出构造 Scenario 数据类。"""
+    driving_context = data.get("driving_context", {})
+    if not isinstance(driving_context, dict):
+        driving_context = {}
+    return Scenario(
+        id=dim_id,
+        driving_context=driving_context,
+        user_query=data.get("user_query", ""),
+        expected_decision=data.get("expected_decision", {}),
+        expected_task_type=data.get("expected_task_type", combo["task_type"]),
+        safety_relevant=_compute_safety_relevant(combo),
+        scenario_type=driving_context.get("scenario", combo["scenario"]),
+        synthesis_dims=combo,
+    )
 
 
 async def synthesize_scenarios(output_path: Path, count: int = 260) -> int:
@@ -195,49 +268,17 @@ async def synthesize_scenarios(output_path: Path, count: int = 260) -> int:
 
     async def _synthesize_one(combo: dict) -> int:
         nonlocal generated_count
-        dim_id = f"{combo['scenario']}_{combo['fatigue_level']}_{combo['workload']}_{combo['task_type']}_{combo['has_passengers']}"
-        # dim_id 由维度组合唯一决定（360 种排列），
-        # 同一 dim_id 只会生成一次场景（幂等跳过），不存在同一 ID 对应不同内容的情况。
+        dim_id = _build_dim_id(combo)
         if dim_id in existing:
             return 0
-        # 注：dim_id 来自 _build_dimension_combinations() 的 360 种唯一排列，
-        # 无两 task 共享同 dim_id，故此检查在锁外安全。
-
-        # 早退：已达目标数量则跳过，避免浪费 LLM 调用
-        # generated_count 只增不减，无锁读取可能滞后，最多多调 sem 容量次 LLM
         if generated_count >= count:
             return 0
 
         async with sem:
-            prompt = _build_prompt(combo)
-            try:
-                raw = await chat_model.generate(
-                    prompt=prompt, system_prompt=SYSTEM_PROMPT, json_mode=True
-                )
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse JSON for combo %s", dim_id)
+            data = await _generate_json(combo, chat_model, dim_id)
+            if data is None:
                 return 0
-            except ChatError:
-                logger.warning("LLM call failed for combo %s", dim_id, exc_info=True)
-                return 0
-
-            driving_context = data.get("driving_context", {})
-            if not isinstance(driving_context, dict):
-                driving_context = {}
-            scenario_type_val = driving_context.get("scenario", combo["scenario"])
-            safety = _compute_safety_relevant(combo)
-
-            scenario = Scenario(
-                id=dim_id,
-                driving_context=driving_context,
-                user_query=data.get("user_query", ""),
-                expected_decision=data.get("expected_decision", {}),
-                expected_task_type=data.get("expected_task_type", combo["task_type"]),
-                safety_relevant=safety,
-                scenario_type=scenario_type_val,
-                synthesis_dims=combo,
-            )
+            scenario = _build_scenario(combo, data, dim_id)
 
             async with write_lock:
                 current_total = generated_count
