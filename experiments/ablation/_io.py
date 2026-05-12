@@ -180,9 +180,13 @@ async def load_checkpoint(
                 except json.JSONDecodeError, KeyError, ValueError:
                     logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                     continue
-    except FileNotFoundError, OSError:
-        logger.warning("Checkpoint 读取失败（%s），从零开始运行", path)
+    except FileNotFoundError:
+        logger.warning("Checkpoint 文件不存在（%s），从零开始运行", path)
         return ids, results
+    except OSError:
+        logger.warning("Checkpoint 读取失败（%s），从零开始运行", path)
+        # 中途 I/O 错误——丢弃部分数据，避免不一致结果混入续跑
+        return set(), []
     return ids, results
 
 

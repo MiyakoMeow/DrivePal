@@ -116,6 +116,8 @@ async def _aggregate_full_stage_scores(
     raw_scores = await asyncio.gather(*tasks, return_exceptions=True)
     all_scores: list[dict[str, Any]] = []
     for r in raw_scores:
+        if isinstance(r, asyncio.CancelledError):
+            raise r  # 传播取消语义
         if isinstance(r, Exception):
             logger.warning("Stage scoring task failed: %s", r)
         elif isinstance(r, dict):

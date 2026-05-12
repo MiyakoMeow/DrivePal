@@ -256,6 +256,8 @@ def _safe_parse_judge_scores(raw_scores: list) -> list[JudgeScores] | None:
     逐条尝试解析，记录损坏数。损坏率超过 _MAX_BAD_SCORE_RATIO 时
     返回 None 触发全量重算；否则返回有效条目。
     """
+    if not raw_scores:
+        return []
     parsed: list[JudgeScores] = []
     bad_count = 0
     for s in raw_scores:
@@ -273,8 +275,6 @@ def _safe_parse_judge_scores(raw_scores: list) -> list[JudgeScores] | None:
             )
         except KeyError, ValueError, TypeError:
             bad_count += 1
-            if not raw_scores:
-                continue
             if bad_count / len(raw_scores) > _MAX_BAD_SCORE_RATIO:
                 logger.warning(
                     "scores.json 损坏率 %.0f%% (%d/%d)，回退重算",
@@ -296,7 +296,7 @@ async def _try_load_existing_scores(
         async with aiofiles.open(scores_path, encoding="utf-8") as f:
             raw = await f.read()
         data = json.loads(raw)
-    except json.JSONDecodeError, OSError, FileNotFoundError:
+    except json.JSONDecodeError, OSError:
         return None
     loaded = _safe_parse_judge_scores(data.get("scores", []))
     if loaded is None:

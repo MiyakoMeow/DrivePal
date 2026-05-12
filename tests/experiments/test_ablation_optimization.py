@@ -429,3 +429,49 @@ class TestJudgeOnlyCaching:
 
         loaded = await _try_load_existing_scores(tmp_path / "nope.json", [])
         assert loaded is None
+
+    def test_safe_parse_judge_scores_damage_above_threshold_returns_none(self):
+        """给定损坏率 6% > 5% 阈值，当 _safe_parse_judge_scores，则返回 None."""
+        from experiments.ablation.cli import _safe_parse_judge_scores
+
+        # 100 items, 6 bad → 6% > 5%
+        items = [
+            {
+                "scenario_id": f"s{i}",
+                "variant": "full",
+                "safety_score": 5,
+                "reasonableness_score": 4,
+                "overall_score": 4,
+            }
+            for i in range(100)
+        ]
+        items[0].pop("safety_score")  # corrupt
+        items[1].pop("safety_score")  # corrupt
+        items[2].pop("safety_score")  # corrupt
+        items[3].pop("safety_score")  # corrupt
+        items[4].pop("safety_score")  # corrupt
+        items[5].pop("safety_score")  # corrupt
+        result = _safe_parse_judge_scores(items)
+        assert result is None
+
+    def test_safe_parse_judge_scores_damage_below_threshold_returns_valid(self):
+        """给定损坏率 4% ≤ 5% 阈值，当 _safe_parse_judge_scores，则返回有效部分."""
+        from experiments.ablation.cli import _safe_parse_judge_scores
+
+        items = [
+            {
+                "scenario_id": f"s{i}",
+                "variant": "full",
+                "safety_score": 5,
+                "reasonableness_score": 4,
+                "overall_score": 4,
+            }
+            for i in range(100)
+        ]
+        items[0].pop("safety_score")  # corrupt
+        items[1].pop("safety_score")  # corrupt
+        items[2].pop("safety_score")  # corrupt
+        items[3].pop("safety_score")  # corrupt
+        result = _safe_parse_judge_scores(items)
+        assert result is not None
+        assert len(result) == 96

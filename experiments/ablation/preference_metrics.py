@@ -55,7 +55,10 @@ def _compute_matching_rate(
 
     for wh in weight_history:
         ri = wh.get("round", 0)
-        stage = wh["stage"]
+        stage = wh.get("stage", "")
+        if not stage:
+            logger.warning("weight_history 条目缺 stage 字段，跳过")
+            continue
         if ri not in full_by_round:
             logger.warning(
                 "轮次 %d 缺少 FULL 变体结果——匹配率分母排除该轮，"

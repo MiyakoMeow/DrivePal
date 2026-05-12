@@ -91,6 +91,7 @@ exclude = [".agents/**"]
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
     "BLE001",  # _score_one 捕获所有异常记录并返回空 dict，不重抛
+    "C901",  # _aggregate_full_stage_scores 含 CancelledError 检测+分阶段聚合，复杂度可接受
     "PLR2004",  # len(latencies) 比较魔法数字（1/2），延迟分析常见模式
 ]
 "experiments/ablation/metrics.py" = [

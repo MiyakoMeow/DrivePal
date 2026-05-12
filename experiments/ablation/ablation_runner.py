@@ -238,6 +238,11 @@ class AblationRunner:
         new_results = await asyncio.gather(*tasks, return_exceptions=True)
         succeeded = [r for r in new_results if isinstance(r, VariantResult)]
         failures = [r for r in new_results if isinstance(r, Exception)]
+        for r in new_results:
+            if isinstance(r, BaseException) and not isinstance(r, Exception):
+                if isinstance(r, asyncio.CancelledError):
+                    raise r  # 传播取消语义，与 protocol.py 保持一致
+                logger.error("Unexpected base exception in variant run: %s", r)
         if failures:
             failure_msgs = "; ".join(
                 f"{type(f).__name__}: {f}" if str(f) else type(f).__name__
