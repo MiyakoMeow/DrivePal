@@ -200,15 +200,20 @@ def _compute_decision_divergence(
     对每个 mixed 轮次，比较两个变体的 decision dict 差异字段比例，
     取所有轮次的平均。越高说明 FULL 学偏了。
     """
-    mixed_rounds = [
-        i for i, wh in enumerate(weight_history) if wh.get("stage") == "mixed"
-    ]
-    if not mixed_rounds:
+    # 优先从 wh["round"] 取轮次号（与 _compute_matching_rate 一致）；
+    # 无 "round" 键时回退索引推导（兼容旧测试/无 round_index 的数据）。
+    mixed_indices: set[int] = set()
+    for i, wh in enumerate(weight_history):
+        if wh.get("stage") != "mixed":
+            continue
+        ri = wh.get("round")
+        if isinstance(ri, int):
+            mixed_indices.add(ri)
+        else:
+            mixed_indices.add(i + 1)
+    if not mixed_indices:
         return 0.0
 
-    # weight_history 索引为 0-based，VariantResult.round_index 为 1-based，
-    # 故 i+1 转换匹配
-    mixed_indices = {i + 1 for i in mixed_rounds}
     full_mixed = [
         r
         for r in results

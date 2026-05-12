@@ -3,15 +3,14 @@
 import asyncio
 import dataclasses
 import logging
-import os
 import random
 from pathlib import Path
 
 from ._io import (
+    VARIANT_TIMEOUT_SECONDS,
     append_checkpoint,
     dump_variant_results_jsonl,
     write_json_atomic,
-    write_scores_json,
 )
 from .ablation_runner import AblationRunner
 from .feedback_simulator import (
@@ -27,13 +26,6 @@ from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
 logger = logging.getLogger(__name__)
 
 _MIN_STAGES = 4
-
-try:
-    _PERSONALIZATION_VARIANT_TIMEOUT_SECONDS = int(
-        os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300")
-    )
-except ValueError:
-    _PERSONALIZATION_VARIANT_TIMEOUT_SECONDS = 300
 
 STAGES: list[tuple[str, int, int]] = [
     ("high-freq", 0, 8),
@@ -105,15 +97,13 @@ async def run_personalization_group(
                     else f"{runner.base_user_id}-{variant.value}"
                 )
                 try:
-                    async with asyncio.timeout(
-                        _PERSONALIZATION_VARIANT_TIMEOUT_SECONDS
-                    ):
+                    async with asyncio.timeout(VARIANT_TIMEOUT_SECONDS):
                         vr = await runner.run_variant(scenario, variant, user_id=uid)
                 except TimeoutError:
                     logger.warning(
                         "Variant %s timed out after %ds (round %d, scenario %s)",
                         variant.value,
-                        _PERSONALIZATION_VARIANT_TIMEOUT_SECONDS,
+                        VARIANT_TIMEOUT_SECONDS,
                         i + 1,
                         scenario.id,
                     )
@@ -219,13 +209,6 @@ async def run_personalization_group(
             "stages": stages,
         },
     )
-
-    # 持久化 Judge 评分（供 --judge-only 缓存复用）
-    scores_path = output_path.with_name("scores.json")
-    try:
-        await write_scores_json(scores_path, scores)
-    except OSError:
-        logger.exception("Failed to write scores for personalization group")
 
     return GroupResult(
         group="personalization",

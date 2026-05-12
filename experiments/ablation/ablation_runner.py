@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -30,15 +29,10 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
-from ._io import append_checkpoint, load_checkpoint
+from ._io import VARIANT_TIMEOUT_SECONDS, append_checkpoint, load_checkpoint
 from .types import BatchResult, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
-
-try:
-    _VARIANT_TIMEOUT_SECONDS = int(os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300"))
-except ValueError:
-    _VARIANT_TIMEOUT_SECONDS = 300
 
 
 class AblationRunner:
@@ -213,12 +207,12 @@ class AblationRunner:
             async with sem:
                 uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
                 try:
-                    async with asyncio.timeout(_VARIANT_TIMEOUT_SECONDS):
+                    async with asyncio.timeout(VARIANT_TIMEOUT_SECONDS):
                         vr = await self.run_variant(scenario, variant, user_id=uid)
                 except TimeoutError:
                     logger.warning(
                         "Variant timeout after %ds: %s %s",
-                        _VARIANT_TIMEOUT_SECONDS,
+                        VARIANT_TIMEOUT_SECONDS,
                         scenario.id,
                         variant.value,
                     )
