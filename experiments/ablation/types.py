@@ -49,12 +49,14 @@ class BatchResult:
 
     results: list[VariantResult]
     expected: int
-    actual: int = 0
-    failures: int = 0
 
-    def __post_init__(self) -> None:
-        self.actual = len(self.results)
-        self.failures = self.expected - self.actual
+    @property
+    def actual(self) -> int:
+        return len(self.results)
+
+    @property
+    def failures(self) -> int:
+        return self.expected - self.actual
 
 
 @dataclass
