@@ -525,6 +525,8 @@ async def main(argv: list[str] | None = None) -> None:
                 for g in concurrent_groups
             ]
             for r in await asyncio.gather(*tasks, return_exceptions=True):
+                if isinstance(r, asyncio.CancelledError):
+                    raise r  # 传播取消语义
                 if isinstance(r, Exception):
                     logger.error("Group experiment failed: %s", r)
                     failures.append(str(r))

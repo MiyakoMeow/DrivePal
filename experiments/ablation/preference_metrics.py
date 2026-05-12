@@ -50,6 +50,12 @@ def _compute_matching_rate(
 
     # 以 round_index 建映射，消除对列表序的依赖
     # 注意：round_index >= 1（1-based），round_index=0 表示未分配轮次
+    zero_round = [r for r in full_results if r.round_index == 0]
+    if zero_round:
+        logger.warning(
+            "%d 条 FULL 结果 round_index=0（未分配轮次），已从匹配率计算中排除",
+            len(zero_round),
+        )
     full_by_round = {r.round_index: r for r in full_results if r.round_index > 0}
     stage_matches: dict[str, list[bool]] = {}
 
