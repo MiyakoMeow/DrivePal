@@ -501,3 +501,14 @@ class TestJudgeConcentrationDetection:
         ]
         result = detect_judge_degradation(scores)
         assert result["degraded"] is False
+
+    def test_exactly_80_percent_no_degradation(self):
+        """恰好 80% 占比不触发集中度退化（严格 > 阈值）。"""
+        from experiments.ablation.judge import detect_judge_degradation
+
+        # 8/10 = 0.8 恰好等于 CONCENTRATION_THRESHOLD，严格 > 不触发
+        scores = [
+            JudgeScores(f"s{i}", Variant.FULL, 4, 4, 4, [], "") for i in range(8)
+        ] + [JudgeScores(f"s{i}", Variant.FULL, 5, 5, 5, [], "") for i in range(8, 10)]
+        result = detect_judge_degradation(scores)
+        assert result["degraded"] is False

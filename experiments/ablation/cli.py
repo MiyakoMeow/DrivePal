@@ -347,7 +347,7 @@ def _prepare_group_scenarios(
             )
             used_ids |= {s.id for s in group_scenarios["architecture"]}
         else:
-            logger.warning("架构组经 exclude_ids 排除后无可用场景，跳过架构组实验。")
+            logger.warning("架构组预过滤后无可用场景，跳过架构组实验。")
             group_scenarios["architecture"] = []
 
     if "personalization" in groups_to_run:
