@@ -187,11 +187,19 @@ class AblationRunner:
                 for sid, vval in raw_ids
                 if sid in current_sids and vval in current_vvals
             }
-            results.extend(
-                r
-                for r in raw_results
-                if r.scenario_id in current_sids and r.variant.value in current_vvals
-            )
+            # 按 (scenario_id, variant.value) 去重——checkpoint 中同对可能出现多行
+            # （如并发追加或部分恢复），取首次出现的记录。
+            seen_pairs: set[tuple[str, str]] = set()
+            for r in raw_results:
+                if r.scenario_id not in current_sids:
+                    continue
+                if r.variant.value not in current_vvals:
+                    continue
+                pair = (r.scenario_id, r.variant.value)
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                results.append(r)
 
         pending = [
             (s, v)

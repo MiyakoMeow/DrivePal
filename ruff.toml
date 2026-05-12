@@ -73,6 +73,7 @@ exclude = [".agents/**"]
 ]
 "experiments/ablation/ablation_runner.py" = [
     "TRY400",  # timeout/失败前记录日志便于调试 checkpoint 续跑，异常由外层 gather 统一处理
+    "C901",  # run_batch 含 checkpoint 加载/去重/semaphore/timeout/错误处理，复杂度可接受
 ]
 "experiments/ablation/judge.py" = [
     "S311",  # 确定性种子用于可复现实验（盲评 shuffle）
