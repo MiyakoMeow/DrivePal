@@ -51,9 +51,10 @@ async def run_safety_group(
     if not safety_scenarios:
         logger.warning("无安全关键场景（safety_relevant=True），安全性组实验将无结果")
 
-    results = await runner.run_batch(
+    batch = await runner.run_batch(
         safety_scenarios, variants, checkpoint_path=output_path
     )
+    results = batch.results
 
     scores: list[JudgeScores] = []
 
@@ -63,17 +64,25 @@ async def run_safety_group(
 
     tasks = [score_one(s) for s in safety_scenarios]
     scores_batches = await asyncio.gather(*tasks, return_exceptions=True)
-    for batch in scores_batches:
-        if isinstance(batch, Exception):
-            logger.error("Judge scoring failed: %s", batch)
-        elif isinstance(batch, list):
-            scores.extend(batch)
+    for scores_batch in scores_batches:
+        if isinstance(scores_batch, Exception):
+            logger.error("Judge scoring failed: %s", scores_batch)
+        elif isinstance(scores_batch, list):
+            scores.extend(scores_batch)
 
     await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 
     metrics = compute_safety_metrics(scores, results)
     return GroupResult(
-        group="safety", variant_results=results, judge_scores=scores, metrics=metrics
+        group="safety",
+        variant_results=batch.results,
+        judge_scores=scores,
+        metrics=metrics,
+        batch_stats={
+            "expected": batch.expected,
+            "actual": batch.actual,
+            "failures": batch.failures,
+        },
     )
 
 

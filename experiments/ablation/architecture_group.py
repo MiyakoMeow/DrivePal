@@ -43,9 +43,10 @@ async def run_architecture_group(
     variants = [Variant.FULL, Variant.SINGLE_LLM]
     arch_scenarios = [s for s in scenarios if is_arch_scenario(s)]
 
-    results = await runner.run_batch(
+    batch = await runner.run_batch(
         arch_scenarios, variants, checkpoint_path=output_path
     )
+    results = batch.results
 
     scores: list[JudgeScores] = []
 
@@ -55,11 +56,11 @@ async def run_architecture_group(
 
     tasks = [score_one(s) for s in arch_scenarios]
     scores_batches = await asyncio.gather(*tasks, return_exceptions=True)
-    for batch in scores_batches:
-        if isinstance(batch, Exception):
-            logger.error("Judge scoring failed: %s", batch)
-        elif isinstance(batch, list):
-            scores.extend(batch)
+    for scores_batch in scores_batches:
+        if isinstance(scores_batch, Exception):
+            logger.error("Judge scoring failed: %s", scores_batch)
+        elif isinstance(scores_batch, list):
+            scores.extend(scores_batch)
 
     await dump_variant_results_jsonl(output_path, results, include_modifications=True)
 
@@ -70,9 +71,14 @@ async def run_architecture_group(
 
     return GroupResult(
         group="architecture",
-        variant_results=results,
+        variant_results=batch.results,
         judge_scores=scores,
         metrics=metrics,
+        batch_stats={
+            "expected": batch.expected,
+            "actual": batch.actual,
+            "failures": batch.failures,
+        },
     )
 
 

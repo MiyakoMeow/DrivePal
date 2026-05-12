@@ -31,7 +31,7 @@ from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
 from ._io import append_checkpoint, load_checkpoint
-from .types import Scenario, Variant, VariantResult
+from .types import BatchResult, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
 
@@ -165,13 +165,14 @@ class AblationRunner:
         *,
         concurrency: int = 4,
         checkpoint_path: Path | None = None,
-    ) -> list[VariantResult]:
+    ) -> BatchResult:
         """批量运行场景×变体笛卡尔积（并发）。
 
         concurrency 控制 LLM 并发度（默认 4，匹配 provider concurrency）。
         每变体独立 user_id（{base_user_id}-{scenario.id}-{variant.value}），MemoryBank 无竞态。
         续跑先加载 checkpoint 中已有结果，再并发跑未完成的变体。
         """
+        expected = len(scenarios) * len(variants)
         results: list[VariantResult] = []
         existing_ids: set[tuple[str, str]] = set()
         if checkpoint_path:
@@ -212,7 +213,7 @@ class AblationRunner:
                 return vr
 
         if not pending:
-            return results
+            return BatchResult(results=results, expected=expected)
         tasks = [asyncio.create_task(run_one(s, v)) for s, v in pending]
         new_results = await asyncio.gather(*tasks, return_exceptions=True)
         succeeded = [r for r in new_results if isinstance(r, VariantResult)]
@@ -225,4 +226,4 @@ class AblationRunner:
                 len(new_results),
                 failure_msgs,
             )
-        return results + succeeded
+        return BatchResult(results=results + succeeded, expected=expected)
