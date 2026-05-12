@@ -63,6 +63,7 @@ class LLMJsonResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     raw: str
+    data: dict | None = None
 
     @classmethod
     def from_llm(cls, text: str) -> LLMJsonResponse:
@@ -72,10 +73,9 @@ class LLMJsonResponse(BaseModel):
         try:
             data = json.loads(cleaned)
             if isinstance(data, dict):
-                data.pop("raw", None)  # prevent collision with explicit raw=text
-                return cls(raw=text, **data)
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.warning("LLM JSON parse/validate failed: %s", e)
+                return cls(raw=text, data=data)
+        except json.JSONDecodeError:
+            pass
         return cls(raw=text)
 
 
@@ -332,17 +332,12 @@ class AgentWorkflow:
 
             parsed = await self._call_llm_json(prompt)
             try:
-                validated = ContextOutput.model_validate(
-                    parsed.model_dump(exclude={"raw"})
-                )
+                validated = ContextOutput.model_validate(parsed.data or {})
                 context = validated.model_dump()
             except ValidationError as e:
                 logger.warning("ContextOutput validation failed: %s", e)
-                try:
-                    raw_data = json.loads(parsed.raw)
-                    context = raw_data if isinstance(raw_data, dict) else {}
-                except json.JSONDecodeError:
-                    context = {}
+                raw_data = parsed.data
+                context = raw_data or {}
             context["current_datetime"] = current_datetime
             context["related_events"] = relevant_memories
 
@@ -367,15 +362,12 @@ class AgentWorkflow:
 
         parsed = await self._call_llm_json(prompt)
         try:
-            validated = TaskOutput.model_validate(parsed.model_dump(exclude={"raw"}))
+            validated = TaskOutput.model_validate(parsed.data or {})
             task = validated.model_dump()
         except ValidationError as e:
             logger.warning("TaskOutput validation failed: %s", e)
-            try:
-                raw_data = json.loads(parsed.raw)
-                task = raw_data if isinstance(raw_data, dict) else {}
-            except json.JSONDecodeError:
-                task = {}
+            raw_data = parsed.data
+            task = raw_data or {}
         if stages is not None:
             stages.task = task
         return {
@@ -442,17 +434,12 @@ class AgentWorkflow:
 
         parsed = await self._call_llm_json(prompt)
         try:
-            validated = StrategyOutput.model_validate(
-                parsed.model_dump(exclude={"raw"})
-            )
+            validated = StrategyOutput.model_validate(parsed.data or {})
             decision = validated.model_dump()
         except ValidationError as e:
             logger.warning("StrategyOutput validation failed: %s", e)
-            try:
-                raw_data = json.loads(parsed.raw)
-                decision = raw_data if isinstance(raw_data, dict) else {}
-            except json.JSONDecodeError:
-                decision = {}
+            raw_data = parsed.data
+            decision = raw_data or {}
         decision["postpone"] = postpone
         if stages is not None:
             stages.decision = decision
