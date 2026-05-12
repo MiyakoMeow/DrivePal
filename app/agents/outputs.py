@@ -89,11 +89,11 @@ class OutputRouter:
             rules_result: 规则引擎 apply_rules() 的输出。
 
         """
-        rc = decision.get("reminder_content", {})
+        rc = decision.get("reminder_content") or {}
         if isinstance(rc, str):
             rc = {"detailed": rc}
         if not isinstance(rc, dict):
-            rc = {"detailed": str(rc)}
+            rc = {}
 
         detailed = rc.get("detailed", "") or ""
 

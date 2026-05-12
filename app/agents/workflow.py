@@ -9,7 +9,14 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
 
 from app.agents.conversation import _conversation_manager
 from app.agents.outputs import OutputRouter
@@ -149,12 +156,20 @@ class StrategyOutput(BaseModel):
     is_emergency: bool = False
     target_time: str = ""
     delay_seconds: int = 300
-    reminder_content: str | dict = ""
+    reminder_content: str | dict | None = ""
     type: str = "general"
     reason: str = ""
     allowed_channels: list = []
     action: str = ""
     postpone: bool = False
+
+    @field_validator("reminder_content", mode="before")
+    @classmethod
+    def _normalize_reminder_content(cls, v: str | dict | None) -> str | dict:
+        """LLM 可能返回 null，归一化为空字符串。"""
+        if v is None:
+            return ""
+        return v
 
 
 class ReminderContent(BaseModel):

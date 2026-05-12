@@ -271,6 +271,9 @@ def postprocess_decision(
         return decision, []
 
     result = dict(decision)
+    # LLM 可能输出 null，归一化为 ""，避免下游 None 检查
+    if "reminder_content" in result and result["reminder_content"] is None:
+        result["reminder_content"] = ""
     modifications: list[str] = []
     constraints = apply_rules(driving_context)
 
