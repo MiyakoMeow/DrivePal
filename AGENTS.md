@@ -47,7 +47,6 @@ app/
 tests/                 # 测试运行命令、CI 工作流 → tests/AGENTS.md
 config/                # 模型配置格式、环境变量、完整配置项 → config/AGENTS.md
 data/                  # 运行时数据
-docs/                  # 文档资源
 scripts/               # 工具脚本
 webui/                 # 模拟测试工作台
 archive/               # 论文参考文献 → archive/AGENTS.md

@@ -76,7 +76,8 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 `retention = e^(-days / (time_scale × strength))`
 
-- **默认确定性模式**：retention < `SOFT_FORGET_THRESHOLD=0.3` 标记遗忘（`forgotten=True`）
+- **默认关闭**：`enable_forgetting=False`，需 `MEMORYBANK_ENABLE_FORGETTING=true` 开启
+- **默认确定性模式**（开启后）：retention < `SOFT_FORGET_THRESHOLD=0.3` 标记遗忘（`forgotten=True`）
 - **可选概率性模式**：`MEMORYBANK_FORGET_MODE=probabilistic`，每条目独立掷骰子
 - **回忆强化**：检索命中 memory_strength += 1（上限 max_memory_strength，默认 10）
 - **节流**：`FORGET_INTERVAL_SECONDS=300`，两次遗忘判断至少间隔5分钟
@@ -108,7 +109,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 ### 与原始论文差异
 
 - 硬删除 → 软标记（`forgotten=True`） + 后续 `purge_forgotten()` 硬清理
-- 启动时批量遗忘 → 每次搜索前清理已遗忘条目
+- 启动时批量遗忘（仅 `enable_forgetting=True` 时生效）→ 每次搜索前清理已遗忘条目
 - 无级联删除 summary → 保留所有 summary 更安全
 
 ## 错误处理
@@ -130,6 +131,8 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 | 阈值 | 值 | 位置 |
 |------|-----|------|
+| `ENABLE_FORGETTING` | `False` | `memory_bank/config.py` |
+| `FORGET_MODE` | `deterministic` | `memory_bank/config.py` |
 | `SOFT_FORGET_THRESHOLD` | 0.3 | `memory_bank/config.py` |
 | `FORGET_INTERVAL_SECONDS` | 300 | `memory_bank/config.py` |
 | `FORGETTING_TIME_SCALE` | 1.0 | `memory_bank/config.py` |
@@ -204,10 +207,12 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 位置脱敏
 
-写入记忆前自动脱敏位置信息：
+`sanitize_context()` 由 `app/agents/workflow.py` Execution 节点调用，非记忆模块内部自动执行。
+
+对传入上下文的字段逐层脱敏：
 - 经纬度截断至小数点后 2 位（约 1km 精度）
 - 地址只保留街道级（逗号前第一段）
-- `sanitize_context()` 固定处理 `spatial.current_location` + `destination` 两个字段，无递归遍历
+- 固定处理 `spatial.current_location` + `destination` 两个字段，无递归遍历
 
 ### 数据可携带性
 
