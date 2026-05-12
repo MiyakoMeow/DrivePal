@@ -105,14 +105,14 @@ def has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
 def extract_task_type(stages: dict) -> str | None:
     """从 stages.task 提取任务类型。
 
-    LLM 输出的 key 名不一致——可能为 task_type / task_attribution。
+    LLM 输出的 key 名不一致——可能为 type / task_type / task_attribution。
     仅接受已知类型（_KNOWN_TASK_TYPES），过滤如 "navigation"/"reminder" 等
     非标准值——这些值无法映射到 reminder_weights 的维度，接受后权重更新
     将绑定错误 key。
     """
     task_stage = stages.get("task", {})
     if isinstance(task_stage, dict):
-        for key in ("task_type", "task_attribution"):
+        for key in ("type", "task_type", "task_attribution"):
             val = task_stage.get(key)
             if isinstance(val, str) and val.strip():
                 stripped = val.strip()

@@ -86,6 +86,8 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 **假设**：Full 在偏好切换后 3-5 轮内权重收敛至目标方向；-Feedback 匹配率在各阶段均接近随机水平。
 
+**实现细节**：`feedback_simulator.py` 中 `extract_task_type()` 从 `stages.task` 提取任务类型时，按 `type` / `task_type` / `task_attribution` 三级键名 fallback——兜底 LLM 输出的字段名不一致问题（不同模型/温度下可能产出不同键名）。已知类型集合 `_KNOWN_TASK_TYPES` 过滤非标准值（如 "navigation"/"reminder"），避免权重绑定错误 key。
+
 ---
 
 ## 测试场景合成
