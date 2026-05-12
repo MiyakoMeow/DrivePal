@@ -5,13 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import time
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
-
-import aiofiles
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -32,15 +29,10 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
-from ._io import variant_result_from_dict
-from .types import Scenario, Variant, VariantResult
+from ._io import VARIANT_TIMEOUT_SECONDS, append_checkpoint, load_checkpoint
+from .types import BatchResult, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
-
-try:
-    _VARIANT_TIMEOUT_SECONDS = int(os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300"))
-except ValueError:
-    _VARIANT_TIMEOUT_SECONDS = 300
 
 
 class AblationRunner:
@@ -145,16 +137,23 @@ class AblationRunner:
         if not isinstance(output, dict):
             output = {}
         latency_ms = (time.perf_counter() - t0) * 1000
+
+        def _safe_dict(val: object) -> dict[str, Any]:
+            """运行时类型守卫——LLM 输出可能为列表等非 dict 类型。"""
+            if isinstance(val, dict):
+                return cast("dict[str, Any]", val)
+            return {}
+
         return VariantResult(
             scenario_id=scenario.id,
             variant=Variant.SINGLE_LLM,
-            decision=cast("dict[str, Any]", output.get("decision", {})),
+            decision=_safe_dict(output.get("decision", {})),
             result_text="",
             event_id=None,
             stages={
-                "context": cast("dict[str, Any]", output.get("context", {})),
-                "task": cast("dict[str, Any]", output.get("task", {})),
-                "decision": cast("dict[str, Any]", output.get("decision", {})),
+                "context": _safe_dict(output.get("context", {})),
+                "task": _safe_dict(output.get("task", {})),
+                "decision": _safe_dict(output.get("decision", {})),
                 "execution": {},
             },
             latency_ms=latency_ms,
@@ -167,18 +166,40 @@ class AblationRunner:
         *,
         concurrency: int = 4,
         checkpoint_path: Path | None = None,
-    ) -> list[VariantResult]:
+    ) -> BatchResult:
         """批量运行场景×变体笛卡尔积（并发）。
 
         concurrency 控制 LLM 并发度（默认 4，匹配 provider concurrency）。
         每变体独立 user_id（{base_user_id}-{scenario.id}-{variant.value}），MemoryBank 无竞态。
         续跑先加载 checkpoint 中已有结果，再并发跑未完成的变体。
         """
+        expected = len(scenarios) * len(variants)
         results: list[VariantResult] = []
         existing_ids: set[tuple[str, str]] = set()
         if checkpoint_path:
-            existing_ids, existing_results = await _load_checkpoint(checkpoint_path)
-            results.extend(existing_results)
+            raw_ids, raw_results = await load_checkpoint(checkpoint_path)
+            # 过滤 checkpoint 中不属于当前 scenarios/variants 的旧记录——
+            # 若在上次 run 后修改了实验范围，旧数据不应污染本次结果。
+            current_sids = {s.id for s in scenarios}
+            current_vvals = {v.value for v in variants}
+            existing_ids = {
+                (sid, vval)
+                for sid, vval in raw_ids
+                if sid in current_sids and vval in current_vvals
+            }
+            # 按 (scenario_id, variant.value) 去重——checkpoint 中同对可能出现多行
+            # （如并发追加或部分恢复），取首次出现的记录。
+            seen_pairs: set[tuple[str, str]] = set()
+            for r in raw_results:
+                if r.scenario_id not in current_sids:
+                    continue
+                if r.variant.value not in current_vvals:
+                    continue
+                pair = (r.scenario_id, r.variant.value)
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                results.append(r)
 
         pending = [
             (s, v)
@@ -194,19 +215,19 @@ class AblationRunner:
             async with sem:
                 uid = f"{self.base_user_id}-{scenario.id}-{variant.value}"
                 try:
-                    async with asyncio.timeout(_VARIANT_TIMEOUT_SECONDS):
+                    async with asyncio.timeout(VARIANT_TIMEOUT_SECONDS):
                         vr = await self.run_variant(scenario, variant, user_id=uid)
                 except TimeoutError:
                     logger.warning(
                         "Variant timeout after %ds: %s %s",
-                        _VARIANT_TIMEOUT_SECONDS,
+                        VARIANT_TIMEOUT_SECONDS,
                         scenario.id,
                         variant.value,
                     )
                     raise
                 if checkpoint_path:
                     async with ckpt_lock:
-                        await _append_checkpoint(
+                        await append_checkpoint(
                             checkpoint_path,
                             vr,
                             include_modifications=True,
@@ -214,65 +235,25 @@ class AblationRunner:
                 return vr
 
         if not pending:
-            return results
+            return BatchResult(results=results, expected=expected)
         tasks = [asyncio.create_task(run_one(s, v)) for s, v in pending]
         new_results = await asyncio.gather(*tasks, return_exceptions=True)
         succeeded = [r for r in new_results if isinstance(r, VariantResult)]
         failures = [r for r in new_results if isinstance(r, Exception)]
+        for r in new_results:
+            if isinstance(r, BaseException) and not isinstance(r, Exception):
+                if isinstance(r, asyncio.CancelledError):
+                    raise r  # 传播取消语义，与 protocol.py 保持一致
+                logger.error("Unexpected base exception in variant run: %s", r)
         if failures:
-            failure_msgs = "; ".join(str(f) for f in failures[:5])
+            failure_msgs = "; ".join(
+                f"{type(f).__name__}: {f}" if str(f) else type(f).__name__
+                for f in failures[:5]
+            )
             logger.error(
                 "%d/%d variant runs failed: %s",
                 len(failures),
                 len(new_results),
                 failure_msgs,
             )
-        return results + succeeded
-
-
-async def _load_checkpoint(
-    path: Path,
-) -> tuple[set[tuple[str, str]], list[VariantResult]]:
-    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表)。
-
-    用于续跑：将已有结果加载回内存，避免 `dump_variant_results_jsonl` 覆盖丢失。
-    """
-    ids: set[tuple[str, str]] = set()
-    results: list[VariantResult] = []
-    try:
-        async with aiofiles.open(path, encoding="utf-8") as f:
-            async for line in f:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                try:
-                    d = json.loads(stripped)
-                    ids.add((d["scenario_id"], d["variant"]))
-                    results.append(variant_result_from_dict(d))
-                except json.JSONDecodeError, KeyError, ValueError:
-                    logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
-                    continue
-    except FileNotFoundError:
-        return ids, results
-    return ids, results
-
-
-async def _append_checkpoint(
-    path: Path, vr: VariantResult, *, include_modifications: bool = False
-) -> None:
-    """追加写单条 VariantResult 到 checkpoint JSONL。"""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    record: dict[str, object] = {
-        "scenario_id": vr.scenario_id,
-        "variant": vr.variant.value,
-        "decision": vr.decision,
-        "stages": vr.stages,
-        "latency_ms": vr.latency_ms,
-        "round_index": vr.round_index,
-        "result_text": vr.result_text,
-        "event_id": vr.event_id,
-    }
-    if include_modifications:
-        record["modifications"] = vr.modifications
-    async with aiofiles.open(path, "a", encoding="utf-8") as f:
-        await f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        return BatchResult(results=results + succeeded, expected=expected)

@@ -24,6 +24,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+try:
+    VARIANT_TIMEOUT_SECONDS = int(os.getenv("ABLATION_VARIANT_TIMEOUT_SECONDS", "300"))
+except ValueError:
+    VARIANT_TIMEOUT_SECONDS = 300
+"""单变体执行超时（秒）。ablation_runner + personalization_group 共用。"""
+
 
 def get_fatigue_threshold() -> float:
     """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。
@@ -80,7 +86,7 @@ async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
 
 
 async def write_summary(path: Path, data: dict[str, Any]) -> None:
-    """写 JSON 总结文件。timestamp 始终由系统生成，不受 data 中同名键覆盖。"""
+    """写 JSON 总结文件。timestamp 始终由系统生成，覆盖 data 中同名键。"""
     record: dict[str, Any] = {
         **data,
         "timestamp": datetime.now(tz=UTC).isoformat(),
@@ -156,6 +162,59 @@ async def write_scores_json(path: Path, scores: list[JudgeScores]) -> None:
         ]
     }
     await write_json_atomic(path, data)
+
+
+async def load_checkpoint(
+    path: Path,
+) -> tuple[set[tuple[str, str]], list[VariantResult]]:
+    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表).
+
+    用于续跑：将已有结果加载回内存，避免 `dump_variant_results_jsonl` 覆盖丢失。
+    """
+    ids: set[tuple[str, str]] = set()
+    results: list[VariantResult] = []
+    try:
+        async with aiofiles.open(path, encoding="utf-8") as f:
+            async for line in f:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    d = json.loads(stripped)
+                    ids.add((d["scenario_id"], d["variant"]))
+                    results.append(variant_result_from_dict(d))
+                except json.JSONDecodeError, KeyError, ValueError:
+                    logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
+                    continue
+    except FileNotFoundError:
+        logger.warning("Checkpoint 文件不存在（%s），从零开始运行", path)
+        return ids, results
+    except OSError:
+        logger.warning("Checkpoint 读取失败（%s），从零开始运行", path)
+        # 中途 I/O 错误——丢弃部分数据，避免不一致结果混入续跑
+        return set(), []
+    return ids, results
+
+
+async def append_checkpoint(
+    path: Path, vr: VariantResult, *, include_modifications: bool = False
+) -> None:
+    """追加写单条 VariantResult 到 checkpoint JSONL。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record: dict[str, object] = {
+        "scenario_id": vr.scenario_id,
+        "variant": vr.variant.value,
+        "decision": vr.decision,
+        "stages": vr.stages,
+        "latency_ms": vr.latency_ms,
+        "round_index": vr.round_index,
+        "result_text": vr.result_text,
+        "event_id": vr.event_id,
+    }
+    if include_modifications:
+        record["modifications"] = vr.modifications
+    async with aiofiles.open(path, "a", encoding="utf-8") as f:
+        await f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 
 
 async def dump_variant_results_jsonl(

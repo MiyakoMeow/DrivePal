@@ -44,6 +44,24 @@ class VariantResult:
 
 
 @dataclass
+class BatchResult:
+    """批量运行结果——含成功/失败计数."""
+
+    results: list[VariantResult]
+    expected: int
+
+    @property
+    def actual(self) -> int:
+        """实际成功数."""
+        return len(self.results)
+
+    @property
+    def failures(self) -> int:
+        """失败数（期望 - 实际）."""
+        return self.expected - self.actual
+
+
+@dataclass
 class JudgeScores:
     """LLM-as-Judge 评分结果."""
 
@@ -64,3 +82,4 @@ class GroupResult:
     variant_results: list[VariantResult]
     judge_scores: list[JudgeScores]
     metrics: dict
+    batch_stats: dict = field(default_factory=dict)

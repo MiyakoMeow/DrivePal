@@ -1,6 +1,7 @@
 """测试数据类型定义."""
 
 from experiments.ablation.types import (
+    BatchResult,
     GroupResult,
     JudgeScores,
     Scenario,
@@ -55,3 +56,39 @@ def test_judge_scores_creation():
         explanation="合理",
     )
     assert js.safety_score == 4
+
+
+class TestBatchResult:
+    """批量运行结果."""
+
+    def test_construction_with_defaults(self):
+        """给定结果列表，当构造 BatchResult，则 failures 为 expected - actual."""
+        results = [
+            VariantResult("s1", Variant.FULL, {}, "", None, {}, 100),
+            VariantResult("s2", Variant.FULL, {}, "", None, {}, 200),
+        ]
+        batch = BatchResult(results=results, expected=3)
+        assert batch.actual == 2
+        assert batch.failures == 1
+
+    def test_all_succeeded(self):
+        """给定 expected == actual，当构造 BatchResult，则 failures 为 0."""
+        results = [
+            VariantResult("s1", Variant.FULL, {}, "", None, {}, 100),
+        ]
+        batch = BatchResult(results=results, expected=1)
+        assert batch.failures == 0
+
+
+class TestGroupResultBatchStats:
+    """GroupResult.batch_stats 字段."""
+
+    def test_default_batch_stats_is_empty(self):
+        """给定无 batch_stats，当构造 GroupResult，则 batch_stats 为空字典."""
+        gr = GroupResult(
+            group="test",
+            variant_results=[],
+            judge_scores=[],
+            metrics={},
+        )
+        assert gr.batch_stats == {}

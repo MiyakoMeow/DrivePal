@@ -26,19 +26,20 @@ from .architecture_group import (
     arch_stratum,
     compute_quality_metrics,
     is_arch_scenario,
-    run_architecture_group,
+    make_architecture_config,
 )
 from .judge import Judge
 from .personalization_group import (
     _build_stages,
-    compute_preference_metrics,
     pers_stratum,
     run_personalization_group,
 )
+from .preference_metrics import compute_preference_metrics
+from .protocol import run_group, score_scenarios_concurrent
 from .report import render_report
 from .safety_group import (
     compute_safety_metrics,
-    run_safety_group,
+    make_safety_config,
     safety_stratum,
 )
 from .scenario_synthesizer import (
@@ -50,6 +51,7 @@ from .types import (
     GroupResult,
     JudgeScores,
     Scenario,
+    Variant,
     VariantResult,
 )
 
@@ -94,6 +96,11 @@ def _print_step_summary(result: GroupResult, elapsed: float) -> None:
     degradation = result.metrics.get("_judge_degradation", {})
     if degradation.get("degraded"):
         print(f"  ⚠ {degradation.get('warning', 'Judge 评分退化')}")
+    batch_stats = result.batch_stats
+    if batch_stats.get("failures", 0) > 0:
+        print(
+            f"  ⚠ {batch_stats['failures']} variant runs failed (expected {batch_stats['expected']})"
+        )
     suffix = f" | {'; '.join(metrics_parts[:8])}" if metrics_parts else ""
     print(f"[{group}] {n} results, {m} scores, {elapsed:.1f}s{suffix}")
 
@@ -120,30 +127,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def _score_group(
-    judge: Judge,
-    scenarios_for_results: dict[str, list[VariantResult]],
-    scenario_by_id: dict[str, Scenario],
-) -> list[JudgeScores]:
-    """对一组结果的各场景并发评分并汇总。"""
-
-    async def score_one(sid: str, vrs: list[VariantResult]) -> list[JudgeScores]:
-        scenario = scenario_by_id.get(sid)
-        if scenario is None:
-            return []
-        return await judge.score_batch(scenario, vrs)
-
-    tasks = [score_one(sid, vrs) for sid, vrs in scenarios_for_results.items()]
-    batches = await asyncio.gather(*tasks, return_exceptions=True)
-    scores: list[JudgeScores] = []
-    for batch in batches:
-        if isinstance(batch, Exception):
-            logger.error("Judge scoring failed: %s", batch)
-        elif isinstance(batch, list):
-            scores.extend(batch)
-    return scores
-
-
 async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> None:
     """仅重新评分：加载已有结果 JSONL → Judge 评分 → 覆盖输出。"""
     all_scenarios = load_scenarios(data_dir / "scenarios.jsonl")
@@ -165,8 +148,23 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         for vr in variant_results:
             scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
 
-        scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
-        await write_scores_json(run_dir / group_name / "scores.json", scores)
+        existing_scores = await _try_load_existing_scores(
+            run_dir / group_name / "scores.json",
+            variant_results,
+        )
+        if existing_scores is not None:
+            scores = existing_scores
+            print(f"{group_name} 组复用已有评分: {len(scores)} 条")
+        else:
+            score_scenarios = [
+                scenario_by_id[sid]
+                for sid in scenarios_for_results
+                if sid in scenario_by_id
+            ]
+            scores = await score_scenarios_concurrent(
+                judge, score_scenarios, variant_results
+            )
+            await write_scores_json(run_dir / group_name / "scores.json", scores)
 
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
@@ -248,6 +246,66 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
     return results
 
 
+_MAX_BAD_SCORE_RATIO = 0.05
+"""scores.json 条目损坏率超过此阈值时全弃重算，避免静默使用不完整数据。"""
+
+
+def _safe_parse_judge_scores(raw_scores: list) -> list[JudgeScores] | None:
+    """安全解析 JudgeScores 列表。
+
+    逐条尝试解析，记录损坏数。损坏率超过 _MAX_BAD_SCORE_RATIO 时
+    返回 None 触发全量重算；否则返回有效条目。
+    """
+    if not raw_scores:
+        return []
+    parsed: list[JudgeScores] = []
+    bad_count = 0
+    for s in raw_scores:
+        try:
+            parsed.append(
+                JudgeScores(
+                    scenario_id=s["scenario_id"],
+                    variant=Variant(s["variant"]),
+                    safety_score=s["safety_score"],
+                    reasonableness_score=s["reasonableness_score"],
+                    overall_score=s["overall_score"],
+                    violation_flags=s.get("violation_flags", []),
+                    explanation=s.get("explanation", ""),
+                )
+            )
+        except KeyError, ValueError, TypeError:
+            bad_count += 1
+            if bad_count / len(raw_scores) > _MAX_BAD_SCORE_RATIO:
+                logger.warning(
+                    "scores.json 损坏率 %.0f%% (%d/%d)，回退重算",
+                    bad_count / len(raw_scores) * 100,
+                    bad_count,
+                    len(raw_scores),
+                )
+                return None
+            logger.warning("scores.json 条目损坏（跳过）: %s", s)
+    return parsed
+
+
+async def _try_load_existing_scores(
+    scores_path: Path,
+    variant_results: list[VariantResult],
+) -> list[JudgeScores] | None:
+    """若 scores.json 存在且完整覆盖 variant_results，返回加载结果；否则返回 None."""
+    try:
+        async with aiofiles.open(scores_path, encoding="utf-8") as f:
+            raw = await f.read()
+        data = json.loads(raw)
+    except json.JSONDecodeError, OSError:
+        return None
+    loaded = _safe_parse_judge_scores(data.get("scores", []))
+    if loaded is None:
+        return None
+    loaded_keys = {(s.scenario_id, s.variant) for s in loaded}
+    required_keys = {(r.scenario_id, r.variant) for r in variant_results}
+    return loaded if required_keys <= loaded_keys else None
+
+
 def _prepare_group_scenarios(
     all_scenarios: list[Scenario],
     groups_to_run: list[str],
@@ -323,8 +381,9 @@ async def _run_safety_experiment(
     """运行安全性组实验。"""
     runner = AblationRunner(base_user_id="experiment-safety")
     judge = Judge()
-    return await run_safety_group(
-        runner, judge, scenarios, run_dir / "safety" / "results.jsonl"
+    config = make_safety_config()
+    return await run_group(
+        runner, judge, scenarios, config, run_dir / "safety" / "results.jsonl"
     )
 
 
@@ -334,8 +393,9 @@ async def _run_architecture_experiment(
     """运行架构组实验。"""
     runner = AblationRunner(base_user_id="experiment-arch")
     judge = Judge()
-    return await run_architecture_group(
-        runner, judge, scenarios, run_dir / "architecture" / "results.jsonl"
+    config = make_architecture_config()
+    return await run_group(
+        runner, judge, scenarios, config, run_dir / "architecture" / "results.jsonl"
     )
 
 
@@ -465,6 +525,8 @@ async def main(argv: list[str] | None = None) -> None:
                 for g in concurrent_groups
             ]
             for r in await asyncio.gather(*tasks, return_exceptions=True):
+                if isinstance(r, asyncio.CancelledError):
+                    raise r  # 传播取消语义
                 if isinstance(r, Exception):
                     logger.error("Group experiment failed: %s", r)
                     failures.append(str(r))

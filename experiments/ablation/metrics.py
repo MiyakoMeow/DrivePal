@@ -2,10 +2,14 @@
 
 import math
 import random
+from typing import TYPE_CHECKING
 
 from scipy.stats import wilcoxon as _scipy_wilcoxon
 
 from .types import JudgeScores
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def cohens_d(group_a: list[float], group_b: list[float]) -> float:
@@ -83,14 +87,17 @@ def bootstrap_ci(
 def wilcoxon_test(
     scores: list[JudgeScores],
     baseline: str = "full",
+    *,
+    key_fn: Callable[[JudgeScores], str] | None = None,
 ) -> dict[str, dict]:
-    """Wilcoxon signed-rank test——按 scenario_id 配对。
+    """Wilcoxon signed-rank test——按自定义键配对。
 
     返回 {variant: {statistic, p_value, n_pairs}}。
     """
+    _get_key = key_fn or (lambda s: s.scenario_id)
     by_pair: dict[str, dict[str, list[float]]] = {}
     for s in scores:
-        by_pair.setdefault(s.scenario_id, {}).setdefault(s.variant.value, []).append(
+        by_pair.setdefault(_get_key(s), {}).setdefault(s.variant.value, []).append(
             s.overall_score
         )
 
