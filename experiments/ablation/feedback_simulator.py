@@ -24,7 +24,12 @@ _KNOWN_TASK_TYPES: frozenset[str] = frozenset(
 
 
 def simulate_feedback(
-    decision: dict, stage: str, rng: random.Random, *, stages: dict | None = None
+    decision: dict,
+    stage: str,
+    rng: random.Random,
+    *,
+    stages: dict | None = None,
+    scenario_id: str = "",
 ) -> Literal["accept", "ignore"]:
     """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
 
@@ -37,6 +42,7 @@ def simulate_feedback(
         rng: 随机数生成器。
         stages: AgentWorkflow 各阶段原始输出。visual-detail 阶段优先从此读取
             LLM 原始意图（规则引擎前的 reminder_content）。
+        scenario_id: 场景标识，用于诊断日志。
 
     TODO: 可选集成正式 submitFeedback API。
 
@@ -52,7 +58,8 @@ def simulate_feedback(
     if stage == "visual-detail":
         if stages and stages.get("decision") == decision:
             logger.debug(
-                "规则引擎未修改 decision，反馈基于原始 LLM 输出"
+                "规则引擎未修改 decision，反馈基于原始 LLM 输出 (scenario: %s)",
+                scenario_id,
             )
         return "accept" if _has_visual_content(decision, stages=stages) else "ignore"
     if stage == "mixed":

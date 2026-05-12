@@ -127,7 +127,11 @@ async def run_personalization_group(
                     if task_type:
                         try:
                             action = simulate_feedback(
-                                vr.decision, stage_name, rng, stages=vr.stages
+                                vr.decision,
+                                stage_name,
+                                rng,
+                                stages=vr.stages,
+                                scenario_id=scenario.id,
                             )
                             await update_feedback_weight(
                                 runner.base_user_id,
