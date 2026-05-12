@@ -1,6 +1,7 @@
 """架构组实验——四 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
 
 import asyncio
+import dataclasses
 import logging
 import statistics
 from typing import Any
@@ -44,10 +45,18 @@ async def _stage_scores_hook(
     judge: Judge,
     _scenarios: list[Scenario],
 ) -> GroupResult:
-    """架构组后处理：聚合 Full 变体中间阶段评分。"""
+    """架构组后处理：聚合 Full 变体中间阶段评分。
+
+    返回新 GroupResult（不原地修改），保持数据流不可变。
+    """
     full_results = [r for r in gr.variant_results if r.variant == Variant.FULL]
-    gr.metrics["stage_scores"] = await _aggregate_full_stage_scores(judge, full_results)
-    return gr
+    return dataclasses.replace(
+        gr,
+        metrics={
+            **gr.metrics,
+            "stage_scores": await _aggregate_full_stage_scores(judge, full_results),
+        },
+    )
 
 
 def compute_quality_metrics(

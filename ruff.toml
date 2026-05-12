@@ -11,7 +11,6 @@ ignore = [
     "D213",  # pydocstyle - 多行docstring应在第二行开始
     "D400",  # pydocstyle - docstring首行应以句号结尾
     "D415",  # pydocstyle - docstring首行需以标点结尾
-    "D105",  # pydocstyle - 魔术方法（如__post_init__）无需docstring
     "COM812",  # 与formatter冲突（formatter自动处理尾随逗号）
     "E501",  # pycodestyle - 行长度限制
     "RUF001",  # 全角字符检查（中文项目无需修改）
@@ -109,6 +108,9 @@ exclude = [".agents/**"]
     "TC003",  # Path 用于类型注解及运行时操作
     "BLE001",  # update_feedback_weight 失败记录日志后跳过，不中断实验
     "C901",  # run_personalization_group 含 4 阶段 × 20 轮 × 2 变体编排，复杂度可接受
+]
+"experiments/ablation/feedback_simulator.py" = [
+    "ANN401",  # _safe_read_weights 接受 Any 输入做运行时类型校验（TOML 输出无固定类型）
 ]
 
 "app/memory/memory_bank/lifecycle.py" = [

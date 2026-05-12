@@ -246,6 +246,32 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
     return results
 
 
+def _safe_parse_judge_scores(raw_scores: list) -> list[JudgeScores] | None:
+    """安全解析 JudgeScores 列表。
+
+    任一项缺字段或值非法（KeyError/ValueError/TypeError）则返回 None，
+    由上层回退重算。
+    """
+    parsed: list[JudgeScores] = []
+    for s in raw_scores:
+        try:
+            parsed.append(
+                JudgeScores(
+                    scenario_id=s["scenario_id"],
+                    variant=Variant(s["variant"]),
+                    safety_score=s["safety_score"],
+                    reasonableness_score=s["reasonableness_score"],
+                    overall_score=s["overall_score"],
+                    violation_flags=s.get("violation_flags", []),
+                    explanation=s.get("explanation", ""),
+                )
+            )
+        except KeyError, ValueError, TypeError:
+            logger.warning("scores.json 条目损坏，回退重算: %s", s)
+            return None
+    return parsed
+
+
 async def _try_load_existing_scores(
     scores_path: Path,
     variant_results: list[VariantResult],
@@ -257,18 +283,9 @@ async def _try_load_existing_scores(
         data = json.loads(raw)
     except json.JSONDecodeError, OSError, FileNotFoundError:
         return None
-    loaded = [
-        JudgeScores(
-            scenario_id=s["scenario_id"],
-            variant=Variant(s["variant"]),
-            safety_score=s["safety_score"],
-            reasonableness_score=s["reasonableness_score"],
-            overall_score=s["overall_score"],
-            violation_flags=s.get("violation_flags", []),
-            explanation=s.get("explanation", ""),
-        )
-        for s in data.get("scores", [])
-    ]
+    loaded = _safe_parse_judge_scores(data.get("scores", []))
+    if loaded is None:
+        return None
     loaded_keys = {(s.scenario_id, s.variant) for s in loaded}
     required_keys = {(r.scenario_id, r.variant) for r in variant_results}
     return loaded if required_keys <= loaded_keys else None

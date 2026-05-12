@@ -1,4 +1,19 @@
-"""公共实验编排协议."""
+"""公共实验编排协议.
+
+设计决策：
+- GroupConfig 声明式：每组实验的变体列表、场景过滤、指标计算通过
+  dataclass 组合而非子类化。原因：消融实验三组之间仅在配置上有差异（安全性/
+  架构/个性化），行为完全一致——声明式比继承树更直观、更易复用。
+- filter → run_batch → score → dump → metrics → post_hook 固定流水线：
+  各组实验的编排步骤完全相同，差异通过 config 参数化注入。post_hook 用于
+  架构组的中间阶段评分聚合等组特化逻辑，不影响通用流水线。
+- 并发粒度：score_scenarios_concurrent 按场景并发（每个场景并发评分所有变体），
+  而非按变体×场景笛卡尔积并发。原因：Judge.score_batch 内部已按变体并发，
+  外层再次并发仅增加调度开销，不减少总耗时。
+- CancelledError 显式传播：Python 3.9+ 中它不再是 Exception 子类，
+  asyncio.gather(return_exceptions=True) 不会将其自动识别为异常，
+  必须显式检查并重抛以保留取消语义。
+"""
 
 import asyncio
 import logging
@@ -76,7 +91,11 @@ async def score_scenarios_concurrent(
     scenarios: list[Scenario],
     results: list[VariantResult],
 ) -> list[JudgeScores]:
-    """并发评分所有场景的所有变体."""
+    """并发评分所有场景的所有变体.
+
+    CancelledError 需显式传播——Python 3.9+ 中它是 BaseException 子类，
+    不会被 isinstance(batch, Exception) 捕获。
+    """
 
     async def score_one(scenario: Scenario) -> list[JudgeScores]:
         vrs = [r for r in results if r.scenario_id == scenario.id]
@@ -85,9 +104,11 @@ async def score_scenarios_concurrent(
     tasks = [score_one(s) for s in scenarios]
     batches = await asyncio.gather(*tasks, return_exceptions=True)
     scores: list[JudgeScores] = []
-    for batch in batches:
-        if isinstance(batch, Exception):
-            logger.error("Judge scoring failed: %s", batch)
+    for scenario, batch in zip(scenarios, batches, strict=True):
+        if isinstance(batch, BaseException):
+            if isinstance(batch, asyncio.CancelledError):
+                raise batch
+            logger.error("Judge scoring failed for %s: %s", scenario.id, batch)
         elif isinstance(batch, list):
             scores.extend(batch)
     return scores

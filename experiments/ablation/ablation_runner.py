@@ -176,8 +176,21 @@ class AblationRunner:
         results: list[VariantResult] = []
         existing_ids: set[tuple[str, str]] = set()
         if checkpoint_path:
-            existing_ids, existing_results = await load_checkpoint(checkpoint_path)
-            results.extend(existing_results)
+            raw_ids, raw_results = await load_checkpoint(checkpoint_path)
+            # 过滤 checkpoint 中不属于当前 scenarios/variants 的旧记录——
+            # 若在上次 run 后修改了实验范围，旧数据不应污染本次结果。
+            current_sids = {s.id for s in scenarios}
+            current_vvals = {v.value for v in variants}
+            existing_ids = {
+                (sid, vval)
+                for sid, vval in raw_ids
+                if sid in current_sids and vval in current_vvals
+            }
+            results.extend(
+                r
+                for r in raw_results
+                if r.scenario_id in current_sids and r.variant.value in current_vvals
+            )
 
         pending = [
             (s, v)

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import MutableMapping
-from typing import TYPE_CHECKING, Literal
+from collections.abc import Mapping, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     import random
@@ -33,8 +33,18 @@ def simulate_feedback(
 ) -> Literal["accept", "ignore"]:
     """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
 
-    实验简写版：直接操作 strategies.toml 的 reminder_weights，
-    不走正式 submitFeedback mutation（不写 feedback.jsonl、不更新 memory_strength）。
+    设计动机：
+    - 直接操作 strategies.toml 的 reminder_weights 而非走正式 submitFeedback
+      mutation，因为反馈模拟需要同步、确定性的权重更新以复现实验；走全套
+      GraphQL API（写 feedback.jsonl + 更新 memory_strength）引入不必要的
+      异步依赖和竞态风险。
+    - visual-detail 阶段优先从 stages["decision"]（规则引擎前的 LLM 原始
+      输出）读取意图，因为规则引擎可能因安全约束修改 reminder_content，导致
+      has_visual_content 误判。stages["visual-detail"] 是 LLM 在未受硬约束
+      干扰下的真实意图。
+    - _KNOWN_TASK_TYPES 仅接受 meeting/travel/shopping/contact/other——
+      LLM 有时输出非标准 task_type（如 "navigation"/"reminder"），这些值
+      无法映射到权重维度，接受后将污染提醒策略。
 
     Args:
         decision: 最终决策 dict（可能已被规则引擎修改）。
@@ -43,8 +53,6 @@ def simulate_feedback(
         stages: AgentWorkflow 各阶段原始输出。visual-detail 阶段优先从此读取
             LLM 原始意图（规则引擎前的 reminder_content）。
         scenario_id: 场景标识，用于诊断日志。
-
-    TODO: 可选集成正式 submitFeedback API。
 
     """
     if stage == "high-freq":
@@ -95,7 +103,9 @@ def extract_task_type(stages: dict) -> str | None:
     """从 stages.task 提取任务类型。
 
     LLM 输出的 key 名不一致——可能为 task_type / task_attribution。
-    返回值仅接受已知类型集合，过滤无效值。
+    仅接受已知类型（_KNOWN_TASK_TYPES），过滤如 "navigation"/"reminder" 等
+    非标准值——这些值无法映射到 reminder_weights 的维度，接受后权重更新
+    将绑定错误 key。
     """
     task_stage = stages.get("task", {})
     if isinstance(task_stage, dict):
@@ -107,6 +117,26 @@ def extract_task_type(stages: dict) -> str | None:
                     return stripped
                 logger.debug("task_type=%r 不在已知类型集合中，跳过反馈", stripped)
     return None
+
+
+def _safe_read_weights(current: Any) -> dict[str, float]:
+    """从 TOML 读取结果中安全提取 reminder_weights。
+
+    配置损坏（值非 Mapping、key 非 str、value 非数字）时返回空 dict，
+    避免后续计算因脏类型抛异常。
+    """
+    if not isinstance(current, MutableMapping):
+        return {}
+    raw = current.get("reminder_weights")
+    if not isinstance(raw, Mapping):
+        return {}
+    clean: dict[str, float] = {}
+    for key, val in raw.items():
+        if not isinstance(key, str):
+            continue
+        if isinstance(val, (int, float)):
+            clean[key] = float(val)
+    return clean
 
 
 async def update_feedback_weight(
@@ -136,21 +166,15 @@ async def update_feedback_weight(
         user_dir=ud, filename="strategies.toml", default_factory=dict
     )
     current = await strategy_store.read()
-    weights: dict[str, float] = {}
-    if isinstance(current, MutableMapping):
-        weights = dict(current.get("reminder_weights", {}))
+    weights = _safe_read_weights(current)
     delta = 0.1 if action == "accept" else -0.1
     weights[event_type] = max(0.1, min(1.0, weights.get(event_type, 0.5) + delta))
     await strategy_store.update("reminder_weights", weights)
 
 
-async def read_weights(user_id: str) -> dict:
-    """读取用户的 reminder_weights 配置。"""
+async def read_weights(user_id: str) -> dict[str, float]:
+    """读取用户的 reminder_weights 配置（经类型校验清洗）。"""
     ud = user_data_dir(user_id)
     store = TOMLStore(user_dir=ud, filename="strategies.toml", default_factory=dict)
     current = await store.read()
-    return (
-        current.get("reminder_weights", {})
-        if isinstance(current, MutableMapping)
-        else {}
-    )
+    return _safe_read_weights(current)
