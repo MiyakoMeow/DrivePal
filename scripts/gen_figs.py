@@ -16,8 +16,12 @@ matplotlib.use("Agg")
 
 # 中文字体：Noto Sans CJK → WenQuanYi Zen Hei / 微软雅黑 → sans-serif 回退
 _FONT_CANDIDATES = [
-    "Noto Sans CJK SC", "Noto Sans CJK JP", "WenQuanYi Zen Hei",
-    "WenQuanYi Micro Hei", "Microsoft YaHei", "SimHei",
+    "Noto Sans CJK SC",
+    "Noto Sans CJK JP",
+    "WenQuanYi Zen Hei",
+    "WenQuanYi Micro Hei",
+    "Microsoft YaHei",
+    "SimHei",
 ]
 _available = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
 _font = next((f for f in _FONT_CANDIDATES if f in _available), "sans-serif")
@@ -96,8 +100,14 @@ def fig_overall_match() -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
     bars = ax.bar(LABELS, EXACT_MATCH, color=COLORS, edgecolor="white", linewidth=0.5)
     for bar, val in zip(bars, EXACT_MATCH, strict=True):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5,
-                f"{val:.1f}%", ha="center", va="bottom", fontsize=10)
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1.5,
+            f"{val:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
     ax.set_ylabel("精确匹配率 (%)", fontsize=12)
     ax.set_ylim(0, 100)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))

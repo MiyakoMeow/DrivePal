@@ -697,7 +697,9 @@ def _add_page_numbers(doc: Document) -> None:
 # ── 主构建函数 ──
 
 
-async def build_docx(tokens: list[dict], output_path: Path, *, source_dir: Path) -> None:
+async def build_docx(
+    tokens: list[dict], output_path: Path, *, source_dir: Path
+) -> None:
     """主建文档函数。遍历 token 流构建 docx。
 
     Args:
