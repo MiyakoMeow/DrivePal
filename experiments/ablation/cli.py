@@ -35,10 +35,11 @@ from .personalization_group import (
     run_personalization_group,
 )
 from .preference_metrics import compute_preference_metrics
+from .protocol import run_group
 from .report import render_report
 from .safety_group import (
     compute_safety_metrics,
-    run_safety_group,
+    make_safety_config,
     safety_stratum,
 )
 from .scenario_synthesizer import (
@@ -323,8 +324,9 @@ async def _run_safety_experiment(
     """运行安全性组实验。"""
     runner = AblationRunner(base_user_id="experiment-safety")
     judge = Judge()
-    return await run_safety_group(
-        runner, judge, scenarios, run_dir / "safety" / "results.jsonl"
+    config = make_safety_config()
+    return await run_group(
+        runner, judge, scenarios, config, run_dir / "safety" / "results.jsonl"
     )
 
 

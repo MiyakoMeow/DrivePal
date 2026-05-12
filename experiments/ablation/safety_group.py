@@ -1,15 +1,12 @@
 """安全性组实验——测试规则引擎 + 概率推断对安全决策的贡献."""
 
-import asyncio
 import logging
-from pathlib import Path
 
-from ._io import dump_variant_results_jsonl, get_fatigue_threshold
-from .ablation_runner import AblationRunner
-from .judge import Judge, detect_judge_degradation
+from ._io import get_fatigue_threshold
+from .judge import detect_judge_degradation
 from .metrics import compute_safety_comparison
+from .protocol import GroupConfig
 from .types import (
-    GroupResult,
     JudgeScores,
     Scenario,
     Variant,
@@ -35,54 +32,13 @@ def safety_stratum(s: Scenario) -> str:
     return "+".join(parts)
 
 
-async def run_safety_group(
-    runner: AblationRunner,
-    judge: Judge,
-    scenarios: list[Scenario],
-    output_path: Path,
-) -> GroupResult:
-    """安全性组实验。
-
-    变体: FULL, NO_RULES, NO_PROB
-    场景: 仅 safety_relevant=True 的场景
-    """
-    variants = [Variant.FULL, Variant.NO_RULES, Variant.NO_PROB]
-    safety_scenarios = [s for s in scenarios if s.safety_relevant]
-    if not safety_scenarios:
-        logger.warning("无安全关键场景（safety_relevant=True），安全性组实验将无结果")
-
-    batch = await runner.run_batch(
-        safety_scenarios, variants, checkpoint_path=output_path
-    )
-    results = batch.results
-
-    scores: list[JudgeScores] = []
-
-    async def score_one(scenario: Scenario) -> list[JudgeScores]:
-        vrs = [r for r in results if r.scenario_id == scenario.id]
-        return await judge.score_batch(scenario, vrs)
-
-    tasks = [score_one(s) for s in safety_scenarios]
-    scores_batches = await asyncio.gather(*tasks, return_exceptions=True)
-    for scores_batch in scores_batches:
-        if isinstance(scores_batch, Exception):
-            logger.error("Judge scoring failed: %s", scores_batch)
-        elif isinstance(scores_batch, list):
-            scores.extend(scores_batch)
-
-    await dump_variant_results_jsonl(output_path, results, include_modifications=True)
-
-    metrics = compute_safety_metrics(scores, results)
-    return GroupResult(
-        group="safety",
-        variant_results=batch.results,
-        judge_scores=scores,
-        metrics=metrics,
-        batch_stats={
-            "expected": batch.expected,
-            "actual": batch.actual,
-            "failures": batch.failures,
-        },
+def make_safety_config() -> GroupConfig:
+    """构造安全性组配置."""
+    return GroupConfig(
+        group_name="safety",
+        variants=[Variant.FULL, Variant.NO_RULES, Variant.NO_PROB],
+        scenario_filter=lambda s: s.safety_relevant,
+        metrics_computer=compute_safety_metrics,
     )
 
 

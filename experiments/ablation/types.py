@@ -52,10 +52,12 @@ class BatchResult:
 
     @property
     def actual(self) -> int:
+        """实际成功数."""
         return len(self.results)
 
     @property
     def failures(self) -> int:
+        """失败数（期望 - 实际）."""
         return self.expected - self.actual
 
 

@@ -85,6 +85,9 @@ exclude = [".agents/**"]
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
 ]
+"experiments/ablation/protocol.py" = [
+    "TC003",  # Callable/Awaitable 用于 @dataclass 字段注解，运行时必需
+]
 "experiments/ablation/architecture_group.py" = [
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
@@ -168,6 +171,8 @@ exclude = [".agents/**"]
     "D403",  # 测试 docstring 首词大写非强制
     "ERA001",  # 测试中公式注释合理
     "F401",  # 测试 fixtures 中导入为 pytest 发现机制需要
+    "FBT001",  # 测试辅助函数布尔参数是常见做法
+    "FBT002",  # 测试辅助函数布尔默认参数是常见做法
     "PERF401",  # 测试中 for-loop 构建 fixture 数据可读性优先
     "PLC0415",  # 测试中局部导入合理
     "PLR2004",  # 测试中魔法数字（期望值）是标准做法
