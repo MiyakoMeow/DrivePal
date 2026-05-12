@@ -51,6 +51,7 @@ from .types import (
     GroupResult,
     JudgeScores,
     Scenario,
+    Variant,
     VariantResult,
 )
 
@@ -171,8 +172,16 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         for vr in variant_results:
             scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
 
-        scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
-        await write_scores_json(run_dir / group_name / "scores.json", scores)
+        existing_scores = await _try_load_existing_scores(
+            run_dir / group_name / "scores.json",
+            variant_results,
+        )
+        if existing_scores is not None:
+            scores = existing_scores
+            print(f"{group_name} 组复用已有评分: {len(scores)} 条")
+        else:
+            scores = await _score_group(judge, scenarios_for_results, scenario_by_id)
+            await write_scores_json(run_dir / group_name / "scores.json", scores)
 
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
@@ -252,6 +261,34 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
             except json.JSONDecodeError, KeyError, ValueError:
                 logger.warning("跳过无效行: %s", stripped[:80])
     return results
+
+
+async def _try_load_existing_scores(
+    scores_path: Path,
+    variant_results: list[VariantResult],
+) -> list[JudgeScores] | None:
+    """若 scores.json 存在且完整覆盖 variant_results，返回加载结果；否则返回 None."""
+    try:
+        async with aiofiles.open(scores_path, encoding="utf-8") as f:
+            raw = await f.read()
+        data = json.loads(raw)
+    except json.JSONDecodeError, OSError, FileNotFoundError:
+        return None
+    loaded = [
+        JudgeScores(
+            scenario_id=s["scenario_id"],
+            variant=Variant(s["variant"]),
+            safety_score=s["safety_score"],
+            reasonableness_score=s["reasonableness_score"],
+            overall_score=s["overall_score"],
+            violation_flags=s.get("violation_flags", []),
+            explanation=s.get("explanation", ""),
+        )
+        for s in data.get("scores", [])
+    ]
+    loaded_keys = {(s.scenario_id, s.variant) for s in loaded}
+    required_keys = {(r.scenario_id, r.variant) for r in variant_results}
+    return loaded if required_keys <= loaded_keys else None
 
 
 def _prepare_group_scenarios(

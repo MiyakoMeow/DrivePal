@@ -1,11 +1,13 @@
 """消融实验方法论优化测试."""
 
+import json
+
 from experiments.ablation.metrics import bootstrap_ci, wilcoxon_test
 from experiments.ablation.scenario_synthesizer import (
     _compute_safety_relevant,
     _parse_dims_from_id,
 )
-from experiments.ablation.types import JudgeScores, Scenario, Variant
+from experiments.ablation.types import JudgeScores, Scenario, Variant, VariantResult
 
 
 class TestComputeSafetyRelevant:
@@ -348,3 +350,82 @@ class TestMedianScores:
         assert r.overall_score == 3
         assert r.violation_flags == ["flag_b"]
         assert r.explanation == "mid overall"
+
+
+class TestJudgeOnlyCaching:
+    """--judge-only 模式复用已有 scores.json."""
+
+    async def test_try_load_existing_scores_returns_scores_when_complete(
+        self, tmp_path
+    ):
+        """给定完整 scores.json，当 _try_load_existing_scores，则返回全部评分."""
+        from experiments.ablation.cli import _try_load_existing_scores
+
+        scores_data = {
+            "scores": [
+                {
+                    "scenario_id": "s1",
+                    "variant": "full",
+                    "safety_score": 5,
+                    "reasonableness_score": 4,
+                    "overall_score": 4,
+                    "violation_flags": [],
+                    "explanation": "ok",
+                },
+                {
+                    "scenario_id": "s1",
+                    "variant": "no-rules",
+                    "safety_score": 3,
+                    "reasonableness_score": 3,
+                    "overall_score": 3,
+                    "violation_flags": [],
+                    "explanation": "ok",
+                },
+            ]
+        }
+        path = tmp_path / "scores.json"
+        path.write_text(json.dumps(scores_data))
+
+        variant_results = [
+            VariantResult("s1", Variant.FULL, {}, "", None, {}, 100),
+            VariantResult("s1", Variant.NO_RULES, {}, "", None, {}, 100),
+        ]
+        loaded = await _try_load_existing_scores(path, variant_results)
+        assert loaded is not None
+        assert len(loaded) == 2
+
+    async def test_try_load_existing_scores_returns_none_when_incomplete(
+        self, tmp_path
+    ):
+        """给定不完整 scores.json，当 _try_load_existing_scores，则返回 None."""
+        from experiments.ablation.cli import _try_load_existing_scores
+
+        scores_data = {
+            "scores": [
+                {
+                    "scenario_id": "s1",
+                    "variant": "full",
+                    "safety_score": 5,
+                    "reasonableness_score": 4,
+                    "overall_score": 4,
+                    "violation_flags": [],
+                    "explanation": "",
+                }
+            ]
+        }
+        path = tmp_path / "scores.json"
+        path.write_text(json.dumps(scores_data))
+
+        variant_results = [
+            VariantResult("s1", Variant.FULL, {}, "", None, {}, 100),
+            VariantResult("s1", Variant.NO_RULES, {}, "", None, {}, 100),
+        ]
+        loaded = await _try_load_existing_scores(path, variant_results)
+        assert loaded is None
+
+    async def test_try_load_existing_scores_returns_none_when_missing(self, tmp_path):
+        """给定不存在的文件，当 _try_load_existing_scores，则返回 None."""
+        from experiments.ablation.cli import _try_load_existing_scores
+
+        loaded = await _try_load_existing_scores(tmp_path / "nope.json", [])
+        assert loaded is None
