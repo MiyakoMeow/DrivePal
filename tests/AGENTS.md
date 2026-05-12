@@ -36,7 +36,8 @@ tests/
 │   ├── test_rules.py              # 规则引擎合并策略
 │   ├── test_shortcuts.py          # 快捷键路由
 │   ├── test_llm_json_validation.py # LLM JSON 输出验证
-│   └── test_sse_stream.py         # SSE 流式测试
+│   ├── test_sse_stream.py         # SSE 流式测试
+│   └── test_workflow_llm_json.py  # LLMJsonResponse.from_llm 解析测试
 ├── api/                  # → app/api/
 │   └── test_graphql.py            # GraphQL 端点
 ├── memory/               # → app/memory/
@@ -77,7 +78,9 @@ tests/
     ├── test_personalization.py    # 个性化
     ├── test_protocol.py           # 实验协议
     ├── test_scenario_synthesizer.py # 场景合成
-    └── test_types.py              # 类型定义
+    ├── test_types.py              # 类型定义
+    ├── test_ablation_runner.py    # 消融实验运行器测试
+    └── test_report.py             # 报告生成测试
 ```
 
 ## CI 工作流

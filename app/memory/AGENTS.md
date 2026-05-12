@@ -14,7 +14,7 @@ app/memory/memory_bank/
 ├── config.py         # 集中配置（pydantic-settings，MEMORYBANK_ 前缀）
 ├── index.py          # FAISS 索引管理（IndexIDMap(IndexFlatIP) + LoadResult降级恢复）
 ├── index_reader.py   # IndexReader Protocol（只读视图）
-├── retrieval.py      # 五阶段检索管道
+├── retrieval.py      # 检索管道
 ├── forget.py         # Ebbinghaus 遗忘曲线
 ├── summarizer.py     # 分层摘要 + 人格生成
 ├── llm.py            # LLM 封装（上下文截断重试，异常化）
@@ -54,7 +54,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 索引损坏恢复
 
-`FaissIndex.load()` 返回 `LoadResult(ok, warnings, recovery_actions)`。三级降级策略：
+`FaissIndex.load()` 返回 `LoadResult(ok, warnings, recovery_actions)`。降级策略：
 
 | 损坏类型 | 恢复策略 |
 |----------|----------|
@@ -63,14 +63,14 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 | Count mismatch | 以 index 为权威——从 `id_map` 补缺失骨架条目 |
 | `index.faiss` 读失败 | 备份 `.bak` 后重建空索引 |
 
-### 五阶段检索管道
+### 检索管道
 
 1. query embedding + FAISS 粗排（top_k × 4）
-1b. BM25 稀疏回退：FAISS 最高分低于阈值时补充检索结果
-2. 邻居合并（同 source 连续条目）、自适应分块（P90×3）
-3. 重叠去重（并查集：共享 `_merged_indices` 合并为连通分量，取最高分条目）
-4. 说话人感知降权（查询含说话人名的无关条目降权 ×0.75）
-5. Ebbinghaus 保留率加权：`adjusted = α × score + (1-α) × retention`
+2. BM25 稀疏回退：FAISS 最高分低于阈值时补充检索结果
+3. 邻居合并（同 source 连续条目）、自适应分块（P90×3）
+4. 重叠去重（并查集：共享 `_merged_indices` 合并为连通分量，取最高分条目）
+5. 说话人感知降权（查询含说话人名的无关条目降权 ×0.75）
+6. Ebbinghaus 保留率加权：`adjusted = α × score + (1-α) × retention`
 
 ### 遗忘曲线
 
@@ -117,7 +117,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 | 异常类 | 触发条件 | 性质 |
 |--------|----------|------|
-| `MemoryBankError` → `TransientError` / `FatalError` | MemoryBank 异常基类（三层） | 基类 |
+| `MemoryBankError` ← `TransientError` / `FatalError` | MemoryBank 异常基类（三层） | 基类 |
 | `LLMCallFailedError` | LLM API 调用失败 | 瞬态，可重试 |
 | `SummarizationEmpty` | LLM 返回空内容 | 哨兵异常，非错误 |
 | `ConfigError` | 配置错误 | 永久 |
@@ -132,16 +132,22 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 |------|-----|------|
 | `SOFT_FORGET_THRESHOLD` | 0.3 | `memory_bank/config.py` |
 | `FORGET_INTERVAL_SECONDS` | 300 | `memory_bank/config.py` |
-| `FORGETTING_TIME_SCALE` | 1 | `memory_bank/config.py` |
+| `FORGETTING_TIME_SCALE` | 1.0 | `memory_bank/config.py` |
 | `EMBEDDING_MIN_SIMILARITY` | 0.3 | `memory_bank/config.py` |
 | `COARSE_SEARCH_FACTOR` | 4 | `memory_bank/config.py` |
 | `DEFAULT_CHUNK_SIZE` | 1500（自适应回退值） | `memory_bank/config.py` |
 | `CHUNK_SIZE_MIN` | 200 | `memory_bank/config.py` |
 | `CHUNK_SIZE_MAX` | 8192 | `memory_bank/config.py` |
-| `SAVE_INTERVAL_SECONDS` | 30 | `memory_bank/config.py` |
+| `SAVE_INTERVAL_SECONDS` | 30.0 | `memory_bank/config.py` |
 | `LLM_TEMPERATURE` (摘要) | 0.3 | `memory_bank/summarizer.py` |
 | `LLM_MAX_TOKENS` (摘要) | 400 | `memory_bank/summarizer.py` |
 | `REFERENCE_DATE_OFFSET` | 1 天 | `memory_bank/index.py` |
+| `MAX_MEMORY_STRENGTH` | 10 | `memory_bank/config.py` |
+| `BM25_FALLBACK_THRESHOLD` | 0.5 | `memory_bank/config.py` |
+| `RETRIEVAL_ALPHA` | 0.7 | `memory_bank/config.py` |
+| `EMBEDDING_BATCH_SIZE` | 100 | `memory_bank/config.py` |
+| `LLM_MAX_RETRIES` | 3 | `memory_bank/config.py` |
+| `SHUTDOWN_TIMEOUT_SECONDS` | 30.0 | `memory_bank/config.py` |
 
 完整配置项及环境变量见 `config/AGENTS.md` 的环境变量表。
 
@@ -149,7 +155,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### MemoryModule 主实现
 
-`app/memory/memory.py` —— MemoryModule Facade 主实现。工厂注册表管理 store 生命周期，`get_store()` 返回 per-user MemoryBankStore。
+`app/memory/memory.py` —— MemoryModule Facade 主实现。工厂注册表管理 store 生命周期，`_get_store()` 返回 per-user MemoryBankStore。
 
 ### MemoryModule 单例
 
@@ -161,7 +167,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 多用户隔离
 
-`MemoryModule.get_store(user_id)` 返回 per-user `MemoryBankStore` 实例。每用户独立子目录 `data/users/{user_id}/`（含 memorybank/ 子目录及独立 JSONL/TOML 文件），由 `config.user_data_dir(user_id)` 生成路径。下游组件（RetrievalPipeline、MemoryLifecycle、Summarizer）构造时绑定用户目录，无需 `user_id` 参数。
+`MemoryModule._get_store(mode, user_id)` 返回 per-user `MemoryBankStore` 实例。每用户独立子目录 `data/users/{user_id}/`（含 memorybank/ 子目录及独立 JSONL/TOML 文件），由 `config.user_data_dir(user_id)` 生成路径。下游组件（RetrievalPipeline、MemoryLifecycle、Summarizer）构造时绑定用户目录，无需 `user_id` 参数。
 
 ### 可观测性
 
