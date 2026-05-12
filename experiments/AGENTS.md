@@ -82,7 +82,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | 偏好匹配率 | 决策与当前阶段期望偏好的一致比例 | 每阶段匹配数 / 该阶段总轮数 |
 | 权重收敛速度 | 目标类型权重稳定所需的归一化进度 | [0,1] 归一化（越小越快），-1 表示未收敛 |
 | 收敛稳定性 | 偏好切换后权重振荡幅度 | 切换后连续 5 轮权重的标准差 |
- | 决策分歧度 | 混合偏好阶段 FULL vs NO_FEEDBACK 决策差异 | 所有决策字段差异比例取平均 |
+| 决策分歧度 | 混合偏好阶段 FULL vs NO_FEEDBACK 决策差异 | 所有决策字段差异比例取平均 |
 
 **假设**：Full 在偏好切换后 3-5 轮内权重收敛至目标方向；-Feedback 匹配率在各阶段均接近随机水平。
 
@@ -104,8 +104,8 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 ## LLM-as-Judge 评测
 
- - **模型**：优先 `model_groups.judge`（TOML 配置），否则回退 `model_groups.default`
- - **盲评**：Judge 不参考 expected_decision，仅依据规则表 + 场景条件评分。shuffle（打乱变体顺序）支持确定性（ABLATION_SEED 非零）/ 随机（零/未设置）双模式
+- **模型**：优先 `model_groups.judge`（TOML 配置），否则回退 `model_groups.default`
+- **盲评**：Judge 不参考 expected_decision，仅依据规则表 + 场景条件评分。shuffle（打乱变体顺序）支持确定性（ABLATION_SEED 非零）/ 随机（零/未设置）双模式
 - **中位数**：每场景评 3 次取中位数，减少非确定性噪声
 - **容错**：`ChatError` → 默认分 3；`JSONDecodeError`/`TypeError`/`ValueError` → 默认分 3
 - **退化检测**：默认分 3 占比超过 50% 时标记 `degraded=True`；任一分数值占比超过 `CONCENTRATION_THRESHOLD`（0.8）时标记集中度退化。全量运行和 judge-only 两条路径均输出警告
