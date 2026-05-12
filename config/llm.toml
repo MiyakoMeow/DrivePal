@@ -16,7 +16,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 concurrency = 8
 
 [model_groups.judge]
-models = ["zhipu-coding/glm-4.5-air?temperature=0.1"]
+models = ["deepseek/deepseek-v4-pro?temperature=0.1"]
 
 [model_providers.zhipu-coding]
 base_url = "https://open.bigmodel.cn/api/coding/paas/v4"

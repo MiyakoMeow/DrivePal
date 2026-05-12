@@ -157,6 +157,14 @@ exclude = [".agents/**"]
     "RET503",   # _http_fetch_with_retry 所有路径均 raise/return，for 后 unreachable
 ]
 
+"scripts/gen_figs.py" = [
+    "INP001",   # scripts/ 目录无需 __init__.py
+    "T201",     # CLI 脚本 print 输出进度
+    "D103",     # 图表函数 docstring 由注释说明，无需重复
+    "ANN001",   # matplotlib 内部类型（fig/ax）无需显式标注
+    "ICN001",   # matplotlib 惯用别名 mpl，此处仅用 font_manager，显式导入即可
+]
+
 "tests/**" = [
     "S101",  # 测试中使用 assert 是标准做法
     "S311",  # 测试中使用伪随机种子是标准做法
