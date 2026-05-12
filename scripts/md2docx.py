@@ -566,12 +566,12 @@ async def _render_table(doc: Document, rows: list[list[str]], client) -> None:
             p.paragraph_format.line_spacing = 1.0
             # 表格单元格支持粗斜体、引用上标等行内格式
             font_size = SIZE_BODY
+            await _render_inline_content(
+                p, cell_text, client=client, font_size=font_size
+            )
             if is_header:
-                _add_run(p, cell_text, bold=True, font_size=font_size)
-            else:
-                await _render_inline_content(
-                    p, cell_text, client=client, font_size=font_size
-                )
+                for run in p.runs:
+                    run.bold = True
 
     tbl = table._tbl
     tblPr = tbl.tblPr
