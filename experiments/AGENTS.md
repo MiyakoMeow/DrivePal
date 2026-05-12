@@ -47,7 +47,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | **因变量** | 决策质量分、JSON 结构合规率、各阶段中间质量、端到端延迟 |
 | **变体** | Full（四阶段 Context→Task→Decision→Execution）/ SingleLLM（一次 LLM 调用，合并 prompt 直接输出） |
 | **测试场景** | 50 个多样化场景（排除极端安全条件：fatigue ≤ 0.7, workload ≠ overloaded, scenario ≠ highway），覆盖所有 scenario × task_type 组合（排除 highway） |
-| **无关变量控制** | 同一 LLM（默认模型组）、两侧均经 `postprocess_decision` 规则引擎后处理（控制规则维度）、同一场景集、固定随机种子。记忆检索为流水线架构固有组成，论文中说明此设计决策 |
+| **无关变量控制** | 同一 LLM（默认模型组）、两侧均经 `postprocess_decision` 规则引擎后处理（控制规则维度）、同一场景集、固定随机种子。Full 启用记忆检索（流水线固有组成），SingleLLM 禁用（单次调用不查历史） |
 
 **评价指标**：
 
@@ -77,7 +77,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 **评价指标**：
 
-| 指标 | 定义 | 量化方法 |
+| 指标 | 定义 | 计算方式 |
 |------|------|---------|
 | 偏好匹配率 | 决策与当前阶段期望偏好的一致比例 | 每阶段匹配数 / 该阶段总轮数 |
 | 权重收敛速度 | 目标类型权重稳定所需的归一化进度 | [0,1] 归一化（越小越快），-1 表示未收敛 |
@@ -92,7 +92,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 ## 测试场景合成
 
-360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景 → 缓存至 JSONL。精选 ~260 场景（360 维度组合随机抽取）：
+360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景 → 缓存至 JSONL。精选 ~132 场景（360 维度组合随机抽取）：
 
 - 安全关键场景 50（按 scenario×safety_condition 分层抽样，min_per_stratum=1。不含 task_type——task_type × condition 叉积可达 80 层，远超 n=50）
 - 多样化场景 50（分层随机抽样，覆盖所有 scenario × task_type 组合）
@@ -100,17 +100,17 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 共 ~132 场景（安全 50 + 架构 50 + 个性化 32）。
 
-每个场景含：`driving_context` + `user_query` + `expected_task_type`（来自维度组合）。`expected_decision` 字段为历史遗留（旧 JSONL 兼容），当前合成不再生成。
+每个场景含：`driving_context` + `user_query` + `expected_task_type`（来自维度组合）。`expected_decision` 为历史字段，已停用，仅作旧 JSONL 兼容。
 
 ## LLM-as-Judge 评测
 
-- **模型**：优先 `[model_groups.judge]`（TOML 配置），否则回退 `[model_groups.default]`
-- **盲评**：Judge 不参考 expected_decision，仅依据规则表 + 场景条件评分。shuffle 支持确定性（ABLATION_SEED 非零）/ 随机（零/未设置）双模式
+- **模型**：优先 `model_groups.judge`（TOML 配置），否则回退 `model_groups.default`
+- **盲评**：Judge 不参考 expected_decision，仅依据规则表 + 场景条件评分。shuffle（打乱变体顺序）支持确定性（ABLATION_SEED 非零）/ 随机（零/未设置）双模式
 - **中位数**：每场景评 3 次取中位数，减少非确定性噪声
 - **容错**：`ChatError` → 默认分 3；`JSONDecodeError`/`TypeError`/`ValueError` → 默认分 3
 - **退化检测**：默认分 3 占比超过 50% 时标记 `degraded=True`；任一分数值占比超过 `CONCENTRATION_THRESHOLD`（0.8）时标记集中度退化。全量运行和 judge-only 两条路径均输出警告
 - **分数分布报告**：`summary.json` 中含 `score_distributions` 字段（各变体均值 + 各分数段比例），辅助 Judge 校准评估
-- **统计检验**：Bootstrap 置信区间（n=10000, α=0.05）+ Wilcoxon signed-rank test（按 scenario_id 配对）
+- **统计方法**：Bootstrap 置信区间（n=10000, α=0.05）+ Wilcoxon signed-rank test（按 scenario_id 配对）
 - **人工校准**：人工校准为后续工作，当前未实现。
 
 ## 与 VehicleMemBench 的关系

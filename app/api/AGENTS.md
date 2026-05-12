@@ -9,7 +9,7 @@ scenarioPresets(currentUser): [ScenarioPresetGQL]
 experimentResults: ExperimentResults
 ```
 
-**Mutation:**
+**Mutation（GraphQL Schema 定义，camelCase）：**
 ```graphql
 processQuery(input: {query, memoryMode, context, currentUser, sessionId}): {result, eventId, stages}
 submitFeedback(input: {eventId, action, memoryMode, currentUser, modifiedContent}): {status}
@@ -23,7 +23,13 @@ getPendingReminders(currentUser): [PendingReminderGQL]
 closeSession(sessionId, currentUser): Boolean
 ```
 
-反馈学习：submitFeedback 接受时对应类型权重 +0.1（上限 1.0），忽略时 -0.1（下限 0.1），不存在类型初始 0.5。权重存入 `strategies.toml` 的 `reminder_weights`，Strategy Agent prompt 中注入偏好高权重类型。
+**命名约定：** Schema 用 camelCase（GraphQL 约定），Python resolver 实现用 snake_case（PEP 8）。Strawberry 自动转换，开发者无需手动映射。例：`processQuery` → `process_query`。
+
+**反馈学习机制：**
+1. **权重更新**：`submitFeedback` 接受（accept）时对应类型权重 +0.1（上限 1.0），忽略（ignore）时 -0.1（下限 0.1），新类型初始 0.5。权重存入 `strategies.toml` 的 `reminder_weights`。
+2. **权重映射**：权重 → 偏好描述（例：`{"maintenance": 0.9, "weather": 0.3}` → "User prefers maintenance reminders, rarely weather"）。
+3. **注入时机**：Strategy Agent 调用前，prompt 末尾注入偏好描述。
+4. **交互顺序**：规则引擎先处理硬约束 → Strategy Agent 语义推理（受偏好影响）→ 决策输出。
 
 **枚举：** `MemoryModeEnum`, `EmotionEnum`, `WorkloadEnum`, `CongestionLevelEnum`, `ScenarioEnum`
 
