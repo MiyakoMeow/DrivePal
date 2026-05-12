@@ -43,7 +43,7 @@ app/
 ├── schemas/           # 上下文数据模型 → app/schemas/AGENTS.md
 ├── storage/           # TOML/JSONL 存储引擎、错误处理 → app/storage/AGENTS.md
 ├── config.py          # 应用级配置
-├── AGENTS.md           # 应用层文档
+├── AGENTS.md          # 应用层文档
 tests/                 # 测试运行命令、CI 工作流 → tests/AGENTS.md
 config/                # 模型配置格式、环境变量、完整配置项 → config/AGENTS.md
 data/                  # 运行时数据

@@ -1,15 +1,15 @@
 # 记忆系统
 
-`app/memory/` —— MemoryBank 记忆系统及基础设施。
+`memory/` —— MemoryBank 记忆系统及基础设施。
 
 ## MemoryBank 记忆系统
 
-`app/memory/memory_bank/`。基于论文 MemoryBank 实现。
+`memory_bank/`。基于论文 MemoryBank 实现。
 
 ### 文件结构
 
 ```
-app/memory/memory_bank/
+memory/memory_bank/
 ├── __init__.py        # 模块初始化
 ├── config.py         # 集中配置（pydantic-settings，MEMORYBANK_ 前缀）
 ├── index.py          # FAISS 索引管理（IndexIDMap(IndexFlatIP) + LoadResult降级恢复）
@@ -23,7 +23,7 @@ app/memory/memory_bank/
 ├── observability.py  # 可观测性指标（MemoryBankMetrics）
 └── bg_tasks.py       # 后台任务管理器
 
-`app/memory/stores/` —— 预留给多 store 切换的扩展点，当前仅 re-export MemoryBankStore。
+`memory/stores/` —— 预留给多 store 切换的扩展点，当前仅 re-export MemoryBankStore。
 
 ### 架构
 
@@ -31,7 +31,7 @@ app/memory/memory_bank/
 
 ### 记忆数据模型
 
-`app/memory/schemas.py`。核心类型：
+`schemas.py`。核心类型：
 
 | 类型 | 关键字段 | 说明 |
 |------|----------|------|
@@ -43,7 +43,7 @@ app/memory/memory_bank/
 
 MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不展开 interaction_ids。`get_history()` 中展开。
 
-记忆模式枚举 `MemoryMode` 定义见 `app/memory/types.py`。
+记忆模式枚举 `MemoryMode` 定义见 `types.py`。
 
 ### FAISS索引
 
@@ -93,7 +93,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 后台任务管理器
 
-`app/memory/memory_bank/bg_tasks.py`
+`memory_bank/bg_tasks.py`
 
 - asyncio 任务注册与调度（`create_task` + 跟踪集）
 - `shutdown()` 方法：等待所有 inflight 任务完成，支持优雅关闭
@@ -125,7 +125,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 | `IndexIntegrityError` | 数据损坏 | 永久 |
 | `InvalidActionError` | FeedbackData action 校验失败（继承 `ValueError`，独立于 `MemoryBankError` 体系） | — |
 
-异常定义见 `app/memory/exceptions.py`（`InvalidActionError` 除外，定义于 `app/memory/schemas.py`）。
+异常定义见 `memory/exceptions.py`（`InvalidActionError` 除外，定义于 `memory/schemas.py`）。
 
 ## 关键阈值
 
@@ -158,11 +158,11 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### MemoryModule 主实现
 
-`app/memory/memory.py` —— MemoryModule Facade 主实现。工厂注册表管理 store 生命周期，`_get_store()` 返回 per-user MemoryBankStore。
+`memory.py` —— MemoryModule Facade 主实现。工厂注册表管理 store 生命周期，`_get_store()` 返回 per-user MemoryBankStore。
 
 ### MemoryModule 单例
 
-`app/memory/singleton.py`
+`singleton.py`
 
 - 线程安全双检锁模式（`threading.Lock`）
 - `get_memory_module()` 懒初始化：`MemoryModule(data_dir, embedding_model, chat_model)`
@@ -174,11 +174,11 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 可观测性
 
-`app/memory/memory_bank/observability.py` 提供 `MemoryBankMetrics`（dataclass，零锁开销）。指标：search_count、search_latency_ms（P50/P90）、forget_count、background_task_failures 等。`MemoryBankStore.metrics` 属性获取实例 → `MemoryModule.get_metrics(user_id)` 聚合查询。
+`memory_bank/observability.py` 提供 `MemoryBankMetrics`（dataclass，零锁开销）。指标：search_count、search_latency_ms（P50/P90）、forget_count、background_task_failures 等。`MemoryBankStore.metrics` 属性获取实例 → `MemoryModule.get_metrics(user_id)` 聚合查询。
 
 ### EmbeddingClient 维度检测
 
-`app/memory/embedding_client.py`
+`embedding_client.py`
 
 - `EmbeddingModel` 的薄代理
 - `encode_batch()` 含双重校验：
@@ -188,7 +188,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### MemoryStore 接口契约
 
-`app/memory/interfaces.py`
+`interfaces.py`
 
 - `MemoryStore Protocol` 结构化定义——MemoryBankStore 实现之接口
 - 声明 `write`/`search`/`get_history`/`update_feedback`/`get_event_type`/`write_interaction`/`close` 七方法契约
@@ -196,14 +196,14 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 工具函数
 
-`app/memory/utils.py`
+`utils.py`
 
 - `cosine_similarity(a, b)` — 向量余弦相似度计算（长度不一时自动截断）
 - `compute_events_hash(events)` — SHA256 事件内容哈希（当前死代码，无调用方）
 
 ## 隐私保护
 
-`app/memory/privacy.py`。
+`privacy.py`。
 
 ### 位置脱敏
 

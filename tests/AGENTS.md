@@ -83,11 +83,12 @@ tests/
 
 ## CI 工作流
 
-`.github/workflows/python.yml`。push/PR 到 main 时触发，三个并行 job：
+`.github/workflows/python.yml`。push/PR 到 main 时触发，四并行 job：
 
 | Job | 命令 | 说明 |
 |-----|------|------|
-| `lint` | `uv run ruff check .` + `uv run ruff format --check .` | 代码风格 + 格式 |
+| `lint` | `uv run ruff check .` | 代码风格 |
+| `format` | `uv run ruff format --check .` | 格式检查 |
 | `typecheck` | `uv run ty check .` | 类型检查 |
 | `test` | `uv run pytest -v` | 单测（无外部 provider） |
 

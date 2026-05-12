@@ -14,9 +14,26 @@
 [model_groups.default]
 models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
 
+[model_groups.smart]
+models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
+
+[model_groups.fast]
+models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
+
+[model_groups.balanced]
+models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
+
+[model_groups.judge]
+models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
+
 [model_providers.deepseek]
 base_url = "https://api.deepseek.com/v1"
 api_key_env = "DEEPSEEK_API_KEY"
+concurrency = 8
+
+[model_providers.zhipu-coding]
+base_url = "https://open.bigmodel.cn/api/paas/v4"
+api_key_env = "ZHIPU_API_KEY"
 concurrency = 8
 
 [model_providers.openrouter]
@@ -38,7 +55,7 @@ model = "openrouter/baai/bge-m3"
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
 | `ZHIPU_API_KEY` | 智谱 API Key |
 | `OPENROUTER_API_KEY` | OpenRouter API Key |
-| `JUDGE_MODEL` / `JUDGE_BASE_URL` | 消融实验 Judge 配置（记录实验环境快照）。应用内 Judge 通过 TOML 配置 |
+| `JUDGE_MODEL` / `JUDGE_BASE_URL` | 消融实验 Judge 配置（记录实验环境快照）。应用内 Judge 通过 TOML 的 `[model_groups.judge]` 配置 |
 | `JUDGE_API_KEY` | 预留，当前未使用 |
 | `FATIGUE_THRESHOLD` | 疲劳规则阈值（默认0.7） |
 | `PROBABILISTIC_INFERENCE_ENABLED` | 概率推断开关（默认1） |
