@@ -475,3 +475,29 @@ class TestJudgeOnlyCaching:
         result = _safe_parse_judge_scores(items)
         assert result is not None
         assert len(result) == 96
+
+
+class TestJudgeConcentrationDetection:
+    """Judge 评分集中度检测."""
+
+    def test_single_score_dominates_triggers_degradation(self):
+        """80% 以上评分为同一值时标记退化。"""
+        from experiments.ablation.judge import detect_judge_degradation
+
+        scores = [
+            JudgeScores(f"s{i}", Variant.FULL, 4, 4, 4, [], "") for i in range(8)
+        ] + [JudgeScores(f"s{i}", Variant.FULL, 5, 5, 5, [], "") for i in range(8, 10)]
+        result = detect_judge_degradation(scores)
+        assert result["degraded"] is True
+        assert "集中度" in result["warning"]
+
+    def test_diverse_scores_no_concentration(self):
+        """分数分布均匀时不触发集中度退化。"""
+        from experiments.ablation.judge import detect_judge_degradation
+
+        scores = [
+            JudgeScores(f"s{i}", Variant.FULL, i + 1, i + 1, i + 1, [], "")
+            for i in range(5)
+        ]
+        result = detect_judge_degradation(scores)
+        assert result["degraded"] is False
