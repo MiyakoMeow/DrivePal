@@ -46,8 +46,8 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | **自变量** | 决策架构（四Agent流水线 / 单LLM） |
 | **因变量** | 决策质量分、JSON 结构合规率、各阶段中间质量、端到端延迟 |
 | **变体** | Full（四阶段 Context→Task→Decision→Execution）/ SingleLLM（一次 LLM 调用，合并 prompt 直接输出） |
- | **测试场景** | 50 个多样化场景（排除极端安全条件：fatigue ≤ 0.7, workload ≠ overloaded, scenario ≠ highway），覆盖所有 scenario × task_type 组合（排除 highway） |
- | **无关变量控制** | 同一 LLM（默认模型组）、两侧均经 `postprocess_decision` 规则引擎后处理（控制规则维度）、同一场景集、固定随机种子。Full 启用记忆检索（流水线固有组成），SingleLLM 禁用（单次调用不查历史） |
+| **测试场景** | 50 个多样化场景（排除极端安全条件：fatigue ≤ 0.7, workload ≠ overloaded, scenario ≠ highway），覆盖所有 scenario × task_type 组合（排除 highway） |
+| **无关变量控制** | 同一 LLM（默认模型组）、两侧均经 `postprocess_decision` 规则引擎后处理（控制规则维度）、同一场景集、固定随机种子。Full 启用记忆检索（流水线固有组成），SingleLLM 禁用（单次调用不查历史） |
 
 **评价指标**：
 
@@ -77,11 +77,11 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 **评价指标**：
 
- | 指标 | 定义 | 计算方式 |
- |------|------|---------|
- | 偏好匹配率 | 决策与当前阶段期望偏好的一致比例 | 每阶段匹配数 / 该阶段总轮数 |
- | 权重收敛速度 | 目标类型权重稳定所需的归一化进度 | [0,1] 归一化（越小越快），-1 表示未收敛 |
- | 收敛稳定性 | 偏好切换后权重振荡幅度 | 切换后连续 5 轮权重的标准差 |
+| 指标 | 定义 | 计算方式 |
+|------|------|---------|
+| 偏好匹配率 | 决策与当前阶段期望偏好的一致比例 | 每阶段匹配数 / 该阶段总轮数 |
+| 权重收敛速度 | 目标类型权重稳定所需的归一化进度 | [0,1] 归一化（越小越快），-1 表示未收敛 |
+| 收敛稳定性 | 偏好切换后权重振荡幅度 | 切换后连续 5 轮权重的标准差 |
  | 决策分歧度 | 混合偏好阶段 FULL vs NO_FEEDBACK 决策差异 | 所有决策字段差异比例取平均 |
 
 **假设**：Full 在偏好切换后 3-5 轮内权重收敛至目标方向；-Feedback 匹配率在各阶段均接近随机水平。
