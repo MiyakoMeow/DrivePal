@@ -288,8 +288,10 @@ async def _check_font_warning() -> None:
 
 
 def _setup_document(doc: Document) -> None:
-    """配置页面边距、默认字体。字体警告由调用方异步执行。"""
+    """配置 A4 纸面、默认字体。字体警告由调用方异步执行。"""
     for section in doc.sections:
+        section.page_width = Cm(21.0)
+        section.page_height = Cm(29.7)
         section.top_margin = MARGIN_TOP
         section.bottom_margin = MARGIN_BOTTOM
         section.left_margin = MARGIN_LEFT
