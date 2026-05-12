@@ -44,6 +44,20 @@ class VariantResult:
 
 
 @dataclass
+class BatchResult:
+    """批量运行结果——含成功/失败计数."""
+
+    results: list[VariantResult]
+    expected: int
+    actual: int = 0
+    failures: int = 0
+
+    def __post_init__(self) -> None:
+        self.actual = len(self.results)
+        self.failures = self.expected - self.actual
+
+
+@dataclass
 class JudgeScores:
     """LLM-as-Judge 评分结果."""
 
@@ -64,3 +78,4 @@ class GroupResult:
     variant_results: list[VariantResult]
     judge_scores: list[JudgeScores]
     metrics: dict
+    batch_stats: dict = field(default_factory=dict)
