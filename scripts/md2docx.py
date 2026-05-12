@@ -50,9 +50,8 @@ MERMAID_API = "https://mermaid.ink/img/"
 MERMAID_TIMEOUT = 60  # 秒
 MERMAID_CACHE_DIR = Path("archive/mermaid")
 
-# LaTeX 公式渲染（codecogs API）
-LATEX_API = "https://latex.codecogs.com/png.latex?"
-LATEX_CACHE_DIR = Path("archive/latex")
+# OMML 命名空间常量
+_OMML_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 # 默认路径
 DEFAULT_INPUT = Path("archive/定稿-20260511.md")
@@ -112,7 +111,7 @@ def _is_valid_png(path: Path) -> bool:
     return True
 
 
-# ── Mermaid / LaTeX 渲染 ─────────────────────────────────
+# ── Mermaid 渲染 / OMML 公式转换 ─────────────────────────────────
 
 
 async def _mkdir_cache(cache_dir: Path) -> None:
@@ -181,27 +180,27 @@ async def render_mermaid(code: str, cache_dir: Path, client) -> Path | None:
         return None
 
 
-async def render_latex(
-    latex: str, cache_dir: Path, client, *, display: bool = False
-) -> Path | None:
-    """将 LaTeX 公式渲染为 PNG，缓存至 cache_dir。"""
-    import urllib.parse
+def _latex_to_omml_element(latex: str, *, display: bool = False):
+    """将 LaTeX 公式转换为 OMML XML 元素，可插入 docx 段落。
 
-    encoded = urllib.parse.quote(latex)
-    extra = r"\dpi{200}" if display else r"\dpi{150}"
-    url = f"{LATEX_API}{extra}{encoded}"
-
-    await _mkdir_cache(cache_dir)
-    cache_path = cache_dir / f"{_mermaid_hash(latex + str(display))}.png"
-    if await _check_cache(cache_path):
-        return cache_path
+    OMML 元素直接作为 <w:p> 子级，与 <w:r> 同级。
+    """
+    import latex2mathml.converter
+    import mathml2omml
+    from docx.oxml import parse_xml
 
     try:
-        data = await _http_fetch_with_retry(client, url)
-        await _write_cache(cache_path, data)
-        return cache_path
+        mathml = latex2mathml.converter.convert(
+            latex, display="block" if display else "inline"
+        )
+        omml_str = mathml2omml.convert(mathml)
+        # mathml2omml 输出不含 namespace，需注入
+        omml_str = omml_str.replace("<m:oMath", f'<m:oMath xmlns:m="{_OMML_NS}"', 1)
+        if display:
+            omml_str = f'<m:oMathPara xmlns:m="{_OMML_NS}">{omml_str}</m:oMathPara>'
+        return parse_xml(omml_str)
     except Exception as e:
-        print(f"  [latex] 渲染失败: {e}", file=sys.stderr)
+        print(f"  [latex] OMML 转换失败: {e}", file=sys.stderr)
         return None
 
 
@@ -394,7 +393,7 @@ def _extract_plain_text(md_content: str) -> str:
 
 
 async def _render_inline_content(
-    paragraph, content: str, *, client, font_size: Pt = SIZE_BODY
+    paragraph, content: str, *, font_size: Pt = SIZE_BODY
 ) -> None:
     """将 inline markdown 文本渲染为 paragraph 中的 runs。
 
@@ -454,10 +453,9 @@ async def _render_inline_content(
             end = content.find("$", i + 1)
             if end != -1:
                 latex = content[i + 1 : end]
-                png_path = await render_latex(latex, LATEX_CACHE_DIR, client)
-                if png_path:
-                    run = paragraph.add_run()
-                    run.add_picture(str(png_path), height=Inches(0.22))
+                omml_el = _latex_to_omml_element(latex)
+                if omml_el is not None:
+                    paragraph._element.append(omml_el)
                 else:
                     _add_run(paragraph, f"[公式:{latex}]", font_size=SIZE_CODE)
                 i = end + 1
@@ -501,21 +499,19 @@ def _render_inner_with_citations(
 
 
 async def _add_body_paragraph(
-    doc: Document, content: str, *, client, use_ref_font: bool = False
+    doc: Document, content: str, *, use_ref_font: bool = False
 ) -> None:
     """添加正文段落，处理粗斜体、[N] 引用和公式。"""
-    # 块级公式 $$...$$：整段替换为居中图片
+    # 块级公式 $$...$$：整段替换为居中 OMML 公式
     stripped = content.strip()
     if stripped.startswith("$$") and stripped.endswith("$$"):
         latex = stripped[2:-2].strip()
-        png_path = await render_latex(latex, LATEX_CACHE_DIR, client, display=True)
-        if png_path:
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.add_run().add_picture(str(png_path), width=Inches(5.5))
+        omml_el = _latex_to_omml_element(latex, display=True)
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if omml_el is not None:
+            p._element.append(omml_el)
         else:
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             _add_run(p, f"[公式渲染失败: {latex}]", font_size=SIZE_CODE)
         return
 
@@ -523,7 +519,7 @@ async def _add_body_paragraph(
     p = doc.add_paragraph()
     p.paragraph_format.line_spacing = LINE_SPACING
     p.paragraph_format.first_line_indent = FIRST_LINE_INDENT
-    await _render_inline_content(p, content, client=client, font_size=font_size)
+    await _render_inline_content(p, content, font_size=font_size)
 
 
 # ── 代码块 ──
@@ -541,7 +537,7 @@ def _add_code_block(doc: Document, code: str) -> None:
 # ── 表格 ──
 
 
-async def _render_table(doc: Document, rows: list[list[str]], client) -> None:
+async def _render_table(doc: Document, rows: list[list[str]]) -> None:
     """将二维数据渲染为三线表。首行（表头）加粗。支持行内格式。"""
     if not rows or not rows[0]:
         return
@@ -566,9 +562,7 @@ async def _render_table(doc: Document, rows: list[list[str]], client) -> None:
             p.paragraph_format.line_spacing = 1.0
             # 表格单元格支持粗斜体、引用上标等行内格式
             font_size = SIZE_BODY
-            await _render_inline_content(
-                p, cell_text, client=client, font_size=font_size
-            )
+            await _render_inline_content(p, cell_text, font_size=font_size)
             if is_header:
                 for run in p.runs:
                     run.bold = True
@@ -615,7 +609,7 @@ async def _render_table(doc: Document, rows: list[list[str]], client) -> None:
 
 
 async def _add_list_item(
-    doc: Document, content: str, client, is_ordered: bool, counter: int
+    doc: Document, content: str, is_ordered: bool, counter: int
 ) -> None:
     """添加列表项段落。"""
     prefix = f"{counter}. " if is_ordered else "\u2022 "
@@ -623,9 +617,7 @@ async def _add_list_item(
     p.paragraph_format.line_spacing = LINE_SPACING
     p.paragraph_format.first_line_indent = Cm(0)
     p.paragraph_format.left_indent = Cm(0.85)
-    await _render_inline_content(
-        p, prefix + content, client=client, font_size=SIZE_BODY
-    )
+    await _render_inline_content(p, prefix + content, font_size=SIZE_BODY)
 
 
 # ── 目录和页码 ──
@@ -703,7 +695,7 @@ def _add_page_numbers(doc: Document) -> None:
 # ── 主构建函数 ──
 
 
-async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
+async def build_docx(tokens: list[dict], output_path: Path) -> None:
     """主建文档函数。遍历 token 流构建 docx。"""
     doc = Document()
     _setup_document(doc)
@@ -757,9 +749,7 @@ async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
                 run = p.add_run()
                 run.add_picture(str(png_path), width=Inches(6))
             else:
-                await _add_body_paragraph(
-                    doc, f"[图片缺失: {png_path.name}]", client=client
-                )
+                await _add_body_paragraph(doc, f"[图片缺失: {png_path.name}]")
             continue
 
         # ── 代码块（非 mermaid） ──
@@ -776,7 +766,7 @@ async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
             continue
         if tp == "table_close":
             in_table = False
-            await _render_table(doc, table_rows, client)
+            await _render_table(doc, table_rows)
             table_rows = []
             continue
         if tp == "tr_open":
@@ -825,7 +815,7 @@ async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
             pending_list_item = False
             continue
         if tp == "inline" and in_list and pending_list_item:
-            await _add_list_item(doc, t["content"], client, ordered_list, list_counter)
+            await _add_list_item(doc, t["content"], ordered_list, list_counter)
             pending_list_item = False
             continue
 
@@ -835,9 +825,7 @@ async def build_docx(tokens: list[dict], output_path: Path, client) -> None:
         if tp == "paragraph_close":
             continue
         if tp == "inline":
-            await _add_body_paragraph(
-                doc, t["content"], client=client, use_ref_font=in_references
-            )
+            await _add_body_paragraph(doc, t["content"], use_ref_font=in_references)
             continue
         if tp in ("hardbreak", "softbreak"):
             continue
@@ -886,7 +874,7 @@ async def main() -> None:
         print(f"  预处理后 {len(tokens)} 个 token")
 
         print("构建 docx...")
-        await build_docx(tokens, args.output, client)
+        await build_docx(tokens, args.output)
 
 
 if __name__ == "__main__":
