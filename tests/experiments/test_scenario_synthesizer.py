@@ -114,17 +114,17 @@ def test_sample_scenarios_empty_pool_raises():
         sample_scenarios(scenarios, 1, exclude_ids={"s1"})
 
 
-def test_sample_scenarios_min_per_stratum_too_large():
-    """min_per_stratum 总和超过 n 时应抛出 ValueError。"""
+def test_sample_scenarios_min_per_stratum_too_large_falls_back():
+    """min_per_stratum 总和超过 n 时回退简单随机抽样，不抛异常。"""
     scenarios = [_sc(f"s{i}", {"type": f"t{i}"}) for i in range(5)]
-    with pytest.raises(ValueError, match="无法满足 min_per_stratum"):
-        sample_scenarios(
-            scenarios,
-            3,
-            stratify_key=lambda s: s.driving_context.get("type", "unknown"),
-            min_per_stratum=1,
-            seed=42,
-        )
+    result = sample_scenarios(
+        scenarios,
+        3,
+        stratify_key=lambda s: s.driving_context.get("type", "unknown"),
+        min_per_stratum=1,
+        seed=42,
+    )
+    assert len(result) == 3
 
 
 def test_safety_stratum_combined_keys():
@@ -150,3 +150,24 @@ def test_safety_stratum_invalid_fatigue_fallback():
 
     s = _sc("x", {"driver": {"fatigue_level": "bad", "workload": "normal"}})
     assert safety_stratum(s) == "unknown"
+
+
+class TestSampleScenariosPoolExhaustion:
+    """池不足时的降级行为."""
+
+    def test_pool_smaller_than_n_returns_all(self):
+        """请求 10 个但池只有 3 个时，返回全部 3 个。"""
+        scenarios = [
+            Scenario(
+                id=f"s{i}",
+                driving_context={},
+                user_query="",
+                expected_decision={},
+                expected_task_type="meeting",
+                safety_relevant=False,
+                scenario_type="parked",
+            )
+            for i in range(3)
+        ]
+        result = sample_scenarios(scenarios, 10, seed=42)
+        assert len(result) == 3

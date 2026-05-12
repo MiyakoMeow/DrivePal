@@ -328,38 +328,27 @@ def _prepare_group_scenarios(
         used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
-        # 先按 is_arch_scenario 预过滤池，再分层采样。
-        # arch_pool 中的场景已排除 highway / 高疲劳 / 过载，
-        # 故 safety_only=False 虽语义冗余但不会误选安全关键场景。
         arch_pool = [s for s in all_scenarios if is_arch_scenario(s)]
-        # exclude_ids 还会进一步减少可用数（安全性组已占场景），
-        # 此处仅报告预过滤池大小作为预警下限。
-        if len(arch_pool) < 50:
+        arch_available = [s for s in arch_pool if s.id not in used_ids]
+        target_n = min(50, len(arch_available))
+        if len(arch_available) < 50:
             logger.warning(
-                "架构组可用场景仅 %d（不足 50），将使用所有可用场景。"
-                "增加 --synthesize-only count=200 可扩充池。",
-                len(arch_pool),
+                "架构组可用场景仅 %d（不足 50），降级使用全部可用场景。",
+                len(arch_available),
             )
-        try:
+        if arch_available:
             group_scenarios["architecture"] = sample_scenarios(
-                arch_pool,
-                50,
+                arch_available,
+                target_n,
                 safety_only=False,
-                exclude_ids=used_ids,
                 stratify_key=arch_stratum,
                 min_per_stratum=1,
                 seed=seed + 1,
             )
-        except ValueError:
-            logger.warning(
-                "架构组经 exclude_ids 排除后无可用场景，跳过架构组实验。"
-                "可用池 %d 场景，已用 %d。",
-                len(arch_pool),
-                len(used_ids),
-            )
-            group_scenarios["architecture"] = []
-        if group_scenarios["architecture"]:
             used_ids |= {s.id for s in group_scenarios["architecture"]}
+        else:
+            logger.warning("架构组经 exclude_ids 排除后无可用场景，跳过架构组实验。")
+            group_scenarios["architecture"] = []
 
     if "personalization" in groups_to_run:
         group_scenarios["personalization"] = sample_scenarios(
