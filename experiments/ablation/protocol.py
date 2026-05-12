@@ -27,7 +27,7 @@ class GroupConfig:
     scenario_filter: Callable[[Scenario], bool]
     metrics_computer: Callable[..., dict]
     post_hook: (
-        Callable[[GroupResult, object, list[Scenario]], Awaitable[GroupResult]] | None
+        Callable[[GroupResult, Judge, list[Scenario]], Awaitable[GroupResult]] | None
     ) = None
 
 

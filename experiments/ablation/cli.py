@@ -26,7 +26,7 @@ from .architecture_group import (
     arch_stratum,
     compute_quality_metrics,
     is_arch_scenario,
-    run_architecture_group,
+    make_architecture_config,
 )
 from .judge import Judge
 from .personalization_group import (
@@ -336,8 +336,9 @@ async def _run_architecture_experiment(
     """运行架构组实验。"""
     runner = AblationRunner(base_user_id="experiment-arch")
     judge = Judge()
-    return await run_architecture_group(
-        runner, judge, scenarios, run_dir / "architecture" / "results.jsonl"
+    config = make_architecture_config()
+    return await run_group(
+        runner, judge, scenarios, config, run_dir / "architecture" / "results.jsonl"
     )
 
 

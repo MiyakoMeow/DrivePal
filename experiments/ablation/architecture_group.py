@@ -3,13 +3,12 @@
 import asyncio
 import logging
 import statistics
-from pathlib import Path
 from typing import Any
 
-from ._io import dump_variant_results_jsonl, get_fatigue_threshold
-from .ablation_runner import AblationRunner
+from ._io import get_fatigue_threshold
 from .judge import Judge, detect_judge_degradation
 from .metrics import compute_comparison
+from .protocol import GroupConfig
 from .types import (
     GroupResult,
     JudgeScores,
@@ -29,57 +28,26 @@ def arch_stratum(s: Scenario) -> str:
     return f"{d['scenario']}:{d['task_type']}"
 
 
-async def run_architecture_group(
-    runner: AblationRunner,
+def make_architecture_config() -> GroupConfig:
+    """构造架构组配置（含 stage_scores post_hook）。"""
+    return GroupConfig(
+        group_name="architecture",
+        variants=[Variant.FULL, Variant.SINGLE_LLM],
+        scenario_filter=is_arch_scenario,
+        metrics_computer=compute_quality_metrics,
+        post_hook=_stage_scores_hook,
+    )
+
+
+async def _stage_scores_hook(
+    gr: GroupResult,
     judge: Judge,
-    scenarios: list[Scenario],
-    output_path: Path,
+    _scenarios: list[Scenario],
 ) -> GroupResult:
-    """架构组实验。
-
-    变体: FULL, SINGLE_LLM
-    场景: 非安全关键场景（排除 highway 及高疲劳/过载的 city_driving）
-    """
-    variants = [Variant.FULL, Variant.SINGLE_LLM]
-    arch_scenarios = [s for s in scenarios if is_arch_scenario(s)]
-
-    batch = await runner.run_batch(
-        arch_scenarios, variants, checkpoint_path=output_path
-    )
-    results = batch.results
-
-    scores: list[JudgeScores] = []
-
-    async def score_one(scenario: Scenario) -> list[JudgeScores]:
-        vrs = [r for r in results if r.scenario_id == scenario.id]
-        return await judge.score_batch(scenario, vrs)
-
-    tasks = [score_one(s) for s in arch_scenarios]
-    scores_batches = await asyncio.gather(*tasks, return_exceptions=True)
-    for scores_batch in scores_batches:
-        if isinstance(scores_batch, Exception):
-            logger.error("Judge scoring failed: %s", scores_batch)
-        elif isinstance(scores_batch, list):
-            scores.extend(scores_batch)
-
-    await dump_variant_results_jsonl(output_path, results, include_modifications=True)
-
-    metrics = compute_quality_metrics(scores, results)
-
-    full_results = [r for r in results if r.variant == Variant.FULL]
-    metrics["stage_scores"] = await _aggregate_full_stage_scores(judge, full_results)
-
-    return GroupResult(
-        group="architecture",
-        variant_results=batch.results,
-        judge_scores=scores,
-        metrics=metrics,
-        batch_stats={
-            "expected": batch.expected,
-            "actual": batch.actual,
-            "failures": batch.failures,
-        },
-    )
+    """架构组后处理：聚合 Full 变体中间阶段评分。"""
+    full_results = [r for r in gr.variant_results if r.variant == Variant.FULL]
+    gr.metrics["stage_scores"] = await _aggregate_full_stage_scores(judge, full_results)
+    return gr
 
 
 def compute_quality_metrics(
