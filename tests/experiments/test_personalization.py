@@ -1,6 +1,6 @@
 """测试个性化组指标."""
 
-from experiments.ablation.personalization_group import (
+from experiments.ablation.preference_metrics import (
     _compute_decision_divergence,
     _compute_stability,
 )

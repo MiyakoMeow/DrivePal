@@ -31,10 +31,10 @@ from .architecture_group import (
 from .judge import Judge
 from .personalization_group import (
     _build_stages,
-    compute_preference_metrics,
     pers_stratum,
     run_personalization_group,
 )
+from .preference_metrics import compute_preference_metrics
 from .report import render_report
 from .safety_group import (
     compute_safety_metrics,
