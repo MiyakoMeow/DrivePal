@@ -354,7 +354,7 @@ def detect_judge_degradation(scores: list[JudgeScores]) -> dict:
     overall_counter = Counter(s.overall_score for s in scores)
     for score_val, count in overall_counter.items():
         concentration_ratio = count / n
-        if concentration_ratio >= CONCENTRATION_THRESHOLD:
+        if concentration_ratio > CONCENTRATION_THRESHOLD:
             return {
                 "degraded": True,
                 "ratio": concentration_ratio,

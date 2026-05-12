@@ -485,8 +485,8 @@ class TestJudgeConcentrationDetection:
         from experiments.ablation.judge import detect_judge_degradation
 
         scores = [
-            JudgeScores(f"s{i}", Variant.FULL, 4, 4, 4, [], "") for i in range(8)
-        ] + [JudgeScores(f"s{i}", Variant.FULL, 5, 5, 5, [], "") for i in range(8, 10)]
+            JudgeScores(f"s{i}", Variant.FULL, 4, 4, 4, [], "") for i in range(9)
+        ] + [JudgeScores(f"s{i}", Variant.FULL, 5, 5, 5, [], "") for i in range(9, 10)]
         result = detect_judge_degradation(scores)
         assert result["degraded"] is True
         assert "集中度" in result["warning"]
