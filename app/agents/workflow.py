@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 
 from app.agents.conversation import _conversation_manager
 from app.agents.outputs import OutputRouter
@@ -80,28 +80,63 @@ class LLMJsonResponse(BaseModel):
 
 
 class ContextOutput(BaseModel):
-    """Context Agent JSON 输出模型，extra forbid."""
+    """Context Agent JSON 输出模型，extra forbid。
+
+    validation_alias 兜底 LLM 字段名漂移——不同模型/温度下可能产出
+    非标准键名（如 scene/location/datetime 等）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    scenario: str = ""
-    driver_state: dict = {}
-    spatial: dict = {}
-    traffic: dict = {}
-    current_datetime: str = ""
-    related_events: list = []
+    scenario: str = Field(
+        default="",
+        validation_alias=AliasChoices("scenario", "scene", "driving_scenario"),
+    )
+    driver_state: dict = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("driver_state", "driver", "state"),
+    )
+    spatial: dict = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("spatial", "location", "position"),
+    )
+    traffic: dict = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("traffic", "traffic_status"),
+    )
+    current_datetime: str = Field(
+        default="",
+        validation_alias=AliasChoices("current_datetime", "datetime", "time"),
+    )
+    related_events: list = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("related_events", "events", "history"),
+    )
     conversation_history: list | None = None
 
 
 class TaskOutput(BaseModel):
-    """Task Agent JSON 输出模型，extra forbid."""
+    """Task Agent JSON 输出模型，extra forbid。
+
+    validation_alias 兜底 LLM 字段名漂移——不同模型/温度下可能产出
+    task_type / task_attribution 代替 type，events / event_list 代替 entities。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    type: str = "general"
-    confidence: float = 0.0
+    type: str = Field(
+        default="general",
+        validation_alias=AliasChoices("type", "task_type", "task_attribution"),
+    )
+    confidence: float = Field(
+        default=0.0,
+        validation_alias=AliasChoices("confidence", "conf"),
+    )
     description: str = ""
-    entities: list = []
+    entities: list = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("entities", "events", "event_list"),
+    )
 
 
 class StrategyOutput(BaseModel):
