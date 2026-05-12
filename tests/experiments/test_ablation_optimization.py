@@ -118,6 +118,16 @@ class TestWilcoxonTest:
         assert "no-rules" in result
         assert result["no-rules"]["n_pairs"] == 5
 
+    def test_custom_key_fn_groups_by_composite_key(self):
+        """给定自定义 key_fn，当 wilcoxon_test，则应按自定义键配对."""
+        scores = []
+        for i in range(5):
+            scores.append(JudgeScores(f"s{i}", Variant.FULL, 3, 3, 4 + i, [], ""))
+            scores.append(JudgeScores(f"s{i}", Variant.NO_RULES, 3, 3, 2, [], ""))
+        result = wilcoxon_test(scores, key_fn=lambda s: f"{s.scenario_id}:r0")
+        assert "no-rules" in result
+        assert result["no-rules"]["n_pairs"] == 5
+
 
 class TestStratumFunctions:
     """分层键使用合成维度."""
