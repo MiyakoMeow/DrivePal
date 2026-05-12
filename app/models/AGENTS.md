@@ -8,7 +8,7 @@
 - provider级别semaphore限制并发（共享同一base_url的provider共享semaphore）
 - 12小时read timeout（长时推理不断开）
 - JSON mode支持（`response_format={"type": "json_object"}`）
-- MemoryBank 摘要调用默认 temperature=0.3、max_tokens=400（可通过 `MEMORYBANK_LLM_TEMPERATURE` / `MEMORYBANK_LLM_MAX_TOKENS` 环境变量覆盖）
+- MemoryBank 摘要调用默认 temperature=0.3、max_tokens=400（可通过 `MEMORYBANK_LLM_TEMPERATURE` / `MEMORYBANK_LLM_MAX_TOKENS` 环境变量覆盖，见 app/memory/AGENTS.md）
 
 ## 模块全景
 
@@ -30,11 +30,20 @@
 |--------|----------|
 | `ProviderNotFoundError` | 引用字符串中 provider 未配置 |
 | `ModelGroupNotFoundError` | 引用字符串中 model_group 未配置 |
+| `InvalidModelStringError` | 模型引用字符串格式错误 |
+| `ChatError` | LLM chat 调用通用失败 |
+| `NoProviderError` | provider 列表为空 |
+| `AllProviderFailedError` | 所有 provider 均失败 |
+| `NoLLMConfigurationError` | 未找到 LLM 配置 |
+| `MissingModelFieldError` | 模型配置缺少必需字段 |
+| `NoDefaultModelGroupError` | 未设置默认 model group |
+| `NoJudgeModelConfiguredError` | 未配置评测模型 |
 
 ## 关键阈值
 
 | 阈值 | 值 | 位置 |
 |------|-----|------|
 | HTTP read timeout | 12h | `_http.py` |
-| Embedding batch size | 100 | `embedding.py` |
+| Embedding batch size（入口默认） | 100 | `get_cached_embedding_model` |
+| Embedding batch size（类默认） | 32 | `EmbeddingModel.__init__` |
 | Embedding retry | 3 次（指数退避） | `embedding.py` |

@@ -20,7 +20,7 @@
 | [3] | Ablaßmeier M, Poitschke T, Reifinger S, et al. Context-Aware Information Agents for the Automotive Domain Using Bayesian Networks[C]. HCII, 2007. | §1.1, §1.2, §2.1 |
 | [4] | Kim G, Lee J, Yeo D, et al. Physiological Indices to Predict Driver Situation Awareness in VR[C]. UbiComp/ISWC Adjunct, 2023. | §1.2, §2.1 |
 | [5] | Chen X, Wang X, Fang C, et al. Emotion-aware Design in Automobiles[C]. CHI, 2025. | §1.1, §1.2, §2.1 |
-| [6] | Parwani K, Das S, Vijay D K. Model Context Protocol (MCP): A Scalable Framework for Context-Aware Multi-Agent Coordination[Z]. Zenodo, 2025. | §1.2, §2.1 |
+| [6] | Parwani K, Das S, Vijay D K. Model Context Protocol (MCP): A Scalable Framework for Context-Aware Multi-Agent Coordination[EB/OL]. Zenodo, 2025. | §1.2, §2.1 |
 | [7] | Karpukhin V, Oğuz B, Min S, et al. Dense Passage Retrieval for Open-Domain Question Answering[C]. EMNLP, 2020. | §3.3 |
 | [8] | Johnson J, Douze M, Jégou H. Billion-scale Similarity Search with GPUs[J]. IEEE Trans. Big Data, 2021, 7(3): 535-547. | §1.1, §3.3 |
 | [9] | Ebbinghaus H. Memory: A Contribution to Experimental Psychology[M]. Dover, 1964 (1885). | §1.2, §2.2, §3.4 |

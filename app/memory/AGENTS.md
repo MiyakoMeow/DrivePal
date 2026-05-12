@@ -10,6 +10,7 @@
 
 ```
 app/memory/memory_bank/
+├── __init__.py        # 模块初始化
 ├── config.py         # 集中配置（pydantic-settings，MEMORYBANK_ 前缀）
 ├── index.py          # FAISS 索引管理（IndexIDMap(IndexFlatIP) + LoadResult降级恢复）
 ├── index_reader.py   # IndexReader Protocol（只读视图）
@@ -21,7 +22,8 @@ app/memory/memory_bank/
 ├── store.py          # MemoryBankStore Facade（MemoryStore Protocol 实现）
 ├── observability.py  # 可观测性指标（MemoryBankMetrics）
 └── bg_tasks.py       # 后台任务管理器
-```
+
+`app/memory/stores/` —— 预留给多 store 切换的扩展点，当前仅 re-export MemoryBankStore。
 
 ### 架构
 
@@ -40,6 +42,8 @@ app/memory/memory_bank/
 | `InteractionResult` | event_id, interaction_id | 写入结果 |
 
 MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不展开 interaction_ids。`get_history()` 中展开。
+
+记忆模式枚举 `MemoryMode` 定义见 `app/memory/types.py`。
 
 ### FAISS索引
 
@@ -120,6 +124,8 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 | `IndexIntegrityError` | 数据损坏 | 永久 |
 | `InvalidActionError` | FeedbackData action 校验失败（继承 `ValueError`，独立于 `MemoryBankError` 体系） | — |
 
+异常定义见 `app/memory/exceptions.py`（`InvalidActionError` 除外，定义于 `app/memory/schemas.py`）。
+
 ## 关键阈值
 
 | 阈值 | 值 | 位置 |
@@ -140,6 +146,10 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 完整配置项及环境变量见 `config/AGENTS.md` 的环境变量表。
 
 ## 记忆模块基础设施
+
+### MemoryModule 主实现
+
+`app/memory/memory.py` —— MemoryModule Facade 主实现。工厂注册表管理 store 生命周期，`get_store()` 返回 per-user MemoryBankStore。
 
 ### MemoryModule 单例
 
@@ -166,6 +176,21 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
   - 数量匹配：输入数 ≠ 输出数 → `RuntimeError`
   - 维度一致性：所有向量维度不同 → `RuntimeError`
 - 重试由 `EmbeddingModel` 内部处理（3 次指数退避），此层不再重复
+
+### MemoryStore 接口契约
+
+`app/memory/interfaces.py`
+
+- `MemoryStore Protocol` 结构化定义——MemoryBankStore 实现之接口
+- 声明 `write`/`search`/`get_history`/`update_feedback`/`get_event_type`/`write_interaction`/`close` 七方法契约
+- 属性 `store_name`, `requires_embedding`, `requires_chat`, `supports_interaction` 标识特性
+
+### 工具函数
+
+`app/memory/utils.py`
+
+- `cosine_similarity(a, b)` — 向量余弦相似度计算（长度不一时自动截断）
+- `compute_events_hash(events)` — SHA256 事件内容哈希（当前死代码，无调用方）
 
 ## 隐私保护
 
