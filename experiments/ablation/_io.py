@@ -80,7 +80,7 @@ async def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
 
 
 async def write_summary(path: Path, data: dict[str, Any]) -> None:
-    """写 JSON 总结文件。timestamp 始终由系统生成，不受 data 中同名键覆盖。"""
+    """写 JSON 总结文件。timestamp 始终由系统生成，覆盖 data 中同名键。"""
     record: dict[str, Any] = {
         **data,
         "timestamp": datetime.now(tz=UTC).isoformat(),

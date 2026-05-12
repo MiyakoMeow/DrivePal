@@ -196,6 +196,8 @@ async def synthesize_scenarios(output_path: Path, count: int = 260) -> int:
     async def _synthesize_one(combo: dict) -> int:
         nonlocal generated_count
         dim_id = f"{combo['scenario']}_{combo['fatigue_level']}_{combo['workload']}_{combo['task_type']}_{combo['has_passengers']}"
+        # dim_id 由维度组合唯一决定（360 种排列），
+        # 同一 dim_id 只会生成一次场景（幂等跳过），不存在同一 ID 对应不同内容的情况。
         if dim_id in existing:
             return 0
         # 注：dim_id 来自 _build_dimension_combinations() 的 360 种唯一排列，
