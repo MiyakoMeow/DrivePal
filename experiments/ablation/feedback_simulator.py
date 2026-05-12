@@ -64,6 +64,9 @@ def simulate_feedback(
             else "ignore"
         )
     if stage == "visual-detail":
+        # 启发式近似：用 dict 等值比较判断规则引擎是否修改了 decision。
+        # 若 LLM 输出恰好与最终 decision 值相同但结构稍异（多 key），
+        # 此比较可能误判——仅用于 debug 日志，视觉内容检测仍走 has_visual_content。
         if stages and stages.get("decision") == decision:
             logger.debug(
                 "规则引擎未修改 decision，反馈基于原始 LLM 输出 (scenario: %s)",
@@ -160,6 +163,11 @@ async def update_feedback_weight(
             mode = MemoryMode.MEMORY_BANK
             event_type = await mm.get_event_type(event_id, mode=mode, user_id=user_id)
     if not event_type:
+        logger.warning(
+            "update_feedback_weight(%s): 无 task_type 且无 event_id，跳过权重更新。"
+            "调用方应在调用前保证至少其一可用。",
+            user_id,
+        )
         return
     ud = user_data_dir(user_id)
     strategy_store = TOMLStore(

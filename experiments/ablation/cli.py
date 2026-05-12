@@ -246,13 +246,18 @@ async def _load_variant_results(path: Path) -> list[VariantResult]:
     return results
 
 
+_MAX_BAD_SCORE_RATIO = 0.05
+"""scores.json 条目损坏率超过此阈值时全弃重算，避免静默使用不完整数据。"""
+
+
 def _safe_parse_judge_scores(raw_scores: list) -> list[JudgeScores] | None:
     """安全解析 JudgeScores 列表。
 
-    任一项缺字段或值非法（KeyError/ValueError/TypeError）则返回 None，
-    由上层回退重算。
+    逐条尝试解析，记录损坏数。损坏率超过 _MAX_BAD_SCORE_RATIO 时
+    返回 None 触发全量重算；否则返回有效条目。
     """
     parsed: list[JudgeScores] = []
+    bad_count = 0
     for s in raw_scores:
         try:
             parsed.append(
@@ -267,8 +272,18 @@ def _safe_parse_judge_scores(raw_scores: list) -> list[JudgeScores] | None:
                 )
             )
         except KeyError, ValueError, TypeError:
-            logger.warning("scores.json 条目损坏，回退重算: %s", s)
-            return None
+            bad_count += 1
+            if not raw_scores:
+                continue
+            if bad_count / len(raw_scores) > _MAX_BAD_SCORE_RATIO:
+                logger.warning(
+                    "scores.json 损坏率 %.0f%% (%d/%d)，回退重算",
+                    bad_count / len(raw_scores) * 100,
+                    bad_count,
+                    len(raw_scores),
+                )
+                return None
+            logger.warning("scores.json 条目损坏（跳过）: %s", s)
     return parsed
 
 

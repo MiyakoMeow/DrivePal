@@ -108,6 +108,8 @@ exclude = [".agents/**"]
     "TC003",  # Path 用于类型注解及运行时操作
     "BLE001",  # update_feedback_weight 失败记录日志后跳过，不中断实验
     "C901",  # run_personalization_group 含 4 阶段 × 20 轮 × 2 变体编排，复杂度可接受
+    "PLR0912",  # run_personalization_group 分支多（超时/异常/反馈/快照），平铺直叙
+    "PLR0915",  # run_personalization_group 语句多（编排+评分+持久化），逻辑清晰
 ]
 "experiments/ablation/feedback_simulator.py" = [
     "ANN401",  # _safe_read_weights 接受 Any 输入做运行时类型校验（TOML 输出无固定类型）

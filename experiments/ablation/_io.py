@@ -180,7 +180,8 @@ async def load_checkpoint(
                 except json.JSONDecodeError, KeyError, ValueError:
                     logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                     continue
-    except FileNotFoundError:
+    except FileNotFoundError, OSError:
+        logger.warning("Checkpoint 读取失败（%s），从零开始运行", path)
         return ids, results
     return ids, results
 

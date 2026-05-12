@@ -57,6 +57,11 @@ def _compute_matching_rate(
         ri = wh.get("round", 0)
         stage = wh["stage"]
         if ri not in full_by_round:
+            logger.warning(
+                "轮次 %d 缺少 FULL 变体结果——匹配率分母排除该轮，"
+                "若多轮缺失可能导致匹配率虚高",
+                ri,
+            )
             continue
         decision = full_by_round[ri].decision
         matched = _decision_matches_stage(decision, stage)

@@ -143,16 +143,23 @@ class AblationRunner:
         if not isinstance(output, dict):
             output = {}
         latency_ms = (time.perf_counter() - t0) * 1000
+
+        def _safe_dict(val: object) -> dict[str, Any]:
+            """运行时类型守卫——LLM 输出可能为列表等非 dict 类型。"""
+            if isinstance(val, dict):
+                return cast("dict[str, Any]", val)
+            return {}
+
         return VariantResult(
             scenario_id=scenario.id,
             variant=Variant.SINGLE_LLM,
-            decision=cast("dict[str, Any]", output.get("decision", {})),
+            decision=_safe_dict(output.get("decision", {})),
             result_text="",
             event_id=None,
             stages={
-                "context": cast("dict[str, Any]", output.get("context", {})),
-                "task": cast("dict[str, Any]", output.get("task", {})),
-                "decision": cast("dict[str, Any]", output.get("decision", {})),
+                "context": _safe_dict(output.get("context", {})),
+                "task": _safe_dict(output.get("task", {})),
+                "decision": _safe_dict(output.get("decision", {})),
                 "execution": {},
             },
             latency_ms=latency_ms,
@@ -232,7 +239,10 @@ class AblationRunner:
         succeeded = [r for r in new_results if isinstance(r, VariantResult)]
         failures = [r for r in new_results if isinstance(r, Exception)]
         if failures:
-            failure_msgs = "; ".join(str(f) for f in failures[:5])
+            failure_msgs = "; ".join(
+                f"{type(f).__name__}: {f}" if str(f) else type(f).__name__
+                for f in failures[:5]
+            )
             logger.error(
                 "%d/%d variant runs failed: %s",
                 len(failures),
