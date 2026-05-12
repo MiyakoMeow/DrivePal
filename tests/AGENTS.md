@@ -26,8 +26,6 @@ tests/
 ├── conftest.py          # pytest 配置、marker 注册、会话级 fixture
 ├── _helpers.py          # 通用测试辅助
 ├── fixtures.py          # 通用 fixture 和清理函数
-├── test_integration/    # 集成测试占位（当前仅 __pycache__，清理残留）
-├── stores/              # 顶层空目录（仅 __pycache__，清理残留）
 ├── agents/              # → app/agents/
 │   ├── test_conversation.py       # 会话管理
 │   ├── test_outputs.py            # 输出格式化

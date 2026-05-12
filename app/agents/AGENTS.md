@@ -26,7 +26,7 @@
 
 | 类型 | 匹配方式 | 示例 |
 |------|---------|------|
-| travel | patterns 文本匹配 + 参数解析 | "提醒我 10 点去北站" → location_time 触发 |
+| travel | patterns 文本匹配 + 参数解析 | "提醒到家" → location 触发 |
 | action | patterns 文本匹配 | "取消提醒" → cancel_last，"延迟" → snooze（可跟时长） |
 
 `resolve(query)` 返回预构建 decision dict 或 None。返回 None 时走正常四阶段。
