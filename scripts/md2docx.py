@@ -1,6 +1,6 @@
 """Markdown 论文 → docx 转换器。一次性工具，用于学校提交格式转换。
 
-用法: uv run python scripts/md2docx.py [-i input.md] [-o output.docx]
+用法: uv run python scripts/md2docx.py -i input.md [-o output.docx]
 """
 
 from __future__ import annotations
@@ -53,10 +53,6 @@ MERMAID_CACHE_DIR = Path("archive/mermaid")
 # OMML 命名空间常量
 _OMML_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
-# 默认路径
-DEFAULT_INPUT = Path("archive/定稿-20260511.md")
-DEFAULT_OUTPUT = Path("archive/定稿-20260511.docx")
-
 # 引用正则（匹配文中引用标记 [N] 或 [N,M]）
 _CITATION_RE = re.compile(r"\[\d+(?:,\d+)*\]")
 
@@ -83,7 +79,14 @@ async def parse(filepath: Path) -> list[dict]:
         if hasattr(t, "info") and t.info:
             d["info"] = t.info
         if t.children:
-            d["children"] = [{"type": c.type, "content": c.content} for c in t.children]
+            d["children"] = [
+                {
+                    "type": c.type,
+                    "content": c.content,
+                    **({"attrs": dict(c.attrs)} if c.attrs else {}),
+                }
+                for c in t.children
+            ]
         result.append(d)
     return result
 
@@ -694,8 +697,15 @@ def _add_page_numbers(doc: Document) -> None:
 # ── 主构建函数 ──
 
 
-async def build_docx(tokens: list[dict], output_path: Path) -> None:
-    """主建文档函数。遍历 token 流构建 docx。"""
+async def build_docx(tokens: list[dict], output_path: Path, *, source_dir: Path) -> None:
+    """主建文档函数。遍历 token 流构建 docx。
+
+    Args:
+        tokens: 预处理后的 token 流
+        output_path: 输出 docx 路径
+        source_dir: 源 markdown 文件所在目录，用于解析相对图片路径
+
+    """
     doc = Document()
     _setup_document(doc)
 
@@ -818,13 +828,44 @@ async def build_docx(tokens: list[dict], output_path: Path) -> None:
             pending_list_item = False
             continue
 
-        # ── 正文段落 ──
+        # ── 正文段落（含图片） ──
         if tp == "paragraph_open":
             continue
         if tp == "paragraph_close":
             continue
         if tp == "inline":
-            _add_body_paragraph(doc, t["content"], use_ref_font=in_references)
+            children = t.get("children", [])
+            has_image = any(c.get("type") == "image" for c in children)
+            if has_image:
+                for child in children:
+                    if child["type"] == "image":
+                        src = child.get("attrs", {}).get("src", "")
+                        alt = child.get("content", "")
+                        # 先按源文件目录解析，再按 CWD 解析
+                        img_path = source_dir / src
+                        if not await asyncio.to_thread(img_path.exists):
+                            img_path = Path(src)
+                        if await asyncio.to_thread(img_path.exists):
+                            p_img = doc.add_paragraph()
+                            p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            run_img = p_img.add_run()
+                            run_img.add_picture(str(img_path), width=Inches(5.5))
+                            if alt:
+                                _new_paragraph(
+                                    doc,
+                                    alt,
+                                    alignment=WD_ALIGN_PARAGRAPH.CENTER,
+                                    font_size=Pt(10),
+                                    bold=True,
+                                )
+                        else:
+                            _add_body_paragraph(doc, f"[图片缺失: {src}]")
+                    elif child.get("content", "").strip():
+                        _add_body_paragraph(
+                            doc, child["content"], use_ref_font=in_references
+                        )
+            else:
+                _add_body_paragraph(doc, t["content"], use_ref_font=in_references)
             continue
         if tp in ("hardbreak", "softbreak"):
             continue
@@ -851,15 +892,21 @@ async def main() -> None:
 
     parser = argparse.ArgumentParser(description="Markdown 论文 → docx 转换器")
     parser.add_argument(
-        "-i", "--input", type=Path, default=DEFAULT_INPUT, help="输入 markdown 文件路径"
+        "-i", "--input", type=Path, required=True, help="输入 markdown 文件路径"
     )
     parser.add_argument(
-        "-o", "--output", type=Path, default=DEFAULT_OUTPUT, help="输出 docx 文件路径"
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="输出 docx 文件路径（默认：输入文件改扩展名为 .docx）",
     )
     args = parser.parse_args()
 
     if not args.input.exists():
         sys.exit(f"输入文件不存在: {args.input}")
+
+    output = args.output or args.input.with_suffix(".docx")
 
     async with httpx.AsyncClient() as client:
         await _check_font_warning()
@@ -873,7 +920,7 @@ async def main() -> None:
         print(f"  预处理后 {len(tokens)} 个 token")
 
         print("构建 docx...")
-        await build_docx(tokens, args.output)
+        await build_docx(tokens, output, source_dir=args.input.parent)
 
 
 if __name__ == "__main__":
