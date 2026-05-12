@@ -16,8 +16,8 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
 
-from ._io import dump_variant_results_jsonl
-from .ablation_runner import AblationRunner, _append_checkpoint
+from ._io import append_checkpoint, dump_variant_results_jsonl
+from .ablation_runner import AblationRunner
 from .judge import Judge, detect_judge_degradation
 from .types import GroupResult, JudgeScores, Scenario, Variant, VariantResult
 
@@ -121,7 +121,7 @@ async def run_personalization_group(
                 else:
                     vr = dataclasses.replace(vr, round_index=i + 1)
                 all_results.append(vr)
-                await _append_checkpoint(
+                await append_checkpoint(
                     output_path.with_suffix(".checkpoint.jsonl"),
                     vr,
                     include_modifications=True,

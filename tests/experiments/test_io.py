@@ -5,7 +5,11 @@ from typing import TYPE_CHECKING
 
 import aiofiles
 
-from experiments.ablation._io import dump_variant_results_jsonl
+from experiments.ablation._io import (
+    append_checkpoint,
+    dump_variant_results_jsonl,
+    load_checkpoint,
+)
 from experiments.ablation.cli import _load_variant_results
 from experiments.ablation.types import Variant, VariantResult
 
@@ -74,3 +78,35 @@ async def test_load_variant_results_restores_round_index(tmp_path: Path):
     assert len(results) == 1
     assert results[0].round_index == 5
     assert results[0].scenario_id == "s1"
+
+
+async def test_append_and_load_checkpoint_roundtrip(tmp_path: Path):
+    """给定写入 checkpoint 的 VariantResult，当 load，则应还原完整数据."""
+    vr = VariantResult(
+        scenario_id="s1",
+        variant=Variant.NO_RULES,
+        decision={"should_remind": False},
+        result_text="test",
+        event_id="evt1",
+        stages={"decision": {"a": 1}},
+        latency_ms=123.4,
+        modifications=["mod1"],
+        round_index=3,
+    )
+    path = tmp_path / "checkpoint.jsonl"
+    await append_checkpoint(path, vr, include_modifications=True)
+
+    ids, results = await load_checkpoint(path)
+    assert ("s1", "no-rules") in ids
+    assert len(results) == 1
+    assert results[0].scenario_id == "s1"
+    assert results[0].variant == Variant.NO_RULES
+    assert results[0].modifications == ["mod1"]
+    assert results[0].round_index == 3
+
+
+async def test_load_checkpoint_nonexistent_returns_empty(tmp_path: Path):
+    """给定不存在的文件，当 load，则返回空集合和空列表."""
+    ids, results = await load_checkpoint(tmp_path / "nope.jsonl")
+    assert ids == set()
+    assert results == []

@@ -11,8 +11,6 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
-import aiofiles
-
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -32,7 +30,7 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
-from ._io import variant_result_from_dict
+from ._io import append_checkpoint, load_checkpoint
 from .types import Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
@@ -177,7 +175,7 @@ class AblationRunner:
         results: list[VariantResult] = []
         existing_ids: set[tuple[str, str]] = set()
         if checkpoint_path:
-            existing_ids, existing_results = await _load_checkpoint(checkpoint_path)
+            existing_ids, existing_results = await load_checkpoint(checkpoint_path)
             results.extend(existing_results)
 
         pending = [
@@ -206,7 +204,7 @@ class AblationRunner:
                     raise
                 if checkpoint_path:
                     async with ckpt_lock:
-                        await _append_checkpoint(
+                        await append_checkpoint(
                             checkpoint_path,
                             vr,
                             include_modifications=True,
@@ -228,51 +226,3 @@ class AblationRunner:
                 failure_msgs,
             )
         return results + succeeded
-
-
-async def _load_checkpoint(
-    path: Path,
-) -> tuple[set[tuple[str, str]], list[VariantResult]]:
-    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表)。
-
-    用于续跑：将已有结果加载回内存，避免 `dump_variant_results_jsonl` 覆盖丢失。
-    """
-    ids: set[tuple[str, str]] = set()
-    results: list[VariantResult] = []
-    try:
-        async with aiofiles.open(path, encoding="utf-8") as f:
-            async for line in f:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                try:
-                    d = json.loads(stripped)
-                    ids.add((d["scenario_id"], d["variant"]))
-                    results.append(variant_result_from_dict(d))
-                except json.JSONDecodeError, KeyError, ValueError:
-                    logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
-                    continue
-    except FileNotFoundError:
-        return ids, results
-    return ids, results
-
-
-async def _append_checkpoint(
-    path: Path, vr: VariantResult, *, include_modifications: bool = False
-) -> None:
-    """追加写单条 VariantResult 到 checkpoint JSONL。"""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    record: dict[str, object] = {
-        "scenario_id": vr.scenario_id,
-        "variant": vr.variant.value,
-        "decision": vr.decision,
-        "stages": vr.stages,
-        "latency_ms": vr.latency_ms,
-        "round_index": vr.round_index,
-        "result_text": vr.result_text,
-        "event_id": vr.event_id,
-    }
-    if include_modifications:
-        record["modifications"] = vr.modifications
-    async with aiofiles.open(path, "a", encoding="utf-8") as f:
-        await f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")

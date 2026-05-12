@@ -158,6 +158,54 @@ async def write_scores_json(path: Path, scores: list[JudgeScores]) -> None:
     await write_json_atomic(path, data)
 
 
+async def load_checkpoint(
+    path: Path,
+) -> tuple[set[tuple[str, str]], list[VariantResult]]:
+    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表).
+
+    用于续跑：将已有结果加载回内存，避免 `dump_variant_results_jsonl` 覆盖丢失。
+    """
+    ids: set[tuple[str, str]] = set()
+    results: list[VariantResult] = []
+    try:
+        async with aiofiles.open(path, encoding="utf-8") as f:
+            async for line in f:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    d = json.loads(stripped)
+                    ids.add((d["scenario_id"], d["variant"]))
+                    results.append(variant_result_from_dict(d))
+                except json.JSONDecodeError, KeyError, ValueError:
+                    logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
+                    continue
+    except FileNotFoundError:
+        return ids, results
+    return ids, results
+
+
+async def append_checkpoint(
+    path: Path, vr: VariantResult, *, include_modifications: bool = False
+) -> None:
+    """追加写单条 VariantResult 到 checkpoint JSONL。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record: dict[str, object] = {
+        "scenario_id": vr.scenario_id,
+        "variant": vr.variant.value,
+        "decision": vr.decision,
+        "stages": vr.stages,
+        "latency_ms": vr.latency_ms,
+        "round_index": vr.round_index,
+        "result_text": vr.result_text,
+        "event_id": vr.event_id,
+    }
+    if include_modifications:
+        record["modifications"] = vr.modifications
+    async with aiofiles.open(path, "a", encoding="utf-8") as f:
+        await f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+
 async def dump_variant_results_jsonl(
     path: Path,
     results: list[VariantResult],
