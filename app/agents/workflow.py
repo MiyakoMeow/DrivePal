@@ -146,6 +146,7 @@ class StrategyOutput(BaseModel):
 
     should_remind: bool = True
     timing: str = "now"
+    is_emergency: bool = False
     target_time: str = ""
     delay_seconds: int = 300
     reminder_content: str | dict = ""
