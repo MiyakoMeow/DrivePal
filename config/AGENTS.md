@@ -23,18 +23,18 @@ models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
 [model_groups.balanced]
 models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
 
-[model_groups.judge]
-models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
-
 [model_providers.deepseek]
 base_url = "https://api.deepseek.com/v1"
 api_key_env = "DEEPSEEK_API_KEY"
 concurrency = 8
 
+[model_groups.judge]
+models = ["deepseek/deepseek-v4-pro?temperature=0.1"]
+
 [model_providers.zhipu-coding]
-base_url = "https://open.bigmodel.cn/api/paas/v4"
+base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
 api_key_env = "ZHIPU_API_KEY"
-concurrency = 8
+concurrency = 3
 
 [model_providers.openrouter]
 base_url = "https://openrouter.ai/api/v1"
