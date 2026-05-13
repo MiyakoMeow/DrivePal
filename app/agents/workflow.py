@@ -28,7 +28,7 @@ from app.agents.probabilistic import (
     is_enabled,
 )
 from app.agents.prompts import SYSTEM_PROMPTS
-from app.agents.rules import apply_rules, format_constraints, postprocess_decision
+from app.agents.rules import apply_rules, postprocess_decision
 from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
@@ -54,6 +54,10 @@ def get_ablation_disable_feedback() -> bool:
 
 
 logger = logging.getLogger(__name__)
+
+_PREFERENCE_WEIGHT_HIGH: float = 0.6
+_PREFERENCE_WEIGHT_LOW: float = 0.5
+_INTENT_CONFIDENCE_THRESHOLD: float = 0.3
 
 
 class ChatModelUnavailableError(RuntimeError):
@@ -125,6 +129,9 @@ class ContextOutput(BaseModel):
 class TaskOutput(BaseModel):
     """Task Agent JSON 输出模型，extra forbid。
 
+    .. deprecated::
+        JointDecisionOutput 替代。保留供外部模块兼容导入，新代码勿用。
+
     validation_alias 兜底 LLM 字段名漂移——不同模型/温度下可能产出
     task_type / task_attribution 代替 type，events / event_list 代替 entities。
     """
@@ -170,6 +177,30 @@ class StrategyOutput(BaseModel):
         if v is None:
             return ""
         return v
+
+
+class JointDecisionOutput(BaseModel):
+    """JointDecision Agent JSON 输出模型。
+
+    merge TaskOutput + StrategyOutput，decision 字段以 dict 传递（规则后处理）。
+    extra forbid 防止 LLM 注入非法字段。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_type: str = Field(
+        default="general",
+        validation_alias=AliasChoices("task_type", "type", "task_attribution"),
+    )
+    confidence: float = Field(
+        default=0.0,
+        validation_alias=AliasChoices("confidence", "conf"),
+    )
+    entities: list = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("entities", "events", "event_list"),
+    )
+    decision: dict = Field(default_factory=dict)
 
 
 class ReminderContent(BaseModel):
@@ -276,8 +307,7 @@ class AgentWorkflow:
 
         self._nodes = [
             self._context_node,
-            self._task_node,
-            self._strategy_node,
+            self._joint_decision_node,
             self._execution_node,
         ]
         self._strategies_store = TOMLStore(
@@ -285,6 +315,50 @@ class AgentWorkflow:
             filename="strategies.toml",
             default_factory=dict,
         )
+
+    @staticmethod
+    def _format_constraints_hint(driving_context: dict | None) -> str:
+        """apply_rules → 自然语言约束提示."""
+        if not driving_context:
+            return ""
+        constraints = apply_rules(driving_context)
+        hints: list[str] = []
+        channels = constraints.get("allowed_channels")
+        if channels:
+            ch_str = ", ".join(channels)
+            hints.append(f"当前仅建议通过 {ch_str} 通道提醒。")
+        max_freq = constraints.get("max_frequency_minutes")
+        if max_freq is not None:
+            hints.append(f"两次提醒建议至少间隔 {max_freq} 分钟。")
+        if constraints.get("only_urgent"):
+            hints.append("当前仅紧急提醒适合发送。")
+        if constraints.get("postpone"):
+            hints.append("当前应延后非紧急提醒。")
+        return " ".join(hints)
+
+    async def _format_preference_hint(self) -> str:
+        """从 strategies.toml 读 reminder_weights → 自然语言偏好提示."""
+        if get_ablation_disable_feedback():
+            return ""
+        strategies = await self._strategies_store.read()
+        weights = strategies.get("reminder_weights", {})
+        if not isinstance(weights, dict):
+            return ""
+        items: list[tuple[str, float]] = [
+            (k, float(v)) for k, v in weights.items() if isinstance(v, (int, float))
+        ]
+        if not items:
+            return ""
+        items.sort(key=lambda x: -x[1])
+        top_type, top_weight = items[0]
+        if top_weight >= _PREFERENCE_WEIGHT_HIGH:
+            return (
+                f"用户当前偏好 {top_type} 类提醒（权重 {top_weight}），"
+                "若非安全规则冲突请优先处理。"
+            )
+        if top_weight >= _PREFERENCE_WEIGHT_LOW:
+            return f"用户略偏好 {top_type} 类提醒，可适当考虑。"
+        return ""
 
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
@@ -399,104 +473,90 @@ class AgentWorkflow:
             "context": context,
         }
 
-    async def _task_node(self, state: AgentState) -> dict:
+    async def _joint_decision_node(self, state: AgentState) -> dict:
+        """JointDecision 节点：合并 Task 归因 + 策略决策为一次 LLM 调用.
+
+        prompt 精简原则：
+        - 不注入 strategies.toml 全文，仅读 reminder_weights
+        - 规则约束转自然语言（_format_constraints_hint）
+        - 概率推断仅传关键信号，非完整 intent dict
+        - 权重作为显式引导（_format_preference_hint）
+        """
         user_input = state.get("original_query", "")
         context = state.get("context", {})
-        stages = state.get("stages")
-
-        prompt = f"""{SYSTEM_PROMPTS["task"]}
-
-用户输入: {user_input}
-上下文: {json.dumps(context, ensure_ascii=False)}
-
-请输出JSON格式的任务对象. """
-
-        parsed = await self._call_llm_json(prompt)
-        try:
-            validated = TaskOutput.model_validate(parsed.data or {})
-            task = validated.model_dump()
-        except ValidationError as e:
-            logger.warning("TaskOutput validation failed: %s", e)
-            raw_data = parsed.data
-            task = raw_data or {}
-        if stages is not None:
-            stages.task = task
-        return {
-            "task": task,
-        }
-
-    async def _strategy_node(self, state: AgentState) -> dict:
-        context = state.get("context", {})
-        task = state.get("task") or {}
-        stages = state.get("stages")
-
-        strategies = await self._strategies_store.read()
-
-        constraints_block = ""
         driving_context = state.get("driving_context")
-        postpone = False
-        if driving_context:
-            constraints = apply_rules(driving_context)
-            constraints_block = "\n\n" + format_constraints(constraints)
-            postpone = constraints.get("postpone", False)
+        stages = state.get("stages")
 
-        # 概率推断 + 反馈权重注入
-        prob_block = ""
+        constraints_hint = self._format_constraints_hint(driving_context)
+        preference_hint = await self._format_preference_hint()
+
+        prob_hint = ""
         if is_enabled() and self._memory_mode == MemoryMode.MEMORY_BANK:
             try:
                 intent = await infer_intent(
-                    state.get("original_query", ""),
+                    user_input,
                     self.memory_module,
                     user_id=self.current_user,
                 )
                 risk = compute_interrupt_risk(driving_context or {})
-                intent["interrupt_risk"] = round(risk, 2)
-                prob_block = f"\n\n概率推断: {json.dumps(intent, ensure_ascii=False)}"
+                if intent.get("intent_confidence", 0) > _INTENT_CONFIDENCE_THRESHOLD:
+                    prob_hint = (
+                        f"用户当前意图倾向：{intent.get('type', 'unknown')}"
+                        f"（置信度 {intent.get('intent_confidence', 0)}）。"
+                    )
                 if risk >= OVERLOADED_WARNING_THRESHOLD:
-                    prob_block += "\n⚠ 当前打断风险较高，请谨慎决定"
+                    prob_hint += "⚠ 当前打断风险较高，请谨慎决定。"
             except (OSError, RuntimeError, ValueError, TypeError) as e:
                 logger.warning("Probabilistic inference failed: %s", e)
 
-        # 反馈权重注入
-        if _ablation_disable_feedback.get():
-            weights = {
-                "meeting": 0.5,
-                "travel": 0.5,
-                "shopping": 0.5,
-                "contact": 0.5,
-                "other": 0.5,
-            }
-        else:
-            weights = strategies.get("reminder_weights", {})
-        weights_block = ""
-        if weights:
-            weights_block = (
-                f"\n\n事件类型偏好权重: {json.dumps(weights, ensure_ascii=False)}"
-                "\n权重越高表示用户偏好该类型提醒，请在决策时优先考虑高权重类型。"
-            )
+        prompt_parts: list[str] = [
+            f"用户输入：{user_input}",
+            f"驾驶上下文：{json.dumps(context, ensure_ascii=False)}",
+        ]
+        if prob_hint:
+            prompt_parts.append(prob_hint)
+        if constraints_hint:
+            prompt_parts.append(f"安全约束：{constraints_hint}")
+        if preference_hint:
+            prompt_parts.append(f"用户偏好：{preference_hint}")
+        prompt_body = "\n\n".join(prompt_parts)
 
-        prompt = f"""{SYSTEM_PROMPTS["strategy"]}
+        # JointDecision prompt 使用 format() 注入 constraints/preference
+        system_prompt = SYSTEM_PROMPTS["joint_decision"].format(
+            constraints_hint=constraints_hint or "无特殊约束。",
+            preference_hint=preference_hint or "无特殊偏好。",
+        )
+        full_prompt = f"{system_prompt}\n\n{prompt_body}"
+        parsed = await self._call_llm_json(full_prompt)
 
-上下文: {json.dumps(context, ensure_ascii=False)}
-任务: {json.dumps(task, ensure_ascii=False)}
-个性化策略: {json.dumps(strategies, ensure_ascii=False)}{weights_block}{constraints_block}{prob_block}
-
-请输出JSON格式的决策结果. """
-
-        parsed = await self._call_llm_json(prompt)
         try:
-            validated = StrategyOutput.model_validate(parsed.data or {})
-            decision = validated.model_dump()
+            validated = JointDecisionOutput.model_validate(parsed.data or {})
+            task = {
+                "type": validated.task_type,
+                "confidence": validated.confidence,
+                "entities": validated.entities,
+            }
+            decision = validated.decision
         except ValidationError as e:
-            logger.warning("StrategyOutput validation failed: %s", e)
-            raw_data = parsed.data
-            decision = raw_data or {}
-        decision["postpone"] = postpone
+            logger.warning("JointDecisionOutput validation failed: %s", e)
+            raw = parsed.data or {}
+            decision = raw.get("decision", {})
+            task = {
+                "type": raw.get("task_type") or raw.get("type", "general"),
+                "confidence": raw.get("confidence", 0.0),
+                "entities": raw.get("entities", []),
+            }
+
+        # postpone 由规则引擎决定
+        if driving_context:
+            constraints = apply_rules(driving_context)
+            decision["postpone"] = constraints.get("postpone", False)
+
         if stages is not None:
+            stages.task = task
             stages.decision = decision
-        return {
-            "decision": decision,
-        }
+
+        return {"task": task, "decision": decision}
 
     @staticmethod
     def _extract_content(decision: dict) -> str:
@@ -851,40 +911,32 @@ class AgentWorkflow:
             self._log_conversation_turn(state, session_id, user_input)
             return
 
-        # Stage 2: Task
-        yield {"event": "stage_start", "data": {"stage": "task"}}
+        # Stage 2: JointDecision
+        yield {"event": "stage_start", "data": {"stage": "joint_decision"}}
         try:
-            updates = await self._task_node(state)
+            updates = await self._joint_decision_node(state)
             state.update(updates)
-            yield {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
-        except Exception as e:
-            logger.warning("run_stream %s stage failed: %s", "task", e, exc_info=True)
-            yield {"event": "error", "data": {"code": "TASK_FAILED", "message": str(e)}}
-            self._log_conversation_turn(state, session_id, user_input)
-            return
-
-        # Stage 3: Strategy
-        yield {"event": "stage_start", "data": {"stage": "strategy"}}
-        try:
-            updates = await self._strategy_node(state)
-            state.update(updates)
+            task = state.get("task") or {}
             decision = state.get("decision") or {}
             yield {
                 "event": "decision",
-                "data": {"should_remind": decision.get("should_remind")},
+                "data": {
+                    "should_remind": decision.get("should_remind"),
+                    "task_type": task.get("type", "general"),
+                },
             }
         except Exception as e:
             logger.warning(
-                "run_stream %s stage failed: %s", "strategy", e, exc_info=True
+                "run_stream %s stage failed: %s", "joint_decision", e, exc_info=True
             )
             yield {
                 "event": "error",
-                "data": {"code": "STRATEGY_FAILED", "message": str(e)},
+                "data": {"code": "JOINT_DECISION_FAILED", "message": str(e)},
             }
             self._log_conversation_turn(state, session_id, user_input)
             return
 
-        # Stage 4: Execution
+        # Stage 3: Execution
         yield {"event": "stage_start", "data": {"stage": "execution"}}
         try:
             updates = await self._execution_node(state)

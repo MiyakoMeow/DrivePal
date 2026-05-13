@@ -8,9 +8,9 @@ from pydantic import ValidationError
 from app.agents.workflow import (
     AgentWorkflow,
     ContextOutput,
+    JointDecisionOutput,
     LLMJsonResponse,
     StrategyOutput,
-    TaskOutput,
 )
 
 
@@ -76,30 +76,55 @@ class TestContextOutput:
         }
 
 
-class TestTaskOutput:
+class TestJointDecisionOutput:
     def test_valid_full(self):
-        """Given 完整合法输入, When validate, then 字段正确映射."""
-        obj = TaskOutput(
-            type="meeting", confidence=0.9, description="开会", entities=["会议室"]
+        """完整合法输入，字段正确映射。"""
+        obj = JointDecisionOutput(
+            task_type="meeting",
+            confidence=0.9,
+            entities=[{"time": "15:00", "location": "3F"}],
+            decision={"should_remind": True, "timing": "now"},
         )
-        assert obj.type == "meeting"
+        assert obj.task_type == "meeting"
         assert obj.confidence == 0.9
-        assert obj.description == "开会"
-        assert obj.entities == ["会议室"]
+        assert len(obj.entities) == 1
+        assert obj.decision["should_remind"] is True
+
+    def test_alias_task_type(self):
+        """task_type key 通过 AliasChoices 接受。"""
+        data = {"task_type": "travel", "decision": {}}
+        obj = JointDecisionOutput.model_validate(data)
+        assert obj.task_type == "travel"
+
+    def test_alias_type(self):
+        """旧 type key 也通过 AliasChoices 接受。"""
+        data = {"type": "shopping", "decision": {}}
+        obj = JointDecisionOutput.model_validate(data)
+        assert obj.task_type == "shopping"
+
+    def test_alias_conf(self):
+        """conf key 也通过 AliasChoices 接受。"""
+        data = {"confidence": 0.0, "type": "travel", "decision": {}}
+        obj1 = JointDecisionOutput.model_validate(data)
+        assert obj1.confidence == 0.0
+
+        data2 = {"conf": 0.8, "type": "travel", "decision": {}}
+        obj2 = JointDecisionOutput.model_validate(data2)
+        assert obj2.confidence == 0.8
 
     def test_extra_rejected(self):
-        """Given 含额外字段的输入, When validate, then 抛出 ValidationError."""
-        data = {"type": "meeting", "unknown": True}
+        """含额外字段 → ValidationError。"""
+        data = {"task_type": "meeting", "unknown": True}
         try:
-            TaskOutput.model_validate(data)
-            pytest.fail("应抛出 ValidationError")
+            JointDecisionOutput.model_validate(data)
+            pytest.fail("应抛 ValidationError")
         except ValidationError:
             pass
 
 
 class TestStrategyOutput:
     def test_valid_minimal(self):
-        """Given 最小合法输入, When validate, then 使用默认值."""
+        """最小合法输入，使用默认值。"""
         obj = StrategyOutput()
         assert obj.should_remind is True
         assert obj.timing == "now"
@@ -107,11 +132,11 @@ class TestStrategyOutput:
         assert obj.postpone is False
 
     def test_extra_rejected(self):
-        """Given 含额外字段的输入, When validate, then 抛出 ValidationError."""
+        """含额外字段 → ValidationError。"""
         data = {"should_remind": True, "unknown": "x"}
         try:
             StrategyOutput.model_validate(data)
-            pytest.fail("应抛出 ValidationError")
+            pytest.fail("应抛 ValidationError")
         except ValidationError:
             pass
 
@@ -144,16 +169,40 @@ class TestWorkflowValidationPath:
         assert "context" in result
 
     @pytest.mark.asyncio
-    async def test_task_node_validation_success(self, tmp_path):
-        """Task 节点 validate 分支不抛异常。"""
+    async def test_joint_decision_node_validation_success(self, tmp_path):
+        """JointDecision 节点 validate 分支不抛异常。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         workflow._call_llm_json = AsyncMock(
-            return_value=LLMJsonResponse(
-                raw='{"type":"meeting","confidence":0.9,'
-                '"description":"开会","entities":["会议室"]}',
+            return_value=LLMJsonResponse.from_llm(
+                '{"task_type":"meeting","confidence":0.9,'
+                '"entities":[],'
+                '"decision":{"should_remind":true,"timing":"now"}}',
             )
         )
-        result = await workflow._task_node(
+        result = await workflow._joint_decision_node(
+            {
+                "original_query": "test",
+                "context": {"scenario": "city_driving"},
+                "task": None,
+                "decision": None,
+                "result": None,
+                "event_id": None,
+                "driving_context": None,
+                "stages": None,
+            }
+        )
+        assert "task" in result
+        assert "decision" in result
+        assert result["task"]["type"] == "meeting"
+
+    @pytest.mark.asyncio
+    async def test_joint_decision_node_fallback_on_bad_json(self, tmp_path):
+        """LLM 返回非法 JSON → fallback 分支，不抛异常，返回默认值。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._call_llm_json = AsyncMock(
+            return_value=LLMJsonResponse(raw="not json"),
+        )
+        result = await workflow._joint_decision_node(
             {
                 "original_query": "test",
                 "context": {},
@@ -165,28 +214,110 @@ class TestWorkflowValidationPath:
                 "stages": None,
             }
         )
-        assert "task" in result
+        assert result["task"]["type"] == "general"
+        assert result["task"]["confidence"] == 0.0
+
+
+class TestFormatConstraintsHint:
+    """_format_constraints_hint 纯单元测试。"""
+
+    def test_none_context(self):
+        assert AgentWorkflow._format_constraints_hint(None) == ""
+
+    def test_empty_context(self):
+        assert AgentWorkflow._format_constraints_hint({}) == ""
+
+    def test_parked_allows_visual(self):
+        """parked → allowed_channels 含 visual/audio/detailed。"""
+        # _format_constraints_hint 内调 apply_rules，为真实逻辑路径
+        result = AgentWorkflow._format_constraints_hint({"scenario": "parked"})
+        assert "通道" in result
+
+
+class TestFormatPreferenceHint:
+    """_format_preference_hint 纯单元测试。"""
 
     @pytest.mark.asyncio
-    async def test_strategy_node_validation_success(self, tmp_path):
-        """Strategy 节点 validate 分支不抛异常。"""
+    async def test_ablation_disabled(self, tmp_path):
+        from app.agents.workflow import set_ablation_disable_feedback
+
+        set_ablation_disable_feedback(True)
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._call_llm_json = AsyncMock(
-            return_value=LLMJsonResponse(
-                raw='{"should_remind":true,"timing":"now",'
-                '"reminder_content":"测试","type":"general"}',
-            )
+        result = await workflow._format_preference_hint()
+        assert result == ""
+        set_ablation_disable_feedback(False)
+
+    @pytest.mark.asyncio
+    async def test_no_weights(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(return_value={})
+        assert await workflow._format_preference_hint() == ""
+
+    @pytest.mark.asyncio
+    async def test_high_weight(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"meeting": 0.7}}
         )
-        result = await workflow._strategy_node(
-            {
-                "original_query": "test",
-                "context": {},
-                "task": {},
-                "decision": None,
-                "result": None,
-                "event_id": None,
-                "driving_context": None,
-                "stages": None,
-            }
+        result = await workflow._format_preference_hint()
+        assert "meeting" in result
+        assert "优先处理" in result
+
+    @pytest.mark.asyncio
+    async def test_low_weight(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"travel": 0.55}}
         )
-        assert "decision" in result
+        result = await workflow._format_preference_hint()
+        assert "travel" in result
+        assert "略偏好" in result
+
+    @pytest.mark.asyncio
+    async def test_all_below_05(self, tmp_path):
+        """所有权重 < 0.5 → 空字符串。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"meeting": 0.49, "travel": 0.49}}
+        )
+        result = await workflow._format_preference_hint()
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_weight_exactly_05(self, tmp_path):
+        """权重正好 = 0.5 → 弱引导（>= 阈值）。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"travel": 0.5}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "travel" in result
+        assert "略偏好" in result
+
+    @pytest.mark.asyncio
+    async def test_weight_exactly_06(self, tmp_path):
+        """权重正好 = 0.6 → 强引导（>= 阈值）。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"meeting": 0.6}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "meeting" in result
+        assert "优先处理" in result
+
+    @pytest.mark.asyncio
+    async def test_non_dict_weights(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": "invalid"}
+        )
+        assert await workflow._format_preference_hint() == ""
+
+    @pytest.mark.asyncio
+    async def test_mixed_numeric_types(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"meeting": 0.7, "travel": 1}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "travel" in result
