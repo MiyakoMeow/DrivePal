@@ -216,3 +216,78 @@ class TestWorkflowValidationPath:
         )
         assert "task" in result
         assert "decision" in result
+
+
+class TestFormatConstraintsHint:
+    """_format_constraints_hint 纯单元测试。"""
+
+    def test_none_context(self):
+        AgentWorkflow._format_constraints_hint(None) == ""
+
+    def test_empty_context(self):
+        AgentWorkflow._format_constraints_hint({}) == ""
+
+    def test_no_constraints(self):
+        AgentWorkflow._format_constraints_hint({"scenario": "parked"}) == ""
+
+
+class TestFormatPreferenceHint:
+    """_format_preference_hint 纯单元测试。"""
+
+    @pytest.mark.asyncio
+    async def test_ablation_disabled(self, tmp_path):
+        from app.agents.workflow import set_ablation_disable_feedback
+        set_ablation_disable_feedback(True)
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        result = await workflow._format_preference_hint()
+        assert result == ""
+        set_ablation_disable_feedback(False)
+
+    @pytest.mark.asyncio
+    async def test_no_weights(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(return_value={})
+        assert await workflow._format_preference_hint() == ""
+
+    @pytest.mark.asyncio
+    async def test_high_weight(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"meeting": 0.7}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "meeting" in result and "优先处理" in result
+
+    @pytest.mark.asyncio
+    async def test_low_weight(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"travel": 0.55}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "travel" in result and "略偏好" in result
+
+    @pytest.mark.asyncio
+    async def test_all_below_05(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"a": 0.5, "b": 0.5}}
+        )
+        assert await workflow._format_preference_hint() == ""
+
+    @pytest.mark.asyncio
+    async def test_non_dict_weights(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": "invalid"}
+        )
+        assert await workflow._format_preference_hint() == ""
+
+    @pytest.mark.asyncio
+    async def test_mixed_numeric_types(self, tmp_path):
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"meeting": 0.7, "travel": 1}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "travel" in result
