@@ -28,7 +28,7 @@ from app.agents.probabilistic import (
     is_enabled,
 )
 from app.agents.prompts import SYSTEM_PROMPTS
-from app.agents.rules import apply_rules, format_constraints, postprocess_decision
+from app.agents.rules import apply_rules, postprocess_decision
 from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 
 _PREFERENCE_WEIGHT_HIGH: float = 0.6
 _PREFERENCE_WEIGHT_LOW: float = 0.5
+_INTENT_CONFIDENCE_THRESHOLD: float = 0.3
 
 
 class ChatModelUnavailableError(RuntimeError):
@@ -307,7 +308,7 @@ class AgentWorkflow:
         self._nodes = [
             self._context_node,
             self._task_node,
-            self._strategy_node,
+            self._joint_decision_node,
             self._execution_node,
         ]
         self._strategies_store = TOMLStore(
@@ -499,78 +500,90 @@ class AgentWorkflow:
             "task": task,
         }
 
-    async def _strategy_node(self, state: AgentState) -> dict:
+    async def _joint_decision_node(self, state: AgentState) -> dict:
+        """JointDecision 节点：合并 Task 归因 + 策略决策为一次 LLM 调用.
+
+        prompt 精简原则：
+        - 不注入 strategies.toml 全文，仅读 reminder_weights
+        - 规则约束转自然语言（_format_constraints_hint）
+        - 概率推断仅传关键信号，非完整 intent dict
+        - 权重作为显式引导（_format_preference_hint）
+        """
+        user_input = state.get("original_query", "")
         context = state.get("context", {})
-        task = state.get("task") or {}
+        driving_context = state.get("driving_context")
         stages = state.get("stages")
 
-        strategies = await self._strategies_store.read()
+        constraints_hint = self._format_constraints_hint(driving_context)
+        preference_hint = await self._format_preference_hint()
 
-        constraints_block = ""
-        driving_context = state.get("driving_context")
-        postpone = False
-        if driving_context:
-            constraints = apply_rules(driving_context)
-            constraints_block = "\n\n" + format_constraints(constraints)
-            postpone = constraints.get("postpone", False)
-
-        # 概率推断 + 反馈权重注入
-        prob_block = ""
+        prob_hint = ""
         if is_enabled() and self._memory_mode == MemoryMode.MEMORY_BANK:
             try:
                 intent = await infer_intent(
-                    state.get("original_query", ""),
+                    user_input,
                     self.memory_module,
                     user_id=self.current_user,
                 )
                 risk = compute_interrupt_risk(driving_context or {})
-                intent["interrupt_risk"] = round(risk, 2)
-                prob_block = f"\n\n概率推断: {json.dumps(intent, ensure_ascii=False)}"
+                if intent.get("intent_confidence", 0) > _INTENT_CONFIDENCE_THRESHOLD:
+                    prob_hint = (
+                        f"用户当前意图倾向：{intent.get('type', 'unknown')}"
+                        f"（置信度 {intent.get('intent_confidence', 0)}）。"
+                    )
                 if risk >= OVERLOADED_WARNING_THRESHOLD:
-                    prob_block += "\n⚠ 当前打断风险较高，请谨慎决定"
+                    prob_hint += "⚠ 当前打断风险较高，请谨慎决定。"
             except (OSError, RuntimeError, ValueError, TypeError) as e:
                 logger.warning("Probabilistic inference failed: %s", e)
 
-        # 反馈权重注入
-        if _ablation_disable_feedback.get():
-            weights = {
-                "meeting": 0.5,
-                "travel": 0.5,
-                "shopping": 0.5,
-                "contact": 0.5,
-                "other": 0.5,
-            }
-        else:
-            weights = strategies.get("reminder_weights", {})
-        weights_block = ""
-        if weights:
-            weights_block = (
-                f"\n\n事件类型偏好权重: {json.dumps(weights, ensure_ascii=False)}"
-                "\n权重越高表示用户偏好该类型提醒，请在决策时优先考虑高权重类型。"
-            )
+        prompt_parts: list[str] = [
+            f"用户输入：{user_input}",
+            f"驾驶上下文：{json.dumps(context, ensure_ascii=False)}",
+        ]
+        if prob_hint:
+            prompt_parts.append(prob_hint)
+        if constraints_hint:
+            prompt_parts.append(f"安全约束：{constraints_hint}")
+        if preference_hint:
+            prompt_parts.append(f"用户偏好：{preference_hint}")
+        prompt_body = "\n\n".join(prompt_parts)
 
-        prompt = f"""{SYSTEM_PROMPTS["strategy"]}
+        # JointDecision prompt 使用 format() 注入 constraints/preference
+        system_prompt = SYSTEM_PROMPTS["joint_decision"].format(
+            constraints_hint=constraints_hint or "无特殊约束。",
+            preference_hint=preference_hint or "无特殊偏好。",
+        )
+        full_prompt = f"{system_prompt}\n\n{prompt_body}"
+        parsed = await self._call_llm_json(full_prompt)
 
-上下文: {json.dumps(context, ensure_ascii=False)}
-任务: {json.dumps(task, ensure_ascii=False)}
-个性化策略: {json.dumps(strategies, ensure_ascii=False)}{weights_block}{constraints_block}{prob_block}
-
-请输出JSON格式的决策结果. """
-
-        parsed = await self._call_llm_json(prompt)
         try:
-            validated = StrategyOutput.model_validate(parsed.data or {})
-            decision = validated.model_dump()
+            validated = JointDecisionOutput.model_validate(parsed.data or {})
+            task = {
+                "type": validated.task_type,
+                "confidence": validated.confidence,
+                "entities": validated.entities,
+            }
+            decision = validated.decision
         except ValidationError as e:
-            logger.warning("StrategyOutput validation failed: %s", e)
-            raw_data = parsed.data
-            decision = raw_data or {}
-        decision["postpone"] = postpone
+            logger.warning("JointDecisionOutput validation failed: %s", e)
+            raw = parsed.data or {}
+            decision = raw.get("decision", {})
+            task = {
+                "type": raw.get("task_type") or raw.get("type", "general"),
+                "confidence": raw.get("confidence", 0.0),
+                "entities": raw.get("entities", []),
+            }
+
+        # postpone 由规则引擎决定
+        if driving_context:
+            constraints = apply_rules(driving_context)
+            decision["postpone"] = constraints.get("postpone", False)
+
         if stages is not None:
+            stages.task = task
             stages.decision = decision
-        return {
-            "decision": decision,
-        }
+
+        return {"task": task, "decision": decision}
 
     @staticmethod
     def _extract_content(decision: dict) -> str:
@@ -940,7 +953,7 @@ class AgentWorkflow:
         # Stage 3: Strategy
         yield {"event": "stage_start", "data": {"stage": "strategy"}}
         try:
-            updates = await self._strategy_node(state)
+            updates = await self._joint_decision_node(state)
             state.update(updates)
             decision = state.get("decision") or {}
             yield {
