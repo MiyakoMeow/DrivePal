@@ -328,7 +328,7 @@ class AgentWorkflow:
             ch_str = ", ".join(channels)
             hints.append(f"当前仅建议通过 {ch_str} 通道提醒。")
         max_freq = constraints.get("max_frequency_minutes")
-        if max_freq:
+        if max_freq is not None:
             hints.append(f"两次提醒建议至少间隔 {max_freq} 分钟。")
         if constraints.get("only_urgent"):
             hints.append("当前仅紧急提醒适合发送。")
@@ -351,12 +351,12 @@ class AgentWorkflow:
             return ""
         items.sort(key=lambda x: -x[1])
         top_type, top_weight = items[0]
-        if top_weight > _PREFERENCE_WEIGHT_HIGH:
+        if top_weight >= _PREFERENCE_WEIGHT_HIGH:
             return (
                 f"用户当前偏好 {top_type} 类提醒（权重 {top_weight}），"
                 "若非安全规则冲突请优先处理。"
             )
-        if top_weight > _PREFERENCE_WEIGHT_LOW:
+        if top_weight >= _PREFERENCE_WEIGHT_LOW:
             return f"用户略偏好 {top_type} 类提醒，可适当考虑。"
         return ""
 

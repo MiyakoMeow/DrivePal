@@ -197,7 +197,7 @@ class TestWorkflowValidationPath:
 
     @pytest.mark.asyncio
     async def test_joint_decision_node_fallback_on_bad_json(self, tmp_path):
-        """LLM 返回非法 JSON → fallback 分支，不抛异常。"""
+        """LLM 返回非法 JSON → fallback 分支，不抛异常，返回默认值。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         workflow._call_llm_json = AsyncMock(
             return_value=LLMJsonResponse(raw="not json"),
@@ -214,8 +214,8 @@ class TestWorkflowValidationPath:
                 "stages": None,
             }
         )
-        assert "task" in result
-        assert "decision" in result
+        assert result["task"]["type"] == "general"
+        assert result["task"]["confidence"] == 0.0
 
 
 class TestFormatConstraintsHint:
@@ -240,6 +240,7 @@ class TestFormatPreferenceHint:
     @pytest.mark.asyncio
     async def test_ablation_disabled(self, tmp_path):
         from app.agents.workflow import set_ablation_disable_feedback
+
         set_ablation_disable_feedback(True)
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         result = await workflow._format_preference_hint()
@@ -259,7 +260,8 @@ class TestFormatPreferenceHint:
             return_value={"reminder_weights": {"meeting": 0.7}}
         )
         result = await workflow._format_preference_hint()
-        assert "meeting" in result and "优先处理" in result
+        assert "meeting" in result
+        assert "优先处理" in result
 
     @pytest.mark.asyncio
     async def test_low_weight(self, tmp_path):
@@ -268,15 +270,40 @@ class TestFormatPreferenceHint:
             return_value={"reminder_weights": {"travel": 0.55}}
         )
         result = await workflow._format_preference_hint()
-        assert "travel" in result and "略偏好" in result
+        assert "travel" in result
+        assert "略偏好" in result
 
     @pytest.mark.asyncio
     async def test_all_below_05(self, tmp_path):
+        """所有权重 < 0.5 → 空字符串。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         workflow._strategies_store.read = AsyncMock(
-            return_value={"reminder_weights": {"a": 0.5, "b": 0.5}}
+            return_value={"reminder_weights": {"meeting": 0.49, "travel": 0.49}}
         )
-        assert await workflow._format_preference_hint() == ""
+        result = await workflow._format_preference_hint()
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_weight_exactly_05(self, tmp_path):
+        """权重正好 = 0.5 → 弱引导（>= 阈值）。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"travel": 0.5}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "travel" in result
+        assert "略偏好" in result
+
+    @pytest.mark.asyncio
+    async def test_weight_exactly_06(self, tmp_path):
+        """权重正好 = 0.6 → 强引导（>= 阈值）。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._strategies_store.read = AsyncMock(
+            return_value={"reminder_weights": {"meeting": 0.6}}
+        )
+        result = await workflow._format_preference_hint()
+        assert "meeting" in result
+        assert "优先处理" in result
 
     @pytest.mark.asyncio
     async def test_non_dict_weights(self, tmp_path):
