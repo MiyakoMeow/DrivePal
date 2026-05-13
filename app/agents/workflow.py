@@ -55,6 +55,9 @@ def get_ablation_disable_feedback() -> bool:
 
 logger = logging.getLogger(__name__)
 
+_PREFERENCE_WEIGHT_HIGH: float = 0.6
+_PREFERENCE_WEIGHT_LOW: float = 0.5
+
 
 class ChatModelUnavailableError(RuntimeError):
     """ChatModel 不可用时抛出的异常."""
@@ -172,6 +175,30 @@ class StrategyOutput(BaseModel):
         return v
 
 
+class JointDecisionOutput(BaseModel):
+    """JointDecision Agent JSON 输出模型。
+
+    merge TaskOutput + StrategyOutput，decision 字段以 dict 传递（规则后处理）。
+    extra forbid 防止 LLM 注入非法字段。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_type: str = Field(
+        default="general",
+        validation_alias=AliasChoices("task_type", "type", "task_attribution"),
+    )
+    confidence: float = Field(
+        default=0.0,
+        validation_alias=AliasChoices("confidence", "conf"),
+    )
+    entities: list = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("entities", "events", "event_list"),
+    )
+    decision: dict = Field(default_factory=dict)
+
+
 class ReminderContent(BaseModel):
     """提醒内容校验模型。"""
 
@@ -285,6 +312,50 @@ class AgentWorkflow:
             filename="strategies.toml",
             default_factory=dict,
         )
+
+    @staticmethod
+    def _format_constraints_hint(driving_context: dict | None) -> str:
+        """apply_rules → 自然语言约束提示."""
+        if not driving_context:
+            return ""
+        constraints = apply_rules(driving_context)
+        hints: list[str] = []
+        channels = constraints.get("allowed_channels")
+        if channels:
+            ch_str = ", ".join(channels)
+            hints.append(f"当前仅建议通过 {ch_str} 通道提醒。")
+        max_freq = constraints.get("max_frequency_minutes")
+        if max_freq:
+            hints.append(f"两次提醒建议至少间隔 {max_freq} 分钟。")
+        if constraints.get("only_urgent"):
+            hints.append("当前仅紧急提醒适合发送。")
+        if constraints.get("postpone"):
+            hints.append("当前应延后非紧急提醒。")
+        return " ".join(hints)
+
+    async def _format_preference_hint(self) -> str:
+        """从 strategies.toml 读 reminder_weights → 自然语言偏好提示."""
+        if get_ablation_disable_feedback():
+            return ""
+        strategies = await self._strategies_store.read()
+        weights = strategies.get("reminder_weights", {})
+        if not isinstance(weights, dict):
+            return ""
+        items: list[tuple[str, float]] = [
+            (k, float(v)) for k, v in weights.items() if isinstance(v, (int, float))
+        ]
+        if not items:
+            return ""
+        items.sort(key=lambda x: -x[1])
+        top_type, top_weight = items[0]
+        if top_weight > _PREFERENCE_WEIGHT_HIGH:
+            return (
+                f"用户当前偏好 {top_type} 类提醒（权重 {top_weight}），"
+                "若非安全规则冲突请优先处理。"
+            )
+        if top_weight > _PREFERENCE_WEIGHT_LOW:
+            return f"用户略偏好 {top_type} 类提醒，可适当考虑。"
+        return ""
 
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
