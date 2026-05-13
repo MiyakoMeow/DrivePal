@@ -61,7 +61,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 | `metadata.json` 格式错 | 从 FAISS `id_map` 提取实际标签重建骨架（标记 `corrupted=True`） |
 | `extra_metadata.json` 损坏 | 忽略，空 dict 启动（下次摘要自动重建） |
 | Count mismatch | 以 index 为权威——从 `id_map` 补缺失骨架条目 |
-| `index.faiss` 读失败 | 备份 `.bak` 后重建空索引 |
+| `index.faiss` 读失败 | 备份 `.bak` 后删除损坏文件，下次写入时重建空索引 |
 
 ### 检索管道
 
@@ -144,7 +144,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 | `SAVE_INTERVAL_SECONDS` | 30.0 | `memory_bank/config.py` |
 | `LLM_TEMPERATURE` (摘要) | 0.3 | `memory_bank/summarizer.py` |
 | `LLM_MAX_TOKENS` (摘要) | 400 | `memory_bank/summarizer.py` |
-| `REFERENCE_DATE_OFFSET` | 1 天 | `memory_bank/index.py` |
+| `reference_date_offset`（参数默认值） | 1 天 | `memory_bank/index.py` `compute_reference_date(offset_days=1)` |
 | `MAX_MEMORY_STRENGTH` | 10 | `memory_bank/config.py` |
 | `BM25_FALLBACK_THRESHOLD` | 0.5 | `memory_bank/config.py` |
 | `RETRIEVAL_ALPHA` | 0.7 | `memory_bank/config.py` |
@@ -170,7 +170,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 多用户隔离
 
-`MemoryModule._get_store(mode, user_id)` 返回 per-user `MemoryBankStore` 实例。每用户独立子目录 `data/users/{user_id}/`（含 memorybank/ 子目录及独立 JSONL/TOML 文件），由 `config.user_data_dir(user_id)` 生成路径。下游组件（RetrievalPipeline、MemoryLifecycle、Summarizer）构造时绑定用户目录，无需 `user_id` 参数。
+`MemoryModule._get_store(mode, user_id)` 返回 per-user `MemoryBankStore` 实例。每用户独立子目录 `data/users/{user_id}/`（含 memorybank/ 子目录及独立 JSONL/TOML 文件），路径等价于 `app/config.py` 中 `DATA_DIR / "users" / user_id`。下游组件（RetrievalPipeline、MemoryLifecycle、Summarizer）构造时绑定用户目录，无需 `user_id` 参数。
 
 ### 可观测性
 

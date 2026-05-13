@@ -25,7 +25,7 @@ Python 3.14 + `uv`。
 | Web框架 | FastAPI + Uvicorn |
 | API层 | Strawberry GraphQL (code-first) |
 | AI工作流 | 自定义四Agent流水线 + 轻量规则引擎 |
-| LLM | DeepSeek, GLM-4.5-air |
+| LLM | DeepSeek |
 | Embedding | BGE-M3 (vLLM, OpenAI兼容接口, 纯远程) |
 | 记忆 | MemoryBank (FAISS + Ebbinghaus遗忘曲线) |
 | 存储 | TOML (tomllib + tomli-w) + JSONL |

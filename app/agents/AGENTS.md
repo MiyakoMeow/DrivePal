@@ -60,9 +60,9 @@
 | delay | time | 当前时间 ≥ target_time（由 delay_seconds 算出） |
 | location | location | 当前位置距目标位置 < 500m（停车时 1000m） |
 | location_time | location + time | 两者任一满足即触发 |
-| postpone | — | 由 `_execution_node()` 直接处理为 location/time/context 兜底 |
+| postpone | —（经 `_map_pending_trigger()` 映射为 location/time/context） | 由 `_execution_node()` 直接处理 |
 
-`_map_pending_trigger()` 将 decision 映射为 `(trigger_type, trigger_target, trigger_text)`。`location_time` 拆为两条独立 pending 提醒（一条位置触发 + 一条时间触发）。
+`_map_pending_trigger()`（定义于 `workflow.py`）将 decision 映射为 `(trigger_type, trigger_target, trigger_text)`。`location_time` 拆为两条独立 pending 提醒（一条位置触发 + 一条时间触发）。
 
 轮询 `poll(driving_context)` 检查 location（haversine 距离）/ time（>= target_time）/ context（scenario 变化）三种触发条件，满足即标记 triggered。
 

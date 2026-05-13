@@ -27,8 +27,8 @@ closeSession(sessionId, currentUser): Boolean
 
 **反馈学习机制：**
 1. **权重更新**：`submitFeedback` 接受（accept）时对应类型权重 +0.1（上限 1.0），忽略（ignore）时 -0.1（下限 0.1），新类型初始 0.5。权重存入 `strategies.toml` 的 `reminder_weights`。
-2. **权重映射**：权重 → 偏好描述（例：`{"maintenance": 0.9, "weather": 0.3}` → "User prefers maintenance reminders, rarely weather"）。
-3. **注入时机**：Strategy Agent 调用前，prompt 末尾注入偏好描述。
+2. **权重注入**：权重以 JSON 格式直接注入 Strategy Agent prompt 末尾（例：`事件类型偏好权重: {"maintenance": 0.9, "weather": 0.3}`），提示 LLM 在决策时优先考虑高权重类型。
+3. **注入时机**：Strategy Agent 调用前，prompt 末尾注入权重块。
 4. **交互顺序**：规则引擎先处理硬约束 → Strategy Agent 语义推理（受偏好影响）→ 决策输出。
 
 **枚举：** `MemoryModeEnum`, `EmotionEnum`, `WorkloadEnum`, `CongestionLevelEnum`, `ScenarioEnum`
@@ -54,7 +54,7 @@ GraphQL 层异常统一继承 `graphql.error.GraphQLError`，自动转为标准 
 
 支持外部上下文注入（DrivingContext），跳过LLM推断。
 
-输入转换由 `converters.py` 完成：Strawberry Input → `strawberry_to_plain()`（递归 Enum→value, dataclass→dict）→ Pydantic `model_validate()`。
+输入转换由 `resolvers/converters.py` 完成：Strawberry Input → `strawberry_to_plain()`（递归 Enum→value, dataclass→dict）→ Pydantic `model_validate()`。
 
 ## 服务入口与生命周期
 

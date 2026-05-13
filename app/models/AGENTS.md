@@ -8,7 +8,7 @@
 - provider 级别 semaphore（信号量）限制并发（共享同一 base_url 的 provider 共享 semaphore）
 - 12 小时 read timeout（长时推理不断开）
 - JSON mode 支持（`response_format={"type": "json_object"}`）
-- MemoryBank 摘要调用默认 temperature=0.3、max_tokens=400（可通过 `MEMORYBANK_LLM_TEMPERATURE` / `MEMORYBANK_LLM_MAX_TOKENS` 环境变量覆盖，见 app/memory/AGENTS.md）
+- MemoryBank 摘要调用默认 temperature=0.3、max_tokens=400（可通过 `MEMORYBANK_LLM_TEMPERATURE` / `MEMORYBANK_LLM_MAX_TOKENS` 环境变量覆盖，见 config/AGENTS.md）
 
 ## 模块全景
 
