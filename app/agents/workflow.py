@@ -128,6 +128,9 @@ class ContextOutput(BaseModel):
 class TaskOutput(BaseModel):
     """Task Agent JSON 输出模型，extra forbid。
 
+    .. deprecated::
+        JointDecisionOutput 替代。保留供外部模块兼容导入，新代码勿用。
+
     validation_alias 兜底 LLM 字段名漂移——不同模型/温度下可能产出
     task_type / task_attribution 代替 type，events / event_list 代替 entities。
     """
