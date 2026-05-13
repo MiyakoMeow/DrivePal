@@ -49,12 +49,12 @@ async def test_run_stream_ends_with_done(workflow):
 
 @pytest.mark.asyncio
 async def test_run_stream_yields_all_stages(workflow):
-    """run_stream 应产出 context/task/strategy/execution 四阶段事件。"""
+    """run_stream 应产出 context/joint_decision/execution 三阶段事件。"""
     stages = set()
     async for evt in workflow.run_stream("明天开会"):
         if evt["event"] == "stage_start":
             stages.add(evt["data"]["stage"])
-    assert stages == {"context", "task", "strategy", "execution"}
+    assert stages == {"context", "joint_decision", "execution"}
 
 
 @pytest.mark.asyncio

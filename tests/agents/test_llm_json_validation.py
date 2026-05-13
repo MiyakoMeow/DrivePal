@@ -8,9 +8,8 @@ from pydantic import ValidationError
 from app.agents.workflow import (
     AgentWorkflow,
     ContextOutput,
+    JointDecisionOutput,
     LLMJsonResponse,
-    StrategyOutput,
-    TaskOutput,
 )
 
 
@@ -76,42 +75,48 @@ class TestContextOutput:
         }
 
 
-class TestTaskOutput:
+class TestJointDecisionOutput:
     def test_valid_full(self):
-        """Given 完整合法输入, When validate, then 字段正确映射."""
-        obj = TaskOutput(
-            type="meeting", confidence=0.9, description="开会", entities=["会议室"]
+        """完整合法输入，字段正确映射。"""
+        obj = JointDecisionOutput(
+            task_type="meeting",
+            confidence=0.9,
+            entities=[{"time": "15:00", "location": "3F"}],
+            decision={"should_remind": True, "timing": "now"},
         )
-        assert obj.type == "meeting"
+        assert obj.task_type == "meeting"
         assert obj.confidence == 0.9
-        assert obj.description == "开会"
-        assert obj.entities == ["会议室"]
+        assert len(obj.entities) == 1
+        assert obj.decision["should_remind"] is True
+
+    def test_alias_task_type(self):
+        """task_type key 通过 AliasChoices 接受。"""
+        data = {"task_type": "travel", "decision": {}}
+        obj = JointDecisionOutput.model_validate(data)
+        assert obj.task_type == "travel"
+
+    def test_alias_type(self):
+        """旧 type key 也通过 AliasChoices 接受。"""
+        data = {"type": "shopping", "decision": {}}
+        obj = JointDecisionOutput.model_validate(data)
+        assert obj.task_type == "shopping"
+
+    def test_alias_conf(self):
+        """conf key 也通过 AliasChoices 接受。"""
+        data = {"confidence": 0.0, "type": "travel", "decision": {}}
+        obj1 = JointDecisionOutput.model_validate(data)
+        assert obj1.confidence == 0.0
+
+        data2 = {"conf": 0.8, "type": "travel", "decision": {}}
+        obj2 = JointDecisionOutput.model_validate(data2)
+        assert obj2.confidence == 0.8
 
     def test_extra_rejected(self):
-        """Given 含额外字段的输入, When validate, then 抛出 ValidationError."""
-        data = {"type": "meeting", "unknown": True}
+        """含额外字段 → ValidationError。"""
+        data = {"task_type": "meeting", "unknown": True}
         try:
-            TaskOutput.model_validate(data)
-            pytest.fail("应抛出 ValidationError")
-        except ValidationError:
-            pass
-
-
-class TestStrategyOutput:
-    def test_valid_minimal(self):
-        """Given 最小合法输入, When validate, then 使用默认值."""
-        obj = StrategyOutput()
-        assert obj.should_remind is True
-        assert obj.timing == "now"
-        assert obj.delay_seconds == 300
-        assert obj.postpone is False
-
-    def test_extra_rejected(self):
-        """Given 含额外字段的输入, When validate, then 抛出 ValidationError."""
-        data = {"should_remind": True, "unknown": "x"}
-        try:
-            StrategyOutput.model_validate(data)
-            pytest.fail("应抛出 ValidationError")
+            JointDecisionOutput.model_validate(data)
+            pytest.fail("应抛 ValidationError")
         except ValidationError:
             pass
 
@@ -144,16 +149,40 @@ class TestWorkflowValidationPath:
         assert "context" in result
 
     @pytest.mark.asyncio
-    async def test_task_node_validation_success(self, tmp_path):
-        """Task 节点 validate 分支不抛异常。"""
+    async def test_joint_decision_node_validation_success(self, tmp_path):
+        """JointDecision 节点 validate 分支不抛异常。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
         workflow._call_llm_json = AsyncMock(
-            return_value=LLMJsonResponse(
-                raw='{"type":"meeting","confidence":0.9,'
-                '"description":"开会","entities":["会议室"]}',
+            return_value=LLMJsonResponse.from_llm(
+                '{"task_type":"meeting","confidence":0.9,'
+                '"entities":[],'
+                '"decision":{"should_remind":true,"timing":"now"}}',
             )
         )
-        result = await workflow._task_node(
+        result = await workflow._joint_decision_node(
+            {
+                "original_query": "test",
+                "context": {"scenario": "city_driving"},
+                "task": None,
+                "decision": None,
+                "result": None,
+                "event_id": None,
+                "driving_context": None,
+                "stages": None,
+            }
+        )
+        assert "task" in result
+        assert "decision" in result
+        assert result["task"]["type"] == "meeting"
+
+    @pytest.mark.asyncio
+    async def test_joint_decision_node_fallback_on_bad_json(self, tmp_path):
+        """LLM 返回非法 JSON → fallback 分支，不抛异常。"""
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        workflow._call_llm_json = AsyncMock(
+            return_value=LLMJsonResponse(raw="not json"),
+        )
+        result = await workflow._joint_decision_node(
             {
                 "original_query": "test",
                 "context": {},
@@ -166,27 +195,4 @@ class TestWorkflowValidationPath:
             }
         )
         assert "task" in result
-
-    @pytest.mark.asyncio
-    async def test_strategy_node_validation_success(self, tmp_path):
-        """Strategy 节点 validate 分支不抛异常。"""
-        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._call_llm_json = AsyncMock(
-            return_value=LLMJsonResponse(
-                raw='{"should_remind":true,"timing":"now",'
-                '"reminder_content":"测试","type":"general"}',
-            )
-        )
-        result = await workflow._strategy_node(
-            {
-                "original_query": "test",
-                "context": {},
-                "task": {},
-                "decision": None,
-                "result": None,
-                "event_id": None,
-                "driving_context": None,
-                "stages": None,
-            }
-        )
         assert "decision" in result

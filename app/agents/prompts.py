@@ -41,7 +41,7 @@ JOINT_DECISION_SYSTEM_PROMPT = """你是车载AI决策Agent，根据用户输入
    - is_emergency: 是否紧急（如急救/事故预警/儿童遗留检测）
     - target_time: 目标时间（timing=delay 时）
    - delay_seconds: 延迟秒数（timing=delay 时）
-   - reminder_content: 对象 {speakable_text, display_text, detailed}
+    - reminder_content: 对象 {{speakable_text, display_text, detailed}}
    - reason: 决策理由
 
 ## 安全约束
@@ -53,22 +53,22 @@ JOINT_DECISION_SYSTEM_PROMPT = """你是车载AI决策Agent，根据用户输入
 {preference_hint}
 
 示例：
-{
+{{
   "task_type": "meeting",
   "confidence": 0.85,
-  "entities": [{"time": "15:00", "location": "公司3楼会议室", "type": "meeting"}],
-  "decision": {
+  "entities": [{{"time": "15:00", "location": "公司3楼会议室", "type": "meeting"}}],
+  "decision": {{
     "should_remind": true,
     "timing": "now",
     "is_emergency": false,
-    "reminder_content": {
+    "reminder_content": {{
       "speakable_text": "3点公司3楼会议",
       "display_text": "会议 · 15:00 · 公司3F",
       "detailed": "会议提醒：下午3点在公司3楼会议室"
-    },
+    }},
     "reason": "用户请求会议提醒"
-  }
-}"""
+  }}
+}}"""
 
 # 单LLM变体用合并提示词（消融实验架构组）。
 # 不同于分阶段调用的 CONTEXT/TASK/STRATEGY，此 prompt 合并三阶段为一次 LLM 调用，
