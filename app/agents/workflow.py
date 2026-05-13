@@ -307,7 +307,6 @@ class AgentWorkflow:
 
         self._nodes = [
             self._context_node,
-            self._task_node,
             self._joint_decision_node,
             self._execution_node,
         ]
@@ -472,32 +471,6 @@ class AgentWorkflow:
 
         return {
             "context": context,
-        }
-
-    async def _task_node(self, state: AgentState) -> dict:
-        user_input = state.get("original_query", "")
-        context = state.get("context", {})
-        stages = state.get("stages")
-
-        prompt = f"""{SYSTEM_PROMPTS["task"]}
-
-用户输入: {user_input}
-上下文: {json.dumps(context, ensure_ascii=False)}
-
-请输出JSON格式的任务对象. """
-
-        parsed = await self._call_llm_json(prompt)
-        try:
-            validated = TaskOutput.model_validate(parsed.data or {})
-            task = validated.model_dump()
-        except ValidationError as e:
-            logger.warning("TaskOutput validation failed: %s", e)
-            raw_data = parsed.data
-            task = raw_data or {}
-        if stages is not None:
-            stages.task = task
-        return {
-            "task": task,
         }
 
     async def _joint_decision_node(self, state: AgentState) -> dict:
@@ -938,40 +911,32 @@ class AgentWorkflow:
             self._log_conversation_turn(state, session_id, user_input)
             return
 
-        # Stage 2: Task
-        yield {"event": "stage_start", "data": {"stage": "task"}}
-        try:
-            updates = await self._task_node(state)
-            state.update(updates)
-            yield {"event": "task_done", "data": {"tasks": state.get("task") or {}}}
-        except Exception as e:
-            logger.warning("run_stream %s stage failed: %s", "task", e, exc_info=True)
-            yield {"event": "error", "data": {"code": "TASK_FAILED", "message": str(e)}}
-            self._log_conversation_turn(state, session_id, user_input)
-            return
-
-        # Stage 3: Strategy
-        yield {"event": "stage_start", "data": {"stage": "strategy"}}
+        # Stage 2: JointDecision
+        yield {"event": "stage_start", "data": {"stage": "joint_decision"}}
         try:
             updates = await self._joint_decision_node(state)
             state.update(updates)
+            task = state.get("task") or {}
             decision = state.get("decision") or {}
             yield {
                 "event": "decision",
-                "data": {"should_remind": decision.get("should_remind")},
+                "data": {
+                    "should_remind": decision.get("should_remind"),
+                    "task_type": task.get("type", "general"),
+                },
             }
         except Exception as e:
             logger.warning(
-                "run_stream %s stage failed: %s", "strategy", e, exc_info=True
+                "run_stream %s stage failed: %s", "joint_decision", e, exc_info=True
             )
             yield {
                 "event": "error",
-                "data": {"code": "STRATEGY_FAILED", "message": str(e)},
+                "data": {"code": "JOINT_DECISION_FAILED", "message": str(e)},
             }
             self._log_conversation_turn(state, session_id, user_input)
             return
 
-        # Stage 4: Execution
+        # Stage 3: Execution
         yield {"event": "stage_start", "data": {"stage": "execution"}}
         try:
             updates = await self._execution_node(state)
