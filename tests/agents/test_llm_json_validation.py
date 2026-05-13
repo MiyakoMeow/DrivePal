@@ -10,6 +10,7 @@ from app.agents.workflow import (
     ContextOutput,
     JointDecisionOutput,
     LLMJsonResponse,
+    StrategyOutput,
 )
 
 
@@ -116,6 +117,25 @@ class TestJointDecisionOutput:
         data = {"task_type": "meeting", "unknown": True}
         try:
             JointDecisionOutput.model_validate(data)
+            pytest.fail("应抛 ValidationError")
+        except ValidationError:
+            pass
+
+
+class TestStrategyOutput:
+    def test_valid_minimal(self):
+        """最小合法输入，使用默认值。"""
+        obj = StrategyOutput()
+        assert obj.should_remind is True
+        assert obj.timing == "now"
+        assert obj.delay_seconds == 300
+        assert obj.postpone is False
+
+    def test_extra_rejected(self):
+        """含额外字段 → ValidationError。"""
+        data = {"should_remind": True, "unknown": "x"}
+        try:
+            StrategyOutput.model_validate(data)
             pytest.fail("应抛 ValidationError")
         except ValidationError:
             pass
