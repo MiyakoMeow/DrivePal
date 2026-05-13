@@ -29,6 +29,11 @@ def arch_stratum(s: Scenario) -> str:
     return f"{d['scenario']}:{d['task_type']}"
 
 
+# 配置包含两种场景过滤模式：
+# - is_arch_scenario：低难度（非高速、疲劳≤阈值、非过载）
+# - is_hard_arch_scenario：高难度（高速 + 高疲劳/过载）
+
+
 def make_architecture_config() -> GroupConfig:
     """构造架构组配置（含 stage_scores post_hook）。"""
     return GroupConfig(
@@ -149,4 +154,15 @@ def is_arch_scenario(s: Scenario) -> bool:
         d["scenario"] != "highway"
         and float(d["fatigue_level"]) <= get_fatigue_threshold()
         and d["workload"] != "overloaded"
+    )
+
+
+def is_hard_arch_scenario(s: Scenario) -> bool:
+    """高难度架构测试场景：约束冲突组合（高速 + 高疲劳/过载）。"""
+    d = s.synthesis_dims
+    if not d:
+        return False
+    return d["scenario"] == "highway" and (
+        float(d["fatigue_level"]) > get_fatigue_threshold()
+        or d["workload"] == "overloaded"
     )
