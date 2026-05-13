@@ -222,13 +222,16 @@ class TestFormatConstraintsHint:
     """_format_constraints_hint 纯单元测试。"""
 
     def test_none_context(self):
-        AgentWorkflow._format_constraints_hint(None) == ""
+        assert AgentWorkflow._format_constraints_hint(None) == ""
 
     def test_empty_context(self):
-        AgentWorkflow._format_constraints_hint({}) == ""
+        assert AgentWorkflow._format_constraints_hint({}) == ""
 
-    def test_no_constraints(self):
-        AgentWorkflow._format_constraints_hint({"scenario": "parked"}) == ""
+    def test_parked_allows_visual(self):
+        """parked → allowed_channels 含 visual/audio/detailed。"""
+        # _format_constraints_hint 内调 apply_rules，为真实逻辑路径
+        result = AgentWorkflow._format_constraints_hint({"scenario": "parked"})
+        assert "通道" in result
 
 
 class TestFormatPreferenceHint:

@@ -40,9 +40,9 @@ JOINT_DECISION_SYSTEM_PROMPT = """你是车载AI决策Agent，根据用户输入
    - timing: 时机（now/delay/skip/location）
    - is_emergency: 是否紧急（如急救/事故预警/儿童遗留检测）
     - target_time: 目标时间（timing=delay 时）
-   - delay_seconds: 延迟秒数（timing=delay 时）
+    - delay_seconds: 延迟秒数（timing=delay 时）
     - reminder_content: 对象 {{speakable_text, display_text, detailed}}
-   - reason: 决策理由
+    - reason: 决策理由
 
 ## 安全约束
 
