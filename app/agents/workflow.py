@@ -623,6 +623,13 @@ class AgentWorkflow:
             else:
                 decision, modifications = postprocess_decision(decision, driving_ctx)
 
+        # 同步 stages.decision 为 post-postprocess 版本——
+        # 消融实验通过 stages.decision 读取最终决策送 Judge 评分，
+        # 若不同步则 Full 流水线送 pre-postprocess（含违规）而 SingleLLM 送 post-postprocess，
+        # 造成不公平比较。
+        if stages is not None:
+            stages.decision = decision
+
         # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
         if not decision.get("should_remind", True):
             result = "提醒已取消：安全规则禁止发送"
