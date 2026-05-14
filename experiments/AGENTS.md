@@ -4,7 +4,7 @@
 
 ## 实验目的
 
-VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Key-Value）。消融实验覆盖非记忆组件对比——验证规则引擎、四Agent流水线架构、反馈学习各自对系统决策质量的贡献。
+VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Key-Value）。消融实验覆盖非记忆组件对比——验证规则引擎、三Agent流水线架构、反馈学习各自对系统决策质量的贡献。
 
 ---
 
@@ -37,16 +37,16 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 ---
 
-## 架构组：四Agent流水线 vs 单LLM
+## 架构组：三Agent流水线 vs 单LLM
 
-**研究问题**：四 Agent 结构化流水线 vs 单 LLM 调用，决策质量差异多大？
+**研究问题**：三 Agent 结构化流水线 vs 单 LLM 调用，决策质量差异多大？
 
 | 要素 | 说明 |
 |------|------|
-| **自变量** | 决策架构（四Agent流水线 / 单LLM） |
+| **自变量** | 决策架构（三Agent流水线 / 单LLM） |
 | **因变量** | 决策质量分、JSON 结构合规率、各阶段中间质量、端到端延迟 |
-| **变体** | Full（四阶段 Context→Task→Decision→Execution）/ SingleLLM（一次 LLM 调用，合并 prompt 直接输出） |
-| **测试场景** | 50 个多样化场景（排除极端安全条件：fatigue ≤ 0.7, workload ≠ overloaded, scenario ≠ highway），覆盖所有 scenario × task_type 组合（排除 highway） |
+| **变体** | Full（三阶段 Context→JointDecision→Execution）/ SingleLLM（一次 LLM 调用，合并 prompt 直接输出） |
+| **测试场景** | 50 个多样化场景（排除极端安全条件：fatigue ≤ FATIGUE_THRESHOLD 阈值（默认 0.7）, workload ≠ overloaded, scenario ≠ highway），覆盖所有 scenario × task_type 组合（排除 highway） |
 | **无关变量控制** | 同一 LLM（默认模型组）、两侧均经 `postprocess_decision` 规则引擎后处理（控制规则维度）、同一场景集、固定随机种子。Full 启用记忆检索（流水线固有组成），SingleLLM 禁用（单次调用不查历史） |
 
 **评价指标**：
@@ -92,7 +92,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 
 ## 测试场景合成
 
-360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景 → 缓存至 JSONL。精选 ~132 场景（360 维度组合随机抽取）：
+360 维度组合（scenario 4 × fatigue 3 × workload 3 × task_type 5 × has_passengers 2）→ LLM 批量合成驾驶场景（默认 `count=260`，随机抽取）→ 缓存至 JSONL。精选 ~132 场景（从合成结果中随机抽取）：
 
 - 安全关键场景 50（按 scenario×safety_condition 分层抽样，min_per_stratum=1。不含 task_type——task_type × condition 叉积可达 80 层，远超 n=50）
 - 多样化场景 50（分层随机抽样，覆盖所有 scenario × task_type 组合）

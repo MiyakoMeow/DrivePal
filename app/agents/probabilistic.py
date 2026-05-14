@@ -97,11 +97,17 @@ async def infer_intent(
         results = []
 
     if not results:
-        return {"intent_confidence": 0.2, "alternative": None, "alt_confidence": 0.0}
+        return {
+            "type": "unknown",
+            "intent_confidence": 0.2,
+            "alternative": None,
+            "alt_confidence": 0.0,
+        }
 
     sorted_types = aggregate_type_confidences(results)
 
     return {
+        "type": sorted_types[0][0],
         "intent_confidence": sorted_types[0][1],
         "alternative": sorted_types[1][0] if len(sorted_types) > 1 else None,
         "alt_confidence": sorted_types[1][1] if len(sorted_types) > 1 else 0.0,
