@@ -26,7 +26,7 @@ class FeedbackRequest(BaseModel):
     """POST /api/feedback 请求."""
 
     event_id: str
-    action: Literal["accept", "ignore"]
+    action: Literal["accept", "ignore", "snooze", "modify"] = "accept"
     modified_content: str | None = None
     current_user: str = "default"
 

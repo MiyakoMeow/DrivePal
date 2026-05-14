@@ -29,6 +29,7 @@ exclude = [".agents/**"]
 
 "app/api/schemas.py" = ["TC001"]  # Pydantic BaseModel 字段需运行时引用 DrivingContext
 "app/api/routes/query.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
+"app/api/v1/query.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
 "app/api/stream.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
 
 "app/schemas/query.py" = ["TC001"]  # Pydantic BaseModel 字段需运行时引用 DrivingContext

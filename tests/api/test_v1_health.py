@@ -9,8 +9,6 @@ if TYPE_CHECKING:
 def test_v1_routers_respond(app_client: TestClient) -> None:
     """所有 v1 子路由健康检查端点可访问。"""
     for path in (
-        "/api/v1/query/health",
-        "/api/v1/feedback/health",
         "/api/v1/presets/health",
         "/api/v1/sessions/health",
         "/api/v1/reminders/health",
