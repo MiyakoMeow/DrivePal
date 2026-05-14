@@ -38,15 +38,15 @@ main.py                # Uvicorn 入口
 app/
 ├── agents/            # Agent工作流、规则引擎、概率推断 → app/agents/AGENTS.md
 ├── api/               # REST API、服务入口与生命周期、错误处理 → app/api/AGENTS.md
-├── models/            # LLM调用特性、错误处理与阈值 → app/models/AGENTS.md
+├── models/            # LLM/Embedding 调用、配置加载、错误处理与阈值 → app/models/AGENTS.md
 ├── memory/            # MemoryBank、记忆基础设施、隐私保护、错误处理与阈值 → app/memory/AGENTS.md
-├── schemas/           # 上下文数据模型 → app/schemas/AGENTS.md
+├── schemas/           # 上下文数据模型 + API 查询 Schema → app/schemas/AGENTS.md
 ├── storage/           # TOML/JSONL 存储引擎、错误处理 → app/storage/AGENTS.md
 ├── config.py          # 应用级配置
 ├── AGENTS.md          # 应用层文档
 tests/                 # 测试运行命令、CI 工作流 → tests/AGENTS.md
 config/                # 模型配置格式、环境变量、完整配置项 → config/AGENTS.md
-data/                  # 运行时数据
+data/                  # 运行时数据（由 init_storage() 运行时创建，不在源码树中）
 scripts/               # 工具脚本
 webui/                 # 模拟测试工作台
 archive/               # 论文写作相关文件存档（草稿、图表、参考文献） → archive/AGENTS.md
@@ -68,7 +68,7 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 ### ruff 配置
 
 `ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/COM812/E501/RUF001-003。
-`tests/**` 豁免 S101/S311/SLF001 等测试常见模式。
+`tests/**` 豁免约25条测试常见规则（见 ruff.toml L170-195 完整列表）。
 
 ### ty 配置
 

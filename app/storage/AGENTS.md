@@ -29,7 +29,7 @@ data/
 
 `app/storage/toml_store.py`。异步锁 + 文件级粒度。
 
-- **锁机制**：`_LOCK_REGISTRY` 全局字典，每个文件独立 `asyncio.Lock`
+- **锁机制**：`_LOCK_REGISTRY` 全局字典，每个文件独立 `asyncio.Lock`；`_LOCK_REGISTRY_LOCK` 保护字典自身并发访问
 - **列表存储**：TOML 不支持顶层数组，用 `_list` 键包裹
 - **None 处理**：`_clean_for_toml()` 递归将 `None` 转空字符串（含日志警告）
 - **API**：
@@ -37,14 +37,14 @@ data/
   - `write(data: T)`
   - `append(item)` — 仅列表存储
   - `update(key, value)` — 仅字典存储
-  - `merge_dict_key(key, updates)` — 合并字典的指定键（仅字典存储）
+  - `merge_dict_key(key, updates)` — 合并字典的指定键；若目标值非 dict，记录警告后直接覆盖（仅字典存储）
 
 ## 错误处理
 
 | 异常类 | 触发条件 |
 |--------|----------|
 | `AppendError` | 非列表存储调用 `append()` |
-| `UpdateError` | 非字典存储调用 `update()` |
+| `UpdateError` | 非字典存储调用 `update()` 或 `merge_dict_key()` |
 
 ## JSONLinesStore
 
@@ -61,7 +61,12 @@ data/
 
 - `_MIGRATED_FLAG = ".migrated_flag"` — 标记文件名。标记存在时 `init_storage()` 直接跳过迁移（幂等）
 - `init_storage(data_dir: Path | None = None)` — 接受可选 data_dir，默认 `DATA_DIR`。创建 root → 检查 `_MIGRATED_FLAG` → 调用 `_migrate_legacy()` + `init_user_dir("default")` → 写标记（lifespan 使用）
-- `init_user_dir(user_id)` → `Path` — 初始化指定用户的完整目录结构（4 个 jsonl + 4 个 toml 文件，`feedback_log.jsonl` 在 `init_user_dir()` 中直接创建）并写入默认值
+- `init_user_dir(user_id)` → `Path` — 初始化指定用户的完整目录结构（4 个 jsonl + 4 个 toml 文件，`feedback_log.jsonl` 在 `init_user_dir()` 中直接创建）并写入默认值：
+  - jsonl 文件：空文件
+  - `contexts.toml`：`{}`
+  - `preferences.toml`：`{"language": "zh-CN"}`
+  - `strategies.toml`：含 preferred_time_offset(15)、preferred_method("visual")、reminder_weights({})、ignored_patterns([])、modified_keywords([])、cooldown_periods({})
+  - `scenario_presets.toml`：`{"_list": []}`
 - `_migrate_legacy()` → `bool` — 调用 `_migrate_text_files()` + `_migrate_memorybank()`，将平铺旧结构迁移至 `data/users/default/`。双重幂等保护：`default_dir.exists()` 提前返回 + `_MIGRATED_FLAG` 标记
 - `_migrate_text_files(default_dir, old_root)` → `bool` — 迁移 3 个 jsonl + 4 个 toml 文件至 default_dir
 - `_migrate_memorybank(default_dir, old_root)` — 迁移 `data/memorybank/` 和 `data/user_*/` 目录至 `data/users/{user_id}/` 结构
@@ -78,5 +83,6 @@ data/
 
 - **文件名**：`feedback_log.jsonl`（与 `feedback.jsonl` 职责分离——后者服务于 MemoryBank 记忆强度反馈）
 - **API**：
+  - `feedback_log_store(user_dir)` → `JSONLinesStore` — 获取 feedback_log.jsonl 的存储实例
   - `append_feedback(user_dir, event_id, action, feedback_type)` — 追加一条反馈原始记录
   - `aggregate_weights(user_dir)` → `dict[str, float]` — 按事件类型聚合权重（accept +0.1 / ignore -0.1，新类型初始 0.5，范围 [0.1, 1.0]）

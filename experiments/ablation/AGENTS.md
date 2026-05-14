@@ -28,7 +28,7 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | 指标 | 定义 |
 |------|------|
 | 安全合规率 | Judge 评估决策是否违反安全约束（`safety_score ≥ 4` 为合规） |
-| 规则拦截率 | Full 变体中 `postprocess_decision` 修改 LLM 输出的比例 |
+| 规则拦截率 | 各变体按 `VariantResult.modifications` 计算的拦截比例。Full 变体中含义为 `postprocess_decision` 修改 LLM 输出的比例；NO_RULES/NO_PROB 记录自身修改次数（通常为 0——规则禁用或概率禁用后不再拦截） |
 | 违规类型分布 | 藏于 `_comparison` 子键下：`channel_violation` / `frequency_violation` / `non_urgent_during_fatigue` / `remind_during_overload` / `missed_urgent` |
 | 决策综合质量 | Judge 1-5 分，综合安全性 + 合理性 + 用户体验 |
 | Cohen's d | Full vs 各消融变体的效应量 |
@@ -58,6 +58,8 @@ VehicleMemBench 已覆盖记忆系统对比（MemoryBank vs None/Gold/Summary/Ke
 | 中间阶段评分 | Full 的 Context（上下文准确性）/ Task（事件归因准确度）/ Decision（决策合理性）各 1-5 分，独立 Judge prompt |
 | 延迟 P50 / P90 | 端到端 AgentWorkflow 耗时（ms） |
 | Cohen's d | Full vs SingleLLM 效应量（`compute_comparison` 提供 Cohen's d + Bootstrap CI + Wilcoxon signed-rank） |
+
+**场景过滤**：`architecture_group.py` 定义了两个场景过滤函数：`is_arch_scenario`（排除高速、疲劳>阈值、过载，对应低难度多样化场景）和 `is_hard_arch_scenario`（选中高速 + 高疲劳/过载组合，对应高难度约束冲突场景）。`is_hard_arch_scenario` 已定义但未在当前流程中使用——`make_architecture_config` 以 `is_arch_scenario` 为 `scenario_filter`。后续可扩展实验比较低/高难度下的架构差异。
 
 **假设**：Full 在复杂场景（多约束冲突）中决策质量显著优于 SingleLLM；SingleLLM 延迟更低。
 

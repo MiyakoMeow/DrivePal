@@ -8,7 +8,7 @@
 | `rules.toml` | 规则引擎规则定义 |
 | `shortcuts.toml` | 快捷命令定义 |
 
-`config/llm.toml`。**model_groups + model_providers** 组合模式。
+以下为 `config/llm.toml` 的示例。其核心设计模式为 **model_groups + model_providers** 的组合：前者定义模型组（如 default、smart），后者定义对应 provider 的连接信息。
 
 ```toml
 [model_groups.default]
@@ -51,7 +51,7 @@ model = "openrouter/baai/bge-m3"
 |------|------|
 | `CONFIG_PATH` | 自定义配置文件路径（默认 config/llm.toml；相对路径从项目根解析，绝对路径直接使用） |
 | `DATA_DIR` | 数据目录路径（默认 data） |
-| `WEBUI_DIR` | WebUI静态文件目录路径（默认 webui/） |
+| `WEBUI_DIR` | WebUI静态文件目录路径（默认由 `Path(__file__).parent.parent.parent / "webui"` 计算，即项目根下的 webui/；若环境变量指定路径不存在，回退至该计算路径） |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
 | `ZHIPU_API_KEY` | 智谱 API Key |
 | `OPENROUTER_API_KEY` | OpenRouter API Key |
@@ -64,9 +64,9 @@ model = "openrouter/baai/bge-m3"
 | `MEMORYBANK_SEED` | 遗忘随机种子（benchmark复现用） |
 | `MEMORYBANK_FORGET_MODE` | 遗忘模式：deterministic/probabilistic |
 | `MEMORYBANK_ENABLE_FORGETTING` | 启用遗忘（默认关闭） |
-| `MEMORYBANK_CHUNK_SIZE` | 检索分块大小（默认 None，自适应；回退默认值 1500） |
-| `MEMORYBANK_LLM_TEMPERATURE` | LLM 温度（None=使用摘要默认值 0.3） |
-| `MEMORYBANK_LLM_MAX_TOKENS` | LLM 最大 token 数（摘要默认400） |
+| `MEMORYBANK_CHUNK_SIZE` | 检索分块大小（默认 None 表示启用自适应分块；设非 None 值禁用自适应。自适应回退值由 MEMORYBANK_DEFAULT_CHUNK_SIZE 控制，默认 1500） |
+| `MEMORYBANK_LLM_TEMPERATURE` | LLM 温度（None=使用摘要模块默认值 0.3，定义于 summarizer.py 的 `_SUMMARY_DEFAULT_TEMPERATURE`） |
+| `MEMORYBANK_LLM_MAX_TOKENS` | LLM 最大 token 数（None=使用摘要模块默认值 400，定义于 summarizer.py 的 `_SUMMARY_DEFAULT_MAX_TOKENS`） |
 | `MEMORYBANK_EMBEDDING_BATCH_SIZE` | 嵌入批量大小（默认100） |
 | `MEMORYBANK_SAVE_INTERVAL_SECONDS` | 持久化节流间隔（默认30秒） |
 | `MEMORYBANK_REFERENCE_DATE_AUTO` | 启用自动推算参考日期（默认false） |
@@ -83,6 +83,6 @@ model = "openrouter/baai/bge-m3"
 | `MEMORYBANK_BM25_FALLBACK_ENABLED` | BM25 稀疏回退开关（默认true） |
 | `MEMORYBANK_BM25_FALLBACK_THRESHOLD` | BM25 回退触发阈值（默认0.5） |
 | `MEMORYBANK_REFERENCE_DATE` | 固定参考日期（ISO格式，默认None） |
-| `MEMORYBANK_SHUTDOWN_TIMEOUT_SECONDS` | 关闭超时秒数（默认30.0） |
+| `MEMORYBANK_SHUTDOWN_TIMEOUT_SECONDS` | 关闭超时秒数（float，默认30.0） |
 
 > 此为常用子集，完整列表见 `app/memory/memory_bank/config.py` 的 `MemoryBankConfig` 类。

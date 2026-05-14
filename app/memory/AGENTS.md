@@ -35,10 +35,10 @@ memory/memory_bank/
 
 | 类型 | 关键字段 | 说明 |
 |------|----------|------|
-| `MemoryEvent` | id, created_at, content, type, description, memory_strength, last_recall_date, date_group, interaction_ids, updated_at, speaker | 语义摘要后的事件（agent 输出） |
-| `InteractionRecord` | id, event_id, query, response, timestamp, memory_strength, last_recall_date | 原始用户↔系统交互 |
+| `MemoryEvent` | id, created_at, content, type, description, memory_strength, last_recall_date, date_group, interaction_ids, updated_at, speaker | 语义摘要后的事件（agent 输出）；`date_group` 为预留字段，写入时未设置 |
+| `InteractionRecord` | id, event_id, query, response, timestamp, memory_strength, last_recall_date | 原始用户↔系统交互；定义但当前无生产代码调用方（仅测试文件直接构造实例） |
 | `FeedbackData` | event_id, action(accept\|ignore), type, timestamp, modified_content | 用户反馈，action 校验 `InvalidActionError` |
-| `SearchResult` | event(dict), score(float), source(default="event"), interactions(list[dict]) | 检索结果包装，`to_public()` 清洗内部评分字段 |
+| `SearchResult` | event(dict), score(float), source(default="event"), interactions(list[dict]) | 检索结果包装，`to_public()` `dict(self.event)` 浅拷贝（含 interactions），无剔除逻辑 |
 | `InteractionResult` | event_id, interaction_id | 写入结果 |
 
 MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不展开 interaction_ids。`get_history()` 中展开。
@@ -70,7 +70,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 2. BM25 稀疏回退：FAISS 最高分低于阈值时补充检索结果
 3. 遗忘条目 + 低分条目过滤（forgotten=True / score < EMBEDDING_MIN_SIMILARITY）
 4. 邻居合并（同 source 连续条目）、自适应分块（P90×3）+ 重叠去重（并查集）
-5. 说话人感知降权（查询含说话人名的无关条目降权 ×0.75）
+5. 说话人感知降权（查询含说话人名的无关条目：正分 ×0.75 降权，负分 ×1.25 加重惩罚）
 6. Ebbinghaus 保留率加权：`adjusted = α × score + (1-α) × retention`
 
 ### 遗忘曲线
@@ -119,7 +119,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 | 异常类 | 触发条件 | 性质 |
 |--------|----------|------|
-| `MemoryBankError` ← `TransientError` / `FatalError` | MemoryBank 异常基类（三层） | 基类 |
+| `TransientError` / `FatalError` → `MemoryBankError`（继承） | MemoryBank 异常基类（三层） | 基类 |
 | `LLMCallFailedError` | LLM API 调用失败 | 瞬态，可重试 |
 | `SummarizationEmpty` | LLM 返回空内容 | 哨兵异常，非错误 |
 | `ConfigError` | 配置错误 | 永久 |
@@ -132,26 +132,29 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 | 阈值 | 值 | 位置 |
 |------|-----|------|
-| `ENABLE_FORGETTING` | `False` | `memory_bank/config.py` |
-| `FORGET_MODE` | `deterministic` | `memory_bank/config.py` |
-| `SOFT_FORGET_THRESHOLD` | 0.3 | `memory_bank/config.py` |
-| `FORGET_INTERVAL_SECONDS` | 300 | `memory_bank/config.py` |
-| `FORGETTING_TIME_SCALE` | 1.0 | `memory_bank/config.py` |
-| `EMBEDDING_MIN_SIMILARITY` | 0.3 | `memory_bank/config.py` |
-| `COARSE_SEARCH_FACTOR` | 4 | `memory_bank/config.py` |
-| `DEFAULT_CHUNK_SIZE` | 1500（自适应回退值） | `memory_bank/config.py` |
-| `CHUNK_SIZE_MIN` | 200 | `memory_bank/config.py` |
-| `CHUNK_SIZE_MAX` | 8192 | `memory_bank/config.py` |
-| `SAVE_INTERVAL_SECONDS` | 30.0 | `memory_bank/config.py` |
-| `LLM_TEMPERATURE` (摘要) | 0.3 | `memory_bank/summarizer.py` |
-| `LLM_MAX_TOKENS` (摘要) | 400 | `memory_bank/summarizer.py` |
+| `enable_forgetting` | `False` | `memory_bank/config.py` |
+| `forget_mode` | `deterministic` | `memory_bank/config.py` |
+| `soft_forget_threshold` | 0.3 | `memory_bank/config.py` |
+| `forget_interval_seconds` | 300 | `memory_bank/config.py` |
+| `forgetting_time_scale` | 1.0 | `memory_bank/config.py` |
+| `embedding_min_similarity` | 0.3 | `memory_bank/config.py` |
+| `coarse_search_factor` | 4 | `memory_bank/config.py` |
+| `default_chunk_size` | 1500（自适应回退值） | `memory_bank/config.py` |
+| `chunk_size_min` | 200 | `memory_bank/config.py` |
+| `chunk_size_max` | 8192 | `memory_bank/config.py` |
+| `save_interval_seconds` | 30.0 | `memory_bank/config.py` |
+| `llm_temperature` (摘要) | `None`（回退值 0.3，见 `_SUMMARY_DEFAULT_TEMPERATURE`） | `memory_bank/summarizer.py`，可被 `config.llm_temperature` 覆盖 |
+| `llm_max_tokens` (摘要) | `None`（回退值 400，见 `_SUMMARY_DEFAULT_MAX_TOKENS`） | `memory_bank/summarizer.py`，可被 `config.llm_max_tokens` 覆盖 |
 | `reference_date_offset`（参数默认值） | 1 天 | `memory_bank/index.py` `compute_reference_date(offset_days=1)` |
-| `MAX_MEMORY_STRENGTH` | 10 | `memory_bank/config.py` |
-| `BM25_FALLBACK_THRESHOLD` | 0.5 | `memory_bank/config.py` |
-| `RETRIEVAL_ALPHA` | 0.7 | `memory_bank/config.py` |
-| `EMBEDDING_BATCH_SIZE` | 100 | `memory_bank/config.py` |
-| `LLM_MAX_RETRIES` | 3 | `memory_bank/config.py` |
-| `SHUTDOWN_TIMEOUT_SECONDS` | 30.0 | `memory_bank/config.py` |
+| `max_memory_strength` | 10 | `memory_bank/config.py` |
+| `bm25_fallback_enabled` | `True` | `memory_bank/config.py` |
+| `bm25_fallback_threshold` | 0.5 | `memory_bank/config.py` |
+| `retrieval_alpha` | 0.7 | `memory_bank/config.py` |
+| `embedding_batch_size` | 100 | `memory_bank/config.py` |
+| `llm_max_retries` | 3 | `memory_bank/config.py` |
+| `shutdown_timeout_seconds` | 30.0 | `memory_bank/config.py` |
+| `index_type` | `"flat"` | `memory_bank/config.py` |
+| `ivf_nlist` | 128 | `memory_bank/config.py` |
 
 完整配置项及环境变量见 `config/AGENTS.md` 的环境变量表。
 
@@ -200,7 +203,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 `utils.py`
 
 - `cosine_similarity(a, b)` — 向量余弦相似度计算（长度不一时自动截断）
-- `compute_events_hash(events)` — SHA256 事件内容哈希（当前死代码，无调用方）
+- `compute_events_hash(events)` — SHA256 事件内容哈希（当前死代码，无调用方；保留供未来数据完整性校验使用）
 
 ## 隐私保护
 
