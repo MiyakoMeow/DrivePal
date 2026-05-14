@@ -7,10 +7,6 @@
 ```
 archive/
 ├── AGENTS.md              # 本文档
-├── mermaid/               # Mermaid 架构图导出
-│   ├── 068636d9120fc252.png
-│   ├── 4c5f96646f18b2bd.png
-│   └── 763ddb736e861848.png
 ├── figs/                  # 论文图表
 │   ├── fig4-1_exact_match_overall.png
 │   ├── fig4-2_exact_match_by_type.png
@@ -19,7 +15,7 @@ archive/
 │   ├── fig4-5_ablation_safety.png
 │   ├── fig4-6_ablation_architecture.png
 │   └── fig4-7_ablation_personalization.png
-├── ref/                   # 参考文献 PDF 等原文资料
+├── ref/                   # 中期检查参考资料
 │   ├── 中期检查表参考1.md
 │   └── 中期检查表参考2.md
 ├── legacy/                # 旧版存档
@@ -40,9 +36,8 @@ archive/
 | 审阅意见 | `初稿意见-20260430.md` | 2026-04-30 收到的初稿修改意见 |
 | 开题 | `开题报告.md` | 开题报告 |
 | 中期 | `中期检查表.md` | 中期检查表 |
-| 架构图 | `mermaid/` | Mermaid 架构图导出（3 张，PNG 格式） |
 | 图表 | `figs/` | 论文图表（fig4-1 至 fig4-7，PNG 格式） |
-| 参考 | `ref/` | 参考文献原文、模板参考等辅助材料 |
+| 参考 | `ref/` | 中期检查参考资料（中期检查表参考1/2） |
 | 旧版 | `legacy/` | 各阶段历史版本（如中期检查答辩稿） |
 
 ## 写作规范

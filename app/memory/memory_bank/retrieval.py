@@ -579,7 +579,7 @@ class RetrievalPipeline:
     ) -> list[dict]:
         """对检索结果应用 Ebbinghaus 保留率加权。
 
-        公式: adjusted = α × max(score, 0.0) + (1-α) × retention
+        公式: adjusted = α × score + (1-α) × retention
         其中 retention = e^(-days / (time_scale × strength))
         """
         alpha = self._config.retrieval_alpha

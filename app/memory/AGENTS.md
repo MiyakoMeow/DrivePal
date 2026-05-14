@@ -62,6 +62,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 | `extra_metadata.json` 损坏 | 忽略，空 dict 启动（下次摘要自动重建） |
 | Count mismatch | 以 index 为权威——从 `id_map` 补缺失骨架条目 |
 | `index.faiss` 读失败 | 备份 `.bak` 后删除损坏文件，下次写入时重建空索引 |
+| `index.faiss` 加载成功但类型非 `IndexIDMap` | 备份全部文件后删除重建，下次写入时重建空索引 |
 
 ### 检索管道
 
