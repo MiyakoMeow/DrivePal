@@ -29,7 +29,7 @@
 | 异常类 | 触发条件 |
 |--------|----------|
 | `ProviderNotFoundError` | 引用字符串中 provider 未配置 |
-| `ModelGroupNotFoundError` | 引用字符串中 model_group 未配置 |
+| `ModelGroupNotFoundError` | 请求的 model_group 名称未在配置中找到 |
 | `InvalidModelStringError` | 模型引用字符串格式错误 |
 | `ChatError` | LLM chat 调用通用失败 |
 | `NoProviderError` | provider 列表为空 |

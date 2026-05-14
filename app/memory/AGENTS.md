@@ -67,8 +67,8 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 1. query embedding + FAISS 粗排（top_k × 4）
 2. BM25 稀疏回退：FAISS 最高分低于阈值时补充检索结果
-3. 邻居合并（同 source 连续条目）、自适应分块（P90×3）
-4. 重叠去重（并查集：共享 `_merged_indices` 合并为连通分量，取最高分条目）
+3. 遗忘条目 + 低分条目过滤（forgotten=True / score < EMBEDDING_MIN_SIMILARITY）
+4. 邻居合并（同 source 连续条目）、自适应分块（P90×3）+ 重叠去重（并查集）
 5. 说话人感知降权（查询含说话人名的无关条目降权 ×0.75）
 6. Ebbinghaus 保留率加权：`adjusted = α × score + (1-α) × retention`
 
@@ -183,7 +183,7 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 - `EmbeddingModel` 的薄代理
 - `encode_batch()` 含双重校验：
   - 数量匹配：输入数 ≠ 输出数 → `RuntimeError`
-  - 维度一致性：所有向量维度不同 → `RuntimeError`
+  - 维度一致性：向量维度不一致 → `RuntimeError`
 - 重试由 `EmbeddingModel` 内部处理（3 次指数退避），此层不再重复
 
 ### MemoryStore 接口契约
