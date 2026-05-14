@@ -50,3 +50,25 @@ jobs:
             exit 1
           fi
           echo "No # type: comments found. Clean!"
+
+  ty-ignore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - run: |
+          matches=$(grep -rn --include='*.py' \
+            --exclude-dir=.agents \
+            --exclude-dir=.venv \
+            --exclude-dir=__pycache__ \
+            --exclude-dir='*.egg-info' \
+            '# ty:' . || true)
+          if [ -n "$matches" ]; then
+            echo "Found # ty: comments in source code:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "No # ty: comments found. Clean!"

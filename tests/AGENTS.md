@@ -93,4 +93,4 @@ tests/
 | `typecheck` | `uv run ty check .` | 类型检查 |
 | `test` | `uv run pytest -v` | 单测（无外部 provider） |
 
-额外 workflow `no-suppressions.yml`：扫描 `# noqa` 和 `# ty:` 内联抑制注释，禁止绕过。注意：CI 中 type-ignore job 搜索 `# type:`（第46行），而项目实际使用 `# ty:` 作为 ty 的抑制注释格式，二者不匹配。
+额外 workflow `no-suppressions.yml`：三个 job 分别扫描 `# noqa`、`# type:`（mypy/pyright 格式）、`# ty:`（ty 格式），禁止绕过任意一种内联抑制注释。

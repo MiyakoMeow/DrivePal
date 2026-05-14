@@ -78,7 +78,7 @@ Python 3.14 注意：`except ValueError, TypeError:` 是 PEP-758 新语法，非
 
 - **注释**：中文，解释 why 非 what
 - **提交**：英文，Conventional Commits（feat/fix/docs/refactor）
-- **内联抑制**：禁 `# noqa`、`# type:`。遇 lint/type 错误先修代码，修不了在 ruff.toml/ty.toml 按文件或全局忽略并注明原因
+- **内联抑制**：禁 `# noqa`、`# type:`、`# ty:`。遇 lint/type 错误先修代码，修不了在 ruff.toml/ty.toml 按文件或全局忽略并注明原因
 - **函数粒度**：一事一函数，长度遵循 ruff 检查
 - **嵌套控制**：小分支提前 return/continue/break，复杂逻辑提取函数
 - **导入顺序**：标准库 → 三方库 → 内部模块 → 相对导入，空行分隔。禁通配导入
