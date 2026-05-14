@@ -31,7 +31,8 @@ async def query_stream(req: ProcessQueryRequest) -> StreamingResponse:
         current_user=req.current_user,
     )
 
-    driving_context = req.context
+    # REST 边界校验 DrivingContext，workflow 内部期望 dict
+    driving_context = req.context.model_dump() if req.context else None
 
     async def event_generator() -> AsyncGenerator[str]:
         try:
