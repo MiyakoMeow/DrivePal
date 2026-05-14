@@ -37,6 +37,7 @@ dev = [
     "httpx>=0.28.0",
     "latex2mathml>=3.81.0",
     "mathml2omml-as>=0.1.0",
+    "markdown-it-py>=4.0.0",
     "scipy>=1.17.1",
     "matplotlib>=3.10.9",
 ]
