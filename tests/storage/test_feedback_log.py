@@ -36,3 +36,15 @@ async def test_feedback_log_clamp(tmp_path: Path) -> None:
 
     weights = await aggregate_weights(u_dir)
     assert weights["weather"] == pytest.approx(0.1)
+
+
+async def test_feedback_log_upper_clamp(tmp_path: Path) -> None:
+    """验证权重上界 clamp 为 1.0."""
+    u_dir = tmp_path / "users" / "default"
+    u_dir.mkdir(parents=True, exist_ok=True)
+
+    for i in range(10):
+        await append_feedback(u_dir, f"e{i}", "accept", "meeting")
+
+    weights = await aggregate_weights(u_dir)
+    assert weights["meeting"] == pytest.approx(1.0)
