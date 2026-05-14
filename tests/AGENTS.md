@@ -37,7 +37,7 @@ tests/
 │   ├── test_sse_stream.py         # SSE 流式测试
 │   └── test_workflow_llm_json.py  # LLMJsonResponse.from_llm 解析测试
 ├── api/                  # → app/api/
-│   └── test_graphql.py            # GraphQL 端点
+│   └── test_rest.py               # REST API 端点
 ├── memory/               # → app/memory/
 │   ├── test_forgetting.py         # 遗忘曲线单元测试（确定性/概率模式、阈值、节流）
 │   ├── test_retrieval_pipeline.py # 六阶段检索管道（mock FAISS + Embedding）

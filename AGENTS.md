@@ -23,7 +23,7 @@ Python 3.14 + `uv`。
 | 类别 | 技术 |
 |------|------|
 | Web框架 | FastAPI + Uvicorn |
-| API层 | Strawberry GraphQL (code-first) |
+| API层 | FastAPI REST API |
 | AI工作流 | 自定义三Agent流水线 + 轻量规则引擎 |
 | LLM | DeepSeek |
 | Embedding | BGE-M3 (OpenRouter, OpenAI兼容接口, 纯远程) |
@@ -37,7 +37,7 @@ Python 3.14 + `uv`。
 main.py                # Uvicorn 入口
 app/
 ├── agents/            # Agent工作流、规则引擎、概率推断 → app/agents/AGENTS.md
-├── api/               # GraphQL API、服务入口与生命周期、错误处理 → app/api/AGENTS.md
+├── api/               # REST API、服务入口与生命周期、错误处理 → app/api/AGENTS.md
 ├── models/            # LLM调用特性、错误处理与阈值 → app/models/AGENTS.md
 ├── memory/            # MemoryBank、记忆基础设施、隐私保护、错误处理与阈值 → app/memory/AGENTS.md
 ├── schemas/           # 上下文数据模型 → app/schemas/AGENTS.md
@@ -96,7 +96,7 @@ git worktree add .worktrees/<分支名> -b <分支名>
 
 各层异常定义见对应模块文档：
 
-- **API 层**：GraphQL 异常 → [app/api/AGENTS.md](app/api/AGENTS.md)
+- **API 层**：HTTP 异常 → [app/api/AGENTS.md](app/api/AGENTS.md)
 - **记忆系统**：MemoryBank 分层异常 → [app/memory/AGENTS.md](app/memory/AGENTS.md)
 - **数据存储**：`AppendError` / `UpdateError` → [app/storage/AGENTS.md](app/storage/AGENTS.md)
 - **模型封装**：`ProviderNotFoundError` / `ModelGroupNotFoundError` → [app/models/AGENTS.md](app/models/AGENTS.md)

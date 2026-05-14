@@ -216,4 +216,4 @@ MemoryEvent 通过 `interaction_ids` 列表关联交互，但 `SearchResult` 不
 
 ### 数据可携带性
 
-`exportData`/`deleteAllData` 属于 GraphQL API 层（`app/api/`），通过 `MemoryModule` 接口操作数据。
+`exportData`/`deleteAllData` 属于 REST API 层（`app/api/`），通过 `MemoryModule` 接口操作数据。
