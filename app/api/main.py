@@ -10,14 +10,23 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.agents.conversation import _conversation_manager
-from app.api.routes import api_router
-from app.api.stream import router as stream_router
+from app.api.errors import AppError, app_error_handler
+from app.api.middleware import UserIdentityMiddleware
+from app.api.routes import api_router as _legacy_router
+from app.api.stream import router as _stream_router
+from app.api.v1.data import router as data_router
+from app.api.v1.feedback import router as feedback_router
+from app.api.v1.presets import router as presets_router
+from app.api.v1.query import router as query_router
+from app.api.v1.reminders import router as reminders_router
+from app.api.v1.sessions import router as sessions_router
+from app.api.v1.ws import router as ws_router
 from app.config import DATA_DIR
 from app.memory.singleton import _memory_module_state
 from app.models.chat import close_client_cache
@@ -68,10 +77,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(UserIdentityMiddleware)
+app.add_exception_handler(AppError, app_error_handler)
+
 app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
-app.include_router(api_router, prefix="/api")
-app.include_router(stream_router)
+# v1 API 路由
+API_V1 = APIRouter(prefix="/api/v1")
+API_V1.include_router(query_router, prefix="/query", tags=["query"])
+API_V1.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
+API_V1.include_router(presets_router, prefix="/presets", tags=["presets"])
+API_V1.include_router(data_router, tags=["data"])
+API_V1.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
+API_V1.include_router(reminders_router, prefix="/reminders", tags=["reminders"])
+API_V1.include_router(ws_router, prefix="/ws", tags=["ws"])
+app.include_router(API_V1)
+
+# 旧路由（过渡期保留，后续任务 9 删除）
+app.include_router(_legacy_router, prefix="/api")
+app.include_router(_stream_router)
 
 
 @app.get("/")

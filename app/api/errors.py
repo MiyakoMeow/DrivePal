@@ -47,8 +47,11 @@ class AppError(HTTPException):
 
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     """FastAPI exception handler：AppError → 统一信封 JSON."""
-    logger.error(
-        "AppError: code=%s status=%d msg=%s", exc.code, exc.status_code, exc.app_message
+    logger.warning(
+        "AppError: code=%s status=%d msg=%s",
+        exc.code,
+        exc.status_code,
+        exc.app_message,
     )
     return JSONResponse(
         status_code=exc.status_code,
@@ -68,6 +71,8 @@ async def safe_memory_call[T](
     """
     try:
         return await coro
+    except AppError:
+        raise
     except OSError as e:
         logger.exception("%s failed", context_msg)
         # 通用消息防内部细节泄露至客户端
