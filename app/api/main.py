@@ -10,19 +10,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-import strawberry
-import strawberry.fastapi
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from strawberry.scalars import JSON
-from strawberry.schema.config import StrawberryConfig
 
 from app.agents.conversation import _conversation_manager
-from app.api.graphql_schema import JSONScalar
-from app.api.resolvers.mutation import Mutation as MutationImpl
-from app.api.resolvers.query import Query as QueryImpl
+from app.api.routes import api_router
 from app.api.stream import router as stream_router
 from app.config import DATA_DIR
 from app.memory.singleton import _memory_module_state
@@ -76,18 +70,7 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 
-
-def _mount_graphql() -> None:
-    schema = strawberry.Schema(
-        query=QueryImpl,
-        mutation=MutationImpl,
-        config=StrawberryConfig(scalar_map={JSON: JSONScalar}),
-    )
-    graphql_app = strawberry.fastapi.GraphQLRouter(schema)
-    app.include_router(graphql_app, prefix="/graphql")
-
-
-_mount_graphql()
+app.include_router(api_router, prefix="/api")
 app.include_router(stream_router)
 
 
