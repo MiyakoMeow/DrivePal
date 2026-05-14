@@ -112,8 +112,8 @@ def test_scenario_preset_round_trip() -> None:
     assert sp2.context.scenario == "parked"
 
 
-def test_process_query_request_validates_context() -> None:
-    """ProcessQueryRequest.context 接受 DrivingContext 结构."""
+def test_context_highway_validated() -> None:
+    """场景：高速传递合法 DrivingContext，期望：校验通过，scenario 保持 highway."""
     from app.schemas.context import DrivingContext
     from app.schemas.query import ProcessQueryRequest
 
@@ -125,8 +125,8 @@ def test_process_query_request_validates_context() -> None:
     assert req.context.scenario == "highway"
 
 
-def test_process_query_request_invalid_context_raises() -> None:
-    """ProcessQueryRequest 拒绝非法 context（Pydantic coercion 层校验）。"""
+def test_context_invalid_scenario_rejected() -> None:
+    """场景：非法 scenario 值，期望：抛出 ValidationError."""
     from app.schemas.query import ProcessQueryRequest
 
     with pytest.raises(ValidationError):

@@ -223,6 +223,7 @@ function handleSSEEvent(event, data) {
             document.getElementById('stage-context-body').textContent = formatJson(data.context);
             break;
         case 'decision':
+            document.getElementById('stage-task-body').textContent = formatJson({ task_type: data.task_type });
             document.getElementById('stage-decision-body').textContent = formatJson(data);
             break;
         case 'done':
@@ -230,7 +231,10 @@ function handleSSEEvent(event, data) {
                 currentEventId = data.event_id;
                 document.getElementById('feedbackRow').style.display = 'flex';
             }
-            if (data.result) {
+            if (data.status === 'pending') {
+                document.getElementById('stage-execution-body').textContent =
+                    '提醒已延迟: ' + (data.pending_reminder_id ? 'ID ' + data.pending_reminder_id : data.status);
+            } else if (data.result) {
                 document.getElementById('stage-execution-body').textContent = formatJson(data.result);
             } else if (data.reason) {
                 document.getElementById('stage-execution-body').textContent = data.reason;

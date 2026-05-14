@@ -59,20 +59,13 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
     user_dir = user_data_dir(req.current_user)
     await append_feedback(user_dir, req.event_id, safe_action, actual_type)
 
-    # 从日志聚合权重，与既有 weights 合并（日志有记录的类型覆盖，无记录的类型保留）
+    # 原子合并权重（merge_dict_key 在 TOMLStore 内部锁下完成读-合-写）
     aggregated = await aggregate_weights(user_dir)
     strategy_store = TOMLStore(
         user_dir=user_dir,
         filename="strategies.toml",
         default_factory=dict,
     )
-    current = await strategy_store.read()
-    existing_weights = current.get("reminder_weights", {})
-    if isinstance(existing_weights, dict):
-        existing_weights.update(aggregated)
-        merged = existing_weights
-    else:
-        merged = aggregated
-    await strategy_store.update("reminder_weights", merged)
+    await strategy_store.merge_dict_key("reminder_weights", aggregated)
 
     return FeedbackResponse(status="success")

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.storage.jsonl_store import JSONLinesStore
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -47,6 +50,13 @@ async def aggregate_weights(user_dir: Path) -> dict[str, float]:
         t = rec.get("type", "")
         if not t:
             continue
-        delta = 0.1 if rec.get("action") == "accept" else -0.1
+        action = rec.get("action")
+        if action == "accept":
+            delta = 0.1
+        elif action == "ignore":
+            delta = -0.1
+        else:
+            logger.warning("Unknown action %r in feedback_log, skipping record", action)
+            continue
         deltas[t] = deltas.get(t, 0.0) + delta
     return {t: max(0.1, min(1.0, 0.5 + delta)) for t, delta in deltas.items()}
