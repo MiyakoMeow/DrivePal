@@ -20,8 +20,9 @@ ignore = [
 exclude = [".agents/**"]
 
 [lint.per-file-ignores]
-"app/api/graphql_schema.py" = ["TC002"]  # Strawberry GraphQL 需要运行时导入类型
+"app/api/schemas.py" = ["TC001"]  # Pydantic BaseModel 字段需运行时引用 DrivingContext
 "app/api/stream.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
+"app/api/routes/query.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
 
 "app/memory/memory_bank/llm.py" = [
     "ANN401",  # LlmClient 接受任意有 generate 方法的对象（duck typing）
