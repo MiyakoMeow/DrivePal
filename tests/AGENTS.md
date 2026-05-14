@@ -68,7 +68,8 @@ tests/
 ├── storage/              # → app/storage/
 │   ├── test_jsonl_store.py        # JSONL 存储引擎
 │   ├── test_storage.py            # 存储层持久化与反馈学习
-│   └── test_experiment_results.py # 实验结果反序列化（read_benchmark）
+│   ├── test_experiment_results.py # 实验结果反序列化（read_benchmark）
+│   └── test_feedback_log.py      # 反馈日志追加与权重聚合
 └── experiments/          # → experiments/
     ├── test_ablation_optimization.py # 消融实验优化逻辑
     ├── test_io.py                 # IO 工具

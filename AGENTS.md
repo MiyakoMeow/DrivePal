@@ -49,7 +49,7 @@ config/                # 模型配置格式、环境变量、完整配置项 →
 data/                  # 运行时数据
 scripts/               # 工具脚本
 webui/                 # 模拟测试工作台
-archive/               # 论文参考文献 → archive/AGENTS.md
+archive/               # 论文写作相关文件存档（草稿、图表、参考文献） → archive/AGENTS.md
 experiments/           # 消融实验设计 → experiments/ablation/AGENTS.md
 ```
 

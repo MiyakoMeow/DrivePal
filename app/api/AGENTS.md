@@ -1,13 +1,13 @@
 # API层
 
-`app/api/` —— FastAPI REST API，挂载于 `/api` 前缀。
+`app/api/` —— FastAPI REST API。主路由挂载于 `/api` 前缀；流式端点单独挂载，路径为 `/query/stream`。
 
 ## 端点一览
 
 | 方法 | 路径 | 用途 | 请求/响应 Schema |
 |------|------|------|------------------|
 | POST | `/api/query` | 处理用户查询，返回完整工作流结果 | `ProcessQueryRequest` → `ProcessQueryResponse` |
-| POST | `/api/query/stream` | SSE 流式返回各阶段结果 | `ProcessQueryRequest` → `text/event-stream` |
+| POST | `/query/stream` | SSE 流式返回各阶段结果 | `ProcessQueryRequest` → `text/event-stream` |
 | POST | `/api/feedback` | 提交用户反馈（accept/ignore） | `FeedbackRequest` → `FeedbackResponse` |
 | GET | `/api/history` | 查询历史记忆事件 | query: `limit`, `current_user` → `list[MemoryEventResponse]` |
 | GET | `/api/export` | 导出当前用户全量文本数据 | query: `current_user` → `ExportDataResponse` |
