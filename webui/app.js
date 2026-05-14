@@ -204,6 +204,49 @@ async function loadExperimentData() {
     }
 }
 
+function handleSSEEvent(event, data) {
+    switch (event) {
+        case 'stage_start': {
+            const stage = data.stage;
+            if (stage === 'joint_decision') {
+                document.getElementById('stage-task-body').innerHTML =
+                    '<span class="empty-hint">处理中...</span>';
+                document.getElementById('stage-decision-body').innerHTML =
+                    '<span class="empty-hint">处理中...</span>';
+            } else {
+                document.getElementById(`stage-${stage}-body`).innerHTML =
+                    '<span class="empty-hint">处理中...</span>';
+            }
+            break;
+        }
+        case 'context_done':
+            document.getElementById('stage-context-body').textContent = formatJson(data.context);
+            break;
+        case 'decision':
+            document.getElementById('stage-decision-body').textContent = formatJson(data);
+            break;
+        case 'done':
+            if (data.event_id) {
+                currentEventId = data.event_id;
+                document.getElementById('feedbackRow').style.display = 'flex';
+            }
+            if (data.result) {
+                document.getElementById('stage-execution-body').textContent = formatJson(data.result);
+            } else if (data.reason) {
+                document.getElementById('stage-execution-body').textContent = data.reason;
+            }
+            break;
+        case 'error':
+            ['context', 'task', 'decision', 'execution'].forEach(s => {
+                const el = document.getElementById(`stage-${s}-body`);
+                if (el.querySelector('.empty-hint')) {
+                    el.innerHTML = '<span class="error">' + escapeHtml(data.message) + '</span>';
+                }
+            });
+            break;
+    }
+}
+
 async function sendQuery() {
     const query = document.getElementById('queryInput').value.trim();
     if (!query) return;
@@ -219,20 +262,45 @@ async function sendQuery() {
     try {
         const body = { query };
         if (context) body.context = context;
-        const res = await api('POST', '/api/query', body);
 
-        currentEventId = res.event_id;
+        const resp = await fetch('/api/query/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
 
-        const stages = res.stages || {};
-        document.getElementById('stage-context-body').textContent = formatJson(stages.context);
-        document.getElementById('stage-task-body').textContent = formatJson(stages.task);
-        document.getElementById('stage-decision-body').textContent = formatJson(stages.decision);
-        document.getElementById('stage-execution-body').textContent = formatJson(stages.execution);
-
-        if (currentEventId) {
-            document.getElementById('feedbackRow').style.display = 'flex';
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `HTTP ${resp.status}`);
         }
 
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            let currentEvent = '';
+            for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                    currentEvent = line.slice(7).trim();
+                } else if (line.startsWith('data: ') && currentEvent) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        handleSSEEvent(currentEvent, data);
+                    } catch (e) {
+                        console.error('Failed to parse SSE data:', e);
+                    }
+                    currentEvent = '';
+                }
+            }
+        }
         loadHistory();
     } catch (e) {
         ['context', 'task', 'decision', 'execution'].forEach(s => {
