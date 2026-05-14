@@ -18,8 +18,6 @@ from fastapi.staticfiles import StaticFiles
 from app.agents.conversation import _conversation_manager
 from app.api.errors import AppError, app_error_handler
 from app.api.middleware import UserIdentityMiddleware
-from app.api.routes import api_router as _legacy_router
-from app.api.stream import router as _stream_router
 from app.api.v1.data import router as data_router
 from app.api.v1.feedback import router as feedback_router
 from app.api.v1.presets import router as presets_router
@@ -92,10 +90,6 @@ API_V1.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
 API_V1.include_router(reminders_router, prefix="/reminders", tags=["reminders"])
 API_V1.include_router(ws_router, prefix="/ws", tags=["ws"])
 app.include_router(API_V1)
-
-# 旧路由（过渡期保留，后续任务 9 删除）
-app.include_router(_legacy_router, prefix="/api")
-app.include_router(_stream_router)
 
 
 @app.get("/")

@@ -28,7 +28,7 @@
                 <div class="section-title">驾驶员状态</div>
                 <div class="field">
                     <label>情绪</label>
-                    <select id="ctx-emotion">
+                    <select id="ctx-emotion" data-ctx-path="driver.emotion">
                         <option value="">（未设置）</option>
                         <option value="neutral">正常</option>
                         <option value="calm">平静</option>
@@ -39,7 +39,7 @@
                 </div>
                 <div class="field">
                     <label>负荷</label>
-                    <select id="ctx-workload">
+                    <select id="ctx-workload" data-ctx-path="driver.workload">
                         <option value="">（未设置）</option>
                         <option value="low">低</option>
                         <option value="normal">正常</option>
@@ -49,7 +49,7 @@
                 </div>
                 <div class="field">
                     <label>疲劳程度: <span id="fatigueVal" class="range-val">0.0</span></label>
-                    <input type="range" id="ctx-fatigueLevel" min="0" max="1" step="0.1" value="0" oninput="document.getElementById('fatigueVal').textContent=parseFloat(this.value).toFixed(1)">
+                    <input type="range" id="ctx-fatigueLevel" data-ctx-path="driver.fatigue_level" min="0" max="1" step="0.1" value="0" oninput="document.getElementById('fatigueVal').textContent=parseFloat(this.value).toFixed(1)">
                 </div>
             </div>
 
@@ -57,27 +57,27 @@
                 <div class="section-title">时空信息</div>
                 <div class="field">
                     <label>纬度</label>
-                    <input type="number" step="any" id="ctx-lat" placeholder="例: 39.9042">
+                    <input type="number" step="any" id="ctx-lat" data-ctx-path="spatial.current_location.latitude" placeholder="例: 39.9042">
                 </div>
                 <div class="field">
                     <label>经度</label>
-                    <input type="number" step="any" id="ctx-lng" placeholder="例: 116.4074">
+                    <input type="number" step="any" id="ctx-lng" data-ctx-path="spatial.current_location.longitude" placeholder="例: 116.4074">
                 </div>
                 <div class="field">
                     <label>地址</label>
-                    <input type="text" id="ctx-address" placeholder="当前位置地址">
+                    <input type="text" id="ctx-address" data-ctx-path="spatial.current_location.address" placeholder="当前位置地址">
                 </div>
                 <div class="field">
                     <label>车速 (km/h)</label>
-                    <input type="number" id="ctx-speedKmh" placeholder="0" min="0">
+                    <input type="number" id="ctx-speedKmh" data-ctx-path="spatial.current_location.speed_kmh" placeholder="0" min="0">
                 </div>
                 <div class="field">
                     <label>目的地地址</label>
-                    <input type="text" id="ctx-dest-address" placeholder="目的地">
+                    <input type="text" id="ctx-dest-address" data-ctx-path="spatial.destination.address" placeholder="目的地">
                 </div>
                 <div class="field">
                     <label>ETA (分钟)</label>
-                    <input type="number" id="ctx-etaMinutes" placeholder="预估到达时间" min="0">
+                    <input type="number" id="ctx-etaMinutes" data-ctx-path="spatial.eta_minutes" placeholder="预估到达时间" min="0">
                 </div>
             </div>
 
@@ -85,7 +85,7 @@
                 <div class="section-title">交通状况</div>
                 <div class="field">
                     <label>拥堵程度</label>
-                    <select id="ctx-congestionLevel">
+                    <select id="ctx-congestionLevel" data-ctx-path="traffic.congestion_level">
                         <option value="">（未设置）</option>
                         <option value="smooth">畅通</option>
                         <option value="slow">缓行</option>
@@ -95,11 +95,11 @@
                 </div>
                 <div class="field">
                     <label>事故信息</label>
-                    <input type="text" id="ctx-incidents" placeholder="事故描述（可选）">
+                    <input type="text" id="ctx-incidents" data-ctx-path="traffic.incidents" placeholder="事故描述（可选）">
                 </div>
                 <div class="field">
                     <label>延误 (分钟)</label>
-                    <input type="number" id="ctx-delayMinutes" placeholder="0" min="0">
+                    <input type="number" id="ctx-delayMinutes" data-ctx-path="traffic.estimated_delay_minutes" placeholder="0" min="0">
                 </div>
             </div>
 
@@ -107,7 +107,7 @@
                 <div class="section-title">驾驶场景</div>
                 <div class="field">
                     <label>场景类型</label>
-                    <select id="ctx-scenario">
+                    <select id="ctx-scenario" data-ctx-path="scenario">
                         <option value="">（未设置）</option>
                         <option value="parked">停车场</option>
                         <option value="city_driving">城市道路</option>
@@ -119,7 +119,7 @@
 
             <div class="btn-group">
                 <button class="btn btn-primary btn-sm" onclick="savePreset()">保存预设</button>
-                <button class="btn btn-secondary btn-sm" onclick="clearForm()">清空表单</button>
+                <button class="btn btn-secondary btn-sm" onclick="resetContext(document.querySelector('.panel-left'))">清空表单</button>
             </div>
         </div>
 
@@ -152,6 +152,8 @@
                 <div class="feedback-row" id="feedbackRow" style="display:none; padding: 0 14px 12px;">
                     <button class="btn btn-success btn-sm" onclick="submitFeedback('accept')">接受</button>
                     <button class="btn btn-secondary btn-sm" onclick="submitFeedback('ignore')">忽略</button>
+                    <button class="btn btn-secondary btn-sm" onclick="submitFeedback('snooze')">延后5分钟</button>
+                    <button class="btn btn-secondary btn-sm" onclick="submitFeedback('modify')">修改</button>
                 </div>
             </details>
 
@@ -165,9 +167,6 @@
     <div class="experiment-section" style="max-width:1200px;margin:20px auto;padding:0 20px;">
         <div class="card" style="padding:16px;">
             <div class="section-title">实验结果对比</div>
-            <div style="margin-bottom:10px;">
-                <button class="btn btn-secondary" onclick="loadExperimentData()">加载数据</button>
-            </div>
             <canvas id="experimentChart" height="200"></canvas>
         </div>
     </div>
