@@ -208,7 +208,6 @@ async function sendQuery() {
     const query = document.getElementById('queryInput').value.trim();
     if (!query) return;
 
-    const memoryMode = document.getElementById('memoryMode').value;
     const context = getContextInput();
 
     setLoading(true);
@@ -218,7 +217,7 @@ async function sendQuery() {
     });
 
     try {
-        const body = { query, memory_mode: memoryMode };
+        const body = { query };
         if (context) body.context = context;
         const res = await api('POST', '/api/query', body);
 
@@ -257,8 +256,7 @@ async function submitFeedback(action) {
 
 async function loadHistory() {
     try {
-        const mode = document.getElementById('memoryMode').value;
-        const items = await api('GET', `/api/history?limit=10&memory_mode=${mode}`);
+        const items = await api('GET', '/api/history?limit=10');
         const container = document.getElementById('historyList');
         if (!items.length) {
             container.innerHTML = '<span class="empty-hint">暂无历史记录</span>';

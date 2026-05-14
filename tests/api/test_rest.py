@@ -131,7 +131,7 @@ def test_process_query_without_context(isolated_app: TestClient) -> None:
     """测试不带上下文的 POST /api/query（需要 LLM）。"""
     resp = isolated_app.post(
         "/api/query",
-        json={"query": "明天上午9点有个会议", "memory_mode": "memory_bank"},
+        json={"query": "明天上午9点有个会议"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -145,7 +145,6 @@ def test_process_query_with_context(isolated_app: TestClient) -> None:
         "/api/query",
         json={
             "query": "提醒我买牛奶",
-            "memory_mode": "memory_bank",
             "context": {
                 "driver": {
                     "emotion": "calm",

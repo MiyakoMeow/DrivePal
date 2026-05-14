@@ -27,7 +27,7 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
     safe_action: Literal["accept", "ignore"] = req.action
-    mode = MemoryMode(req.memory_mode)
+    mode = MemoryMode.MEMORY_BANK
 
     actual_type = await safe_memory_call(
         mm.get_event_type(req.event_id, mode=mode),

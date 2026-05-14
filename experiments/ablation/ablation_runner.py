@@ -30,7 +30,6 @@ from app.agents.workflow import (
 )
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
-from app.memory.types import MemoryMode
 from app.models.chat import ChatError, get_chat_model
 
 from ._io import VARIANT_TIMEOUT_SECONDS, append_checkpoint, load_checkpoint
@@ -89,7 +88,6 @@ class AblationRunner:
         mm = get_memory_module()
         workflow = AgentWorkflow(
             data_dir=DATA_DIR,
-            memory_mode=MemoryMode.MEMORY_BANK,
             memory_module=mm,
             current_user=user_id,
         )

@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.agents.workflow import AgentWorkflow
-from app.memory.types import MemoryMode
 
 
 @pytest.fixture
@@ -23,7 +22,7 @@ def workflow():
         mock_mm_instance.get_history.return_value = []
         mock_mm_instance.chat_model = mock_chat
         mock_mm.return_value = mock_mm_instance
-        wf = AgentWorkflow(memory_mode=MemoryMode.MEMORY_BANK)
+        wf = AgentWorkflow()
         yield wf
 
 
