@@ -59,7 +59,6 @@ model = "openrouter/baai/bge-m3"
 | `SECONDARY_JUDGE_MODEL` | 消融实验安全组二次裁判模型 |
 | `ABLATION_SEED` | 消融实验随机种子（控制场景合成、抽样等可复现性） |
 | `ABLATION_VARIANT_TIMEOUT_SECONDS` | 消融实验单个 variant 超时秒数（默认 300） |
-| `JUDGE_API_KEY` | 预留，当前未使用 |
 | `FATIGUE_THRESHOLD` | 疲劳规则阈值（默认0.7） |
 | `PROBABILISTIC_INFERENCE_ENABLED` | 概率推断开关（默认1） |
 | `MEMORYBANK_SEED` | 遗忘随机种子（benchmark复现用） |

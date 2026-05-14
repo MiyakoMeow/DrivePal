@@ -92,20 +92,20 @@ archive/
 | 编号 | 文献 | 正文引用位置 |
 |------|------|-------------|
 | [1] | Zhong W, Guo L, Gao Q, et al. MemoryBank: Enhancing Large Language Models with Long-Term Memory[C]. NeurIPS, 2023. | §1.2, §2.2, §3.4 |
-| [2] | Chen Y, Xu Y, Ding X, et al. VehicleMemBench: An Executable Benchmark for Multi-User Long-Term Memory in In-Vehicle Agents[J]. arXiv:2603.23840, 2026. | §1.2, §2.3, §4.1 |
+| [2] | Chen Y, Xu Y, Ding X, et al. VehicleMemBench: An Executable Benchmark for Multi-User Long-Term Memory in In-Vehicle Agents[EB/OL]. arXiv:2603.23840, 2026. | §1.2, §2.3, §4.1 |
 | [3] | Ablaßmeier M, Poitschke T, Reifinger S, et al. Context-Aware Information Agents for the Automotive Domain Using Bayesian Networks[C]. HCII, 2007. | §1.1, §1.2, §2.1 |
-| [4] | Kim G, Lee J, Yeo D, et al. Physiological Indices to Predict Driver Situation Awareness in VR[C]. UbiComp/ISWC Adjunct, 2023. | §1.2, §2.1 |
-| [5] | Chen X, Wang X, Fang C, et al. Emotion-aware Design in Automobiles[C]. CHI, 2025. | §1.1, §1.2, §2.1 |
+| [4] | Kim G, Lee J, Yeo D, et al. Physiological Indices to Predict Driver Situation Awareness in VR[C]. UbiComp/ISWC, 2023. | §1.2, §2.1 |
+| [5] | Chen X, Wang X, Fang C, et al. Emotion-aware Design in Automobiles: Embracing Technology Advancements to Enhance Human-Vehicle Interaction[C]. CHI, 2025. | §1.1, §1.2, §2.1 |
 | [6] | Parwani K, Das S, Vijay D K. Model Context Protocol (MCP): A Scalable Framework for Context-Aware Multi-Agent Coordination[EB/OL]. Zenodo, 2025. | §1.2, §2.1 |
 | [7] | Karpukhin V, Oğuz B, Min S, et al. Dense Passage Retrieval for Open-Domain Question Answering[C]. EMNLP, 2020. | §3.3 |
 | [8] | Johnson J, Douze M, Jégou H. Billion-scale Similarity Search with GPUs[J]. IEEE Trans. Big Data, 2021, 7(3): 535-547. | §1.1, §3.3 |
 | [9] | Ebbinghaus H. Memory: A Contribution to Experimental Psychology[M]. Dover, 1964 (1885). | §1.2, §2.2, §3.4 |
-| [10] | Lu J, An S, Lin M, et al. MemoChat: Tuning LLMs to Use Memos for Consistent Long-Range Open-Domain Conversation[J]. arXiv:2308.08239, 2023. | §1.2, §2.2 |
-| [11] | Graves A, Wayne G, Danihelka I. Neural Turing Machines[J]. arXiv:1410.5401, 2014. | §2.2 |
-| [12] | Xu J, Szlam A, Weston J. Beyond Goldfish Memory: Long-Term Open-Domain Conversation[J]. arXiv:2107.07567, 2021. | §1.2, §2.2 |
-| [13] | Chhikara P, et al. Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory[J]. arXiv:2504.19413, 2025. | §1.2, §2.2 |
-| [14] | Li Z, et al. MemOS: A Memory OS for AI System[J]. arXiv:2507.03724, 2025. | §1.2, §2.2 |
-| [15] | Endsley M R. Toward a Theory of Situation Awareness in Dynamic Systems[J]. Human Factors, 1995, 37(1): 32-64. | §1.1, §2.1, §3.6, §3.8, §5.1 |
-| [16] | Wickens C D. Multiple Resources and Mental Workload[J]. Human Factors, 2008, 50(3): 449-455. | §1.1, §2.1, §3.6, §3.8, §5.1 |
-| [17] | Yang J, et al. VehicleWorld: A Highly Integrated Multi-Device Environment for Intelligent Vehicle Interaction[J]. arXiv:2509.06736, 2025. | §1.2, §2.3, §4.1 |
+| [10] | Lu J, An S, Lin M, et al. MemoChat: Tuning LLMs to Use Memos for Consistent Long-Range Open-Domain Conversation[EB/OL]. arXiv:2308.08239, 2023. | §1.2, §2.2 |
+| [11] | Graves A, Wayne G, Danihelka I. Neural Turing Machines[EB/OL]. arXiv:1410.5401, 2014. | §2.2 |
+| [12] | Xu J, Szlam A, Weston J. Beyond Goldfish Memory: Long-Term Open-Domain Conversation[EB/OL]. arXiv:2107.07567, 2021. | §1.2, §2.2 |
+| [13] | Chhikara P, et al. Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory[EB/OL]. arXiv:2504.19413, 2025. | §1.2, §2.2 |
+| [14] | Li Z, et al. MemOS: A Memory OS for AI System[EB/OL]. arXiv:2507.03724, 2025. | §1.2, §2.2 |
+| [15] | Endsley M R. Toward a Theory of Situation Awareness in Dynamic Systems[J]. Human Factors, 1995, 37(1): 32-64. | §1.1, §1.2, §2.1, §3.6, §3.8, §5.1 |
+| [16] | Wickens C D. Multiple Resources and Mental Workload[J]. Human Factors, 2008, 50(3): 449-455. | §1.1, §1.2, §2.1, §3.6, §3.7, §3.8, §5.1 |
+| [17] | Yang J, et al. VehicleWorld: A Highly Integrated Multi-Device Environment for Intelligent Vehicle Interaction[EB/OL]. arXiv:2509.06736, 2025. | §1.2, §2.3, §4.1 |
 

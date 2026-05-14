@@ -3,8 +3,8 @@
 从 VehicleMemBench memorybank.py 移植并适配：
 - 阶段 1: query embedding + FAISS 粗排
 - 阶段 2: BM25 稀疏回退（FAISS 最高分低于阈值时补充）
-- 阶段 3: 邻居合并（同 source 连续条目）+ 重叠去重（并查集）
-- 阶段 4: 遗忘条目 + 低分条目过滤
+- 阶段 3: 遗忘条目 + 低分条目过滤
+- 阶段 4: 邻居合并（同 source 连续条目）+ 重叠去重（并查集）
 - 阶段 5: 说话人感知降权
 - 阶段 6: Ebbinghaus 保留率加权
 """
@@ -380,8 +380,8 @@ class RetrievalPipeline:
 
     阶段 1: query embedding + FAISS 粗排
     阶段 2: BM25 稀疏回退（FAISS 最高分低于阈值时补充）
-    阶段 3: 邻居合并（同 source 连续条目）+ 重叠去重（并查集）
-    阶段 4: 遗忘条目 + 低分条目过滤
+    阶段 3: 遗忘条目 + 低分条目过滤
+    阶段 4: 邻居合并（同 source 连续条目）+ 重叠去重（并查集）
     阶段 5: 说话人感知降权
     阶段 6: Ebbinghaus 保留率加权
 
