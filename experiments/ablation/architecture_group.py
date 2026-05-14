@@ -1,4 +1,4 @@
-"""架构组实验——四 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
+"""架构组实验——三 Agent 流水线 vs 单 LLM 调用的决策质量对比."""
 
 import asyncio
 import dataclasses

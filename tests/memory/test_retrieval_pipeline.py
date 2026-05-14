@@ -1,4 +1,4 @@
-"""四阶段检索管道单元测试——mock FaissIndex + EmbeddingClient。"""
+"""六阶段检索管道单元测试——mock FaissIndex + EmbeddingClient。"""
 
 from unittest.mock import AsyncMock, MagicMock
 

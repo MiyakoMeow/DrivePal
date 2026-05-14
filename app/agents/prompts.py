@@ -72,7 +72,7 @@ JOINT_DECISION_SYSTEM_PROMPT = """你是车载AI决策Agent，根据用户输入
 
 # 单LLM变体用合并提示词（消融实验架构组）。
 # 不同于分阶段调用的 CONTEXT/TASK/STRATEGY，此 prompt 合并三阶段为一次 LLM 调用，
-# 减少延迟和 token 交互轮次，用于与四阶段流水线对比。故不放入 SYSTEM_PROMPTS 字典。
+# 减少延迟和 token 交互轮次，用于与三阶段流水线对比。故不放入 SYSTEM_PROMPTS 字典。
 SINGLE_LLM_SYSTEM_PROMPT = """你是一个车载AI智能体，负责情境建模、任务理解和策略决策。
 
 当前时间：{current_datetime}
