@@ -48,5 +48,5 @@ async def process_query(req: ProcessQueryRequest) -> ProcessQueryResponse:
             detail="AI model unavailable",
         ) from e
     except Exception as e:
-        logger.exception("processQuery failed")
+        logger.exception("process_query failed")
         raise HTTPException(status_code=500, detail="Internal server error") from e

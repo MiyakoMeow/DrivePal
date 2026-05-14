@@ -22,13 +22,14 @@ async def poll_pending_reminders(req: PollRemindersRequest) -> PollRemindersResp
     pm = PendingReminderManager(user_data_dir(req.current_user))
     ctx = req.context.model_dump() if req.context else {}
     triggered = await pm.poll(ctx)
+    now = datetime.now(UTC).isoformat()
     return PollRemindersResponse(
         triggered=[
             TriggeredReminderResponse(
                 id=r["id"],
                 event_id=r.get("event_id", ""),
                 content=r.get("content", {}),
-                triggered_at=datetime.now(UTC).isoformat(),
+                triggered_at=now,
             )
             for r in triggered
         ]

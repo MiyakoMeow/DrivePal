@@ -10,6 +10,8 @@ from app.api.routes.reminders import router as reminders_router
 from app.api.routes.sessions import router as sessions_router
 
 api_router = APIRouter()
+# data_router 无 prefix：history/export/experiments 直接暴露于 /api 下，
+# 因各端点已有独立路径前缀（/history、/export、/data、/experiments）
 api_router.include_router(data_router, tags=["data"])
 api_router.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
 api_router.include_router(presets_router, prefix="/presets", tags=["presets"])

@@ -55,6 +55,8 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
     )
 
     # 权重更新：读→改→写 strategies.toml
+    # 步长 0.1 为经验性置信度增量；下限 0.1 防止权重归零（保留最低响应概率）；
+    # 上限 1.0 防止过度信任（完全信任=无条件触发）。
     user_dir = user_data_dir(req.current_user)
     strategy_store = TOMLStore(
         user_dir=user_dir,

@@ -28,9 +28,7 @@ async def safe_memory_call[T](
         raise HTTPException(status_code=503, detail="Internal storage error") from e
     except ValueError as e:
         logger.exception("%s failed", context_msg)
-        raise HTTPException(
-            status_code=422, detail=f"Invalid data in {context_msg}"
-        ) from e
+        raise HTTPException(status_code=422, detail="Invalid request data") from e
     except Exception as e:
         logger.exception("%s failed", context_msg)
         raise HTTPException(status_code=500, detail="Internal server error") from e
