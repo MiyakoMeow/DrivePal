@@ -1,18 +1,28 @@
 """共享测试配置和 fixtures."""
 
+import os
+from contextlib import ExitStack
+from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
+from app.api.main import app
 from app.models.embedding import (
     EmbeddingModel,
     get_cached_embedding_model,
     reset_embedding_singleton,
 )
 from app.models.settings import LLMProviderConfig, LLMSettings
+from tests.fixtures import reset_all_singletons
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+_MODULES_WITH_DATA_DIR = ["app.config", "app.api.main", "app.memory.singleton"]
+_MODULES_WITH_DATA_ROOT = ["app.config"]
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -106,3 +116,19 @@ def embedding() -> Generator[EmbeddingModel]:
         yield model
     finally:
         reset_embedding_singleton()
+
+
+@pytest.fixture
+def app_client(tmp_path: Path) -> Generator[TestClient]:
+    """提供 TestClient 实例，隔离数据目录。"""
+    data_dir = tmp_path / "data"
+    os.environ["DATA_DIR"] = str(data_dir)
+    target = Path(data_dir)
+    with ExitStack() as stack:
+        for mod in _MODULES_WITH_DATA_DIR:
+            stack.enter_context(patch(f"{mod}.DATA_DIR", target))
+        for mod in _MODULES_WITH_DATA_ROOT:
+            stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
+        reset_all_singletons()
+        yield TestClient(app)
+        reset_all_singletons()
