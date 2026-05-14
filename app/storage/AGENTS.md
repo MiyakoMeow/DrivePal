@@ -1,88 +1,64 @@
 # 数据存储
 
-`app/storage/` —— 持久化存储引擎。
+`app/storage/` — 持久化引擎。
 
-## 数据目录结构
+## 数据目录
 
 ```
 data/
-├── users/
-│   └── {user_id}/
-│       ├── events.jsonl          # 事件历史（JSONL）
-│       ├── interactions.jsonl    # 交互记录（JSONL）
-│       ├── feedback.jsonl        # 反馈记录（JSONL，MemoryBank 记忆强度反馈）
-│       ├── feedback_log.jsonl    # 策略权重聚合源（JSONL，反馈学习原始记录）
-│       ├── contexts.toml         # 上下文缓存（TOML）
-│       ├── preferences.toml      # 用户偏好（TOML）
-│       ├── strategies.toml       # 个性化策略 + reminder_weights（TOML）
-│       ├── scenario_presets.toml # 场景预设（TOML）
-│       └── memorybank/           # MemoryBank 持久化数据
-│           ├── index.faiss
-│           ├── metadata.json
-│           └── extra_metadata.json
-└── experiment_benchmark.toml  # 实验对比数据（全局共享）
+├── users/{user_id}/
+│   ├── events.jsonl           # 事件历史
+│   ├── interactions.jsonl     # 交互记录
+│   ├── feedback.jsonl         # MemoryBank记忆强度反馈
+│   ├── feedback_log.jsonl     # 策略权重聚合源
+│   ├── contexts.toml          # 上下文缓存
+│   ├── preferences.toml       # 用户偏好
+│   ├── strategies.toml        # 个性化策略 + reminder_weights
+│   ├── scenario_presets.toml  # 场景预设
+│   └── memorybank/            # MemoryBank持久化
+│       ├── index.faiss
+│       ├── metadata.json
+│       └── extra_metadata.json
+└── experiment_benchmark.toml  # 实验对比（全局共享）
 ```
 
-旧平铺结构（`data/*.{jsonl,toml}`）通过 `init_storage()` 调用的模块级函数 `_migrate_legacy()` 幂等迁移至 `data/users/default/`。
+旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移至 `data/users/default/`。
 
-## TOMLStore
+## TOMLStore (`toml_store.py`)
 
-`app/storage/toml_store.py`。异步锁 + 文件级粒度。
+异步锁+文件级粒度。
 
-- **锁机制**：`_LOCK_REGISTRY` 全局字典，每个文件独立 `asyncio.Lock`；`_LOCK_REGISTRY_LOCK` 保护字典自身并发访问
-- **列表存储**：TOML 不支持顶层数组，用 `_list` 键包裹
-- **None 处理**：`_clean_for_toml()` 递归将 `None` 转空字符串（含日志警告）
-- **API**：
-  - `read()` → T
-  - `write(data: T)`
-  - `append(item)` — 仅列表存储
-  - `update(key, value)` — 仅字典存储
-  - `merge_dict_key(key, updates)` — 合并字典的指定键；若目标值非 dict，记录警告后直接覆盖（仅字典存储）
+- **锁**：`_LOCK_REGISTRY` 每文件独立 `asyncio.Lock`
+- **列表存储**：`_list` 键包裹（TOML不支持顶层组数）
+- **None处理**：`_clean_for_toml()` 递归转空字符串
+- **API**：read/write/append(列表)/update(字典)/merge_dict_key(字典)
 
-## 错误处理
+### 异常
 
-| 异常类 | 触发条件 |
-|--------|----------|
-| `AppendError` | 非列表存储调用 `append()` |
-| `UpdateError` | 非字典存储调用 `update()` 或 `merge_dict_key()` |
+| 异常 | 触发 |
+|------|------|
+| AppendError | 非列表存储调append |
+| UpdateError | 非字典存储调update/merge_dict_key |
 
-## JSONLinesStore
+## JSONLinesStore (`jsonl_store.py`)
 
-`app/storage/jsonl_store.py`。JSONL 追加写，用于 events/interactions/feedback 等高频写入数据。
+JSONL追加写，用于高频写入数据(events/interactions/feedback)。
 
-- **API**：
-  - `append(obj: dict)` — 追加一行
-  - `read_all()` → `list[dict]` — 读取所有行
-  - `count()` → `int` — 文件行数（近似记录数）
+- append(obj) / read_all() / count()
 
-## init_data
+## init_data (`init_data.py`)
 
-`app/storage/init_data.py`。数据目录初始化与默认数据填充。
+`init_storage(data_dir)` 创建目录 + `_migrate_legacy()` + `init_user_dir("default")`。
+`init_user_dir(user_id)` 创建4个jsonl + 4个toml文件并写默认值。
+`_MIGRATED_FLAG` 标记保证幂等。
 
-- `_MIGRATED_FLAG = ".migrated_flag"` — 标记文件名。标记存在时 `init_storage()` 直接跳过迁移（幂等）
-- `init_storage(data_dir: Path | None = None)` — 接受可选 data_dir，默认 `DATA_DIR`。创建 root → 检查 `_MIGRATED_FLAG` → 调用 `_migrate_legacy()` + `init_user_dir("default")` → 写标记（lifespan 使用）
-- `init_user_dir(user_id)` → `Path` — 初始化指定用户的完整目录结构（4 个 jsonl + 4 个 toml 文件，`feedback_log.jsonl` 在 `init_user_dir()` 中直接创建）并写入默认值：
-  - jsonl 文件：空文件
-  - `contexts.toml`：`{}`
-  - `preferences.toml`：`{"language": "zh-CN"}`
-  - `strategies.toml`：含 preferred_time_offset(15)、preferred_method("visual")、reminder_weights({})、ignored_patterns([])、modified_keywords([])、cooldown_periods({})
-  - `scenario_presets.toml`：`{"_list": []}`
-- `_migrate_legacy()` → `bool` — 调用 `_migrate_text_files()` + `_migrate_memorybank()`，将平铺旧结构迁移至 `data/users/default/`。双重幂等保护：`default_dir.exists()` 提前返回 + `_MIGRATED_FLAG` 标记
-- `_migrate_text_files(default_dir, old_root)` → `bool` — 迁移 3 个 jsonl + 4 个 toml 文件至 default_dir
-- `_migrate_memorybank(default_dir, old_root)` — 迁移 `data/memorybank/` 和 `data/user_*/` 目录至 `data/users/{user_id}/` 结构
+## experiment_store (`experiment_store.py`)
 
-## experiment_store
+只读。`read_benchmark()` 读 `experiment_benchmark.toml`，不存在返空dict。
 
-`app/storage/experiment_store.py`。实验基准数据只读存储。通过 TOML 文件读取，无写入接口。
+## feedback_log (`feedback_log.py`)
 
-- `read_benchmark()` → `dict[str, Any]` — 读取 `experiment_benchmark.toml`，不存在返空 dict
+策略权重反馈原始记录。与 `feedback.jsonl`（MemoryBank记忆强度）职责分离。
 
-## feedback_log
-
-`app/storage/feedback_log.py`。策略权重反馈的原始记录存储，供 `strategies.toml` 中 `reminder_weights` 聚合计算。
-
-- **文件名**：`feedback_log.jsonl`（与 `feedback.jsonl` 职责分离——后者服务于 MemoryBank 记忆强度反馈）
-- **API**：
-  - `feedback_log_store(user_dir)` → `JSONLinesStore` — 获取 feedback_log.jsonl 的存储实例
-  - `append_feedback(user_dir, event_id, action, feedback_type)` — 追加一条反馈原始记录
-  - `aggregate_weights(user_dir)` → `dict[str, float]` — 按事件类型聚合权重（accept +0.1 / ignore -0.1，新类型初始 0.5，范围 [0.1, 1.0]）
+- `append_feedback(user_dir, event_id, action, feedback_type)` — 追加原始记录
+- `aggregate_weights(user_dir)` — 按类型聚合（accept +0.1/ignore -0.1，基值0.5，范围[0.1, 1.0]）
