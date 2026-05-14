@@ -91,9 +91,13 @@ def _decision_matches_stage(decision: dict, stage: str) -> bool | None:
     if stage == "high-freq":
         return bool(decision.get("should_remind"))
     if stage == "silent":
-        return bool(decision.get("should_remind")) and bool(
-            decision.get("is_emergency")
-        )
+        # silent 阶段期望：抑制非紧急提醒，仅放行紧急事件。
+        # should_remind=false → 正确抑制 → match
+        # should_remind=true AND is_emergency=true → 正确放行 → match
+        # should_remind=true AND is_emergency=false → 错误放行 → no match
+        if not decision.get("should_remind"):
+            return True
+        return bool(decision.get("is_emergency"))
     if stage == "visual-detail":
         return has_visual_content(decision)
     return True
