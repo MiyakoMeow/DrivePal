@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -48,7 +49,25 @@ MARGIN_RIGHT = Cm(3.17)
 # mermaid
 MERMAID_API = "https://mermaid.ink/img/"
 MERMAID_TIMEOUT = 60  # 秒
-MERMAID_CACHE_DIR = Path("archive/mermaid")
+
+
+def _get_system_cache_dir() -> Path:
+    """获取各系统通用缓存目录下子目录用于 mermaid 缓存。"""
+    import platform as _platform
+
+    system = _platform.system()
+    if system == "Linux":
+        base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    elif system == "Darwin":
+        base = Path.home() / "Library" / "Caches"
+    elif system == "Windows":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        base = Path.home() / ".cache"
+    return base / "drivepal" / "mermaid"
+
+
+MERMAID_CACHE_DIR = _get_system_cache_dir()
 
 # OMML 命名空间常量
 _OMML_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
@@ -925,6 +944,11 @@ async def main() -> None:
 
         print("构建 docx...")
         await build_docx(tokens, output, source_dir=args.input.parent)
+
+        # 清理 mermaid 临时缓存，避免遗留临时文件
+        if await asyncio.to_thread(MERMAID_CACHE_DIR.exists):
+            await asyncio.to_thread(shutil.rmtree, MERMAID_CACHE_DIR)
+            print(f"  清理缓存: {MERMAID_CACHE_DIR}")
 
 
 if __name__ == "__main__":
