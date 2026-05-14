@@ -240,7 +240,7 @@ function handleSSEEvent(event, data) {
             ['context', 'task', 'decision', 'execution'].forEach(s => {
                 const el = document.getElementById(`stage-${s}-body`);
                 if (el.querySelector('.empty-hint')) {
-                    el.innerHTML = '<span class="error">' + escapeHtml(data.message) + '</span>';
+                    el.innerHTML = '<span class="error">' + escapeHtml(data.message ?? '未知错误') + '</span>';
                 }
             });
             break;
@@ -277,6 +277,7 @@ async function sendQuery() {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let currentEvent = '';
 
         while (true) {
             const { done, value } = await reader.read();
@@ -286,7 +287,6 @@ async function sendQuery() {
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
 
-            let currentEvent = '';
             for (const line of lines) {
                 if (line.startsWith('event: ')) {
                     currentEvent = line.slice(7).trim();
