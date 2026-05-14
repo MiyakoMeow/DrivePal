@@ -8,10 +8,6 @@ replace-imports-with-any = ["faiss", "docx"]
 all = "error"
 
 [[overrides]]
-include = ["app/storage/toml_store.py"]
-rules = { "invalid-argument-type" = "ignore" }  # cast(Callable[[], T], dict) — dict 为合法 default_factory
-
-[[overrides]]
 include = ["tests/memory/test_schemas.py"]
 rules = { "unresolved-attribute" = "ignore" }  # MemoryEvent ConfigDict(extra="allow") 允许动态属性
 

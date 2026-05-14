@@ -21,8 +21,9 @@ exclude = [".agents/**"]
 
 [lint.per-file-ignores]
 "app/api/schemas.py" = ["TC001"]  # Pydantic BaseModel 字段需运行时引用 DrivingContext
-"app/api/stream.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
 "app/api/routes/query.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
+"app/api/stream.py" = ["TC001"]  # FastAPI 路由注解需要运行时解析 ProcessQueryRequest
+
 "app/schemas/query.py" = ["TC001"]  # Pydantic BaseModel 字段需运行时引用 DrivingContext
 
 "app/memory/memory_bank/llm.py" = [
@@ -30,7 +31,7 @@ exclude = [".agents/**"]
 ]
 
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
-"app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 data_dir.mkdir()/ 操作，ruff 误判
+"app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 mkdir()/open() 操作，ruff 误判
 
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
 "app/memory/memory_bank/store.py" = [
@@ -59,12 +60,22 @@ exclude = [".agents/**"]
     "ANN401",  # infer_intent memory_store 为 duck-typing Any
     "FBT001",  # setter 接受 bool 参数（消融实验标记）
 ]
+"experiments/ablation/safety_group.py" = [
+    "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
+]
+"experiments/ablation/protocol.py" = [
+    "TC003",  # Callable/Awaitable 用于 @dataclass 字段注解，运行时必需
+]
+"experiments/ablation/report.py" = [
+    "TC001",  # GroupResult/JudgeScores 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "TC003",  # Path 用于类型注解及运行时 mkdir()/Path.open() 操作，ruff 误判
+]
 "experiments/ablation/scenario_synthesizer.py" = [
     "S311",  # random.Random 用于分层抽样复现种子，非安全场景
-    "T201",  # _verify() 调试入口 print 合理
-    "TC003",  # Path 用于类型注解但实际运行时 path.open()/exists() 操作，ruff 误判
+    "TC003",  # Path/Callable 用于类型注解及运行时操作，ruff 误判
     "PLR0913",  # sample_scenarios 参数多（分层采样配置），功能聚合合理
-    "EM101", "EM102", "TRY003",  # 消融实验代码使用中文错误消息，自定义异常类过度设计
+    "EM101",  # 消融实验代码使用中文错误消息，自定义异常类过度设计
 ]
 "experiments/ablation/cli.py" = [
     "T201",  # CLI 入口用 print 输出进度，非生产日志
@@ -74,22 +85,14 @@ exclude = [".agents/**"]
     "PLR2004",  # 元组长度检查等魔法数字在编排逻辑中可接受
 ]
 "experiments/ablation/ablation_runner.py" = [
-    "TRY400",  # timeout/失败前记录日志便于调试 checkpoint 续跑，异常由外层 gather 统一处理
     "C901",  # run_batch 含 checkpoint 加载/去重/semaphore/timeout/错误处理，复杂度可接受
 ]
 "experiments/ablation/judge.py" = [
     "S311",  # 确定性种子用于可复现实验（盲评 shuffle）
-    "ANN202",  # _make_raw_conditions_loader 返回闭包，类型注解需 Callable 运行时导入
-    "TC003",  # Callable 用于 _make_raw_conditions_loader 返回类型注解，运行时必需
+    "TC003",  # Callable 用于函数签名，运行时必需
 ]
 
-"experiments/ablation/safety_group.py" = [
-    "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
-    "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
-]
-"experiments/ablation/protocol.py" = [
-    "TC003",  # Callable/Awaitable 用于 @dataclass 字段注解，运行时必需
-]
+
 "experiments/ablation/architecture_group.py" = [
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判
@@ -98,17 +101,14 @@ exclude = [".agents/**"]
     "PLR2004",  # len(latencies) 比较魔法数字（1/2），延迟分析常见模式
 ]
 "experiments/ablation/metrics.py" = [
-    "TC001",  # JudgeScores/VariantResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
+    "TC001",  # JudgeScores 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "S311",  # random.Random 用于 bootstrap 重采样种子，非安全场景
     "PLR2004",  # Wilcoxon 最小样本量阈值 2 是统计学要求
 ]
-"experiments/ablation/report.py" = [
-    "TC001",  # GroupResult 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
-    "TC003",  # Path 用于类型注解及运行时 mkdir()/Path.open() 操作，ruff 误判
-]
+
 "experiments/ablation/personalization_group.py" = [
     "S311",  # random.Random 用于实验可复现种子，非安全场景
-    "TC001",  # AblationRunner 仅用于类型注解
+    "TC001",  # AblationRunner/Judge 仅用于类型注解
     "TC003",  # Path 用于类型注解及运行时操作
     "BLE001",  # update_feedback_weight 失败记录日志后跳过，不中断实验
     "C901",  # run_personalization_group 含 4 阶段 × 20 轮 × 2 变体编排，复杂度可接受
