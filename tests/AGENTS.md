@@ -67,7 +67,7 @@ tests/
 │   └── test_context_schemas.py    # 上下文数据模型验证
 ├── storage/              # → app/storage/
 │   ├── test_jsonl_store.py        # JSONL 存储引擎
-│   ├── test_storage.py            # 存储层持久化与反馈学习
+│   ├── test_storage.py            # 存储层持久化与反馈学习（模块级 pytestmark = [pytest.mark.embedding]，需 --test-embedding 运行；CI 的 `uv run pytest -v` 不带该标记，此文件被整体跳过）
 │   ├── test_experiment_results.py # 实验结果反序列化（read_benchmark）
 │   └── test_feedback_log.py      # 反馈日志追加与权重聚合
 └── experiments/          # → experiments/
@@ -93,4 +93,4 @@ tests/
 | `typecheck` | `uv run ty check .` | 类型检查 |
 | `test` | `uv run pytest -v` | 单测（无外部 provider） |
 
-额外 workflow `no-suppressions.yml`：扫描 `# noqa` 和 `# type:` 内联抑制注释，禁止绕过。
+额外 workflow `no-suppressions.yml`：三个 job 分别扫描 `# noqa`、`# type:`（mypy/pyright 格式）、`# ty:`（ty 格式），禁止绕过任意一种内联抑制注释。
