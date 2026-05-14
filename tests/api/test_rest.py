@@ -30,7 +30,6 @@ def test_save_scenario_preset(app_client: TestClient) -> None:
         json={
             "name": "test-highway",
             "context": {"scenario": "highway"},
-            "current_user": "default",
         },
     )
     assert resp.status_code == 200

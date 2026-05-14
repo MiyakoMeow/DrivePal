@@ -65,6 +65,19 @@ async def _handle_memory_feedback(
 
 async def _handle_snooze(req: FeedbackRequest, user_id: str) -> None:
     """Snooze 路径：创建延后提醒."""
+    mm = get_memory_module()
+    mode = MemoryMode.MEMORY_BANK
+    actual_type = await safe_memory_call(
+        mm.get_event_type(req.event_id, mode=mode),
+        "snooze(get_event_type)",
+    )
+    if actual_type is None:
+        raise AppError(
+            AppErrorCode.NOT_FOUND,
+            f"Event not found: {req.event_id!r}",
+            404,
+        )
+
     pm = PendingReminderManager(user_data_dir(user_id))
     target_time = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
     content = MultiFormatContent(

@@ -86,12 +86,15 @@ async def _handle_query(ws: WebSocket, user_id: str, payload: dict) -> None:
                     "payload": event["data"],
                 },
             )
-    except Exception as e:
+    except Exception:
         logger.exception("WS query failed")
         await ws_manager.send_to(
             ws,
             {
                 "type": "error",
-                "payload": {"code": "QUERY_FAILED", "message": str(e)},
+                "payload": {
+                    "code": "QUERY_FAILED",
+                    "message": "Query processing failed",
+                },
             },
         )

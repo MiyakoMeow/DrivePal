@@ -18,9 +18,12 @@ class AppState {
     setWs(ws) { this.#ws = ws; }
     getWs() { return this.#ws; }
 
+    setWsReconnectTimer(timer) { this.#wsReconnectTimer = timer; }
+
     reset() {
         this.#currentEventId = null;
         this.reconnectAttempts = 0;
+        this.destroyChart();
         document.getElementById('feedbackRow').style.display = 'none';
         ['context', 'task', 'decision', 'execution'].forEach(s => {
             document.getElementById(`stage-${s}-body`).innerHTML =
@@ -103,7 +106,7 @@ function resetContext(rootEl) {
 
 function connectWS() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${location.host}/api/v1/ws/`;
+    const wsUrl = `${protocol}//${location.host}/api/v1/ws`;
     const ws = new WebSocket(wsUrl);
     ws.onopen = () => {
         state.setWs(ws);
@@ -124,7 +127,8 @@ function connectWS() {
 function scheduleReconnect() {
     const delay = Math.min(1000 * Math.pow(2, state.reconnectAttempts), 30000);
     state.reconnectAttempts += 1;
-    setTimeout(() => connectWS(), delay);
+    const timer = setTimeout(() => connectWS(), delay);
+    state.setWsReconnectTimer(timer);
 }
 
 function handleWSMessage(type, data) {
@@ -150,6 +154,7 @@ function handleWSMessage(type, data) {
             document.getElementById('stage-decision-body').textContent = formatJson(data);
             break;
         case 'done':
+            setLoading(false);
             if (data.event_id) {
                 state.setCurrentEventId(data.event_id);
                 document.getElementById('feedbackRow').style.display = 'flex';
@@ -164,6 +169,8 @@ function handleWSMessage(type, data) {
             }
             break;
         case 'error':
+            setLoading(false);
+            showToast(data.message ?? '未知错误', 'error');
             ['context', 'task', 'decision', 'execution'].forEach(s => {
                 const el = document.getElementById(`stage-${s}-body`);
                 if (el.querySelector('.empty-hint')) {
@@ -193,7 +200,6 @@ async function sendQuery() {
         type: 'query',
         payload: { query, context, session_id: 'webui-' + Date.now() },
     }));
-    setLoading(false);
 }
 
 function showToast(message, type = 'info') {
@@ -323,7 +329,7 @@ async function loadExperimentData() {
             }
         }));
     } catch (e) {
-        console.error('Failed to load experiment data:', e);
+        showToast('实验数据加载失败', 'error');
         const canvas = document.getElementById('experimentChart');
         if (canvas) {
             const ctx = canvas.getContext('2d');
@@ -357,7 +363,7 @@ async function loadHistory() {
             container.appendChild(div);
         });
     } catch (e) {
-        console.error('Failed to load history:', e);
+        showToast('加载历史失败: ' + e.message, 'error');
         const container = document.getElementById('historyList');
         container.innerHTML = '<span class="error">加载历史失败</span>';
     }

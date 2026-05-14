@@ -36,6 +36,7 @@ async def get_history(
     limit: int = 10,
 ) -> list[MemoryEventResponse]:
     """查询历史记忆事件."""
+    limit = max(1, min(limit, 100))
     user_id = request.state.user_id
     mm = get_memory_module()
     events = await safe_memory_call(
@@ -103,7 +104,10 @@ def _allowed_suffixes(export_type: str) -> tuple[str, ...]:
 
 @router.get("/experiments", response_model=ExperimentResultsResponse)
 async def get_experiment_results() -> ExperimentResultsResponse:
-    """查询五策略实验结果对比."""
+    """查询五策略实验结果对比.
+
+    实验数据为系统级（VehicleMemBench 全局 benchmark），非 per-user，故无需用户上下文。
+    """
     try:
         data = read_benchmark()
     except (OSError, ValueError) as e:

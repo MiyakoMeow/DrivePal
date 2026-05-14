@@ -26,18 +26,38 @@ def test_feedback_accept(app_client: TestClient) -> None:
 
 
 def test_feedback_snooze(app_client: TestClient) -> None:
-    """POST /api/v1/feedback snooze 应创建 pending reminder。"""
-    with patch("app.api.v1.feedback.PendingReminderManager") as mock_pm:
-        mock_instance = AsyncMock()
-        mock_instance.add.return_value = AsyncMock(id="pr_001")
-        mock_pm.return_value = mock_instance
+    """POST /api/v1/feedback snooze 应验证事件存在后创建 pending reminder."""
+    with (
+        patch("app.api.v1.feedback.get_memory_module") as mock_mm,
+        patch("app.api.v1.feedback.PendingReminderManager") as mock_pm,
+    ):
+        mock_mm_instance = AsyncMock()
+        mock_mm_instance.get_event_type.return_value = "reminder"
+        mock_mm.return_value = mock_mm_instance
+        mock_pm_instance = AsyncMock()
+        mock_pm_instance.add.return_value = AsyncMock(id="pr_001")
+        mock_pm.return_value = mock_pm_instance
         resp = app_client.post(
             "/api/v1/feedback",
             json={"event_id": "evt_001", "action": "snooze"},
             headers={"X-User-Id": "alice"},
         )
         assert resp.status_code == 200
-        mock_instance.add.assert_called_once()
+        mock_pm_instance.add.assert_called_once()
+
+
+def test_feedback_snooze_not_found(app_client: TestClient) -> None:
+    """POST /api/v1/feedback snooze 事件不存在返 404."""
+    with patch("app.api.v1.feedback.get_memory_module") as mock_mm:
+        mock_mm_instance = AsyncMock()
+        mock_mm_instance.get_event_type.return_value = None
+        mock_mm.return_value = mock_mm_instance
+        resp = app_client.post(
+            "/api/v1/feedback",
+            json={"event_id": "nonexistent", "action": "snooze"},
+            headers={"X-User-Id": "alice"},
+        )
+        assert resp.status_code == 404
 
 
 def test_feedback_modify(app_client: TestClient) -> None:

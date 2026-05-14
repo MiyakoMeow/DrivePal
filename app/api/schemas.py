@@ -28,7 +28,6 @@ class FeedbackRequest(BaseModel):
     event_id: str
     action: Literal["accept", "ignore", "snooze", "modify"] = "accept"
     modified_content: str | None = None
-    current_user: str = "default"
 
 
 class FeedbackResponse(BaseModel):
@@ -45,7 +44,6 @@ class SavePresetRequest(BaseModel):
 
     name: str
     context: DrivingContext
-    current_user: str = "default"
 
 
 class ScenarioPresetResponse(BaseModel):
@@ -98,28 +96,6 @@ class ExperimentResultsResponse(BaseModel):
 
 
 # --- Reminders ---
-
-
-class PollRemindersRequest(BaseModel):
-    """POST /api/reminders/poll 请求."""
-
-    current_user: str = "default"
-    context: DrivingContext | None = None
-
-
-class TriggeredReminderResponse(BaseModel):
-    """已触发提醒."""
-
-    id: str
-    event_id: str
-    content: dict
-    triggered_at: str
-
-
-class PollRemindersResponse(BaseModel):
-    """POST /api/reminders/poll 响应."""
-
-    triggered: list[TriggeredReminderResponse]
 
 
 class PendingReminderResponse(BaseModel):

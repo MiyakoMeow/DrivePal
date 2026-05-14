@@ -108,3 +108,26 @@ def test_experiments(app_client: TestClient) -> None:
         body = resp.json()
         assert len(body["strategies"]) == 1
         assert body["strategies"][0]["strategy"] == "memory_bank"
+
+
+def test_delete_data(app_client: TestClient, tmp_path: Path) -> None:
+    """DELETE /api/v1/data 删除用户数据目录."""
+    user_dir = tmp_path / "data" / "users" / "alice"
+    user_dir.mkdir(parents=True)
+    (user_dir / "test.txt").write_text("hello", encoding="utf-8")
+
+    with patch("app.api.v1.data.user_data_dir", return_value=user_dir):
+        resp = app_client.delete("/api/v1/data", headers={"X-User-Id": "alice"})
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    assert not user_dir.exists()
+
+
+def test_delete_data_nonexistent(app_client: TestClient, tmp_path: Path) -> None:
+    """DELETE /api/v1/data 目录不存在时返回 success=False."""
+    user_dir = tmp_path / "data" / "users" / "nonexistent"
+
+    with patch("app.api.v1.data.user_data_dir", return_value=user_dir):
+        resp = app_client.delete("/api/v1/data", headers={"X-User-Id": "alice"})
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False

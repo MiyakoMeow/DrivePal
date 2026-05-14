@@ -20,9 +20,13 @@ class WSManager:
         self._conns.setdefault(user_id, []).append(ws)
 
     def disconnect(self, ws: WebSocket, user_id: str) -> None:
-        """从用户连接列表移除指定连接."""
+        """从用户连接列表移除指定连接，清理空列表."""
         conns = self._conns.get(user_id, [])
-        self._conns[user_id] = [c for c in conns if c is not ws]
+        remaining = [c for c in conns if c is not ws]
+        if remaining:
+            self._conns[user_id] = remaining
+        else:
+            self._conns.pop(user_id, None)
 
     async def broadcast(self, user_id: str, message: dict) -> None:
         """向指定用户的所有活跃连接广播消息。发送失败时移除断连。"""

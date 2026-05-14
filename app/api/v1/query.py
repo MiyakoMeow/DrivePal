@@ -50,9 +50,11 @@ async def process_query(
             "AI model unavailable",
             503,
         ) from e
-    except Exception as e:
+    except AppError:
+        raise
+    except Exception:
         logger.exception("process_query failed")
         raise AppError(
             AppErrorCode.INTERNAL_ERROR,
             "Internal server error",
-        ) from e
+        ) from None
