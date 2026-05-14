@@ -42,11 +42,11 @@ async def aggregate_weights(user_dir: Path) -> dict[str, float]:
     """
     store = feedback_log_store(user_dir)
     records = await store.read_all()
-    counts: dict[str, float] = {}
+    deltas: dict[str, float] = {}
     for rec in records:
         t = rec.get("type", "")
         if not t:
             continue
         delta = 0.1 if rec.get("action") == "accept" else -0.1
-        counts[t] = counts.get(t, 0.0) + delta
-    return {t: max(0.1, min(1.0, 0.5 + delta)) for t, delta in counts.items()}
+        deltas[t] = deltas.get(t, 0.0) + delta
+    return {t: max(0.1, min(1.0, 0.5 + delta)) for t, delta in deltas.items()}

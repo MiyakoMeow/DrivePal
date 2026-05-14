@@ -96,6 +96,7 @@ def init_user_dir(user_id: str) -> Path:
         "events.jsonl",
         "interactions.jsonl",
         "feedback.jsonl",
+        "feedback_log.jsonl",
     ]
 
     for fname in jsonl_files:
