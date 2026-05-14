@@ -27,7 +27,7 @@
 
 ### 查询
 
-- **ProcessQueryRequest** (`app/schemas/query.py`): `query` (str), `context` (dict | None), `current_user` (str, 默认 "default"), `session_id` (str | None)
+- **ProcessQueryRequest** (`app/schemas/query.py`): `query` (str), `context` (DrivingContext | None), `current_user` (str, 默认 "default"), `session_id` (str | None)
 - **ProcessQueryResponse**: `result` (str), `event_id` (str | None), `stages` (dict | None)
 
 ### 反馈

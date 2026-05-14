@@ -11,7 +11,7 @@
 ### 设计目标
 
 1. **驾驶安全优先**：轻量规则引擎基于驾驶员状态自动约束提醒方式
-2. **情境感知**：通过 GraphQL API 接收细粒度外部数据，跳过 LLM 编造上下文
+2. **情境感知**：通过 REST API 接收细粒度外部数据，跳过 LLM 编造上下文
 3. **遗忘曲线记忆**：基于 Ebbinghaus 遗忘曲线实现记忆衰减与强化
 4. **可解释决策**：三阶段工作流各节点输出可独立审查
 5. **交互灵活性**：支持多格式输出、主动触发、流式响应、多轮对话、快捷指令
@@ -91,11 +91,10 @@ app/
 │   ├── shortcuts.py   #   快捷指令
 │   ├── probabilistic.py # 概率推断
 │   └── state.py       #   工作流状态定义
-├── api/               # GraphQL API (Strawberry + FastAPI)
+├── api/               # REST API (FastAPI)
 │   ├── main.py        #   应用入口 + SSE 端点
-│   ├── graphql_schema.py
 │   ├── stream.py      #   流式响应
-│   └── resolvers/     #   Query/Mutation/错误/转换
+│   └── routes/        #   路由定义（query/feedback/presets/data/reminders/sessions）
 ├── models/            # LLM/Embedding 封装（多provider fallback）
 ├── memory/            # MemoryBank 记忆系统
 │   ├── memory_bank/   #   FAISS 索引 + 遗忘曲线 + 摘要
@@ -116,52 +115,51 @@ experiments/           # 消融实验
 
 ---
 
-## GraphQL API
+## REST API
 
-基于 Strawberry GraphQL 的 code-first API。
+基于 FastAPI 的 REST API。
 
-**端点：** `/graphql`（内置 Playground）
+**端点：** `/api` 前缀，详见 [app/api/AGENTS.md](app/api/AGENTS.md)
 
-### 核心 Mutation
+### 核心端点
 
-```graphql
-# stages 含 4 个可审查字段：context / task / decision / execution
-# 其中 task + decision 均由 JointDecision Agent 一次调用产出（三阶段流水线，四字段输出拆分）
-mutation {
-  processQuery(input: {
-    query: "明天上午9点有个会议"
-    memoryMode: MEMORY_BANK
-    context: {
-      driver: { emotion: "calm", workload: "normal", fatigueLevel: 0.2 }
-      spatial: {
-        currentLocation: { latitude: 39.9042, longitude: 116.4074, address: "北京市东城区", speedKmh: 0 }
-        destination: { latitude: 39.9142, longitude: 116.4174, address: "国贸大厦" }
-        etaMinutes: 25
-      }
-      traffic: { congestionLevel: "smooth", incidents: [], estimatedDelayMinutes: 0 }
-      scenario: "parked"
-    }
-  }) {
-    result eventId
-    stages { context task decision execution }
+```
+POST /api/query          # 处理用户查询
+POST /api/query/stream   # SSE 流式返回各阶段结果
+POST /api/feedback       # 提交用户反馈
+GET  /api/history        # 查询历史记忆事件
+GET  /api/presets         # 查询场景预设
+POST /api/presets         # 保存场景预设
+```
+
+### 请求示例
+
+```json
+POST /api/query/stream
+{
+  "query": "明天上午9点有个会议",
+  "current_user": "default",
+  "context": {
+    "driver": { "emotion": "calm", "workload": "normal", "fatigue_level": 0.2 },
+    "spatial": {
+      "current_location": { "latitude": 39.9042, "longitude": 116.4074, "address": "北京市东城区", "speed_kmh": 0 },
+      "destination": { "latitude": 39.9142, "longitude": 116.4174, "address": "国贸大厦" },
+      "eta_minutes": 25
+    },
+    "traffic": { "congestion_level": "smooth", "incidents": [], "estimated_delay_minutes": 0 },
+    "scenario": "parked"
   }
 }
 ```
 
 ### 其他操作
 
-```graphql
-# 反馈学习
-mutation { submitFeedback(input: { eventId: "xxx", action: accept }) { status } }
-
-# 待触发提醒轮询
-mutation { pollPendingReminders { triggered { id content } } }
-
-# 场景预设
-mutation { saveScenarioPreset(input: { name: "高速驾驶", context: { scenario: "highway" } }) { id name } }
-
-# 数据管理
-mutation { exportData(currentUser: "default") { filePath } }
+```
+POST   /api/feedback              # 反馈学习（accept/ignore）
+POST   /api/reminders/poll        # 车机端轮询待触发提醒
+POST   /api/presets               # 保存场景预设
+GET    /api/export?current_user=default  # 导出数据
+DELETE /api/data?current_user=default    # 删除数据
 ```
 
 ---
@@ -196,7 +194,7 @@ uv run uvicorn app.api.main:app
 ```
 
 - 模拟测试工作台：http://localhost:8000
-- GraphQL Playground：http://localhost:8000/graphql
+- REST API 文档：http://localhost:8000/docs（Swagger UI）
 
 ---
 

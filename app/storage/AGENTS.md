@@ -10,7 +10,8 @@ data/
 │   └── {user_id}/
 │       ├── events.jsonl          # 事件历史（JSONL）
 │       ├── interactions.jsonl    # 交互记录（JSONL）
-│       ├── feedback.jsonl        # 反馈记录（JSONL）
+│       ├── feedback.jsonl        # 反馈记录（JSONL，MemoryBank 记忆强度反馈）
+│       ├── feedback_log.jsonl    # 策略权重聚合源（JSONL，反馈学习原始记录）
 │       ├── contexts.toml         # 上下文缓存（TOML）
 │       ├── preferences.toml      # 用户偏好（TOML）
 │       ├── strategies.toml       # 个性化策略 + reminder_weights（TOML）
@@ -69,3 +70,12 @@ data/
 `app/storage/experiment_store.py`。实验基准数据只读存储。通过 TOML 文件读取，无写入接口。
 
 - `read_benchmark()` → `dict[str, Any]` — 读取 `experiment_benchmark.toml`，不存在返空 dict
+
+## feedback_log
+
+`app/storage/feedback_log.py`。策略权重反馈的原始记录存储，供 `strategies.toml` 中 `reminder_weights` 聚合计算。
+
+- **文件名**：`feedback_log.jsonl`（与 `feedback.jsonl` 职责分离——后者服务于 MemoryBank 记忆强度反馈）
+- **API**：
+  - `append_feedback(event_id, action, event_type, current_user)` — 追加一条反馈原始记录
+  - `aggregate_weights(current_user)` → `dict[str, float]` — 按事件类型聚合权重（accept +0.1 / ignore -0.1，新类型初始 0.5，范围 [0.1, 1.0]）
