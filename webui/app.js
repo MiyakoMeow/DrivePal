@@ -47,7 +47,7 @@ function getContextInput() {
 
     const traffic = {};
     if (congestion_level) traffic.congestion_level = congestion_level;
-    if (incidents) traffic.incidents = [incidents];
+    if (incidents) traffic.incidents = incidents.split(',').map(s => s.trim()).filter(Boolean);
     if (delay_minutes !== '') traffic.estimated_delay_minutes = parseInt(delay_minutes, 10);
 
     const ctx = {};
@@ -82,7 +82,7 @@ function fillForm(preset) {
     document.getElementById('ctx-etaMinutes').value = s.eta_minutes ?? '';
 
     document.getElementById('ctx-congestionLevel').value = t.congestion_level || '';
-    document.getElementById('ctx-incidents').value = t.incidents || '';
+    document.getElementById('ctx-incidents').value = Array.isArray(t.incidents) ? t.incidents.join(', ') : (t.incidents || '');
     document.getElementById('ctx-delayMinutes').value = t.estimated_delay_minutes ?? '';
 
     document.getElementById('ctx-scenario').value = ctx.scenario || '';
