@@ -31,13 +31,13 @@ GraphQL 在此项目中仅带来额外复杂度：
 | 4 | `processQuery` mutation | `POST /api/query` | POST | body: `ProcessQueryRequest`（已有） | `ProcessQueryResponse` |
 | 5 | `submitFeedback` mutation | `POST /api/feedback` | POST | body: `FeedbackRequest` | `FeedbackResponse` |
 | 6 | `saveScenarioPreset` mutation | `POST /api/presets` | POST | body: `SavePresetRequest` | `ScenarioPresetResponse` |
-| 7 | `deleteScenarioPreset` mutation | `DELETE /api/presets/{preset_id}` | DELETE | query: `current_user` | `bool` |
+| 7 | `deleteScenarioPreset` mutation | `DELETE /api/presets/{preset_id}` | DELETE | query: `current_user` | `{"success": bool}` |
 | 8 | `exportData` mutation | `GET /api/export` | GET | query: `current_user` | `ExportDataResponse` |
-| 9 | `deleteAllData` mutation | `DELETE /api/data` | DELETE | query: `current_user` | `bool` |
+| 9 | `deleteAllData` mutation | `DELETE /api/data` | DELETE | query: `current_user` | `{"success": bool}` |
 | 10 | `pollPendingReminders` mutation | `POST /api/reminders/poll` | POST | body: `PollRemindersRequest` | `PollRemindersResponse` |
-| 11 | `cancelPendingReminder` mutation | `DELETE /api/reminders/{reminder_id}` | DELETE | query: `current_user` | `bool` |
+| 11 | `cancelPendingReminder` mutation | `DELETE /api/reminders/{reminder_id}` | DELETE | query: `current_user` | `{"success": bool}` |
 | 12 | `getPendingReminders` mutation | `GET /api/reminders` | GET | query: `current_user` | `list[PendingReminderResponse]` |
-| 13 | `closeSession` mutation | `POST /api/sessions/{session_id}/close` | POST | query: `current_user` | `bool` |
+| 13 | `closeSession` mutation | `POST /api/sessions/{session_id}/close` | POST | query: `current_user` | `{"success": bool}` |
 
 **不变：** `POST /query/stream`（SSE 端点）路径不变，已无 GraphQL 依赖。
 
@@ -183,7 +183,7 @@ class PendingReminderResponse(BaseModel):
 | `GraphQLEventNotFoundError` | `HTTPException(status_code=404, detail=...)` | 404 |
 | `ChatModelUnavailableError` | `HTTPException(status_code=503, detail=...)` | 503 |
 
-`_safe_memory_call` 保留逻辑，异常类型改为 `HTTPException`。
+`safe_memory_call`（提取至 `app/api/errors.py`）保留逻辑，异常类型改为 `HTTPException`。
 
 ## 文件变更
 
