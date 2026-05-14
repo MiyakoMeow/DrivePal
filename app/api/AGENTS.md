@@ -1,69 +1,108 @@
 # API层
 
-`app/api/` —— Strawberry GraphQL, code-first。端点 `/graphql`（内置 GraphiQL）。
+`app/api/` —— FastAPI REST API，挂载于 `/api` 前缀。
 
-**Query:**
-```graphql
-history(limit, memoryMode, currentUser): [MemoryEventGQL]
-scenarioPresets(currentUser): [ScenarioPresetGQL]
-experimentResults: ExperimentResults
-```
+## 端点一览
 
-**Mutation（GraphQL Schema 定义，camelCase）：**
-```graphql
-processQuery(input: {query, memoryMode, context, currentUser, sessionId}): {result, eventId, stages}
-submitFeedback(input: {eventId, action, memoryMode, currentUser, modifiedContent}): {status}
-saveScenarioPreset(input): ScenarioPresetGQL
-deleteScenarioPreset(presetId, currentUser): Boolean
-exportData(currentUser): ExportDataResult
-deleteAllData(currentUser): Boolean
-pollPendingReminders(currentUser, contextInput): PollResult
-cancelPendingReminder(reminderId, currentUser): Boolean
-getPendingReminders(currentUser): [PendingReminderGQL]
-closeSession(sessionId, currentUser): Boolean
-```
+| 方法 | 路径 | 用途 | 请求/响应 Schema |
+|------|------|------|------------------|
+| POST | `/api/query` | 处理用户查询，返回完整工作流结果 | `ProcessQueryRequest` → `ProcessQueryResponse` |
+| POST | `/api/query/stream` | SSE 流式返回各阶段结果 | `ProcessQueryRequest` → `text/event-stream` |
+| POST | `/api/feedback` | 提交用户反馈（accept/ignore） | `FeedbackRequest` → `FeedbackResponse` |
+| GET | `/api/history` | 查询历史记忆事件 | query: `limit`, `current_user` → `list[MemoryEventResponse]` |
+| GET | `/api/export` | 导出当前用户全量文本数据 | query: `current_user` → `ExportDataResponse` |
+| DELETE | `/api/data` | 删除当前用户全量数据 | query: `current_user` → `{success: bool}` |
+| GET | `/api/experiments` | 查询五策略实验结果对比 | → `ExperimentResultsResponse` |
+| GET | `/api/presets` | 查询所有场景预设 | query: `current_user` → `list[ScenarioPresetResponse]` |
+| POST | `/api/presets` | 保存场景预设 | `SavePresetRequest` → `ScenarioPresetResponse` |
+| DELETE | `/api/presets/{preset_id}` | 删除场景预设 | → `{success: bool}` |
+| POST | `/api/reminders/poll` | 车机端轮询待触发提醒 | `PollRemindersRequest` → `PollRemindersResponse` |
+| DELETE | `/api/reminders/{reminder_id}` | 取消待触发提醒 | → `{success: bool}` |
+| GET | `/api/reminders` | 获取待触发提醒列表 | query: `current_user` → `list[PendingReminderResponse]` |
+| POST | `/api/sessions/{session_id}/close` | 关闭指定会话 | query: `current_user` → `{success: bool}` |
 
-**命名约定：** Schema 用 camelCase（GraphQL 约定），Python resolver 实现用 snake_case（PEP 8）。Strawberry 自动转换，开发者无需手动映射。例：`processQuery` → `process_query`。
+## 请求/响应 Schema
 
-**反馈学习机制：**
-1. **权重更新**：`submitFeedback` 接受（accept）时对应类型权重 +0.1（上限 1.0），忽略（ignore）时 -0.1（下限 0.1），新类型初始 0.5。权重存入 `strategies.toml` 的 `reminder_weights`。
-2. **权重注入**：权重经 `_format_preference_hint()` 转为自然语言提示，通过 system prompt 的 `{preference_hint}` 占位符和用户 prompt 正文两路注入 JointDecision Agent（权重 ≥ 0.6 强引导，≥ 0.5 弱引导，低于 0.5 不提示）。
-3. **注入时机**：JointDecision Agent 调用前，prompt 中注入偏好提示。
-4. **交互顺序**：规则引擎先处理硬约束 → JointDecision Agent 语义推理（受偏好影响）→ `postprocess_decision()` 规则后处理（allowed_channels 过滤、非紧急降级等）。
+定义于 `app/api/schemas.py`。查询端点额外使用 `app/schemas/query.py`。
 
-**枚举：** `MemoryModeEnum`, `EmotionEnum`, `WorkloadEnum`, `CongestionLevelEnum`, `ScenarioEnum`
+### 查询
 
-**输入类型（8个）：** `GeoLocationInput`, `DriverStateInput`, `SpatioTemporalContextInput`, `TrafficConditionInput`, `DrivingContextInput`, `ProcessQueryInput`, `FeedbackInput`, `ScenarioPresetInput`
+- **ProcessQueryRequest** (`app/schemas/query.py`): `query` (str), `context` (DrivingContext | None), `current_user` (str, 默认 "default"), `session_id` (str | None)
+- **ProcessQueryResponse**: `result` (str), `event_id` (str | None), `stages` (dict | None)
 
-**输出类型（16个）：** `GeoLocationGQL`, `DriverStateGQL`, `TrafficConditionGQL`, `SpatioTemporalContextGQL`, `DrivingContextGQL`, `WorkflowStagesGQL`, `ProcessQueryResult`, `MemoryEventGQL`, `ScenarioPresetGQL`, `FeedbackResult`, `ExportDataResult`, `ExperimentResult`, `ExperimentResults`, `PendingReminderGQL`, `TriggeredReminderGQL`, `PollResult`
+### 反馈
 
-**自定义标量：** `JSON`（WorkflowStages 各阶段输出）
+- **FeedbackRequest**: `event_id` (str), `action` (Literal["accept", "ignore"]), `modified_content` (str | None), `current_user` (str)
+- **FeedbackResponse**: `status` (str)
 
-**SSE 流式端点：**
-- `POST /query/stream` — SSE 流式返回工作流各阶段结果，逐 event 推送（`event: stage_start/context_done/decision/done/error`，其中 stage_start 的 data.stage 含 context/joint_decision/execution），`Content-Type: text/event-stream`
+### 预设
+
+- **SavePresetRequest**: `name` (str), `context` (DrivingContext), `current_user` (str)
+- **ScenarioPresetResponse**: `id`, `name`, `context` (DrivingContext), `created_at`
+
+### 数据
+
+- **MemoryEventResponse**: `id`, `content`, `type`, `description`, `created_at`
+- **ExportDataResponse**: `files` (dict[str, str])
+- **ExperimentResultResponse**: `strategy`, `exact_match`, `field_f1`, `value_f1`
+- **ExperimentResultsResponse**: `strategies` (list[ExperimentResultResponse])
+
+### 提醒
+
+- **PollRemindersRequest**: `current_user`, `context` (DrivingContext | None)
+- **TriggeredReminderResponse**: `id`, `event_id`, `content` (dict), `triggered_at`
+- **PollRemindersResponse**: `triggered` (list[TriggeredReminderResponse])
+- **PendingReminderResponse**: `id`, `event_id`, `trigger_type`, `trigger_text`, `status`, `created_at`
+
+## SSE 流式端点
+
+`POST /query/stream` — `app/api/stream.py`。`Content-Type: text/event-stream`。
+
+逐阶段推送事件：
+
+| 事件 | 触发时机 | data 内容 |
+|------|---------|----------|
+| `stage_start` | 每阶段开始 | `{stage: "context" \| "joint_decision" \| "execution"}` |
+| `context_done` | Context 阶段完成 | `{context: {...}}` |
+| `decision` | JointDecision 阶段完成 | `{should_remind: bool, task_type: string}` |
+| `done` | Execution 完成 | `_build_done_data()`：status=delivered/pending/suppressed |
+| `error` | 任一阶段失败 | `{code: string, message: string}` |
+
+快捷指令命中时跳过中间事件，直接 yield done/error。
 
 ## 错误处理
 
-GraphQL 层异常统一继承 `graphql.error.GraphQLError`，自动转为标准 GraphQL error response：
+### safe_memory_call
 
-| 异常类 | 触发条件 |
-|--------|----------|
-| `InternalServerError` | 未预期的服务器错误 |
-| `GraphQLInvalidActionError` | feedback action 非 accept/ignore |
-| `GraphQLEventNotFoundError` | 事件 ID 不存在 |
+`app/api/errors.py`。包装记忆系统调用，异常统一转 HTTPException：
 
-支持外部上下文注入（DrivingContext），跳过LLM推断。
+| 异常类型 | HTTP 状态码 | 触发条件 |
+|---------|------------|---------|
+| OSError | 503 | 存储服务不可用 |
+| ValueError | 422 | 数据校验失败 |
+| 其余 | 500 | 内部错误 |
 
-输入转换由 `resolvers/converters.py` 完成：Strawberry Input → `strawberry_to_plain()`（递归 Enum→value, dataclass→dict）→ Pydantic `model_validate()`。
+### 路由级异常捕获
+
+`app/api/routes/query.py` 额外捕获 `ChatModelUnavailableError` → 503。
 
 ## 服务入口与生命周期
 
 **入口：** `uv run uvicorn app.api.main:app`
 
 **Lifespan 事件：**
-- **启动：** `init_storage()` 初始化数据目录（首次运行时迁移旧平铺结构至 `data/users/default/`）；启动 `_periodic_cleanup` 后台任务每 300s 清理过期会话
-- **关闭：** `MemoryModule.close()` 关闭 MemoryBank（FAISS 索引落盘 + 后台任务取消等待）；`close_client_cache()` 关闭 Chat 客户端缓存
+- **启动：** `init_storage()` 初始化数据目录（首次运行迁移旧结构至 `data/users/default/`）；启动 `_periodic_cleanup` 后台任务每 300s 清理过期会话
+- **关闭：** `MemoryModule.close()` 关闭 MemoryBank（FAISS 落盘 + 后台任务取消等待）；`close_client_cache()` 关闭 Chat 客户端缓存
 
-**中间件：** CORS（当前 `allow_origins=["*"]`，开发用）
+**中间件：** CORS（`allow_origins=["*"]`，开发用）
+
+**路由注册：** `app/api/routes/__init__.py`。6 个子路由模块（data/feedback/presets/query/reminders/sessions），通过 `APIRouter` 汇总为 `api_router`。
 
 **静态文件：** `/static` 挂载 WebUI 目录，`GET /` 返回 `index.html`
+
+## 反馈学习机制
+
+1. **权重更新**：`POST /api/feedback` 接受（accept）时对应类型权重 +0.1（上限 1.0），忽略（ignore）时 -0.1（下限 0.1），新类型初始 0.5。权重存入 `strategies.toml` 的 `reminder_weights`
+2. **权重注入**：权重经 `_format_preference_hint()` 转为自然语言提示，通过 system prompt 的 `{preference_hint}` 占位符和用户 prompt 正文两路注入 JointDecision Agent（权重 ≥ 0.6 强引导，≥ 0.5 弱引导，低于 0.5 不提示）
+3. **注入时机**：JointDecision Agent 调用前，prompt 中注入偏好提示
+4. **交互顺序**：规则引擎先处理硬约束 → JointDecision Agent 语义推理（受偏好影响）→ `postprocess_decision()` 规则后处理（allowed_channels 过滤、非紧急降级等）

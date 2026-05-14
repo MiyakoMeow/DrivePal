@@ -8,7 +8,6 @@ from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
 from app.api.schemas import ProcessQueryResponse
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
-from app.memory.types import MemoryMode
 from app.schemas.query import ProcessQueryRequest
 
 logger = logging.getLogger(__name__)
@@ -22,14 +21,15 @@ async def process_query(req: ProcessQueryRequest) -> ProcessQueryResponse:
         mm = get_memory_module()
         workflow = AgentWorkflow(
             data_dir=DATA_DIR,
-            memory_mode=MemoryMode(req.memory_mode),
             memory_module=mm,
             current_user=req.current_user,
         )
 
+        # REST 边界校验 DrivingContext，workflow 内部期望 dict
+        ctx = req.context.model_dump() if req.context else None
         result, event_id, stages = await workflow.run_with_stages(
             req.query,
-            req.context,
+            ctx,
             session_id=req.session_id,
         )
         return ProcessQueryResponse(

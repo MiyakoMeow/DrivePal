@@ -125,13 +125,21 @@ async def test_feedback_success_updates_strategy_weight(
     assert "meeting" in strategies.get("reminder_weights", {})
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
+    from app.storage.feedback_log import feedback_log_store
+
+    log = feedback_log_store(user_data_dir("default"))
+    records = await log.read_all()
+    assert len(records) == 1
+    assert records[0]["action"] == "accept"
+    assert records[0]["type"] == "meeting"
+
 
 @pytest.mark.integration
 def test_process_query_without_context(isolated_app: TestClient) -> None:
     """测试不带上下文的 POST /api/query（需要 LLM）。"""
     resp = isolated_app.post(
         "/api/query",
-        json={"query": "明天上午9点有个会议", "memory_mode": "memory_bank"},
+        json={"query": "明天上午9点有个会议"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -145,7 +153,6 @@ def test_process_query_with_context(isolated_app: TestClient) -> None:
         "/api/query",
         json={
             "query": "提醒我买牛奶",
-            "memory_mode": "memory_bank",
             "context": {
                 "driver": {
                     "emotion": "calm",

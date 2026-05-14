@@ -12,7 +12,6 @@ from fastapi.responses import StreamingResponse
 from app.agents.workflow import AgentWorkflow
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
-from app.memory.types import MemoryMode
 from app.schemas.query import ProcessQueryRequest
 
 if TYPE_CHECKING:
@@ -28,12 +27,12 @@ async def query_stream(req: ProcessQueryRequest) -> StreamingResponse:
     mm = get_memory_module()
     workflow = AgentWorkflow(
         data_dir=DATA_DIR,
-        memory_mode=MemoryMode(req.memory_mode),
         memory_module=mm,
         current_user=req.current_user,
     )
 
-    driving_context = req.context
+    # REST 边界校验 DrivingContext，workflow 内部期望 dict
+    driving_context = req.context.model_dump() if req.context else None
 
     async def event_generator() -> AsyncGenerator[str]:
         try:

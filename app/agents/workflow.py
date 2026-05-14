@@ -288,13 +288,12 @@ class AgentWorkflow:
     def __init__(
         self,
         data_dir: Path = Path("data"),
-        memory_mode: MemoryMode = MemoryMode.MEMORY_BANK,
         memory_module: MemoryModule | None = None,
         current_user: str = "default",
     ) -> None:
         """初始化工作流实例."""
         self.data_dir = data_dir
-        self._memory_mode = memory_mode
+        self._memory_mode = MemoryMode.MEMORY_BANK
         self.current_user = current_user
 
         if memory_module is not None:

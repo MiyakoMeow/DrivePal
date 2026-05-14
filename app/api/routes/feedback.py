@@ -11,6 +11,7 @@ from app.config import user_data_dir
 from app.memory.schemas import FeedbackData
 from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
+from app.storage.feedback_log import aggregate_weights, append_feedback
 from app.storage.toml_store import TOMLStore
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
     safe_action: Literal["accept", "ignore"] = req.action
-    mode = MemoryMode(req.memory_mode)
+    mode = MemoryMode.MEMORY_BANK
 
     actual_type = await safe_memory_call(
         mm.get_event_type(req.event_id, mode=mode),
@@ -54,20 +55,17 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
         "submitFeedback(update_feedback)",
     )
 
-    # 权重更新：读→改→写 strategies.toml
-    # 步长 0.1 为经验性置信度增量；下限 0.1 防止权重归零（保留最低响应概率）；
-    # 上限 1.0 防止过度信任（完全信任=无条件触发）。
+    # 追加写反馈日志（append-only，无并发冲突）
     user_dir = user_data_dir(req.current_user)
+    await append_feedback(user_dir, req.event_id, safe_action, actual_type)
+
+    # 原子合并权重（merge_dict_key 在 TOMLStore 内部锁下完成读-合-写）
+    aggregated = await aggregate_weights(user_dir)
     strategy_store = TOMLStore(
         user_dir=user_dir,
         filename="strategies.toml",
         default_factory=dict,
     )
-    current_strategy = await strategy_store.read()
-    weights = current_strategy.get("reminder_weights", {})
-    delta = 0.1 if safe_action == "accept" else -0.1
-    new_weight = weights.get(actual_type, 0.5) + delta
-    weights[actual_type] = max(0.1, min(1.0, new_weight))
-    await strategy_store.update("reminder_weights", weights)
+    await strategy_store.merge_dict_key("reminder_weights", aggregated)
 
     return FeedbackResponse(status="success")

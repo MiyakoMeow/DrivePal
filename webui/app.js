@@ -47,7 +47,7 @@ function getContextInput() {
 
     const traffic = {};
     if (congestion_level) traffic.congestion_level = congestion_level;
-    if (incidents) traffic.incidents = [incidents];
+    if (incidents) traffic.incidents = incidents.split(',').map(s => s.trim()).filter(Boolean);
     if (delay_minutes !== '') traffic.estimated_delay_minutes = parseInt(delay_minutes, 10);
 
     const ctx = {};
@@ -82,7 +82,7 @@ function fillForm(preset) {
     document.getElementById('ctx-etaMinutes').value = s.eta_minutes ?? '';
 
     document.getElementById('ctx-congestionLevel').value = t.congestion_level || '';
-    document.getElementById('ctx-incidents').value = t.incidents || '';
+    document.getElementById('ctx-incidents').value = Array.isArray(t.incidents) ? t.incidents.join(', ') : (t.incidents || '');
     document.getElementById('ctx-delayMinutes').value = t.estimated_delay_minutes ?? '';
 
     document.getElementById('ctx-scenario').value = ctx.scenario || '';
@@ -204,11 +204,57 @@ async function loadExperimentData() {
     }
 }
 
+function handleSSEEvent(event, data) {
+    switch (event) {
+        case 'stage_start': {
+            const stage = data.stage;
+            if (stage === 'joint_decision') {
+                document.getElementById('stage-task-body').innerHTML =
+                    '<span class="empty-hint">处理中...</span>';
+                document.getElementById('stage-decision-body').innerHTML =
+                    '<span class="empty-hint">处理中...</span>';
+            } else {
+                document.getElementById(`stage-${stage}-body`).innerHTML =
+                    '<span class="empty-hint">处理中...</span>';
+            }
+            break;
+        }
+        case 'context_done':
+            document.getElementById('stage-context-body').textContent = formatJson(data.context);
+            break;
+        case 'decision':
+            document.getElementById('stage-task-body').textContent = formatJson({ task_type: data.task_type });
+            document.getElementById('stage-decision-body').textContent = formatJson(data);
+            break;
+        case 'done':
+            if (data.event_id) {
+                currentEventId = data.event_id;
+                document.getElementById('feedbackRow').style.display = 'flex';
+            }
+            if (data.status === 'pending') {
+                document.getElementById('stage-execution-body').textContent =
+                    '提醒已延迟: ' + (data.pending_reminder_id ? 'ID ' + data.pending_reminder_id : data.status);
+            } else if (data.result) {
+                document.getElementById('stage-execution-body').textContent = formatJson(data.result);
+            } else if (data.reason) {
+                document.getElementById('stage-execution-body').textContent = data.reason;
+            }
+            break;
+        case 'error':
+            ['context', 'task', 'decision', 'execution'].forEach(s => {
+                const el = document.getElementById(`stage-${s}-body`);
+                if (el.querySelector('.empty-hint')) {
+                    el.innerHTML = '<span class="error">' + escapeHtml(data.message ?? '未知错误') + '</span>';
+                }
+            });
+            break;
+    }
+}
+
 async function sendQuery() {
     const query = document.getElementById('queryInput').value.trim();
     if (!query) return;
 
-    const memoryMode = document.getElementById('memoryMode').value;
     const context = getContextInput();
 
     setLoading(true);
@@ -218,22 +264,47 @@ async function sendQuery() {
     });
 
     try {
-        const body = { query, memory_mode: memoryMode };
+        const body = { query };
         if (context) body.context = context;
-        const res = await api('POST', '/api/query', body);
 
-        currentEventId = res.event_id;
+        const resp = await fetch('/api/query/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
 
-        const stages = res.stages || {};
-        document.getElementById('stage-context-body').textContent = formatJson(stages.context);
-        document.getElementById('stage-task-body').textContent = formatJson(stages.task);
-        document.getElementById('stage-decision-body').textContent = formatJson(stages.decision);
-        document.getElementById('stage-execution-body').textContent = formatJson(stages.execution);
-
-        if (currentEventId) {
-            document.getElementById('feedbackRow').style.display = 'flex';
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `HTTP ${resp.status}`);
         }
 
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                    currentEvent = line.slice(7).trim();
+                } else if (line.startsWith('data: ') && currentEvent) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        handleSSEEvent(currentEvent, data);
+                    } catch (e) {
+                        console.error('Failed to parse SSE data:', e);
+                    }
+                    currentEvent = '';
+                }
+            }
+        }
         loadHistory();
     } catch (e) {
         ['context', 'task', 'decision', 'execution'].forEach(s => {
@@ -257,8 +328,7 @@ async function submitFeedback(action) {
 
 async function loadHistory() {
     try {
-        const mode = document.getElementById('memoryMode').value;
-        const items = await api('GET', `/api/history?limit=10&memory_mode=${mode}`);
+        const items = await api('GET', '/api/history?limit=10');
         const container = document.getElementById('historyList');
         if (!items.length) {
             container.innerHTML = '<span class="empty-hint">暂无历史记录</span>';

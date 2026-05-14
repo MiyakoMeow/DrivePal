@@ -110,3 +110,26 @@ def test_scenario_preset_round_trip() -> None:
     sp2 = ScenarioPreset(**d)
     assert sp2.name == "parked"
     assert sp2.context.scenario == "parked"
+
+
+def test_context_highway_validated() -> None:
+    """场景：高速传递合法 DrivingContext，期望：校验通过，scenario 保持 highway."""
+    from app.schemas.context import DrivingContext
+    from app.schemas.query import ProcessQueryRequest
+
+    req = ProcessQueryRequest(
+        query="测试",
+        context=DrivingContext(scenario="highway", driver=DriverState(emotion="calm")),
+    )
+    assert req.context is not None
+    assert req.context.scenario == "highway"
+
+
+def test_context_invalid_scenario_rejected() -> None:
+    """场景：非法 scenario 值，期望：抛出 ValidationError."""
+    from app.schemas.query import ProcessQueryRequest
+
+    with pytest.raises(ValidationError):
+        ProcessQueryRequest.model_validate(
+            {"query": "测试", "context": {"scenario": "invalid_scenario"}}
+        )

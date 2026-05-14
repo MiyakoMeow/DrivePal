@@ -133,10 +133,32 @@ class TOMLStore:
             await self._async_write(data)
 
     async def update(self, key: str, value: object) -> None:
-        """更新字典类型存储中指定键的值."""
+        """更新字典类型存储中指定键的值。"""
         async with self._lock:
             data = await self._read_unsafe()
             if not isinstance(data, dict):
                 raise UpdateError(type(data).__name__)
             data[key] = value
+            await self._async_write(data)
+
+    async def merge_dict_key(self, key: str, updates: dict[str, Any]) -> None:
+        """原子地读取指定键的 dict 值，合并 updates 后写回。
+
+        若该键的值非 dict，记录告警后直接覆盖。
+        """
+        async with self._lock:
+            data = await self._read_unsafe()
+            if not isinstance(data, dict):
+                raise UpdateError(type(data).__name__)
+            existing = data.get(key, {})
+            if isinstance(existing, dict):
+                existing.update(updates)
+                data[key] = existing
+            else:
+                logger.warning(
+                    "Key %r has non-dict value %r, overwriting",
+                    key,
+                    existing,
+                )
+                data[key] = updates
             await self._async_write(data)
