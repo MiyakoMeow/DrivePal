@@ -15,10 +15,6 @@ archive/
 │   ├── fig4-5_ablation_safety.png
 │   ├── fig4-6_ablation_architecture.png
 │   └── fig4-7_ablation_personalization.png
-├── mermaid/               # 图表生成源码（mermaid 输出 PNG）
-│   ├── 068636d9120fc252.png
-│   ├── 4c5f96646f18b2bd.png
-│   └── 763ddb736e861848.png
 ├── ref/                   # 参考文献 PDF 等原文资料
 │   ├── 中期检查表参考1.md
 │   └── 中期检查表参考2.md
@@ -41,7 +37,6 @@ archive/
 | 开题 | `开题报告.md` | 开题报告 |
 | 中期 | `中期检查表.md` | 中期检查表 |
 | 图表 | `figs/` | 论文图表（fig4-1 至 fig4-7，PNG 格式） |
-| mermaid 源码 | `mermaid/` | mermaid 图表生成产物（PNG） |
 | 参考 | `ref/` | 参考文献原文、模板参考等辅助材料 |
 | 旧版 | `legacy/` | 各阶段历史版本（如中期检查答辩稿） |
 
