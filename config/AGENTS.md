@@ -1,26 +1,17 @@
-# 模型配置
+# 配置
 
-`config/` 目录包含模型、规则和快捷配置：
+`config/` — 模型、规则、快捷配置。
 
 | 文件 | 说明 |
 |------|------|
-| `llm.toml` | 模型组 + provider 配置（见下文） |
-| `rules.toml` | 规则引擎规则定义 |
-| `shortcuts.toml` | 快捷命令定义 |
+| llm.toml | model_groups + model_providers |
+| rules.toml | 规则引擎规则定义 |
+| shortcuts.toml | 快捷命令定义 |
 
-以下为 `config/llm.toml` 的示例。其核心设计模式为 **model_groups + model_providers** 的组合：前者定义模型组（如 default、smart），后者定义对应 provider 的连接信息。
+## llm.toml 示例
 
 ```toml
 [model_groups.default]
-models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
-
-[model_groups.smart]
-models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
-
-[model_groups.fast]
-models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
-
-[model_groups.balanced]
 models = ["deepseek/deepseek-v4-flash?temperature=0.0"]
 
 [model_providers.deepseek]
@@ -28,61 +19,47 @@ base_url = "https://api.deepseek.com/v1"
 api_key_env = "DEEPSEEK_API_KEY"
 concurrency = 8
 
-[model_groups.judge]
-models = ["deepseek/deepseek-v4-pro?temperature=0.1"]
-
-[model_providers.zhipu-coding]
-base_url = "https://open.bigmodel.cn/api/coding/paas/v4"
-api_key_env = "ZHIPU_API_KEY"
-concurrency = 3
-
-[model_providers.openrouter]
-base_url = "https://openrouter.ai/api/v1"
-api_key_env = "OPENROUTER_API_KEY"
-concurrency = 16
-
 [embedding]
 model = "openrouter/baai/bge-m3"
 ```
+
+核心模式：model_groups 定义模型组(default/smart/fast/balanced/judge)，model_providers 定义连接信息。引用格式 `provider/model?params`。
 
 ## 环境变量
 
 | 变量 | 说明 |
 |------|------|
-| `CONFIG_PATH` | 自定义配置文件路径（默认 config/llm.toml；相对路径从项目根解析，绝对路径直接使用） |
-| `DATA_DIR` | 数据目录路径（默认 data） |
-| `WEBUI_DIR` | WebUI静态文件目录路径（默认由 `Path(__file__).parent.parent.parent / "webui"` 计算，即项目根下的 webui/；若环境变量指定路径不存在，回退至该计算路径） |
-| `DEEPSEEK_API_KEY` | DeepSeek API Key |
-| `ZHIPU_API_KEY` | 智谱 API Key |
-| `OPENROUTER_API_KEY` | OpenRouter API Key |
-| `JUDGE_MODEL` / `JUDGE_BASE_URL` | 消融实验 Judge 配置（记录实验环境快照）。应用内 Judge 通过 TOML 的 `[model_groups.judge]` 配置 |
-| `SECONDARY_JUDGE_MODEL` | 消融实验安全组二次裁判模型 |
-| `ABLATION_SEED` | 消融实验随机种子（控制场景合成、抽样等可复现性） |
-| `ABLATION_VARIANT_TIMEOUT_SECONDS` | 消融实验单个 variant 超时秒数（默认 300） |
-| `FATIGUE_THRESHOLD` | 疲劳规则阈值（默认0.7） |
-| `PROBABILISTIC_INFERENCE_ENABLED` | 概率推断开关（默认1） |
-| `MEMORYBANK_SEED` | 遗忘随机种子（benchmark复现用） |
-| `MEMORYBANK_FORGET_MODE` | 遗忘模式：deterministic/probabilistic |
-| `MEMORYBANK_ENABLE_FORGETTING` | 启用遗忘（默认关闭） |
-| `MEMORYBANK_CHUNK_SIZE` | 检索分块大小（默认 None 表示启用自适应分块；设非 None 值禁用自适应。自适应回退值由 MEMORYBANK_DEFAULT_CHUNK_SIZE 控制，默认 1500） |
-| `MEMORYBANK_LLM_TEMPERATURE` | LLM 温度（None=使用摘要模块默认值 0.3，定义于 summarizer.py 的 `_SUMMARY_DEFAULT_TEMPERATURE`） |
-| `MEMORYBANK_LLM_MAX_TOKENS` | LLM 最大 token 数（None=使用摘要模块默认值 400，定义于 summarizer.py 的 `_SUMMARY_DEFAULT_MAX_TOKENS`） |
-| `MEMORYBANK_EMBEDDING_BATCH_SIZE` | 嵌入批量大小（默认100） |
-| `MEMORYBANK_SAVE_INTERVAL_SECONDS` | 持久化节流间隔（默认30秒） |
-| `MEMORYBANK_REFERENCE_DATE_AUTO` | 启用自动推算参考日期（默认false） |
-| `MEMORYBANK_SOFT_FORGET_THRESHOLD` | 软遗忘阈值（默认0.3） |
-| `MEMORYBANK_FORGET_INTERVAL_SECONDS` | 遗忘判断最小间隔秒数（默认300） |
-| `MEMORYBANK_FORGETTING_TIME_SCALE` | 遗忘时间尺度（默认1.0） |
-| `MEMORYBANK_DEFAULT_CHUNK_SIZE` | 自适应回退分块大小（默认1500） |
-| `MEMORYBANK_CHUNK_SIZE_MIN` | 最小分块（默认200） |
-| `MEMORYBANK_CHUNK_SIZE_MAX` | 最大分块（默认8192） |
-| `MEMORYBANK_COARSE_SEARCH_FACTOR` | 粗搜倍数（默认4） |
-| `MEMORYBANK_EMBEDDING_MIN_SIMILARITY` | 嵌入最低相似度（默认0.3） |
-| `MEMORYBANK_MAX_MEMORY_STRENGTH` | 记忆强度上限（默认10） |
-| `MEMORYBANK_RETRIEVAL_ALPHA` | 语义相似度 vs 记忆留存率权衡系数（默认0.7） |
-| `MEMORYBANK_BM25_FALLBACK_ENABLED` | BM25 稀疏回退开关（默认true） |
-| `MEMORYBANK_BM25_FALLBACK_THRESHOLD` | BM25 回退触发阈值（默认0.5） |
-| `MEMORYBANK_REFERENCE_DATE` | 固定参考日期（ISO格式，默认None） |
-| `MEMORYBANK_SHUTDOWN_TIMEOUT_SECONDS` | 关闭超时秒数（float，默认30.0） |
+| CONFIG_PATH | 自定义配置路径（默认 config/llm.toml） |
+| DATA_DIR | 数据目录（默认 data） |
+| WEBUI_DIR | WebUI目录（默认项目根/webui/） |
+| DEEPSEEK_API_KEY | DeepSeek API Key |
+| ZHIPU_API_KEY | 智谱 API Key |
+| OPENROUTER_API_KEY | OpenRouter API Key |
+| JUDGE_MODEL / JUDGE_BASE_URL | 消融实验Judge配置 |
+| SECONDARY_JUDGE_MODEL | 安全组二次裁判模型 |
+| ABLATION_SEED | 消融实验随机种子 |
+| ABLATION_VARIANT_TIMEOUT_SECONDS | 单variant超时（默认300） |
+| FATIGUE_THRESHOLD | 疲劳规则阈值（默认0.7） |
+| PROBABILISTIC_INFERENCE_ENABLED | 概率推断开关（默认1） |
+| MEMORYBANK_ENABLE_FORGETTING | 启用遗忘（默认关闭） |
+| MEMORYBANK_FORGET_MODE | deterministic/probabilistic |
+| MEMORYBANK_SOFT_FORGET_THRESHOLD | 软遗忘阈值（默认0.3） |
+| MEMORYBANK_FORGET_INTERVAL_SECONDS | 遗忘间隔（默认300） |
+| MEMORYBANK_FORGETTING_TIME_SCALE | 遗忘时间尺度（默认1.0） |
+| MEMORYBANK_CHUNK_SIZE | 分块大小（None=自适应） |
+| MEMORYBANK_DEFAULT_CHUNK_SIZE | 自适应回退（默认1500） |
+| MEMORYBANK_CHUNK_SIZE_MIN/MAX | 200/8192 |
+| MEMORYBANK_LLM_TEMPERATURE | 摘要温度（None→0.3） |
+| MEMORYBANK_LLM_MAX_TOKENS | 摘要max_tokens（None→400） |
+| MEMORYBANK_EMBEDDING_BATCH_SIZE | 嵌入批量（默认100） |
+| MEMORYBANK_SAVE_INTERVAL_SECONDS | 持久化节流（默认30s） |
+| MEMORYBANK_COARSE_SEARCH_FACTOR | 粗搜倍数（默认4） |
+| MEMORYBANK_EMBEDDING_MIN_SIMILARITY | 最低相似度（默认0.3） |
+| MEMORYBANK_MAX_MEMORY_STRENGTH | 记忆强度上限（默认10） |
+| MEMORYBANK_RETRIEVAL_ALPHA | 语义vs留存权衡（默认0.7） |
+| MEMORYBANK_BM25_FALLBACK_ENABLED | BM25回退（默认true） |
+| MEMORYBANK_BM25_FALLBACK_THRESHOLD | BM25回退阈值（默认0.5） |
+| MEMORYBANK_REFERENCE_DATE | 固定参考日期 |
+| MEMORYBANK_SHUTDOWN_TIMEOUT_SECONDS | 关闭超时（默认30s） |
 
-> 此为常用子集，完整列表见 `app/memory/memory_bank/config.py` 的 `MemoryBankConfig` 类。
+完整列表见 `app/memory/memory_bank/config.py` 的 `MemoryBankConfig`。
