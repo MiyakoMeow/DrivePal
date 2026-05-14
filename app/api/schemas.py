@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.memory.types import MemoryMode
 from app.schemas.context import DrivingContext
 
 # --- Query ---
@@ -27,7 +28,7 @@ class FeedbackRequest(BaseModel):
 
     event_id: str
     action: Literal["accept", "ignore"]
-    memory_mode: str = "memory_bank"
+    memory_mode: MemoryMode = MemoryMode.MEMORY_BANK
     modified_content: str | None = None
     current_user: str = "default"
 

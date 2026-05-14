@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.routes.query import _safe_memory_call
+from app.api.errors import safe_memory_call
 from app.api.schemas import FeedbackRequest, FeedbackResponse
 from app.config import user_data_dir
 from app.memory.schemas import FeedbackData
@@ -29,7 +29,7 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
     safe_action: Literal["accept", "ignore"] = req.action
     mode = MemoryMode(req.memory_mode)
 
-    actual_type = await _safe_memory_call(
+    actual_type = await safe_memory_call(
         mm.get_event_type(req.event_id, mode=mode),
         "submitFeedback(get_event_type)",
     )
@@ -44,7 +44,7 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
         type=actual_type,
         modified_content=req.modified_content,
     )
-    await _safe_memory_call(
+    await safe_memory_call(
         mm.update_feedback(
             req.event_id,
             feedback,

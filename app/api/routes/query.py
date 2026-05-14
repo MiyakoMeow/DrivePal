@@ -1,7 +1,6 @@
 """查询处理路由."""
 
 import logging
-from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,34 +11,8 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.schemas.query import ProcessQueryRequest
 
-if TYPE_CHECKING:
-    from collections.abc import Awaitable
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-async def _safe_memory_call[T](
-    coro: Awaitable[T],
-    context_msg: str,
-) -> T:
-    """执行记忆系统调用，异常统一转为 HTTPException."""
-    try:
-        return await coro
-    except OSError as e:
-        logger.exception("%s failed", context_msg)
-        raise HTTPException(status_code=500, detail="Internal storage error") from e
-    except RuntimeError as e:
-        logger.exception("%s failed", context_msg)
-        raise HTTPException(status_code=500, detail="Internal runtime error") from e
-    except ValueError as e:
-        logger.exception("%s failed", context_msg)
-        raise HTTPException(
-            status_code=422, detail=f"Invalid data in {context_msg}"
-        ) from e
-    except Exception as e:
-        logger.exception("%s failed", context_msg)
-        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("", response_model=ProcessQueryResponse)
@@ -72,7 +45,7 @@ async def process_query(req: ProcessQueryRequest) -> ProcessQueryResponse:
     except ChatModelUnavailableError as e:
         raise HTTPException(
             status_code=503,
-            detail="AI 模型未就绪",
+            detail="AI model unavailable",
         ) from e
     except Exception as e:
         logger.exception("processQuery failed")

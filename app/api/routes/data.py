@@ -3,7 +3,7 @@
 import logging
 import shutil
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.api.schemas import (
     ExperimentResultResponse,
@@ -35,8 +35,13 @@ async def get_history(
     current_user: str = "default",
 ) -> list[MemoryEventResponse]:
     """查询历史记忆事件."""
+    try:
+        mode = MemoryMode(memory_mode)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422, detail=f"Invalid memory_mode: {memory_mode!r}"
+        ) from e
     mm = get_memory_module()
-    mode = MemoryMode(memory_mode)
     events = await mm.get_history(limit=limit, mode=mode, user_id=current_user)
     return [
         MemoryEventResponse(
