@@ -1,4 +1,4 @@
-"""v1 reminders 路由测试（无 poll）."""
+"""v1 reminders 路由测试（列表 + 取消 + 轮询触发 + WS 广播）."""
 
 from __future__ import annotations
 
@@ -46,11 +46,50 @@ def test_cancel_reminder(app_client: TestClient) -> None:
         pm.cancel.assert_called_once_with("pr1")
 
 
-def test_poll_endpoint_removed(app_client: TestClient) -> None:
-    """POST /api/v1/reminders/poll 不存在（405 或 404）."""
-    resp = app_client.post(
-        "/api/v1/reminders/poll",
-        json={},
-        headers={"X-User-Id": "alice"},
-    )
-    assert resp.status_code in (404, 405)
+def test_poll_triggers_and_broadcasts(app_client: TestClient) -> None:
+    """POST /api/v1/reminders/poll 触发提醒并经 WS 广播."""
+    fake_triggered = [
+        {
+            "id": "pr1",
+            "event_id": "e1",
+            "content": {"speakable_text": "该休息了"},
+            "trigger_type": "time",
+            "created_at": "2025-01-01T00:00:00",
+            "status": "triggered",
+        },
+    ]
+    with (
+        patch("app.api.v1.reminders.PendingReminderManager") as mock_pm_cls,
+        patch("app.api.v1.reminders.ws_manager.broadcast", new=AsyncMock()) as mock_broadcast,
+    ):
+        pm = AsyncMock()
+        pm.poll.return_value = fake_triggered
+        mock_pm_cls.return_value = pm
+        resp = app_client.post(
+            "/api/v1/reminders/poll",
+            json={"context": {"scenario": "highway"}},
+            headers={"X-User-Id": "alice"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["triggered"]) == 1
+        assert body["triggered"][0]["id"] == "pr1"
+        mock_broadcast.assert_called_once_with(
+            "alice",
+            {"type": "reminder_triggered", "data": fake_triggered[0]},
+        )
+
+
+def test_poll_no_context_no_triggers(app_client: TestClient) -> None:
+    """POST /api/v1/reminders/poll 无上下文无触发."""
+    with patch("app.api.v1.reminders.PendingReminderManager") as mock_pm_cls:
+        pm = AsyncMock()
+        pm.poll.return_value = []
+        mock_pm_cls.return_value = pm
+        resp = app_client.post(
+            "/api/v1/reminders/poll",
+            json={},
+            headers={"X-User-Id": "alice"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["triggered"] == []
