@@ -24,9 +24,9 @@ Python 3.14 + `uv`。
 |------|------|
 | Web框架 | FastAPI + Uvicorn |
 | API层 | Strawberry GraphQL (code-first) |
-| AI工作流 | 自定义四Agent流水线 + 轻量规则引擎 |
+| AI工作流 | 自定义三Agent流水线 + 轻量规则引擎 |
 | LLM | DeepSeek |
-| Embedding | BGE-M3 (vLLM, OpenAI兼容接口, 纯远程) |
+| Embedding | BGE-M3 (OpenRouter, OpenAI兼容接口, 纯远程) |
 | 记忆 | MemoryBank (FAISS + Ebbinghaus遗忘曲线) |
 | 存储 | TOML (tomllib + tomli-w) + JSONL |
 | 开发 | uv, pytest (asyncio_mode=auto), ruff, ty |
