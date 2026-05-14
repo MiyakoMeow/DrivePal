@@ -1,6 +1,6 @@
 # 消融实验
 
-`experiments/ablation/`。三组消融实验，验证系统各组件的独立贡献。通过 `python -m experiments.ablation` 运行。
+本目录。三组消融实验，验证系统各组件的独立贡献。通过 `python -m experiments.ablation` 运行。
 
 ## 实验目的
 
