@@ -1,6 +1,6 @@
 # API层
 
-`app/api/` —— Strawberry GraphQL, code-first。端点 `/graphql`（内置 Playground）。
+`app/api/` —— Strawberry GraphQL, code-first。端点 `/graphql`（内置 GraphiQL）。
 
 **Query:**
 ```graphql
