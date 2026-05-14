@@ -125,6 +125,8 @@ experiments/           # 消融实验
 ### 核心 Mutation
 
 ```graphql
+# stages 含 4 个可审查字段：context / task / decision / execution
+# 其中 task + decision 均由 JointDecision Agent 一次调用产出（三阶段流水线，四字段输出拆分）
 mutation {
   processQuery(input: {
     query: "明天上午9点有个会议"
