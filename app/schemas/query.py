@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.schemas.context import DrivingContext
+
 
 class ProcessQueryRequest(BaseModel):
     """POST /query/stream 请求体."""
 
     query: str
-    context: dict | None = None
+    context: DrivingContext | None = None
     current_user: str = "default"
     session_id: str | None = None
 

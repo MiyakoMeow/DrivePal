@@ -110,3 +110,29 @@ def test_scenario_preset_round_trip() -> None:
     sp2 = ScenarioPreset(**d)
     assert sp2.name == "parked"
     assert sp2.context.scenario == "parked"
+
+
+def test_process_query_request_validates_context() -> None:
+    """ProcessQueryRequest.context 接受 DrivingContext 结构."""
+    from app.schemas.query import ProcessQueryRequest
+
+    req = ProcessQueryRequest(
+        query="测试",
+        context={
+            "driver": {"emotion": "calm"},
+            "scenario": "highway",
+        },
+    )
+    assert req.context is not None
+    assert req.context.scenario == "highway"
+
+
+def test_process_query_request_invalid_context_raises() -> None:
+    """ProcessQueryRequest.context 拒绝非法字段值."""
+    from app.schemas.query import ProcessQueryRequest
+
+    with pytest.raises(ValidationError):
+        ProcessQueryRequest(
+            query="测试",
+            context={"scenario": "invalid_scenario"},
+        )
