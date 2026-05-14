@@ -125,6 +125,14 @@ async def test_feedback_success_updates_strategy_weight(
     assert "meeting" in strategies.get("reminder_weights", {})
     assert strategies["reminder_weights"]["meeting"] == pytest.approx(0.6)
 
+    from app.storage.feedback_log import feedback_log_store
+
+    log = feedback_log_store(user_data_dir("default"))
+    records = await log.read_all()
+    assert len(records) == 1
+    assert records[0]["action"] == "accept"
+    assert records[0]["type"] == "meeting"
+
 
 @pytest.mark.integration
 def test_process_query_without_context(isolated_app: TestClient) -> None:
