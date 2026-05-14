@@ -58,7 +58,7 @@ model = "openrouter/baai/bge-m3"
 | `JUDGE_MODEL` / `JUDGE_BASE_URL` | 消融实验 Judge 配置（记录实验环境快照）。应用内 Judge 通过 TOML 的 `[model_groups.judge]` 配置 |
 | `SECONDARY_JUDGE_MODEL` | 消融实验安全组二次裁判模型 |
 | `ABLATION_SEED` | 消融实验随机种子（控制场景合成、抽样等可复现性） |
-| `ABLATION_VARIANT_TIMEOUT_SECONDS` | 消融实验单个 variant 超时秒数（默认 3600） |
+| `ABLATION_VARIANT_TIMEOUT_SECONDS` | 消融实验单个 variant 超时秒数（默认 300） |
 | `JUDGE_API_KEY` | 预留，当前未使用 |
 | `FATIGUE_THRESHOLD` | 疲劳规则阈值（默认0.7） |
 | `PROBABILISTIC_INFERENCE_ENABLED` | 概率推断开关（默认1） |

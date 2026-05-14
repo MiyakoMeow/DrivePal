@@ -11,7 +11,7 @@ uv run pytest tests/ -v --test-embedding # 需要真实embedding
 uv run pytest tests/ -v --run-integration # 需要完整服务
 ```
 
-pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, -n auto, testpaths=tests, filterwarnings=ignore:builtin type Swig:DeprecationWarning。
+pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, testpaths=tests, filterwarnings=ignore:builtin type Swig:DeprecationWarning。
 
 `tests/conftest.py` 提供：
 - `pytest_configure` 注册 `integration` / `llm` / `embedding` 三个标记
@@ -40,7 +40,7 @@ tests/
 │   └── test_graphql.py            # GraphQL 端点
 ├── memory/               # → app/memory/
 │   ├── test_forgetting.py         # 遗忘曲线单元测试（确定性/概率模式、阈值、节流）
-│   ├── test_retrieval_pipeline.py # 四阶段检索管道（mock FAISS + Embedding）
+│   ├── test_retrieval_pipeline.py # 六阶段检索管道（mock FAISS + Embedding）
 │   ├── test_index_recovery.py     # FAISS 降级恢复（损坏/计数不匹配/备份）
 │   ├── test_memory_bank.py        # 记忆写入 → 检索 → 回放集成测试
 │   ├── test_memory_module_facade.py # MemoryModule Facade 接口测试

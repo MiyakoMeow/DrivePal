@@ -1,10 +1,12 @@
-"""四阶段检索管道。
+"""六阶段检索管道。
 
 从 VehicleMemBench memorybank.py 移植并适配：
 - 阶段 1: query embedding + FAISS 粗排
-- 阶段 2: 邻居合并（同 source 连续条目）
-- 阶段 3: 重叠去重（并查集）
-- 阶段 4: 说话人感知降权
+- 阶段 2: BM25 稀疏回退（FAISS 最高分低于阈值时补充）
+- 阶段 3: 邻居合并（同 source 连续条目）+ 重叠去重（并查集）
+- 阶段 4: 遗忘条目 + 低分条目过滤
+- 阶段 5: 说话人感知降权
+- 阶段 6: Ebbinghaus 保留率加权
 """
 
 from __future__ import annotations
@@ -374,12 +376,14 @@ def _word_in_text(word: str, text: str) -> bool:
 
 
 class RetrievalPipeline:
-    """四阶段检索管道。
+    """六阶段检索管道。
 
     阶段 1: query embedding + FAISS 粗排
-    阶段 2: 邻居合并（同 source 连续条目）
-    阶段 3: 重叠去重（并查集）
-    阶段 4: 说话人感知降权
+    阶段 2: BM25 稀疏回退（FAISS 最高分低于阈值时补充）
+    阶段 3: 邻居合并（同 source 连续条目）+ 重叠去重（并查集）
+    阶段 4: 遗忘条目 + 低分条目过滤
+    阶段 5: 说话人感知降权
+    阶段 6: Ebbinghaus 保留率加权
 
     _apply_speaker_filter 通过遍历结果条目中的 speakers 字段工作，
     不依赖 FaissIndex.get_all_speakers()，迁移 IndexReader 后行为不变。
@@ -405,7 +409,7 @@ class RetrievalPipeline:
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
     ) -> tuple[list[dict], bool]:
-        """执行四阶段检索管道。
+        """执行六阶段检索管道。
 
         Returns:
             (results, updated): results 是检索结果列表，updated 指示是否有

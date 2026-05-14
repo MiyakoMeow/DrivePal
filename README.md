@@ -6,14 +6,14 @@
 
 ## 项目概述
 
-知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于多Agent协作工作流（Context → Task → Strategy → Execution），支持 MemoryBank 长期记忆管理策略，并通过请求级上下文注入集成外部数据（驾驶员状态、时空信息、交通状况）。
+知行车秘是一个车载AI智能体原型系统，专注于**驾驶场景下的智能提醒和日程管理**。系统基于三Agent协作工作流（Context → JointDecision → Execution），支持 MemoryBank 长期记忆管理策略，并通过请求级上下文注入集成外部数据（驾驶员状态、时空信息、交通状况）。
 
 ### 设计目标
 
 1. **驾驶安全优先**：轻量规则引擎基于驾驶员状态自动约束提醒方式
 2. **情境感知**：通过 GraphQL API 接收细粒度外部数据，跳过 LLM 编造上下文
 3. **遗忘曲线记忆**：基于 Ebbinghaus 遗忘曲线实现记忆衰减与强化
-4. **可解释决策**：四阶段工作流各节点输出可独立审查
+4. **可解释决策**：三阶段工作流各节点输出可独立审查
 5. **交互灵活性**：支持多格式输出、主动触发、流式响应、多轮对话、快捷指令
 
 ---
@@ -25,20 +25,17 @@
 ```mermaid
 flowchart LR
     A[用户输入] --> B[Context Agent]
-    B --> C[Task Agent]
-    C --> D[Strategy Agent]
-    D --> E[Execution Agent]
+    B --> C[JointDecision Agent]
+    C --> D[Execution Agent]
 ```
 
-四阶段流水线，各阶段职责概览：
+三阶段流水线，各阶段职责概览：
 
 | Agent | 说明 |
 |-------|------|
 | **Context Agent** | 有外部数据时直接使用，无数据时 LLM 推断 |
-| **Task Agent** | 事件抽取与类型归因 |
-| **Strategy Agent** | 在安全约束范围内决定提醒时机、方式、内容 |
-| **Strategy Agent** 前置 | 规则引擎强制应用安全约束（不可绕过） |
-| **Execution Agent** | 存储事件，路由多格式输出 |
+| **JointDecision Agent** | 事件归因 + 策略决策（合原 Task + Strategy 为一次 LLM 调用），前有规则引擎安全约束 |
+| **Execution Agent** | 存储事件，路由多格式输出，规则后处理强制覆盖 |
 
 ### 记忆系统
 
@@ -85,7 +82,7 @@ flowchart TD
 main.py                # Uvicorn 入口
 app/
 ├── agents/            # 工作流编排、规则引擎、概率推断、提示词
-│   ├── workflow.py    #   四阶段流水线
+│   ├── workflow.py    #   三阶段流水线
 │   ├── rules.py       #   规则引擎
 │   ├── prompts.py     #   系统提示词
 │   ├── outputs.py     #   多格式输出路由
