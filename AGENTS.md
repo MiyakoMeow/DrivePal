@@ -50,7 +50,7 @@ data/                  # 运行时数据
 scripts/               # 工具脚本
 webui/                 # 模拟测试工作台
 archive/               # 论文参考文献 → archive/AGENTS.md
-experiments/           # 消融实验设计 → experiments/AGENTS.md
+experiments/           # 消融实验设计 → experiments/ablation/AGENTS.md
 ```
 
 ## 检查流程
