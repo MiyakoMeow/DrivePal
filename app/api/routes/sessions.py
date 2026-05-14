@@ -7,7 +7,7 @@ from app.agents.conversation import _conversation_manager
 router = APIRouter()
 
 
-@router.post("/sessions/{session_id}/close")
+@router.post("/{session_id}/close")
 async def close_session(
     session_id: str,
     current_user: str = "default",

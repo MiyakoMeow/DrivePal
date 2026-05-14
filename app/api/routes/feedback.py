@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/feedback", response_model=FeedbackResponse)
+@router.post("", response_model=FeedbackResponse)
 async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
     """提交用户反馈."""
     try:

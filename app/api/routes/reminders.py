@@ -16,7 +16,7 @@ from app.config import user_data_dir
 router = APIRouter()
 
 
-@router.post("/reminders/poll", response_model=PollRemindersResponse)
+@router.post("/poll", response_model=PollRemindersResponse)
 async def poll_pending_reminders(req: PollRemindersRequest) -> PollRemindersResponse:
     """车机端轮询待触发提醒."""
     pm = PendingReminderManager(user_data_dir(req.current_user))
@@ -35,7 +35,7 @@ async def poll_pending_reminders(req: PollRemindersRequest) -> PollRemindersResp
     )
 
 
-@router.delete("/reminders/{reminder_id}")
+@router.delete("/{reminder_id}")
 async def cancel_pending_reminder(
     reminder_id: str,
     current_user: str = "default",
@@ -46,7 +46,7 @@ async def cancel_pending_reminder(
     return {"success": True}
 
 
-@router.get("/reminders", response_model=list[PendingReminderResponse])
+@router.get("", response_model=list[PendingReminderResponse])
 async def get_pending_reminders(
     current_user: str = "default",
 ) -> list[PendingReminderResponse]:

@@ -42,7 +42,7 @@ async def _safe_memory_call[T](
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.post("/query", response_model=ProcessQueryResponse)
+@router.post("", response_model=ProcessQueryResponse)
 async def process_query(req: ProcessQueryRequest) -> ProcessQueryResponse:
     """处理用户查询并返回工作流结果."""
     try:

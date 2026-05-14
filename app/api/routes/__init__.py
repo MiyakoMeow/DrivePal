@@ -11,8 +11,8 @@ from app.api.routes.sessions import router as sessions_router
 
 api_router = APIRouter()
 api_router.include_router(data_router, tags=["data"])
-api_router.include_router(feedback_router, tags=["feedback"])
-api_router.include_router(presets_router, tags=["presets"])
-api_router.include_router(query_router, tags=["query"])
-api_router.include_router(reminders_router, tags=["reminders"])
-api_router.include_router(sessions_router, tags=["sessions"])
+api_router.include_router(feedback_router, prefix="/feedback", tags=["feedback"])
+api_router.include_router(presets_router, prefix="/presets", tags=["presets"])
+api_router.include_router(query_router, prefix="/query", tags=["query"])
+api_router.include_router(reminders_router, prefix="/reminders", tags=["reminders"])
+api_router.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
