@@ -24,12 +24,14 @@ async def append_feedback(
 ) -> None:
     """追加一条反馈记录."""
     store = feedback_log_store(user_dir)
-    await store.append({
-        "event_id": event_id,
-        "action": action,
-        "type": feedback_type,
-        "timestamp": datetime.now(UTC).isoformat(),
-    })
+    await store.append(
+        {
+            "event_id": event_id,
+            "action": action,
+            "type": feedback_type,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+    )
 
 
 async def aggregate_weights(user_dir: Path) -> dict[str, float]:

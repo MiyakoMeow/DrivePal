@@ -77,5 +77,5 @@ data/
 
 - **文件名**：`feedback_log.jsonl`（与 `feedback.jsonl` 职责分离——后者服务于 MemoryBank 记忆强度反馈）
 - **API**：
-  - `append_feedback(event_id, action, event_type, current_user)` — 追加一条反馈原始记录
-  - `aggregate_weights(current_user)` → `dict[str, float]` — 按事件类型聚合权重（accept +0.1 / ignore -0.1，新类型初始 0.5，范围 [0.1, 1.0]）
+  - `append_feedback(user_dir, event_id, action, feedback_type)` — 追加一条反馈原始记录
+  - `aggregate_weights(user_dir)` → `dict[str, float]` — 按事件类型聚合权重（accept +0.1 / ignore -0.1，新类型初始 0.5，范围 [0.1, 1.0]）
