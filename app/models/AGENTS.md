@@ -19,7 +19,7 @@
 | `chat.py` | LLM chat completion，多 provider fallback、semaphore 并发控制、JSON mode |
 | `embedding.py` | 文本嵌入模型封装，OpenAI 兼容远程接口、batch 处理、自动重试 |
 | `settings.py` | LLM/Embedding 配置加载器，从 TOML 文件读取模型配置 |
-| `model_string.py` | 模型引用字符串格式解析（如 `"provider_name/model_group"`，格式错误抛出 `InvalidModelStringError`）。存在性校验由 `settings.py` 负责 |
+| `model_string.py` | 模型引用字符串格式解析（如 `"provider_name/model"`，格式错误抛出 `InvalidModelStringError`）。存在性校验由 `settings.py` 负责 |
 | `types.py` | 基础类型定义（`ResolvedModel`、`ProviderConfig` 等） |
 | `exceptions.py` | 模型层异常（`ProviderNotFoundError`、`ModelGroupNotFoundError`） |
 | `_http.py` | HTTP 客户端共享超时配置（12h read timeout） |
