@@ -60,7 +60,7 @@ data/
 - `_MIGRATED_FLAG = ".migrated_flag"` — 标记文件名。标记存在时 `init_storage()` 直接跳过迁移（幂等）
 - `init_storage(data_dir: Path | None = None)` — 接受可选 data_dir，默认 `DATA_DIR`。创建 root → 检查 `_MIGRATED_FLAG` → 调用 `_migrate_legacy()` + `init_user_dir("default")` → 写标记（lifespan 使用）
 - `init_user_dir(user_id)` → `Path` — 初始化指定用户的完整目录结构（3 个 jsonl + 4 个 toml 文件）并写入默认值
-- `_migrate_legacy()` → `bool` — 调用 `_migrate_text_files()` + `_migrate_memorybank()`，将平铺旧结构迁移至 `data/users/default/`。幂等
+- `_migrate_legacy()` → `bool` — 调用 `_migrate_text_files()` + `_migrate_memorybank()`，将平铺旧结构迁移至 `data/users/default/`。双重幂等保护：`default_dir.exists()` 提前返回 + `_MIGRATED_FLAG` 标记
 - `_migrate_text_files(default_dir, old_root)` → `bool` — 迁移 3 个 jsonl + 4 个 toml 文件至 default_dir
 - `_migrate_memorybank(default_dir, old_root)` — 迁移 `data/memorybank/` 和 `data/user_*/` 目录至 `data/users/{user_id}/` 结构
 
