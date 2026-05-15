@@ -253,17 +253,20 @@ def _merge_overlapping_results(
     return merged
 
 
-def _update_memory_strengths(
+def _compute_memory_strength_updates(
     results: list[dict],
     metadata: list[dict],
     config: MemoryBankConfig,
     reference_date: str | None = None,
-) -> bool:
-    """更新命中条目的记忆强度，返回是否有修改。
+) -> dict[int, dict[str, object]]:
+    """计算命中条目的记忆强度更新，返回变更集。不修改 metadata。
 
-    记忆强度受 max_memory_strength 上限约束，防止无限回忆强化。
+    Returns:
+        dict[meta_idx → {field: new_value}]
+
     """
-    updated = False
+    updates: dict[int, dict[str, object]] = {}
+    today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
     for r in results:
         all_mi: list[int] = []
         ai = r.get("_all_meta_indices")
@@ -274,7 +277,7 @@ def _update_memory_strengths(
             if mi is not None:
                 all_mi.append(mi)
         for mi in all_mi:
-            if 0 <= mi < len(metadata):
+            if 0 <= mi < len(metadata) and mi not in updates:
                 new_strength = min(
                     _safe_memory_strength(
                         metadata[mi].get("memory_strength", INITIAL_MEMORY_STRENGTH)
@@ -282,12 +285,11 @@ def _update_memory_strengths(
                     + 1.0,
                     float(config.max_memory_strength),
                 )
-                metadata[mi]["memory_strength"] = new_strength
-                today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
+                fields: dict[str, object] = {"memory_strength": new_strength}
                 if metadata[mi].get("last_recall_date") != today:
-                    metadata[mi]["last_recall_date"] = today
-                updated = True
-    return updated
+                    fields["last_recall_date"] = today
+                updates[mi] = fields
+    return updates
 
 
 def _gather_neighbor_indices(
@@ -408,27 +410,27 @@ class RetrievalPipeline:
 
     async def search(
         self, query: str, top_k: int = 5, reference_date: str | None = None
-    ) -> tuple[list[dict], bool]:
+    ) -> tuple[list[dict], dict[int, dict[str, object]]]:
         """执行六阶段检索管道。
 
         Returns:
-            (results, updated): results 是检索结果列表，updated 指示是否有
-            memory_strength 变更（调用方应在合适时机持久化索引）。
+            (results, updates): results 是检索结果列表，updates 是回忆强化变更集
+            （调用方应在合适时机 apply 到 metadata 并持久化）。
 
         """
         if top_k <= 0:
-            return [], False
+            return [], {}
         query_emb = await self._embedding_client.encode(query)
         index_total = self._index.total
         if index_total == 0:
-            return [], False
+            return [], {}
         coarse_factor = self._config.coarse_search_factor
         if coarse_factor <= 0:
             coarse_factor = 4
         coarse_k = min(top_k * coarse_factor, index_total)
         results = await self._index.search(query_emb, coarse_k)
         if not results:
-            return [], False
+            return [], {}
 
         metadata = self._index.get_metadata()
 
@@ -443,7 +445,7 @@ class RetrievalPipeline:
             if float(r.get("score", 0.0)) >= self._config.embedding_min_similarity
         ]
         if not results:
-            return [], False
+            return [], {}
 
         merged = self._merge_neighbors(results, metadata)
         # 注意：_merge_neighbors 内部已调用 _merge_overlapping_results，
@@ -454,12 +456,12 @@ class RetrievalPipeline:
         merged.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         merged = merged[:top_k]
 
-        updated = _update_memory_strengths(
+        updates = _compute_memory_strength_updates(
             merged, metadata, self._config, reference_date=reference_date
         )
         for r in merged:
             _clean_search_result(r)
-        return merged, updated
+        return merged, updates
 
     async def _apply_bm25_fallback(
         self,

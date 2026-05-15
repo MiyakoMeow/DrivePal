@@ -258,7 +258,7 @@ class MemoryBankStore:
         if self._config.enable_forgetting:
             await self._lifecycle.purge_forgotten(self._index.get_metadata())
         t0 = time.perf_counter()
-        results, _updated = await self._retrieval.search(
+        results, strength_updates = await self._retrieval.search(
             query,
             top_k,
             reference_date=self._get_reference_date(),
@@ -267,6 +267,12 @@ class MemoryBankStore:
         self._metrics.search_latency_ms.append(elapsed)
         if not results:
             self._metrics.search_empty_count += 1
+
+        if strength_updates:
+            metadata = self._index.get_metadata()
+            for mi, fields in strength_updates.items():
+                if 0 <= mi < len(metadata):
+                    metadata[mi].update(fields)
 
         await self._maybe_save()
         extra = self._index.get_extra()
