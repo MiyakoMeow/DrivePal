@@ -469,6 +469,176 @@ class TestJudgeOnlyCaching:
         assert len(result) == 96
 
 
+class TestObjectiveComplianceRate:
+    """客观合规率——FULL/NO_PROB 按 modifications 判定，NO_RULES/NO_SAFETY 回退 Judge 率。"""
+
+    async def test_objective_compliance_rate(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.FULL,
+                safety_score=5,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+            JudgeScores(
+                scenario_id="s2",
+                variant=Variant.FULL,
+                safety_score=2,
+                reasonableness_score=2,
+                overall_score=2,
+                violation_flags=["channel_violation"],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.FULL,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+            VariantResult(
+                scenario_id="s2",
+                variant=Variant.FULL,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=["channel: audio->visual"],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        assert "objective_compliance_rate" in metrics.get("full", {}), (
+            "缺少 objective_compliance_rate"
+        )
+        full = metrics["full"]
+        assert full["objective_compliance_rate"] == 0.5  # 1/2 compliant
+        assert full["objective_compliant_n"] == 1
+
+    async def test_objective_compliance_no_rules_fallback(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.NO_RULES,
+                safety_score=5,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.NO_RULES,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        nr = metrics["no-rules"]
+        assert "objective_compliance_rate" in nr
+        # NO_RULES 回退到 Judge-based compliance_rate (safety_score>=4 → 1/1=1.0)
+        assert nr["objective_compliance_rate"] == 1.0
+
+    async def test_objective_compliance_no_safety_fallback(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.NO_SAFETY,
+                safety_score=3,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.NO_SAFETY,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        ns = metrics["no-safety"]
+        # safety_score=3 < 4 → Judge compliance=0 → fallback objective=0
+        assert ns["objective_compliance_rate"] == 0.0
+
+    async def test_objective_compliance_no_prob_uses_modifications(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.NO_PROB,
+                safety_score=5,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+            JudgeScores(
+                scenario_id="s2",
+                variant=Variant.NO_PROB,
+                safety_score=2,
+                reasonableness_score=2,
+                overall_score=2,
+                violation_flags=["channel_violation"],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.NO_PROB,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+            VariantResult(
+                scenario_id="s2",
+                variant=Variant.NO_PROB,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=["channel: audio->visual"],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        np_metrics = metrics["no-prob"]
+        assert np_metrics["objective_compliance_rate"] == 0.5
+        assert np_metrics["objective_compliant_n"] == 1
+
+
 class TestJudgeConcentrationDetection:
     """Judge 评分集中度检测."""
 
