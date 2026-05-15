@@ -54,6 +54,7 @@ class ProactiveScheduler:
         self._task: asyncio.Task | None = None
         self._running = False
         self._voice_queue: asyncio.Queue[str] = asyncio.Queue()
+        self._current_context: dict = {}
 
     async def push_voice_text(self, text: str) -> None:
         """推入一条被动语音文本到队列。"""
@@ -69,6 +70,22 @@ class ProactiveScheduler:
         triggered = await pm.poll(ctx)
         for tr in triggered:
             logger.info("PendingReminder triggered: %s", tr.get("id"))
+            try:
+                result, event_id, _ = await self._workflow.proactive_run(
+                    context_override=ctx,
+                    trigger_source="pending_reminder",
+                )
+                if event_id:
+                    logger.info(
+                        "PendingReminder executed: %s → %s",
+                        tr.get("id"),
+                        result,
+                    )
+            except (OSError, RuntimeError, ValueError, TypeError) as e:
+                logger.warning(
+                    "PendingReminder execution failed: %s",
+                    e,
+                )
 
     async def _scan_context_changes(self, ctx: dict, delta: ContextDelta) -> list[dict]:
         """检查上下文变化并检索相关记忆。"""
@@ -158,7 +175,7 @@ class ProactiveScheduler:
         """单次 tick：语音消费、PendingReminder 轮询、上下文变化检测、触发执行。"""
         await self._drain_voice_queue()
 
-        ctx: dict | None = getattr(self, "_current_context", None)
+        ctx: dict | None = self._current_context
         if not ctx:
             ctx = {}
 
