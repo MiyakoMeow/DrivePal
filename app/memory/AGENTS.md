@@ -46,15 +46,15 @@ flowchart LR
 |------|---------|------|
 | `memory_bank/store.py` | MemoryBankStore | 持久化存储 |
 | `memory_bank/index.py` | FaissIndex | FAISS 索引管理 |
-| `memory_bank/index_reader.py` | — | 只读视图 |
-| `memory_bank/retrieval.py` | — | 检索管道（6 步） |
-| `memory_bank/forget.py` | — | Ebbinghaus 遗忘曲线 |
-| `memory_bank/summarizer.py` | — | 分层摘要 + 人格 |
-| `memory_bank/llm.py` | — | LLM 封装 |
-| `memory_bank/lifecycle.py` | — | 写入/遗忘/摘要编排 |
+| `memory_bank/index_reader.py` | IndexReader(Protocol) | 只读视图 |
+| `memory_bank/retrieval.py` | RetrievalPipeline | 检索管道（6 步） |
+| `memory_bank/forget.py` | ForgettingCurve + forgetting_retention | Ebbinghaus 遗忘曲线 |
+| `memory_bank/summarizer.py` | Summarizer | 分层摘要 + 人格 |
+| `memory_bank/llm.py` | LlmClient | LLM 封装 |
+| `memory_bank/lifecycle.py` | MemoryLifecycle | 写入/遗忘/摘要编排 |
 | `memory_bank/config.py` | pydantic-settings | 配置参数 |
 | `memory_bank/observability.py` | MemoryBankMetrics | 指标收集 |
-| `memory_bank/bg_tasks.py` | — | 后台任务管理器（待接入） |
+| `memory_bank/bg_tasks.py` | BackgroundTaskRunner | 后台任务管理器（待接入） |
 | `memory.py` | MemoryModule | Facade 主实现 |
 | `schemas.py` | MemoryEvent 等 | 数据模型 |
 | `types.py` | MemoryMode(StrEnum) | 工厂注册表键 |
@@ -82,7 +82,7 @@ flowchart LR
 
 ### FaissIndex
 
-`index.py`。IndexIDMap(IndexFlatIP) + L2 归一化 ≈ 余弦相似度。自适应分块 P90×3。`save()` 持有 asyncio.Lock 防并发写入损坏。
+`index.py`。IndexIDMap(IndexFlatIP) + L2 归一化 ≈ 余弦相似度。索引懒重建：空索引首次写入时自动构建。`save()` 持有 asyncio.Lock 防并发写入损坏。
 
 ### EmbeddingClient
 
@@ -106,7 +106,7 @@ flowchart LR
 
 ## FAISS 索引
 
-IndexIDMap(IndexFlatIP) + L2 归一化 ≈ 余弦相似度。自适应分块 P90×3。`save()` 持有 asyncio.Lock 防并发写入损坏。
+IndexIDMap(IndexFlatIP) + L2 归一化 ≈ 余弦相似度。索引懒重建：空索引首次写入时自动构建。`save()` 持有 asyncio.Lock 防并发写入损坏。
 
 ### 索引损坏恢复
 
@@ -127,7 +127,7 @@ IndexIDMap(IndexFlatIP) + L2 归一化 ≈ 余弦相似度。自适应分块 P90
 1. query embedding + FAISS 粗排（top_k×4）
 2. BM25 稀疏回退（FAISS 最高分低于阈值时）
 3. 遗忘条目+低分过滤（forgotten/score < min_similarity）
-4. 邻居合并 + 自适应分块 + 重叠去重（并查集）
+4. 邻居合并 + 自适应分块（P90×3） + 重叠去重（并查集）
 5. 说话人感知降权（无关条目 ×0.75 正分/×1.25 负分）
 6. Ebbinghaus 保留率加权：`adjusted = α×score + (1-α)×retention`
 
@@ -139,7 +139,7 @@ IndexIDMap(IndexFlatIP) + L2 归一化 ≈ 余弦相似度。自适应分块 P90
 - **确定性模式**（默认）：retention < 0.3 标记 forgotten=True
 - **概率性模式**：`MEMORYBANK_FORGET_MODE=probabilistic`，逐条独立掷骰
 - **回忆强化**：检索命中 memory_strength += 1（上限 10）
-- **节流**：`FORGET_INTERVAL_SECONDS=300`
+- **节流**：`MEMORYBANK_FORGET_INTERVAL_SECONDS=300`
 
 ## 摘要与人格
 
@@ -156,6 +156,7 @@ IndexIDMap(IndexFlatIP) + L2 归一化 ≈ 余弦相似度。自适应分块 P90
 | MemoryBankError | AppError | 本模块基类 |
 | SummarizationEmpty | MemoryBankError | 哨兵，LLM 返空 → 调用方返 None |
 | InvalidActionError | ValueError（独立异常） | schemas.py |
+| UnknownModeError | ValueError（独立异常） | memory.py |
 
 catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储读写 `except (json.JSONDecodeError, OSError, TypeError, ValueError)` 自动恢复。FAISS 逐类损坏恢复。`except LLMCallFailedError` 在 lifecycle 层独立处理。
 
