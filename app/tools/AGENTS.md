@@ -62,12 +62,12 @@ class ToolSpec:
 ### query_memory
 
 - 使用 `get_memory_module()` 单例获取 MemoryModule
-- `top_k=3` 硬编码（当前未读 config）
+- 默认 top_k=5，读 `config/tools.toml` 的 `[tools.memory_query] max_results`
 - 失败返回 `"记忆查询失败"`（不抛异常）
 
 ## Execution 节点集成
 
-`app/agents/workflow.py` `_execution_node` 中，`cancel_last` 处理后、规则后处理前：
+`app/agents/workflow.py` `_execution_node` 中，规则后处理之后、`_check_frequency_guard` 之前：
 
 ```python
 tool_calls = decision.get("tool_calls", [])
