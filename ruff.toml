@@ -52,7 +52,10 @@ exclude = [".agents/**"]
     "ASYNC240",  # _ensure_loaded 中 Path.exists() 为轻量同步调用，本原型中可接受
     "ARG002",  # SherpaOnnxASREngine.transcribe 为占位实现，保留 audio_bytes 参数以符合 ABC 签名
 ]
-"app/voice/pipeline.py" = ["PTH110"]
+"app/voice/pipeline.py" = [
+    "PTH110",
+    "PLR0913",  # __init__ 参数 6（含 self），VoicePipeline 构造参数可空+回调注入
+]
 
 "app/voice/cli.py" = [
     "T201",  # CLI 入口用 print 输出信息，非生产日志
@@ -64,6 +67,7 @@ exclude = [".agents/**"]
 "app/voice/service.py" = [
     "BLE001",  # start 中宽捕获 Exception——VoicePipeline/Recorder 初始化失败类型不可预测，应降级而非崩溃
     "PLC0415",  # pyaudio 为可选依赖（需系统 portaudio 库），get_devices 内局部导入
+    "ASYNC230",  # update_config 中用 asyncio.to_thread 写文件，async 函数内 to_thread 合理
 ]
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 mkdir()/open() 操作，ruff 误判
 

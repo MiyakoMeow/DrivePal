@@ -27,7 +27,11 @@ _WEBUI_DIR = Path(__file__).parent.parent.parent / "webui"
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     voice_service = VoiceService()
     _app.state.voice_service = voice_service
-    await voice_service.start()
+    ok = await voice_service.start()
+    if not ok:
+        logger.warning(
+            "Voice service unavailable (ASR/pyaudio missing, or disabled), continuing without audio"
+        )
     yield
     await voice_service.stop()
 

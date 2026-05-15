@@ -437,7 +437,7 @@ function switchTab(tab) {
 }
 
 function startVoicePolling() {
-  stopVoicePolling();
+  if (state.getVoicePollTimer()) return; // 已运行，防叠加
   state.setVoicePollTimer(setInterval(pollVoiceStatus, 500));
   state.setVoiceTranscriptionTimer(setInterval(pollVoiceTranscriptions, 1000));
   pollVoiceStatus();

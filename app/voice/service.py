@@ -28,8 +28,8 @@ class VoiceService:
     """封装 VoicePipeline + VoiceRecorder 生命周期。提供统一启停/状态/配置接口。"""
 
     def __init__(self, config: VoiceConfig | None = None) -> None:
-        cfg = config or VoiceConfig.load()
-        self._enabled = cfg.enabled
+        self._config = config or VoiceConfig.load()
+        self._enabled = self._config.enabled
         self._pipeline: VoicePipeline | None = None
         self._recorder: VoiceRecorder | None = None
         self._consume_task: asyncio.Task | None = None
@@ -44,17 +44,17 @@ class VoiceService:
     @property
     def status(self) -> dict:
         """当前运行状态。"""
-        cfg = VoiceConfig.load()
+        c = self._config
         return {
             "enabled": self._enabled,
             "running": self._running,
             "vad_status": self._vad_status,
-            "device_index": cfg.device_index,
+            "device_index": c.device_index,
             "config": {
-                "device_index": cfg.device_index,
-                "sample_rate": cfg.sample_rate,
-                "vad_mode": cfg.vad_mode,
-                "min_confidence": cfg.min_confidence,
+                "device_index": c.device_index,
+                "sample_rate": c.sample_rate,
+                "vad_mode": c.vad_mode,
+                "min_confidence": c.min_confidence,
             },
         }
 
@@ -76,7 +76,10 @@ class VoiceService:
         self._on_transcription_external = on_transcription
 
         try:
-            pipeline = VoicePipeline(on_transcription=self._handle_transcription)
+            pipeline = VoicePipeline(
+                on_transcription=self._handle_transcription,
+                on_vad_status=lambda s: setattr(self, "_vad_status", s),
+            )
             recorder = VoiceRecorder()
             await recorder.start(pipeline)
         except Exception:
@@ -84,7 +87,7 @@ class VoiceService:
             await self._cleanup()
             return False
         else:
-
+            # consume 丢弃 yield 值：转录文本已由 _handle_transcription 回调处理
             async def _consume() -> None:
                 async for _ in pipeline.run():
                     pass
@@ -107,6 +110,8 @@ class VoiceService:
             }
         )
         if self._sched is not None:
+            # 同步回调中不可 await，用 set 大小做并发限流。
+            # task 完成后 done_callback 自动 discard，单线程下无竞态
             if len(self._fire_tasks) >= self._fire_task_limit:
                 logger.debug("Fire tasks at limit, dropping voice text: %.30s", text)
                 return
@@ -148,11 +153,14 @@ class VoiceService:
             self._recorder = None
 
     async def update_config(self, cfg: dict) -> dict:
-        """热更新配置。无效配置抛 ValueError。需重建的标记 requires_restart。"""
-        current = VoiceConfig.load()
+        """热更新配置。无效配置抛 ValueError。修改持久化到 self._config。需重建的标记 requires_restart。"""
+        import tomli_w
+
+        from app.config import get_config_root
+
         restart_needed = False
         for key, val in cfg.items():
-            if not hasattr(current, key):
+            if not hasattr(self._config, key):
                 msg = f"Unknown config key: {key}"
                 raise ValueError(msg)
             if key == "vad_mode" and not (0 <= val <= _MAX_VAD_MODE):
@@ -161,9 +169,33 @@ class VoiceService:
             if key == "min_confidence" and not (0.0 <= val <= 1.0):
                 msg = "min_confidence must be 0.0-1.0"
                 raise ValueError(msg)
-            setattr(current, key, val)
+            setattr(self._config, key, val)
             if key in ("vad_mode", "sample_rate", "device_index", "asr"):
                 restart_needed = True
+        # 持久化到 TOML 文件
+        try:
+            path = get_config_root() / "voice.toml"
+            c = self._config
+            raw = {
+                "voice": {
+                    "enabled": c.enabled,
+                    "device_index": c.device_index,
+                    "sample_rate": c.sample_rate,
+                    "vad_mode": c.vad_mode,
+                    "min_confidence": c.min_confidence,
+                    "silence_timeout_ms": c.silence_timeout_ms,
+                    "asr": c.asr,
+                },
+            }
+            import asyncio
+
+            def _write_config() -> None:
+                with path.open("wb") as f:
+                    tomli_w.dump(raw, f)
+
+            await asyncio.to_thread(_write_config)
+        except OSError as e:
+            logger.warning("Failed to persist config: %s", e)
         if restart_needed and self._running:
             saved_sched = self._sched
             saved_cb = self._on_transcription_external
