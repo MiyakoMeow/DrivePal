@@ -6,9 +6,7 @@ import asyncio
 import contextlib
 import copy
 import logging
-import tomllib
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.agents.pending import PendingReminderManager
@@ -16,6 +14,7 @@ from app.agents.rules import get_fatigue_threshold
 from app.config import user_data_dir
 from app.exceptions import AppError
 from app.memory.schemas import EVENT_TYPE_PASSIVE_VOICE, MemoryEvent
+from app.scheduler.config import SchedulerConfig
 from app.scheduler.context_monitor import ContextDelta, ContextMonitor
 from app.scheduler.memory_scanner import MemoryScanner
 from app.scheduler.trigger_evaluator import TriggerEvaluator, TriggerSignal
@@ -30,18 +29,6 @@ logger = logging.getLogger(__name__)
 
 class ProactiveScheduler:
     """主动调度器：后台轮询上下文+记忆，触发 AgentWorkflow 主动模式。"""
-
-    @staticmethod
-    def _load_config() -> dict:
-        """从 config/scheduler.toml 读取调度器配置。"""
-        path = Path("config/scheduler.toml")
-        try:
-            with path.open("rb") as f:
-                data = tomllib.load(f)
-            return data.get("scheduler", {})
-        except OSError, tomllib.TOMLDecodeError:
-            logger.warning("Failed to read %s, using defaults", path)
-            return {}
 
     def __init__(
         self,
@@ -58,24 +45,22 @@ class ProactiveScheduler:
             workflow: AgentWorkflow 实例。
             memory_module: 统一记忆管理模块。
             user_id: 目标用户 ID。
-            tick_interval: 轮询间隔（秒）。
+            tick_interval: 轮询间隔（秒），未传则读 scheduler.toml（缺失则自动生成）。
             debounce_seconds: 去抖间隔（秒）。
             ws_manager: WebSocket 管理器实例，用于广播主动提醒。
 
         """
         self._workflow = workflow
         self._memory_scanner = MemoryScanner(memory_module, user_id)
-        # 从 config/scheduler.toml 读取配置，参数可覆盖
-        _cfg = self._load_config()
+        # 从 scheduler.toml 读取配置，参数可覆盖
+        _cfg = SchedulerConfig.load()
         if tick_interval is None:
-            tick_interval = _cfg.get("tick_interval_seconds", 15)
+            tick_interval = _cfg.tick_interval_seconds
         if debounce_seconds is None:
-            debounce_seconds = _cfg.get("debounce_seconds", 30)
-        proximity = _cfg.get("location_proximity_meters", 500)
-        context_monitor_cfg = _cfg.get("context_monitor", {})
-        fatigue_delta = context_monitor_cfg.get("fatigue_delta_threshold", 0.1)
+            debounce_seconds = _cfg.debounce_seconds
         self._context_monitor = ContextMonitor(
-            proximity_meters=proximity, fatigue_delta_threshold=fatigue_delta
+            proximity_meters=_cfg.location_proximity_meters,
+            fatigue_delta_threshold=_cfg.fatigue_delta_threshold,
         )
         self._trigger_evaluator = TriggerEvaluator(debounce_seconds)
         self._tick_interval = tick_interval
@@ -86,8 +71,8 @@ class ProactiveScheduler:
         self._current_context: dict = {}
         self._pending_manager: PendingReminderManager | None = None
         self._last_review_date: str | None = None
-        self._enable_periodic_review: bool = _cfg.get("enable_periodic_review", True)
-        self._review_time: str = str(_cfg.get("review_time", "08:00"))
+        self._enable_periodic_review: bool = _cfg.enable_periodic_review
+        self._review_time: str = _cfg.review_time
         self._review_window_minutes: int = 5
         try:
             parts = self._review_time.split(":")

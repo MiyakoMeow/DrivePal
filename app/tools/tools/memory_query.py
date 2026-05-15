@@ -1,28 +1,12 @@
 """记忆查询工具。"""
 
 import logging
-import tomllib
-from pathlib import Path
 from typing import Any
 
 from app.memory.singleton import get_memory_module
+from app.tools.config import ToolsConfig
 
 logger = logging.getLogger(__name__)
-
-_TOP_K = 5
-
-
-def _load_max_results() -> int:
-    """从 tools.toml 读取 max_results，失败返回默认值。"""
-    try:
-        with Path("config/tools.toml").open("rb") as f:
-            data = tomllib.load(f)
-        return data.get("tools", {}).get("memory_query", {}).get("max_results", _TOP_K)
-    except OSError, tomllib.TOMLDecodeError:
-        logger.warning(
-            "Failed to read tools.toml max_results, using default %s", _TOP_K
-        )
-        return _TOP_K
 
 
 async def query_memory(params: dict[str, Any]) -> str:
@@ -32,7 +16,8 @@ async def query_memory(params: dict[str, Any]) -> str:
         return "查询失败：未指定查询内容"
     try:
         mm = get_memory_module()
-        top_k = _load_max_results()
+        cfg = ToolsConfig.load()
+        top_k = cfg.memory_query.max_results
         results = await mm.search(query, top_k=top_k)
         if not results:
             return f"未找到与'{query}'相关的记忆"

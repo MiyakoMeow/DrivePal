@@ -4,12 +4,11 @@ import json
 import logging
 import os
 import random
-import tomllib
 from collections import Counter, defaultdict
 from collections.abc import Callable
-from pathlib import Path
 
-from app.agents.rules import SAFETY_RULES, Rule
+from app.agents.rules import _RULES_TOML_DEFAULTS, SAFETY_RULES, Rule
+from app.config import ensure_config, get_config_root
 from app.models.chat import ChatError, ChatModel, get_chat_model, get_judge_model
 from app.models.settings import NoJudgeModelConfiguredError
 
@@ -71,12 +70,11 @@ def _make_raw_conditions_loader() -> Callable[[], dict[str, dict]]:
         nonlocal cache
         if cache is not None:
             return cache
-        rules_toml_path = Path(__file__).resolve().parents[2] / "config" / "rules.toml"
+        rules_toml_path = get_config_root() / "rules.toml"
         try:
-            with rules_toml_path.open("rb") as f:
-                toml_data = tomllib.load(f)
+            toml_data = ensure_config(rules_toml_path, _RULES_TOML_DEFAULTS)
             cache = {cfg["name"]: cfg for cfg in toml_data.get("rules", [])}
-        except OSError, tomllib.TOMLDecodeError, KeyError:
+        except OSError, KeyError:
             logger.warning(
                 "Judge 规则条件加载失败（%s），条件描述将为空", rules_toml_path
             )

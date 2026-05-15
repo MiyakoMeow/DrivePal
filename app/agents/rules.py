@@ -1,13 +1,19 @@
 """轻量规则引擎 — 安全约束规则定义与合并."""
 
+from __future__ import annotations
+
 import contextvars
 import logging
 import math
 import os
 import tomllib
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from app.config import ensure_config, get_config_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +194,62 @@ def load_rules(path: Path) -> list[Rule]:
     return rules
 
 
-_RULES_PATH = Path(__file__).resolve().parents[2] / "config" / "rules.toml"
+_RULES_TOML_DEFAULTS: dict = {
+    "rules": [
+        {
+            "name": "highway_audio_only",
+            "scenario": "highway",
+            "allowed_channels": ["audio"],
+            "max_frequency_minutes": 30,
+            "priority": 10,
+        },
+        {
+            "name": "fatigue_suppress",
+            "fatigue_above": 0.7,
+            "only_urgent": True,
+            "allowed_channels": ["audio"],
+            "priority": 20,
+        },
+        {
+            "name": "overloaded_postpone",
+            "workload": "overloaded",
+            "postpone": True,
+            "priority": 15,
+        },
+        {
+            "name": "parked_all_channels",
+            "scenario": "parked",
+            "allowed_channels": ["visual", "audio", "detailed"],
+            "priority": 5,
+        },
+        {
+            "name": "city_driving_limit",
+            "scenario": "city_driving",
+            "allowed_channels": ["audio"],
+            "max_frequency_minutes": 15,
+            "priority": 8,
+        },
+        {
+            "name": "traffic_jam_calm",
+            "scenario": "traffic_jam",
+            "allowed_channels": ["audio", "visual"],
+            "max_frequency_minutes": 10,
+            "priority": 7,
+        },
+        {
+            "name": "passenger_present_relax",
+            "has_passengers": True,
+            "not_scenario": "highway",
+            "extra_channels": ["visual"],
+            "priority": 3,
+        },
+    ],
+}
+
+
+_RULES_PATH: Path = get_config_root() / "rules.toml"
+# 首次导入时确保配置文件存在
+ensure_config(_RULES_PATH, _RULES_TOML_DEFAULTS)
 SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
 
 
