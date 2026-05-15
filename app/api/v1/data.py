@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 
-from app.api.errors import safe_memory_call
+from app.api.errors import AppError, AppErrorCode, safe_memory_call
 from app.api.schemas import (
     ExperimentResultResponse,
     ExperimentResultsResponse,
@@ -90,7 +90,9 @@ async def delete_all_data(request: Request) -> dict[str, bool]:
         shutil.rmtree(u_dir)
     except OSError as e:
         logger.warning("Failed to delete user data: %s", e)
-        return {"success": False}
+        raise AppError(
+            AppErrorCode.STORAGE_ERROR, "Failed to delete user data", 503
+        ) from e
     return {"success": True}
 
 

@@ -30,7 +30,20 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     try:
         while True:
             raw = await asyncio.wait_for(ws.receive_text(), timeout=_HEARTBEAT_TIMEOUT)
-            msg = json.loads(raw)
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                await ws_manager.send_to(
+                    ws,
+                    {
+                        "type": "error",
+                        "payload": {
+                            "code": "INVALID_JSON",
+                            "message": "Malformed JSON",
+                        },
+                    },
+                )
+                continue
             msg_type = msg.get("type")
 
             if msg_type == "ping":

@@ -52,15 +52,24 @@ async def _handle_memory_feedback(
     )
 
     user_dir = user_data_dir(user_id)
-    await append_feedback(user_dir, req.event_id, req.action, actual_type)
+    await safe_memory_call(
+        append_feedback(user_dir, req.event_id, req.action, actual_type),
+        "feedback(append)",
+    )
 
-    aggregated = await aggregate_weights(user_dir)
+    aggregated = await safe_memory_call(
+        aggregate_weights(user_dir),
+        "feedback(aggregate_weights)",
+    )
     strategy_store = TOMLStore(
         user_dir=user_dir,
         filename="strategies.toml",
         default_factory=dict,
     )
-    await strategy_store.merge_dict_key("reminder_weights", aggregated)
+    await safe_memory_call(
+        strategy_store.merge_dict_key("reminder_weights", aggregated),
+        "feedback(merge_strategy)",
+    )
 
 
 async def _handle_snooze(req: FeedbackRequest, user_id: str) -> None:
@@ -87,12 +96,15 @@ async def _handle_snooze(req: FeedbackRequest, user_id: str) -> None:
         channel=OutputChannel.AUDIO,
         interrupt_level=InterruptLevel.NORMAL,
     )
-    await pm.add(
-        content=content,
-        trigger_type="time",
-        trigger_target={"time": target_time},
-        event_id=req.event_id,
-        trigger_text="延后 5 分钟",
+    await safe_memory_call(
+        pm.add(
+            content=content,
+            trigger_type="time",
+            trigger_target={"time": target_time},
+            event_id=req.event_id,
+            trigger_text="延后 5 分钟",
+        ),
+        "snooze(add_pending)",
     )
 
 

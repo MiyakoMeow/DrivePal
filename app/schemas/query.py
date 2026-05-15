@@ -1,4 +1,4 @@
-"""SSE 查询端点输入/输出 schema."""
+"""查询端点输入/输出 schema."""
 
 from __future__ import annotations
 
@@ -8,11 +8,10 @@ from app.schemas.context import DrivingContext
 
 
 class ProcessQueryRequest(BaseModel):
-    """POST /query/stream 请求体."""
+    """POST /api/v1/query 请求体."""
 
     query: str
     context: DrivingContext | None = None
-    current_user: str = "default"
     session_id: str | None = None
 
 

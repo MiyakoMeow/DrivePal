@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
+
+logger = logging.getLogger(__name__)
 
 
 class WSManager:
@@ -29,18 +32,35 @@ class WSManager:
             self._conns.pop(user_id, None)
 
     async def broadcast(self, user_id: str, message: dict) -> None:
-        """向指定用户的所有活跃连接广播消息。发送失败时移除断连。"""
+        """向指定用户的所有活跃连接广播消息。
+
+        快照连接列表防止与 disconnect 并发竞态：若迭代期间
+        disconnect 修改了列表，仅从当前列表移除确认死亡的连接。
+        """
+        snapshot = list(self._conns.get(user_id, []))
         alive = []
-        for ws in self._conns.get(user_id, []):
+        for ws in snapshot:
             try:
                 await ws.send_json(message)
                 alive.append(ws)
             except Exception:
-                pass  # 斪连，不回收
-        if alive:
-            self._conns[user_id] = alive
+                logger.debug("WS broadcast: dropped dead conn for %s", user_id)
+
+        current = self._conns.get(user_id)
+        if current is None or current is snapshot:
+            # 无并发修改，直接替换
+            if alive:
+                self._conns[user_id] = alive
+            else:
+                self._conns.pop(user_id, None)
         else:
-            self._conns.pop(user_id, None)
+            # 有并发 disconnect/connect，仅移除确认死亡的
+            dead_ids = {id(ws) for ws in snapshot if ws not in alive}
+            merged = [ws for ws in current if id(ws) not in dead_ids]
+            if merged:
+                self._conns[user_id] = merged
+            else:
+                self._conns.pop(user_id, None)
 
     async def send_to(self, ws: WebSocket, message: dict) -> None:
         """向单个连接发送消息."""

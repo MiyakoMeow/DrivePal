@@ -68,6 +68,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
+# CORS：开发用，部署前须收敛 origin 列表
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

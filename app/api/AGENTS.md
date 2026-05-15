@@ -9,30 +9,30 @@
 | 方法 | 路径 | 用途 |
 |------|------|------|
 | POST | `/api/v1/query` | 处理查询，返完整工作流结果 |
-| WS | `/api/v1/ws/` | WebSocket 长连接（流式查询 + 心跳） |
+| WS | `/api/v1/ws` | WebSocket 长连接（流式查询 + 心跳） |
 | POST | `/api/v1/feedback` | 提交反馈(accept/ignore/snooze/modify) |
 | GET | `/api/v1/presets` | 查询场景预设 |
 | POST | `/api/v1/presets` | 保存场景预设 |
 | DELETE | `/api/v1/presets/{id}` | 删除预设 |
-| GET | `/api/v1/data/history` | 查询历史记忆事件 |
-| GET | `/api/v1/data/export` | 导出当前用户全量文本数据（`?export_type=text\|json`） |
+| GET | `/api/v1/history` | 查询历史记忆事件（`?limit=N`, 1–100） |
+| GET | `/api/v1/export` | 导出当前用户文本数据（`?export_type=events\|settings\|all`） |
 | DELETE | `/api/v1/data` | 删除当前用户全量数据 |
-| GET | `/api/v1/data/experiments` | 查询实验结果对比 |
+| GET | `/api/v1/experiments` | 查询实验结果对比（系统级，非 per-user） |
 | GET | `/api/v1/reminders` | 获取待触发提醒列表 |
-| POST | `/api/v1/reminders/poll` | 轮询触发条件，满足的提醒经 WS 广播 |
 | DELETE | `/api/v1/reminders/{id}` | 取消提醒 |
-| POST | `/api/v1/sessions/{id}/close` | 关闭会话 |
+| POST | `/api/v1/sessions/{id}/close` | 关闭会话（校验用户归属） |
 
 Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 
 ## WebSocket
 
-`WS /api/v1/ws/`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。
+`WS /api/v1/ws`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。
 
-消息格式：
-- 客户端→服务端：`{"type": "query", "data": {"query": "...", "context": {...}}}`
-- 服务端→客户端：`{"type": "stage_start"|"context_done"|"decision"|"done"|"error"|"reminder_triggered", ...}`
-- 心跳：客户端每30s发 `{"type": "ping"}`，服务端返 `{"type": "pong"}`
+消息格式（统一用 `payload` 键）：
+- 客户端→服务端：`{"type": "query", "payload": {"query": "...", "context": {...}, "session_id": "..."}}`
+- 服务端→客户端：`{"type": "stage_start"|"context_done"|"decision"|"done"|"error"|"reminder", "payload": {...}}`
+- 心跳：客户端每30s发 `{"type": "ping"}`，服务端返 `{"type": "pong", "payload": {}}`
+- 非法 JSON：返回 `{"type": "error", "payload": {"code": "INVALID_JSON", "message": "Malformed JSON"}}`，不断连
 
 ## 错误处理
 
@@ -40,11 +40,12 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 
 | AppErrorCode | HTTP | 场景 |
 |---|---|---|
+| NOT_FOUND | 404 | 资源不存在 |
 | VALIDATION_ERROR | 422 | 请求参数不合法 |
 | STORAGE_ERROR | 503 | 存储不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 
-`safe_memory_call` 包装记忆调用。`ChatModelUnavailableError` → 503。
+`safe_memory_call` 包装所有存储/记忆调用。`ChatModelUnavailableError` → 503。
 
 ## 中间件
 
@@ -68,7 +69,7 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 |--------|---------|
 | accept | +0.1（上限1.0） |
 | ignore | -0.1（下限0.1） |
-| snooze | 创建5分钟延迟提醒 |
+| snooze | 创建5分钟延迟提醒（验证事件存在） |
 | modify | +0.05（用户微调偏好） |
 
 权重注入：`_format_preference_hint()` → system prompt + 用户 prompt → JointDecision。

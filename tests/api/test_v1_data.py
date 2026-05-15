@@ -131,3 +131,16 @@ def test_delete_data_nonexistent(app_client: TestClient, tmp_path: Path) -> None
         resp = app_client.delete("/api/v1/data", headers={"X-User-Id": "alice"})
     assert resp.status_code == 200
     assert resp.json()["success"] is False
+
+
+def test_delete_data_oserror(app_client: TestClient, tmp_path: Path) -> None:
+    """DELETE /api/v1/data 删除失败时返回 503."""
+    user_dir = tmp_path / "data" / "users" / "alice"
+    user_dir.mkdir(parents=True)
+
+    with (
+        patch("app.api.v1.data.user_data_dir", return_value=user_dir),
+        patch("app.api.v1.data.shutil.rmtree", side_effect=OSError("disk full")),
+    ):
+        resp = app_client.delete("/api/v1/data", headers={"X-User-Id": "alice"})
+    assert resp.status_code == 503
