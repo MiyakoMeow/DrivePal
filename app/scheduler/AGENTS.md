@@ -21,7 +21,7 @@ flowchart TD
 
 | 文件 | 类 | 职责 |
 |------|-----|------|
-| `scheduler.py` | `ProactiveScheduler` | 主循环：start/stop/run/tick。协调其余组件 |
+| `scheduler.py` | `ProactiveScheduler` | 主循环：start/stop/run/tick。`_load_config()` 静态方法加载 scheduler.toml。协调其余组件 |
 | `context_monitor.py` | `ContextMonitor` | 缓存上次 driving_context，检测增量变化 |
 | `context_monitor.py` | `ContextDelta` | 变化增量 dataclass（5 字段） |
 | `memory_scanner.py` | `MemoryScanner` | 按场景/位置变化检索 MemoryBank |
@@ -52,6 +52,8 @@ stop() → cancel task
 | `tick_interval` | `float \| None` | config 值 / 15s | 轮询间隔（秒） |
 | `debounce_seconds` | `float \| None` | config 值 / 30s | 去抖间隔（秒） |
 | `ws_manager` | `WSManager \| None` | `None` | WebSocket 管理器，用于广播提醒 |
+
+`_FATIGUE_HIGH = 0.7` 模块级常量，`_build_signals()` 中 state 触发源以此判定疲劳高阈值。
 
 ### _tick() 顺序
 
@@ -94,7 +96,8 @@ class ContextDelta:
 ```
 
 - 首次 `update()` 仅缓存，返回空 delta
-- `_haversine()` 与 `app/agents/pending.py` 各自独立实现一份相同逻辑（代码重复）
+- `_haversine()` 与 `app/agents/pending.py` 均导入 `app.utils.haversine`，共享同一实现
+- `_DEFAULT_FATIGUE_DELTA = 0.1` 疲劳增量检测默认阈值
 
 ## MemoryScanner
 

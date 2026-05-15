@@ -11,7 +11,7 @@ uv run pytest tests/ -v --test-embedding  # 真实embedding
 uv run pytest tests/ -v --run-integration  # 完整服务
 ```
 
-pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, filterwarnings ignore Swig DeprecationWarning。
+pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, filterwarnings ignore:builtin type Swig:DeprecationWarning。
 
 conftest.py 注册 integration/llm/embedding 三个 marker，未提供对应选项时跳过标记者。
 
@@ -36,12 +36,15 @@ flowchart RL
     end
     subgraph Voice["tests/voice/"]
         VO["test_vad.py"]
+        VO2["test_pipeline.py"]
     end
     subgraph Sched["tests/scheduler/"]
         SC["test_scheduler.py"]
+        SC2["test_tick.py"]
     end
     subgraph Tools["tests/tools/"]
         TL["test_registry.py"]
+        TL2["test_executor.py"]
     end
     subgraph API["tests/api/"]
         A01["test_rest.py"]
@@ -116,4 +119,4 @@ flowchart RL
 | typecheck | `uv run ty check .` |
 | test | `uv run pytest -v` |
 
-额外 `no-suppressions.yml`：扫描禁止 `# noqa`/`# type:`/`# ty:`。
+额外 `no-suppressions.yml`：3 个独立 job（noqa / type-ignore / ty-ignore），各自扫描一种注释类型。

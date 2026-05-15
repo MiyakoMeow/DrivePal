@@ -115,7 +115,7 @@ enabled = true
 max_results = 5
 ```
 
-当前 `enabled` 标志为预留字段，未在代码中强制执行。
+注册时按 `enabled` 标志过滤（`is_enabled()`），`enabled=false` 的工具不会被注册；已注册工具执行时不再检查。
 
 ## 异常
 
