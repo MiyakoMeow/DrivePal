@@ -6,11 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from app.agents.rules import apply_rules
-from app.agents.workflow import (
-    AgentWorkflow,
+from app.agents.types import (
     ContextOutput,
     JointDecisionOutput,
     LLMJsonResponse,
+)
+from app.agents.workflow import (
+    AgentWorkflow,
 )
 
 

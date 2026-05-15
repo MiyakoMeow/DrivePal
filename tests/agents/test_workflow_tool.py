@@ -50,7 +50,8 @@ class TestToolExceptionInWorkflow:
 
     async def test_workflow_error_interrupts(self):
         """WorkflowError 应中断工具执行循环。"""
-        from app.agents.workflow import AgentWorkflow, WorkflowError
+        from app.agents.types import WorkflowError
+        from app.agents.workflow import AgentWorkflow
 
         registry = ToolRegistry()
         spec = ToolSpec(

@@ -88,7 +88,6 @@ exclude = [".agents/**"]
     "ARG002",  # _handle_cancel/_handle_postpone 中 state 参数为接口一致性保留
 ]
 
-
 "app/agents/pending.py" = [
     "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
     "ARG004",  # _check_state/_check_periodic 接收参数为后续实现预留

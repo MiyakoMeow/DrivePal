@@ -4,18 +4,11 @@ import contextvars
 import hashlib
 import json
 import logging
-import re
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import (
-    AliasChoices,
-    BaseModel,
-    ConfigDict,
-    Field,
-    ValidationError,
-)
+from pydantic import ValidationError
 
 from app.agents.conversation import _conversation_manager
 from app.agents.outputs import OutputRouter
@@ -31,6 +24,16 @@ from app.agents.prompts_proactive import PROACTIVE_JOINT_DECISION_PROMPT
 from app.agents.rules import apply_rules, postprocess_decision
 from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
+from app.agents.types import (
+    ContextOutput,
+    JointDecisionOutput,
+    LLMJsonResponse,
+    ReminderContent,
+    WorkflowError,
+    call_llm_json,
+    format_time_for_display,
+    map_pending_trigger,
+)
 from app.config import user_data_dir
 from app.exceptions import AppError
 from app.memory.memory import MemoryModule
@@ -61,178 +64,6 @@ logger = logging.getLogger(__name__)
 _PREFERENCE_WEIGHT_HIGH: float = 0.6
 _PREFERENCE_WEIGHT_LOW: float = 0.5
 _INTENT_CONFIDENCE_THRESHOLD: float = 0.3
-
-
-class WorkflowError(AppError):
-    """工作流异常（模型不可用等）。"""
-
-    def __init__(self, code: str = "WORKFLOW_ERROR", message: str = "") -> None:
-        if not message:
-            message = "Workflow error"
-        super().__init__(code=code, message=message)
-
-
-class LLMJsonResponse(BaseModel):
-    """LLM JSON 输出包装，含校验与兜底."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    raw: str
-    data: dict | None = None
-
-    @classmethod
-    def from_llm(cls, text: str) -> LLMJsonResponse:
-        """Parse LLM output, warning on fail but always return valid."""
-        cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip())
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        try:
-            data = json.loads(cleaned)
-            if isinstance(data, dict):
-                return cls(raw=text, data=data)
-        except json.JSONDecodeError:
-            pass
-        return cls(raw=text)
-
-
-class ContextOutput(BaseModel):
-    """Context Agent JSON 输出模型，extra forbid。
-
-    validation_alias 兜底 LLM 字段名漂移——不同模型/温度下可能产出
-    非标准键名（如 scene/location/datetime 等）。
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    scenario: str = Field(
-        default="",
-        validation_alias=AliasChoices("scenario", "scene", "driving_scenario"),
-    )
-    driver_state: dict = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("driver_state", "driver", "state"),
-    )
-    spatial: dict = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("spatial", "location", "position"),
-    )
-    traffic: dict = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("traffic", "traffic_status"),
-    )
-    current_datetime: str = Field(
-        default="",
-        validation_alias=AliasChoices("current_datetime", "datetime", "time"),
-    )
-    related_events: list = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("related_events", "events", "history"),
-    )
-    conversation_history: list | None = None
-
-
-class JointDecisionOutput(BaseModel):
-    """JointDecision Agent JSON 输出模型。
-
-    merge TaskOutput + StrategyOutput，decision 字段以 dict 传递（规则后处理）。
-    extra forbid 防止 LLM 注入非法字段。
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    task_type: str = Field(
-        default="general",
-        validation_alias=AliasChoices("task_type", "type", "task_attribution"),
-    )
-    confidence: float = Field(
-        default=0.0,
-        validation_alias=AliasChoices("confidence", "conf"),
-    )
-    entities: list = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("entities", "events", "event_list"),
-    )
-    decision: dict = Field(default_factory=dict)
-
-
-class ReminderContent(BaseModel):
-    """提醒内容校验模型。"""
-
-    text: str = ""
-    content: str = ""
-
-    @classmethod
-    def from_decision(cls, decision: dict) -> str:
-        """从 decision dict 中提取提醒内容，多处 key 兜底。"""
-        for key in ("reminder_content", "remind_content", "content"):
-            val = decision.get(key)
-            if isinstance(val, str) and val.strip():
-                return val.strip()
-            if isinstance(val, dict):
-                return val.get("text") or val.get("content") or "无提醒内容"
-        return "无提醒内容"
-
-
-def _format_time_for_display(time_str: str) -> str:
-    """从 ISO 时间字符串提取 HH:MM 用于显示."""
-    try:
-        dt = datetime.fromisoformat(time_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt.strftime("%H:%M")
-    except ValueError, TypeError:
-        return time_str
-
-
-def _extract_location_target(driving_ctx: dict | None) -> dict:
-    """从 driving_context 中提取目标位置经纬度。"""
-    if driving_ctx:
-        spatial = driving_ctx.get("spatial", {}) or {}
-        dest = spatial.get("destination", {}) or {}
-        lat = dest.get("latitude")
-        lon = dest.get("longitude")
-        if lat is not None and lon is not None:
-            return {"latitude": lat, "longitude": lon}
-    return {}
-
-
-def _map_pending_trigger(
-    decision: dict, driving_ctx: dict | None
-) -> tuple[str, dict, str]:
-    """从 decision 映射 trigger_type、trigger_target、trigger_text."""
-    timing = decision.get("timing", "")
-    if timing == "location":
-        return (
-            "location",
-            _extract_location_target(driving_ctx),
-            "到达目的地时",
-        )
-    if timing == "location_time":
-        return (
-            "location_time",
-            {
-                "location": _extract_location_target(driving_ctx),
-                "time": decision.get("target_time", ""),
-            },
-            "到达目的地或到时间时",
-        )
-    if timing == "delay":
-        seconds = decision.get("delay_seconds", 300)
-        target_dt = datetime.now(UTC) + timedelta(seconds=seconds)
-        target_str = target_dt.isoformat()
-        return "time", {"time": target_str}, f"延迟 {seconds} 秒后"
-
-    target_time = decision.get("target_time", "")
-    if target_time:
-        return "time", {"time": target_time}, f"{target_time} 时"
-    if driving_ctx:
-        return (
-            "context",
-            {"previous_scenario": driving_ctx.get("scenario", "")},
-            "驾驶状态恢复时",
-        )
-    # 兜底：无 driving_ctx 且无时间信息时，创建即刻触发的时间提醒
-    # 注意：此时轮询调用 poll() 后会立即触发（now >= target_time）
-    return "time", {"time": datetime.now(UTC).isoformat()}, ""
 
 
 class AgentWorkflow:
@@ -323,15 +154,7 @@ class AgentWorkflow:
         return ""
 
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
-        if not self.memory_module.chat_model:
-            raise WorkflowError(
-                code="MODEL_UNAVAILABLE", message="ChatModel not available"
-            )
-        result = await self.memory_module.chat_model.generate(
-            user_prompt,
-            json_mode=True,
-        )
-        return LLMJsonResponse.from_llm(result)
+        return await call_llm_json(self.memory_module.chat_model, user_prompt)
 
     async def _safe_memory_search(self, user_input: str) -> list[dict] | None:
         """搜索相关记忆，失败或结果为空返回 None。"""
@@ -523,11 +346,6 @@ class AgentWorkflow:
 
         return {"task": task, "decision": decision}
 
-    @staticmethod
-    def _extract_content(decision: dict) -> str:
-        """从决策 dict 中提取提醒内容。"""
-        return ReminderContent.from_decision(decision)
-
     async def _check_frequency_guard(
         self,
         state: AgentState,
@@ -613,7 +431,7 @@ class AgentWorkflow:
         output_content = output_router.route(decision, rules_result)
 
         pm = PendingReminderManager(user_data_dir(self.current_user))
-        trigger_type, trigger_target, trigger_text = _map_pending_trigger(
+        trigger_type, trigger_target, trigger_text = map_pending_trigger(
             decision, driving_ctx
         )
         pending_ids: list[str] = []
@@ -639,7 +457,7 @@ class AgentWorkflow:
                     trigger_type="time",
                     trigger_target={"time": time_target},
                     event_id="",
-                    trigger_text=f"{_format_time_for_display(time_target)} 时",
+                    trigger_text=f"{format_time_for_display(time_target)} 时",
                 )
                 pending_ids.append(pr2.id)
         else:
@@ -682,7 +500,7 @@ class AgentWorkflow:
         modifications: list[str],
         stages: WorkflowStages | None,
     ) -> dict:
-        content = self._extract_content(decision)
+        content = ReminderContent.from_decision(decision)
         original_query = state.get("original_query", "")
 
         output_router = OutputRouter()

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 from app.agents.state import WorkflowStages
-from app.agents.workflow import WorkflowError
+from app.agents.types import WorkflowError
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
