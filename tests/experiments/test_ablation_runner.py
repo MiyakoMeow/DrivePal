@@ -92,10 +92,7 @@ async def test_no_safety_disables_both() -> None:
             },
         )
 
-        # 用 spy 在 _run_agent_workflow 内检查 ContextVar——run_variant 的 finally
-        # 在返回前恢复 ContextVar，外部检查会误判
-        original_fn = runner._run_agent_workflow
-
+        # 用 spy 在 _run_agent_workflow 内检查 ContextVar——不执行真实逻辑
         async def spy(
             scenario: Scenario,
             variant: Variant,
@@ -104,7 +101,15 @@ async def test_no_safety_disables_both() -> None:
         ) -> VariantResult:
             assert get_ablation_disable_rules() is True
             assert get_probabilistic_enabled() is False
-            return await original_fn(scenario, variant, user_id, t0)
+            return VariantResult(
+                scenario_id=scenario.id,
+                variant=Variant.NO_SAFETY,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=t0,
+            )
 
         with patch.object(runner, "_run_agent_workflow", spy):
             await runner.run_variant(scenario, Variant.NO_SAFETY)
