@@ -22,6 +22,7 @@ _TTL_EXTRA_FOR_TIME = 1800
 _MAX_HOUR = 23
 _NOON = 12
 _AM_THRESHOLD = 8  # < 8 且无 AM/PM 标记时视为 PM
+_PERIODIC_WINDOW_SECONDS = 60  # 周期性触发的时间窗口（秒）
 
 
 @dataclass
@@ -268,13 +269,44 @@ class PendingReminderManager:
 
     @staticmethod
     def _check_state(reminder: dict, ctx: dict) -> bool:
-        """State 触发：当前 fatigue/workload 匹配记忆条件。暂未实现。"""
+        target = reminder.get("trigger_target", {})
+        condition = target.get("condition", "")
+        if not condition or not ctx:
+            return False
+        fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
+        workload = ctx.get("driver_state", {}).get("workload", "")
+        try:
+            if "fatigue>" in condition:
+                threshold = float(condition.split(">")[1])
+                return fatigue > threshold
+            if "workload=" in condition:
+                expected = condition.split("=")[1].strip()
+                return workload == expected
+        except ValueError, IndexError, TypeError:
+            return False
         return False
 
     @staticmethod
     def _check_periodic(reminder: dict) -> bool:
-        """Periodic 触发：当前时间匹配周期性窗口。暂未实现。"""
-        return False
+        target = reminder.get("trigger_target", {})
+        interval_hours = target.get("interval_hours", 0)
+        if interval_hours <= 0:
+            return False
+        created_str = reminder.get("created_at", "")
+        if not created_str:
+            return False
+        try:
+            created = datetime.fromisoformat(created_str)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=UTC)
+            elapsed = (datetime.now(UTC) - created).total_seconds()
+            period_seconds = interval_hours * 3600
+            return (
+                elapsed >= period_seconds
+                and (elapsed % period_seconds) < _PERIODIC_WINDOW_SECONDS
+            )
+        except ValueError, TypeError:
+            return False
 
 
 def parse_duration(s: str) -> int | None:

@@ -1,0 +1,204 @@
+"""主动调度器主循环。"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+from app.agents.pending import PendingReminderManager
+from app.config import user_data_dir
+from app.memory.schemas import EVENT_TYPE_PASSIVE_VOICE, MemoryEvent
+from app.scheduler.context_monitor import ContextDelta, ContextMonitor
+from app.scheduler.memory_scanner import MemoryScanner
+from app.scheduler.trigger_evaluator import TriggerEvaluator, TriggerSignal
+
+if TYPE_CHECKING:
+    from app.agents.workflow import AgentWorkflow
+    from app.memory.memory import MemoryModule
+
+logger = logging.getLogger(__name__)
+
+_REVIEW_HOUR = 8
+_FATIGUE_HIGH = 0.7
+
+
+class ProactiveScheduler:
+    """主动调度器：后台轮询上下文+记忆，触发 AgentWorkflow 主动模式。"""
+
+    def __init__(
+        self,
+        workflow: AgentWorkflow,
+        memory_module: MemoryModule,
+        user_id: str = "default",
+        tick_interval: float = 15.0,
+        debounce_seconds: float = 30.0,
+    ) -> None:
+        """初始化 ProactiveScheduler。
+
+        Args:
+            workflow: AgentWorkflow 实例。
+            memory_module: 统一记忆管理模块。
+            user_id: 目标用户 ID。
+            tick_interval: 轮询间隔（秒）。
+            debounce_seconds: 去抖间隔（秒）。
+
+        """
+        self._workflow = workflow
+        self._memory_scanner = MemoryScanner(memory_module, user_id)
+        self._context_monitor = ContextMonitor()
+        self._trigger_evaluator = TriggerEvaluator(debounce_seconds)
+        self._tick_interval = tick_interval
+        self._task: asyncio.Task | None = None
+        self._running = False
+        self._voice_queue: asyncio.Queue[str] = asyncio.Queue()
+
+    async def push_voice_text(self, text: str) -> None:
+        """推入一条被动语音文本到队列。"""
+        await self._voice_queue.put(text)
+
+    def update_context(self, ctx: dict) -> None:
+        """更新当前驾驶上下文。"""
+        self._current_context = ctx
+
+    async def _poll_pending(self, ctx: dict) -> None:
+        """轮询 PendingReminder 触发条件。"""
+        pm = PendingReminderManager(user_data_dir(self._workflow.current_user))
+        triggered = await pm.poll(ctx)
+        for tr in triggered:
+            logger.info("PendingReminder triggered: %s", tr.get("id"))
+
+    async def _scan_context_changes(self, ctx: dict, delta: ContextDelta) -> list[dict]:
+        """检查上下文变化并检索相关记忆。"""
+        memory_hints: list[dict] = []
+        if delta.scenario_changed:
+            hints = await self._memory_scanner.scan_by_scenario_change(
+                old_scenario="", new_scenario=ctx.get("scenario", "")
+            )
+            memory_hints.extend(hints)
+        if delta.location_changed:
+            nearby = await self._memory_scanner.scan_by_context(ctx, top_k=5)
+            memory_hints.extend(nearby)
+        return memory_hints
+
+    def _build_signals(
+        self, ctx: dict, delta: ContextDelta, memory_hints: list[dict]
+    ) -> list[TriggerSignal]:
+        """根据上下文变化构建触发信号列表。"""
+        signals: list[TriggerSignal] = []
+
+        if delta.scenario_changed:
+            signals.append(
+                TriggerSignal(
+                    source="context_change",
+                    priority=1,
+                    context=ctx,
+                    memory_hints=memory_hints,
+                )
+            )
+        if delta.fatigue_increased or delta.workload_changed:
+            signals.append(TriggerSignal(source="state", priority=2, context=ctx))
+
+        now = datetime.now(UTC)
+        if now.hour == _REVIEW_HOUR and now.minute < 1:
+            signals.append(
+                TriggerSignal(source="periodic", priority=0, context=ctx or None)
+            )
+
+        fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
+        workload = ctx.get("driver_state", {}).get("workload", "")
+        if fatigue > _FATIGUE_HIGH or workload == "overloaded":
+            signals.append(TriggerSignal(source="state", priority=2, context=ctx))
+
+        return signals
+
+    async def _evaluate_and_execute(
+        self, signals: list[TriggerSignal], ctx: dict
+    ) -> None:
+        """评估触发信号并执行主动工作流。"""
+        for sig in signals:
+            decision = self._trigger_evaluator.evaluate(sig, ctx or None)
+            if decision.should_trigger:
+                try:
+                    result, event_id, _ = await self._workflow.proactive_run(
+                        context_override=ctx or None,
+                        memory_hints=sig.memory_hints,
+                        trigger_source=sig.source,
+                    )
+                    if event_id:
+                        logger.info(
+                            "Proactive trigger: %s → %s (event=%s)",
+                            sig.source,
+                            result,
+                            event_id,
+                        )
+                except (OSError, RuntimeError, ValueError, TypeError) as e:
+                    logger.warning("proactive_run failed for %s: %s", sig.source, e)
+
+    async def _drain_voice_queue(self) -> None:
+        """消费语音队列，写入被动语音记忆。"""
+        while not self._voice_queue.empty():
+            text = await self._voice_queue.get()
+            event = MemoryEvent(
+                content=text,
+                type=EVENT_TYPE_PASSIVE_VOICE,
+                created_at=datetime.now(UTC).isoformat(),
+            )
+            try:
+                await self._workflow.memory_module.write(
+                    event, user_id=self._workflow.current_user
+                )
+                logger.info("Passive voice memory written: %.50s", text)
+            except (OSError, RuntimeError, ValueError, TypeError) as e:
+                logger.warning("Failed to write passive voice: %s", e)
+
+    async def _tick(self) -> None:
+        """单次 tick：语音消费、PendingReminder 轮询、上下文变化检测、触发执行。"""
+        await self._drain_voice_queue()
+
+        ctx: dict | None = getattr(self, "_current_context", None)
+        if not ctx:
+            ctx = {}
+
+        if ctx:
+            await self._poll_pending(ctx)
+
+        delta = (
+            self._context_monitor.update(ctx) if ctx else ContextMonitor().update({})
+        )
+
+        memory_hints: list[dict] = []
+        if ctx:
+            memory_hints = await self._scan_context_changes(ctx, delta)
+
+        signals = self._build_signals(ctx, delta, memory_hints) if ctx else []
+        await self._evaluate_and_execute(signals, ctx)
+
+    async def run(self) -> None:
+        """调度器主循环。"""
+        self._running = True
+        logger.info("ProactiveScheduler started (tick=%ss)", self._tick_interval)
+        while self._running:
+            try:
+                await self._tick()
+            except Exception as e:
+                logger.warning("Scheduler tick failed: %s", e)
+            await asyncio.sleep(self._tick_interval)
+        logger.info("ProactiveScheduler stopped")
+
+    async def start(self) -> None:
+        """启动调度器（幂等）。"""
+        if self._task is not None:
+            return
+        self._task = asyncio.create_task(self.run())
+
+    async def stop(self) -> None:
+        """停止调度器。"""
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
