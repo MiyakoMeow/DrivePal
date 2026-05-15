@@ -35,18 +35,29 @@
 
 ## 异常
 
-| 异常 | 触发 |
-|------|------|
-| ProviderNotFoundError | provider未配置 |
-| ModelGroupNotFoundError | model_group未找到 |
-| InvalidModelStringError | 引用字符串格式错 |
-| ChatError | LLM调用通用失败 |
-| NoProviderError | provider列表空 |
-| AllProviderFailedError | 全部provider失败 |
-| NoLLMConfigurationError | 无LLM配置 |
-| MissingModelFieldError | 缺model字段 |
-| NoDefaultModelGroupError | 无默认model group |
-| NoJudgeModelConfiguredError | 未配置评测模型 |
+两类异常体系并存——域内异常继承 `AppError`，类型校验继承内置异常。
+
+### AppError 子类（走 API 映射路径）
+
+| 异常 | 父类 | 文件 | 说明 |
+|------|------|------|------|
+| `ChatError` | `AppError` | `chat.py:79` | LLM调用通用失败 |
+| `NoProviderError` | `ChatError` | `chat.py:86` | provider列表为空 |
+| `AllProviderFailedError` | `ChatError` | `chat.py:95` | 全部provider失败 |
+| `NoLLMConfigurationError` | `AppError` | `settings.py:16` | 无LLM配置 |
+| `MissingModelFieldError` | `AppError` | `settings.py:23` | 缺model字段 |
+| `NoDefaultModelGroupError` | `AppError` | `settings.py:32` | 无默认model group |
+| `NoJudgeModelConfiguredError` | `AppError` | `settings.py:41` | 未配置评测模型 |
+
+### 独立异常（不入继承树）
+
+| 异常 | 父类 | 文件 | 说明 |
+|------|------|------|------|
+| `ProviderNotFoundError` | `ValueError` | `exceptions.py:4` | provider未配置 |
+| `ModelGroupNotFoundError` | `KeyError` | `exceptions.py:12` | model_group未找到 |
+| `InvalidModelStringError` | `ValueError` | `model_string.py:9` | 引用字符串格式错 |
+
+catch 模式：provider 调用 `except (openai.APIError, OSError, ValueError, TypeError, RuntimeError)` → 下一provider fallback。全部失败 → `AllProviderFailedError`。
 
 ## 阈值
 

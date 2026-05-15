@@ -117,6 +117,14 @@ max_results = 5
 
 当前 `enabled` 标志为预留字段，未在代码中强制执行。
 
+## 异常
+
+| 异常 | 文件 | 继承 | 说明 |
+|------|------|------|------|
+| `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验失败/handler异常。code=TOOL_ERROR |
+
+catch 模式：`_execution_node`（`agents/workflow.py`）内逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`get_default_executor()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → 空注册表。
+
 ## 安全约束
 
 工具调用受规则引擎 `postprocess_decision()` 统一管辖（`proactive_run` 路径必走规则后处理）。当前规则引擎不区分工具类型——所有 `tool_calls` 在 LLM 输出中存在即被执行，工具级别约束待后续细化。

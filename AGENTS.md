@@ -173,72 +173,29 @@ git worktree add .worktrees/<名> -b <名>
 
 ## 异常处理范式
 
-项目异常体系经统一重构后形成如下范式。所有新增模块应遵循此模式。
+`app/exceptions.py:AppError(Exception)` — 全系统异常基类。统一 `code: str` + `message: str`。
+各模块继承之，形成统一继承树。API 层通过多重继承桥接域内异常与 FastAPI。
 
-### 继承树
-
-```
-Exception
-  └─ AppError                          # app/exceptions.py 全系统基类
-       ├─ MemoryBankError               # app/memory/exceptions.py
-       │    ├─ TransientError           #   可重试（网络/超时/限速）
-       │    │    └─ LLMCallFailedError
-       │    ├─ FatalError               #   不可恢复（配置/数据损坏）
-       │    │    ├─ ConfigError
-       │    │    └─ IndexIntegrityError
-       │    └─ SummarizationEmpty       #   哨兵异常，非错误
-       ├─ WorkflowError                 # app/agents/workflow.py
-       ├─ ToolExecutionError            # app/tools/executor.py
-       ├─ ChatError                     # app/models/chat.py
-       │    ├─ NoProviderError
-       │    └─ AllProviderFailedError
-       ├─ NoLLMConfigurationError       # app/models/settings.py
-       ├─ MissingModelFieldError
-       ├─ NoDefaultModelGroupError
-       ├─ NoJudgeModelConfiguredError
-       └─ AppError(BaseAppError, HTTPException)  # app/api/errors.py 多重继承桥接
-
-ValueError / TypeError / KeyError       # 独立异常，不入继承树
-  ├─ AppendError(TypeError)             # app/storage/toml_store.py
-  ├─ UpdateError(TypeError)
-  ├─ InvalidActionError(ValueError)     # app/memory/schemas.py
-  ├─ UnknownModeError(ValueError)       # app/memory/memory.py
-  ├─ InvalidModelStringError(ValueError)# app/models/model_string.py
-  ├─ ProviderNotFoundError(ValueError)  # app/models/exceptions.py
-  └─ ModelGroupNotFoundError(KeyError)
-```
+> 各模块异常详情 → `app/*/AGENTS.md`。
 
 ### 核心模式
 
 | 模式 | 载体 | 说明 |
 |------|------|------|
-| **统一基类** | `AppError(Exception)` | `code: str` + `message: str`，机器可读+人类可读。各模块异常继承之 |
-| **可恢复性二分** | `TransientError` vs `FatalError` | MemoryBank 首创模式。瞬态（retry_after）→ 可重试；永久 → 不重试 |
-| **多重继承桥接** | `api/errors.py:AppError(BaseAppError, HTTPException)` | `isinstance(e, BaseAppError)` 域内可 catch，`isinstance(e, HTTPException)` FastAPI handler 可 catch。域内域外统一 |
-| **哨兵异常** | `SummarizationEmpty` | 非错误，控制流信号。调用方捕获后返 `None`，不上报 |
-| **独立异常** | `ValueError`/`TypeError` 子类 | 非域内错误（类型校验/结构误用）不纳入 `AppError` 继承树。仅项目级 `AppError` 子类才走 API 映射路径 |
-| **不跨层** | 各层 catch 后 reinterpret | 下层抛特定异常，上层 catch 后包装为本层类型再向上抛。scheduler tick 内各步骤独立 try/except |
-
-### 各层 catch 模式
-
-| 层 | 模式 | 文件 | 说明 |
-|----|------|------|------|
-| **API 边界** | `safe_call()` 精确映射 | `app/api/errors.py:95-142` | `TransientError`→503, `FatalError`→500, `ToolExecutionError`→500, `WorkflowError`→503, `ValueError`→422, `OSError`→503, `BaseAppError`(非HTTP)→500, 其余→500 |
-| **Scheduler** | `except AppError` + log | `app/scheduler/scheduler.py` | tick 级 catch，防单步崩溃影响后续 tick。主循环 `except Exception` 兜底 |
-| **内存/LLM** | `except ValueError, TypeError:` | memory_bank/*.py, agents/*.py | PEP-758 语法，内部数据校验。不跨模块边界 |
-| **配置加载** | `except OSError, tomllib.TOMLDecodeError:` | voice/pipeline.py, scheduler/scheduler.py, tools/tools/*.py | 配置文件不存在/损坏时fallback默认值。静默降级 |
-| **LLM 调用** | `except (openai.APIError, OSError, ValueError, TypeError, RuntimeError)` | `app/models/chat.py:237,299` | provider调用异常统一catch→`AllProviderFailedError` |
-| **存储** | `except (json.JSONDecodeError, OSError, TypeError, ValueError)` | memory_bank/store.py, memory_bank/index.py | 读写corruption 恢复/重建 |
-| **语音** | `except OSError, ImportError, TypeError` | `app/voice/asr.py` | 模型缺失静默降级 |
-| **FAISS索引** | 逐类损坏恢复 | `memory_bank/index.py` | metadata 格式错/计数不匹配/索引类型不对均有对应恢复策略 |
+| **统一基类** | `AppError(Exception)` | 全系统异常基类，`code+message`。各模块异常继承之 |
+| **可恢复性二分** | `TransientError` vs `FatalError` | MemoryBank首创。可重试瞬态 vs 不可恢复永久 |
+| **多重继承桥接** | `AppError(BaseAppError, HTTPException)` | `isinstance(e, BaseAppError)` 域内 catch；`isinstance(e, HTTPException)` FastAPI handler catch |
+| **哨兵异常** | `SummarizationEmpty` | 非错误，控制流信号。调用方捕获后返 None，不上报 |
+| **独立异常** | `ValueError`/`TypeError` 子类 | 非域内错误（类型校验/结构误用）不纳入继承树 |
+| **不跨层** | 各层 catch→reinterpret | 下层抛特定异常，上层包装为本层类型再上抛 |
 
 ### 关键原则
 
-1. **新增异常先看继承树**：域内异常继承 `AppError`，类型校验/结构误用继承 Python 内置异常
-2. **不要在 layer 间传播底层类型**：catch 后 reinterpret，抛上层类型
-3. **Sentinel 模式走哨兵异常**：需在类型标注 + 文档显式说明"非错误"
-4. **瞬态 vs 永久**：MemoryBank 中明确区分，新增持久化/网络模块同理
-5. **阈值配置**（MemoryBank 具体值）→ `app/memory/AGENTS.md`
+1. **新增异常先判断归属**：域内异常继承 `AppError`，类型校验/结构误用继承 Python 内置异常
+2. **不跨层传播底层类型**：catch 后 reinterpret，抛上层类型
+3. **哨兵模式显式标注**：需在类型标注 + 文档说明"非错误"
+4. **瞬态 vs 永久区分**：沿用 `TransientError`/`FatalError` 二分
+5. **各模块具体异常 → 对应 `AGENTS.md`**
 
 ## Benchmark
 

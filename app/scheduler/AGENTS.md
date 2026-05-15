@@ -126,9 +126,13 @@ fatigue_delta_threshold = 0.1
 
 ## 异常
 
-- tick 内各步骤独立 `try/except`，单步失败不影响后续
-- 主循环 `except Exception` 防崩溃，失败 log 后继续下一次 tick
+Scheduler 是 **异常不可跨层原则** 的典型——tick 内不传播异常。
+
+- tick 内各步骤独立 `try/except`，单步失败不影响后续 tick
+- 主循环 `except Exception` 兜底防崩溃，失败 log 后继续下一次 tick
+- `except AppError` 捕获工作流异常，log 后不中断
 - ASR 模型缺失时 `_drain_voice_queue` 静默消耗空字符串
+- 配置加载 `except OSError, tomllib.TOMLDecodeError` → 使用默认值
 
 ## 测试
 
