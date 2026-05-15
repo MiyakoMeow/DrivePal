@@ -1,10 +1,12 @@
-"""数据查询与管理路由（history、export、delete、experiments）."""
+"""v1 data 路由（history、export、delete、experiments）."""
 
 import logging
 import shutil
+from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from app.api.errors import AppError, AppErrorCode, safe_memory_call
 from app.api.schemas import (
     ExperimentResultResponse,
     ExperimentResultsResponse,
@@ -30,13 +32,20 @@ def _safe_float(metrics: dict, key: str) -> float:
 
 @router.get("/history", response_model=list[MemoryEventResponse])
 async def get_history(
+    request: Request,
     limit: int = 10,
-    current_user: str = "default",
 ) -> list[MemoryEventResponse]:
     """查询历史记忆事件."""
-    mm = get_memory_module()
-    events = await mm.get_history(
-        limit=limit, mode=MemoryMode.MEMORY_BANK, user_id=current_user
+    limit = max(1, min(limit, 100))
+    user_id = request.state.user_id
+    try:
+        mm = get_memory_module()
+    except Exception as e:
+        logger.exception("get_memory_module failed in get_history")
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
+    events = await safe_memory_call(
+        mm.get_history(limit=limit, mode=MemoryMode.MEMORY_BANK, user_id=user_id),
+        "get_history",
     )
     return [
         MemoryEventResponse(
@@ -51,45 +60,64 @@ async def get_history(
 
 
 @router.get("/export", response_model=ExportDataResponse)
-async def export_data(current_user: str = "default") -> ExportDataResponse:
-    """导出当前用户全量文本数据."""
-    u_dir = user_data_dir(current_user)
+async def export_data(
+    request: Request,
+    export_type: Literal["events", "settings", "all"] = "all",
+) -> ExportDataResponse:
+    """导出当前用户文本数据，按类型过滤."""
+    u_dir = user_data_dir(request.state.user_id)
     files: dict[str, str] = {}
     if not u_dir.exists():
         return ExportDataResponse(files=files)
 
-    allowed_suffixes = (".jsonl", ".toml", ".json")
-    # 排除 memorybank/ 目录：FAISS 二进制索引文件不可作文本导入
-    for fpath in u_dir.rglob("*"):
-        if "memorybank" in fpath.parts or fpath.suffix not in allowed_suffixes:
-            continue
-        if fpath.is_file():
-            try:
-                content = fpath.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
+    allowed = _allowed_suffixes(export_type)
+    try:
+        for fpath in u_dir.rglob("*"):
+            if "memorybank" in fpath.parts or fpath.suffix not in allowed:
                 continue
-            rel = str(fpath.relative_to(u_dir))
-            files[rel] = content
+            if fpath.is_file():
+                try:
+                    content = fpath.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                rel = str(fpath.relative_to(u_dir))
+                files[rel] = content
+    except OSError as e:
+        logger.warning("Failed to export data: %s", e)
+        raise AppError(AppErrorCode.STORAGE_ERROR, "Failed to export user data") from e
     return ExportDataResponse(files=files)
 
 
 @router.delete("/data")
-async def delete_all_data(current_user: str = "default") -> dict[str, bool]:
+async def delete_all_data(request: Request) -> dict[str, bool]:
     """删除当前用户全量数据."""
-    u_dir = user_data_dir(current_user)
+    u_dir = user_data_dir(request.state.user_id)
     if not u_dir.exists():
         return {"success": False}
     try:
         shutil.rmtree(u_dir)
     except OSError as e:
         logger.warning("Failed to delete user data: %s", e)
-        return {"success": False}
+        raise AppError(
+            AppErrorCode.STORAGE_ERROR, "Failed to delete user data", 503
+        ) from e
     return {"success": True}
+
+
+def _allowed_suffixes(export_type: str) -> tuple[str, ...]:
+    if export_type == "events":
+        return (".jsonl",)
+    if export_type == "settings":
+        return (".toml",)
+    return (".jsonl", ".toml", ".json")
 
 
 @router.get("/experiments", response_model=ExperimentResultsResponse)
 async def get_experiment_results() -> ExperimentResultsResponse:
-    """查询五策略实验结果对比."""
+    """查询五策略实验结果对比.
+
+    实验数据为系统级（VehicleMemBench 全局 benchmark），非 per-user，故无需用户上下文。
+    """
     try:
         data = read_benchmark()
     except (OSError, ValueError) as e:

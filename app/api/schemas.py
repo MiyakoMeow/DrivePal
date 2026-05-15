@@ -12,7 +12,7 @@ from app.schemas.context import DrivingContext
 
 
 class ProcessQueryResponse(BaseModel):
-    """POST /api/query 响应."""
+    """POST /api/v1/query 响应."""
 
     result: str
     event_id: str | None = None
@@ -23,16 +23,15 @@ class ProcessQueryResponse(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    """POST /api/feedback 请求."""
+    """POST /api/v1/feedback 请求."""
 
     event_id: str
-    action: Literal["accept", "ignore"]
+    action: Literal["accept", "ignore", "snooze", "modify"]
     modified_content: str | None = None
-    current_user: str = "default"
 
 
 class FeedbackResponse(BaseModel):
-    """POST /api/feedback 响应."""
+    """POST /api/v1/feedback 响应."""
 
     status: str
 
@@ -41,15 +40,14 @@ class FeedbackResponse(BaseModel):
 
 
 class SavePresetRequest(BaseModel):
-    """POST /api/presets 请求."""
+    """POST /api/v1/presets 请求."""
 
     name: str
     context: DrivingContext
-    current_user: str = "default"
 
 
 class ScenarioPresetResponse(BaseModel):
-    """GET /api/presets 响应项."""
+    """GET /api/v1/presets 响应项."""
 
     id: str
     name: str
@@ -61,7 +59,7 @@ class ScenarioPresetResponse(BaseModel):
 
 
 class MemoryEventResponse(BaseModel):
-    """GET /api/history 响应项."""
+    """GET /api/v1/history 响应项."""
 
     id: str
     content: str
@@ -74,7 +72,7 @@ class MemoryEventResponse(BaseModel):
 
 
 class ExportDataResponse(BaseModel):
-    """GET /api/export 响应."""
+    """GET /api/v1/export 响应."""
 
     files: dict[str, str]
 
@@ -92,7 +90,7 @@ class ExperimentResultResponse(BaseModel):
 
 
 class ExperimentResultsResponse(BaseModel):
-    """GET /api/experiments 响应."""
+    """GET /api/v1/experiments 响应."""
 
     strategies: list[ExperimentResultResponse]
 
@@ -100,30 +98,8 @@ class ExperimentResultsResponse(BaseModel):
 # --- Reminders ---
 
 
-class PollRemindersRequest(BaseModel):
-    """POST /api/reminders/poll 请求."""
-
-    current_user: str = "default"
-    context: DrivingContext | None = None
-
-
-class TriggeredReminderResponse(BaseModel):
-    """已触发提醒."""
-
-    id: str
-    event_id: str
-    content: dict
-    triggered_at: str
-
-
-class PollRemindersResponse(BaseModel):
-    """POST /api/reminders/poll 响应."""
-
-    triggered: list[TriggeredReminderResponse]
-
-
 class PendingReminderResponse(BaseModel):
-    """GET /api/reminders 响应项."""
+    """GET /api/v1/reminders 响应项."""
 
     id: str
     event_id: str

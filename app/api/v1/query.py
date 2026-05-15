@@ -1,10 +1,11 @@
-"""查询处理路由."""
+"""v1 query 路由."""
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request
 
 from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
+from app.api.errors import AppError, AppErrorCode
 from app.api.schemas import ProcessQueryResponse
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
@@ -15,17 +16,18 @@ router = APIRouter()
 
 
 @router.post("", response_model=ProcessQueryResponse)
-async def process_query(req: ProcessQueryRequest) -> ProcessQueryResponse:
+async def process_query(
+    req: ProcessQueryRequest,
+    request: Request,
+) -> ProcessQueryResponse:
     """处理用户查询并返回工作流结果."""
     try:
         mm = get_memory_module()
         workflow = AgentWorkflow(
             data_dir=DATA_DIR,
             memory_module=mm,
-            current_user=req.current_user,
+            current_user=request.state.user_id,
         )
-
-        # REST 边界校验 DrivingContext，workflow 内部期望 dict
         ctx = req.context.model_dump() if req.context else None
         result, event_id, stages = await workflow.run_with_stages(
             req.query,
@@ -43,10 +45,15 @@ async def process_query(req: ProcessQueryRequest) -> ProcessQueryResponse:
             },
         )
     except ChatModelUnavailableError as e:
-        raise HTTPException(
-            status_code=503,
-            detail="AI model unavailable",
+        raise AppError(
+            AppErrorCode.INTERNAL_ERROR,
+            "AI model unavailable",
         ) from e
-    except Exception as e:
+    except AppError:
+        raise
+    except Exception:
         logger.exception("process_query failed")
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise AppError(
+            AppErrorCode.INTERNAL_ERROR,
+            "Internal server error",
+        ) from None

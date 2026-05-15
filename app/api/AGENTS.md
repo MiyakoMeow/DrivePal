@@ -1,64 +1,76 @@
 # API 层
 
-`app/api/` — FastAPI REST。主路由 `/api` 前缀；流式端点 `/query/stream`。
+`app/api/` — FastAPI v1 REST + WebSocket。
 
-## 端点
+## v1 端点
+
+所有端点前缀 `/api/v1`。用户身份由 `X-User-Id` header 注入（默认 `default`）。
 
 | 方法 | 路径 | 用途 |
 |------|------|------|
-| POST | `/api/query` | 处理查询，返完整工作流结果 |
-| POST | `/query/stream` | SSE流式返各阶段结果 |
-| POST | `/api/feedback` | 提交反馈(accept/ignore) |
-| GET | `/api/history` | 查询历史记忆事件 |
-| GET | `/api/export` | 导出当前用户全量文本数据 |
-| DELETE | `/api/data` | 删除当前用户全量数据 |
-| GET | `/api/experiments` | 查询实验结果对比 |
-| GET | `/api/presets` | 查询场景预设 |
-| POST | `/api/presets` | 保存场景预设 |
-| DELETE | `/api/presets/{id}` | 删除预设 |
-| POST | `/api/reminders/poll` | 轮询待触发提醒 |
-| DELETE | `/api/reminders/{id}` | 取消提醒 |
-| GET | `/api/reminders` | 获取待触发提醒列表 |
-| POST | `/api/sessions/{id}/close` | 关闭会话 |
+| POST | `/api/v1/query` | 处理查询，返完整工作流结果 |
+| WS | `/api/v1/ws` | WebSocket 长连接（流式查询 + 心跳） |
+| POST | `/api/v1/feedback` | 提交反馈(accept/ignore/snooze/modify) |
+| GET | `/api/v1/presets` | 查询场景预设 |
+| POST | `/api/v1/presets` | 保存场景预设 |
+| DELETE | `/api/v1/presets/{id}` | 删除预设 |
+| GET | `/api/v1/history` | 查询历史记忆事件（`?limit=N`, 1–100） |
+| GET | `/api/v1/export` | 导出当前用户文本数据（`?export_type=events\|settings\|all`） |
+| DELETE | `/api/v1/data` | 删除当前用户全量数据 |
+| GET | `/api/v1/experiments` | 查询实验结果对比（系统级，非 per-user） |
+| GET | `/api/v1/reminders` | 获取待触发提醒列表 |
+| DELETE | `/api/v1/reminders/{id}` | 取消提醒 |
+| POST | `/api/v1/sessions/{id}/close` | 关闭会话（校验用户归属） |
 
-Schema定义于 `app/api/schemas.py` + `app/schemas/query.py`。
+Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 
-## SSE流式
+## WebSocket
 
-`POST /query/stream`，`Content-Type: text/event-stream`。逐阶段推送 stage_start/context_done/decision/done/error。快捷指令命中时跳中间事件。
+`WS /api/v1/ws?user_id=xxx`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。
+
+消息格式（统一用 `payload` 键）：
+- 客户端→服务端：`{"type": "query", "payload": {"query": "...", "context": {...}, "session_id": "..."}}`
+- 服务端→客户端：`{"type": "stage_start"|"context_done"|"decision"|"done"|"error"|"reminder", "payload": {...}}`
+- 心跳：客户端每30s发 `{"type": "ping"}`，服务端返 `{"type": "pong", "payload": {}}`
+- 非法 JSON：返回 `{"type": "error", "payload": {"code": "INVALID_JSON", "message": "Malformed JSON"}}`，不断连
 
 ## 错误处理
 
-`app/api/errors.py`。`safe_memory_call` 包装记忆调用，异常转 HTTPException：
+`app/api/errors.py`。`AppError` 继承 `HTTPException`，统一错误信封 `{"error": {"code": "...", "message": "..."}}`。
 
-| 异常 | 状态码 |
-|------|--------|
-| OSError | 503 |
-| ValueError | 422 |
-| 其余 | 500 |
+| AppErrorCode | HTTP | 场景 |
+|---|---|---|
+| NOT_FOUND | 404 | 资源不存在 |
+| INVALID_INPUT | 422 | 请求参数不合法 |
+| STORAGE_ERROR | 503 | 存储不可用 |
+| INTERNAL_ERROR | 500 | 未预期异常 |
 
-`query.py` 额外捕获 `ChatModelUnavailableError` → 503。
+`safe_memory_call` 包装所有存储/记忆调用。`ChatModelUnavailableError` → 500。
+
+## 中间件
+
+`UserIdentityMiddleware`：从 `X-User-Id` header 提取用户 ID，注入 `request.state.user_id`。仅处理 HTTP，WS 端点直接读 `ws.headers`。
 
 ## 服务入口
 
 **启动**：`uv run uvicorn app.api.main:app`
 
 **Lifespan**：
-- 启动：`init_storage()` 初始化数据目录；`_periodic_cleanup` 后台每300s清理过期会话
-- 关闭：`MemoryModule.close()` FAISS落盘；`close_client_cache()` 关闭Chat缓存
-
-**中间件**：CORS `allow_origins=["*"]`（开发用）
-
-**路由注册**：`app/api/routes/__init__.py`，6子模块汇总为 `api_router`。
+- 启动：`init_storage()` + 后台每300s清理过期会话
+- 关闭：`MemoryModule.close()` FAISS落盘 + `close_client_cache()`
 
 **静态文件**：`/static` → WebUI，`GET /` → index.html
 
 ## 反馈学习
 
-`POST /api/feedback` 将更新写入 `strategies.toml` 的 `reminder_weights`。accept +0.1（上限1.0），ignore -0.1（下限0.1），基值0.5。
+`POST /api/v1/feedback` 更新 `strategies.toml` 的 `reminder_weights`：
 
-权重注入流程（`app/agents/` 层实现，API层仅暴露写入）：
-1. `_format_preference_hint()` 将权重转自然语言提示
-2. 经 system prompt `{preference_hint}` + 用户prompt两路注入 JointDecision
-3. 权重 ≥0.6 强引导，≥0.5 弱引导，<0.5 不提示
-4. 规则引擎硬约束 → LLM语义推理 → `postprocess_decision()` 后处理
+| action | 权重变化 |
+|--------|---------|
+| accept | +0.1（上限1.0） |
+| ignore | -0.1（下限0.1） |
+| snooze | 创建5分钟延迟提醒（验证事件存在） |
+| modify | +0.05（用户微调偏好） |
+
+权重注入：`_format_preference_hint()` → system prompt + 用户 prompt → JointDecision。
+≥0.6 强引导，≥0.5 弱引导，<0.5 不提示。

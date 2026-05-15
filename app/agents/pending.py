@@ -135,14 +135,17 @@ class PendingReminderManager:
         all_rem = await self._read_all()
         return [r for r in all_rem if r.get("status") == "pending"]
 
-    async def cancel(self, reminder_id: str) -> None:
-        """取消指定 ID 的待触发提醒。"""
+    async def cancel(self, reminder_id: str) -> bool:
+        """取消指定 ID 的待触发提醒，返回是否实际取消."""
         async with self._lock:
             all_rem = await self._read_all()
+            found = False
             for r in all_rem:
                 if r.get("id") == reminder_id:
                     r["status"] = "cancelled"
+                    found = True
             await self._write_all(all_rem)
+            return found
 
     async def cancel_last(self) -> bool:
         """取消最近一条 pending reminder。返回是否成功取消。"""

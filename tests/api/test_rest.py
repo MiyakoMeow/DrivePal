@@ -1,65 +1,35 @@
-"""REST API 端点测试."""
+"""REST API v1 端点测试."""
 
-import os
-from contextlib import ExitStack
-from pathlib import Path
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.api.main import app
 from app.config import user_data_dir
 from app.memory.singleton import get_memory_module
 from app.storage.toml_store import TOMLStore
-from tests.fixtures import reset_all_singletons
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from fastapi.testclient import TestClient
 
-_MODULES_WITH_DATA_DIR = [
-    "app.config",
-    "app.api.main",
-    "app.memory.singleton",
-]
-
-_MODULES_WITH_DATA_ROOT = [
-    "app.config",
-]
+_V1 = "/api/v1"
 
 
-@pytest.fixture
-def isolated_app(tmp_path: Path) -> Generator[TestClient]:
-    """每个测试获取独立的 FastAPI app 实例."""
-    data_dir = tmp_path / "data"
-    os.environ["DATA_DIR"] = str(data_dir)
-    target = Path(data_dir)
-    with ExitStack() as stack:
-        for mod in _MODULES_WITH_DATA_DIR:
-            stack.enter_context(patch(f"{mod}.DATA_DIR", target))
-        for mod in _MODULES_WITH_DATA_ROOT:
-            stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
-        reset_all_singletons()
-        yield TestClient(app)
-        reset_all_singletons()
-
-
-def test_scenario_presets_list(isolated_app: TestClient) -> None:
-    """验证 GET /api/presets 返回列表."""
-    resp = isolated_app.get("/api/presets")
+def test_scenario_presets_list(app_client: TestClient) -> None:
+    """验证 GET /api/v1/presets 返回列表."""
+    resp = app_client.get(f"{_V1}/presets")
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
 
 
-def test_save_scenario_preset(isolated_app: TestClient) -> None:
+def test_save_scenario_preset(app_client: TestClient) -> None:
     """验证保存场景预设."""
-    resp = isolated_app.post(
-        "/api/presets",
+    resp = app_client.post(
+        f"{_V1}/presets",
         json={
             "name": "test-highway",
             "context": {"scenario": "highway"},
-            "current_user": "default",
         },
     )
     assert resp.status_code == 200
@@ -68,30 +38,30 @@ def test_save_scenario_preset(isolated_app: TestClient) -> None:
     assert preset["id"] != ""
 
 
-def test_delete_scenario_preset(isolated_app: TestClient) -> None:
+def test_delete_scenario_preset(app_client: TestClient) -> None:
     """验证删除场景预设."""
-    save_resp = isolated_app.post(
-        "/api/presets",
+    save_resp = app_client.post(
+        f"{_V1}/presets",
         json={"name": "to-delete", "context": {"scenario": "parked"}},
     )
     preset_id = save_resp.json()["id"]
 
-    del_resp = isolated_app.delete(f"/api/presets/{preset_id}")
+    del_resp = app_client.delete(f"{_V1}/presets/{preset_id}")
     assert del_resp.status_code == 200
     assert del_resp.json()["success"] is True
 
 
-def test_delete_nonexistent_preset(isolated_app: TestClient) -> None:
+def test_delete_nonexistent_preset(app_client: TestClient) -> None:
     """验证删除不存在的预设返回 False."""
-    resp = isolated_app.delete("/api/presets/nonexistent")
+    resp = app_client.delete(f"{_V1}/presets/nonexistent")
     assert resp.status_code == 200
     assert resp.json()["success"] is False
 
 
-def test_feedback_invalid_action(isolated_app: TestClient) -> None:
+def test_feedback_invalid_action(app_client: TestClient) -> None:
     """验证无效 action 提交反馈返回 422."""
-    resp = isolated_app.post(
-        "/api/feedback",
+    resp = app_client.post(
+        f"{_V1}/feedback",
         json={"event_id": "x", "action": "invalid"},
     )
     assert resp.status_code == 422
@@ -99,9 +69,9 @@ def test_feedback_invalid_action(isolated_app: TestClient) -> None:
 
 @pytest.mark.embedding
 async def test_feedback_success_updates_strategy_weight(
-    isolated_app: TestClient,
+    app_client: TestClient,
 ) -> None:
-    """验证 POST /api/feedback 成功路径按事件类型更新策略权重."""
+    """验证 POST /api/v1/feedback 成功路径按事件类型更新策略权重."""
     mm = get_memory_module()
     interaction_result = await mm.write_interaction(
         "项目周会",
@@ -110,8 +80,8 @@ async def test_feedback_success_updates_strategy_weight(
     )
     event_id = interaction_result.event_id
 
-    resp = isolated_app.post(
-        "/api/feedback",
+    resp = app_client.post(
+        f"{_V1}/feedback",
         json={"event_id": event_id, "action": "accept"},
     )
     assert resp.status_code == 200
@@ -135,10 +105,10 @@ async def test_feedback_success_updates_strategy_weight(
 
 
 @pytest.mark.integration
-def test_process_query_without_context(isolated_app: TestClient) -> None:
-    """测试不带上下文的 POST /api/query（需要 LLM）。"""
-    resp = isolated_app.post(
-        "/api/query",
+def test_process_query_without_context(app_client: TestClient) -> None:
+    """测试不带上下文的 POST /api/v1/query（需要 LLM）。"""
+    resp = app_client.post(
+        f"{_V1}/query",
         json={"query": "明天上午9点有个会议"},
     )
     assert resp.status_code == 200
@@ -147,10 +117,10 @@ def test_process_query_without_context(isolated_app: TestClient) -> None:
 
 
 @pytest.mark.integration
-def test_process_query_with_context(isolated_app: TestClient) -> None:
-    """测试带上下文的 POST /api/query（验证规则引擎）。"""
-    resp = isolated_app.post(
-        "/api/query",
+def test_process_query_with_context(app_client: TestClient) -> None:
+    """测试带上下文的 POST /api/v1/query（验证规则引擎）。"""
+    resp = app_client.post(
+        f"{_V1}/query",
         json={
             "query": "提醒我买牛奶",
             "context": {

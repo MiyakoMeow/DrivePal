@@ -22,3 +22,7 @@ rules = { "invalid-assignment" = "ignore" }  # mock 替换 _call_llm_json 时类
 [[overrides]]
 include = ["tests/models/test_chat.py"]
 rules = { "invalid-assignment" = "ignore", "unresolved-attribute" = "ignore" }  # mock 替换 generate 时类型不匹配
+
+[[overrides]]
+include = ["app/api/main.py"]
+rules = { "invalid-argument-type" = "ignore" }  # add_exception_handler 签名与 AppError 子类不兼容，FastAPI 运行时正常工作
