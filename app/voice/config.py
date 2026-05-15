@@ -47,7 +47,8 @@ class VoiceConfig:
         """加载 voice.toml，文件缺失则自动生成。"""
         path = get_config_root() / "voice.toml"
         raw = ensure_config(path, cls._toml_defaults())
-        voice_data = raw.get("voice", {})
+        raw_voice = raw.get("voice")
+        voice_data = raw_voice if isinstance(raw_voice, dict) else {}
         asr_data = voice_data.get("asr")
         if isinstance(asr_data, dict) and not asr_data:
             logger.warning(

@@ -129,8 +129,10 @@ class LLMSettings:
             config_path = get_config_root() / "llm.toml"
             config_data = ensure_config(config_path, _LLM_TOML_DEFAULTS)
 
-        model_groups = dict(config_data.get("model_groups", {}))
-        model_providers = dict(config_data.get("model_providers", {}))
+        raw_groups = config_data.get("model_groups")
+        model_groups = dict(raw_groups) if isinstance(raw_groups, dict) else {}
+        raw_providers = config_data.get("model_providers")
+        model_providers = dict(raw_providers) if isinstance(raw_providers, dict) else {}
 
         if not model_groups:
             raise NoLLMConfigurationError

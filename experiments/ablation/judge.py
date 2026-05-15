@@ -74,7 +74,7 @@ def _make_raw_conditions_loader() -> Callable[[], dict[str, dict]]:
         try:
             toml_data = ensure_config(rules_toml_path, _RULES_TOML_DEFAULTS)
             cache = {cfg["name"]: cfg for cfg in toml_data.get("rules", [])}
-        except OSError, KeyError:
+        except KeyError:
             logger.warning(
                 "Judge 规则条件加载失败（%s），条件描述将为空", rules_toml_path
             )

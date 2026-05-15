@@ -36,8 +36,7 @@ class VoicePipeline:
             sample_rate = cfg.sample_rate
         if min_confidence is None:
             min_confidence = cfg.min_confidence
-        # VADEngine 帧时长硬编码 30ms，此处须与之对齐
-        silence_frames = max(1, cfg.silence_timeout_ms // 30)
+        silence_frames = max(1, cfg.silence_timeout_ms // VADEngine.FRAME_MS)
 
         self._vad = VADEngine(
             mode=vad_mode,

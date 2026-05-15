@@ -74,7 +74,8 @@ class ToolsConfig:
         tools_data = raw.get("tools", {})
 
         def _sub(name: str) -> dict:
-            return tools_data.get(name, {})
+            value = tools_data.get(name)
+            return value if isinstance(value, dict) else {}
 
         return cls(
             navigation=NavigationToolConfig(

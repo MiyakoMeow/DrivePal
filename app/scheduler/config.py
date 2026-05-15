@@ -38,8 +38,10 @@ class SchedulerConfig:
         """加载 scheduler.toml，文件缺失则自动生成。"""
         path = get_config_root() / "scheduler.toml"
         raw = ensure_config(path, cls._toml_defaults())
-        sched = raw.get("scheduler", {})
-        ctx = sched.get("context_monitor", {})
+        raw_sched = raw.get("scheduler")
+        sched = raw_sched if isinstance(raw_sched, dict) else {}
+        raw_ctx = sched.get("context_monitor")
+        ctx = raw_ctx if isinstance(raw_ctx, dict) else {}
         return cls(
             tick_interval_seconds=sched.get(
                 "tick_interval_seconds", cls.tick_interval_seconds

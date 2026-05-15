@@ -68,6 +68,7 @@ def ensure_config(path: Path, default_dict: dict) -> dict:
                 tomli_w.dump(default_dict, f)
         except (OSError, PermissionError) as e:
             logger.warning("Cannot write %s: %s, using defaults", path, e)
+            return dict(default_dict)
     try:
         with path.open("rb") as f:
             return tomllib.load(f)
