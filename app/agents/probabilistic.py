@@ -124,6 +124,8 @@ def compute_interrupt_risk(driving_context: dict) -> float:
     scenario 缺失时 risk=0.5（保守防御）。
     """
     driver = driving_context.get("driver_state") or driving_context.get("driver", {})
+    if not isinstance(driver, dict):
+        driver = {}
     fatigue = float(driver.get("fatigue_level", 0.0))
     workload = driver.get("workload", "normal")
     scenario = driving_context.get("scenario")

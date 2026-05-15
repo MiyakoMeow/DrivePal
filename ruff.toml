@@ -31,7 +31,6 @@ exclude = [".agents/**"]
 ]
 
 "app/api/v1/ws_manager.py" = [
-    "D107",  # __init__ docstring 由类 docstring 覆盖
     "SIM105",  # broadcast 中 suppress 不适用于 for 循环体内局部吞异常
     "S110",  # WebSocket 广播单连接失败不中断其余，吞异常合理
     "BLE001",  # WebSocket send 失败类型不可预测，宽捕获合理

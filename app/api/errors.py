@@ -56,7 +56,7 @@ class AppError(BaseAppError, HTTPException):
         status_code: int | None = None,
     ) -> None:
         self.app_message = message
-        self.code = code.value
+        self.code: str = code.value
         self.message = message
         resolved = (
             status_code if status_code is not None else _CODE_TO_HTTP.get(code, 500)

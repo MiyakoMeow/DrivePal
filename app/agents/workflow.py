@@ -266,7 +266,7 @@ class AgentWorkflow:
         )
 
     @staticmethod
-    def _format_constraints_hint(rules_result: dict) -> str:
+    def _format_constraints_hint(rules_result: dict | None) -> str:
         """从规则结果生成自然语言约束提示."""
         if not rules_result:
             return ""
@@ -328,7 +328,7 @@ class AgentWorkflow:
             )
             if events:
                 return [e.to_public() for e in events]
-        except AppError as e:
+        except Exception as e:
             logger.warning("Memory search failed: %s", e)
         return None
 
@@ -340,7 +340,7 @@ class AgentWorkflow:
                 user_id=self.current_user,
             )
             return [e.model_dump() for e in history]
-        except AppError as e:
+        except Exception as e:
             logger.warning("Memory get_history failed: %s", e)
             return []
 
@@ -577,6 +577,8 @@ class AgentWorkflow:
                 try:
                     t_result = await executor.execute(t_name, t_params)
                     tool_results.append(f"[{t_name}] {t_result}")
+                except WorkflowError, AppError:
+                    raise
                 except Exception as e:
                     tool_results.append(f"[{t_name}] 失败: {e}")
         if tool_results:
@@ -738,11 +740,10 @@ class AgentWorkflow:
 
         await self._handle_tool_calls(decision)
 
-        rules_result = state.get("rules_result") or (
-            apply_rules(driving_ctx) if driving_ctx else {}
-        )
-        # shortcut/proactive 路径跳过 _joint_decision_node，此处补写
-        if "rules_result" not in state:
+        if "rules_result" in state:
+            rules_result = state["rules_result"] or {}
+        else:
+            rules_result = apply_rules(driving_ctx) if driving_ctx else {}
             state["rules_result"] = rules_result
 
         postpone = decision.get("postpone", False)

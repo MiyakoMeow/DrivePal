@@ -35,7 +35,6 @@ _CONTEXT_EXCEEDED_PATTERNS = (
     "reduce the length",
     "input length",
 )
-_EMPTY_CONTENT_MSG = "LLM returned empty content"
 _LLM_ATTEMPT_FAILED_TEMPLATE = "LLM call failed after {attempt} attempts: {exc}"
 _LLM_EXHAUSTED_TEMPLATE = "LLM call failed — all {retries} attempts exhausted"
 

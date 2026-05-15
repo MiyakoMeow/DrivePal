@@ -25,7 +25,9 @@ class ContextMonitor:
     """监测驾驶上下文增量变化。"""
 
     def __init__(
-        self, proximity_meters: float = 500.0, fatigue_delta_threshold: float = 0.1
+        self,
+        proximity_meters: float = 500.0,
+        fatigue_delta_threshold: float = _DEFAULT_FATIGUE_DELTA,
     ) -> None:
         """初始化 ContextMonitor。
 

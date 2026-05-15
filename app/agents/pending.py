@@ -5,7 +5,7 @@ import math
 import re
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from weakref import WeakValueDictionary
 
@@ -274,8 +274,11 @@ class PendingReminderManager:
         condition = target.get("condition", "")
         if not condition or not ctx:
             return False
-        fatigue = ctx.get("driver", {}).get("fatigue_level", 0)
-        workload = ctx.get("driver", {}).get("workload", "")
+        driver = ctx.get("driver_state") or ctx.get("driver", {})
+        if not isinstance(driver, dict):
+            driver = {}
+        fatigue = driver.get("fatigue_level", 0)
+        workload = driver.get("workload", "")
         try:
             if "fatigue>" in condition:
                 threshold = float(condition.split(">")[1])
@@ -346,4 +349,7 @@ def parse_time(s: str) -> datetime | None:
     ):
         hour += _NOON
     now_local = datetime.now().astimezone()
-    return now_local.replace(hour=hour, minute=0, second=0, microsecond=0)
+    candidate = now_local.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if candidate <= now_local:
+        candidate += timedelta(days=1)
+    return candidate

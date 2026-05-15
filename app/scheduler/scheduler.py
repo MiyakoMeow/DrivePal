@@ -88,12 +88,12 @@ class ProactiveScheduler:
         self._pending_manager: PendingReminderManager | None = None
         self._last_review_date: str | None = None
         self._enable_periodic_review: bool = _cfg.get("enable_periodic_review", True)
-        self._review_time: str = _cfg.get("review_time", "08:00")
+        self._review_time: str = str(_cfg.get("review_time", "08:00"))
         self._review_window_minutes: int = 5
         try:
             parts = self._review_time.split(":")
             self._review_hour = int(parts[0])
-        except ValueError, IndexError:
+        except ValueError, IndexError, AttributeError:
             self._review_hour = 8
 
     async def push_voice_text(self, text: str) -> None:
@@ -182,11 +182,15 @@ class ProactiveScheduler:
         if self._enable_periodic_review:
             now_local = datetime.now().astimezone()
             today_str = now_local.strftime("%Y-%m-%d")
-            if (
-                self._review_hour == now_local.hour
+            window_before = 60 - self._review_window_minutes
+            in_window = (
+                now_local.hour == self._review_hour
                 and now_local.minute < self._review_window_minutes
-                and self._last_review_date != today_str
-            ):
+            ) or (
+                now_local.hour == (self._review_hour - 1) % 24
+                and now_local.minute >= window_before
+            )
+            if in_window and self._last_review_date != today_str:
                 self._last_review_date = today_str
                 signals.append(
                     TriggerSignal(source="periodic", priority=0, context=ctx_copy)

@@ -206,7 +206,7 @@ class TestFormatConstraintsHint:
     """_format_constraints_hint 纯单元测试。"""
 
     def test_none_rules_result(self):
-        assert AgentWorkflow._format_constraints_hint({}) == ""
+        assert AgentWorkflow._format_constraints_hint(None) == ""
 
     def test_empty_rules_result(self):
         assert AgentWorkflow._format_constraints_hint({}) == ""

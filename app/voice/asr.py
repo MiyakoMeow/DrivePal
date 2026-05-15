@@ -155,7 +155,7 @@ class SherpaOnnxASREngine(ASREngine):
             language = "zh"
             use_itn = True
         if not (model_path and Path(model_path).exists()):
-            model_path = model_path or ""
+            model_path = ""
         self._model_path = model_path
         self._tokens_path = tokens_path
         self._num_threads = num_threads
