@@ -1,5 +1,5 @@
 [project]
-name = "thesis-cockpit-memo"
+name = "drivepal"
 version = "0.1.0"
 description = "车载AI智能体原型系统"
 readme = "README.md"
