@@ -12,10 +12,9 @@
 | `v1/ws_manager.py` | 按 `user_id` 管理 WS 连接，支持广播 |
 | `v1/feedback.py` | `POST /api/v1/feedback` 提交反馈 |
 | `v1/presets.py` | 场景预设增删查 |
-| `v1/data.py` | 历史查询、导出、数据删除 |
+| `v1/data.py` | 历史查询、导出、数据删除、实验结果对比 |
 | `v1/reminders.py` | 提醒列表获取与取消 |
 | `v1/sessions.py` | 会话管理（关闭） |
-| `v1/experiments.py` | 实验结果对比查询 |
 | `schemas.py` | Pydantic 请求/响应模型 |
 | `errors.py` | 异常体系边界、AppErrorCode→HTTP 映射 |
 | `middleware.py` | `UserIdentityMiddleware` |
@@ -57,11 +56,11 @@ Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py`，字段说明见
 
 ## 数据模型
 
-### 驾驶上下文 (`context.py`)
+### 驾驶上下文 (`app/schemas/context.py`)
 
 - **DriverState**: emotion(neutral/anxious/fatigued/calm/angry), workload(low/normal/high/overloaded), fatigue_level(0~1)
 - **GeoLocation**: latitude(ge=-90,le=90), longitude(ge=-180,le=180), address, speed_kmh(ge=0)
-- **SpatioTemporalContext**: current_location, destination, eta_minutes(ge=0), heading(0~360)
+- **SpatioTemporalContext**: current_location, destination, eta_minutes(ge=0, null允许), heading(0~360, null允许)
 - **TrafficCondition**: congestion_level(smooth/slow/congested/blocked), incidents(list[str]), estimated_delay_minutes(ge=0)
 - **DrivingContext**: driver + spatial + traffic + scenario(parked/city_driving/highway/traffic_jam) + passengers
 - **ScenarioPreset**: id(uuid hex[:12]), name, context, created_at
@@ -122,7 +121,7 @@ Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 **Lifespan**：
 - 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户） + `_init_voice_if_available(sched)` 初始化 VoicePipeline + VoiceRecorder（失败静默降级）
 - 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoicePipeline 转录回调推送至 scheduler
-- 关闭：`_stop_voice()` 停止录音流水线 + `ProactiveScheduler.stop()` + `MemoryModule.close()` FAISS落盘 + `close_client_cache()`
+- 关闭：`_stop_voice()` 停止录音流水线 + `ProactiveScheduler.stop()` + `close_memory_module()` FAISS落盘 + `close_client_cache()`
 
 **CORS**：开发用 `allow_origins=["*"]`，部署前须收敛。
 
