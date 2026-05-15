@@ -26,6 +26,7 @@ def _make_pipeline(
     pipeline._asr = mock_asr
     pipeline._min_confidence = min_confidence
     pipeline._on_transcription = on_transcription
+    pipeline._on_vad_status = None
     pipeline._audio_queue = asyncio.Queue()
     pipeline._running = False
 

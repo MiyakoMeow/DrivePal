@@ -15,6 +15,7 @@
 | `v1/data.py` | 历史查询、导出、数据删除、实验结果对比 |
 | `v1/reminders.py` | 提醒列表获取与取消 |
 | `v1/sessions.py` | 会话管理（关闭） |
+| `v1/voice.py` | `GET /api/v1/voice/status`、`POST /start|stop`、`GET|PUT /config`、`GET /transcriptions|devices` |
 | `schemas.py` | Pydantic 请求/响应模型 |
 | `errors.py` | 异常体系边界、AppErrorCode→HTTP 映射 |
 | `middleware.py` | `UserIdentityMiddleware` |
@@ -38,6 +39,13 @@
 | GET | `/api/v1/reminders` | 获取待触发提醒列表 |
 | DELETE | `/api/v1/reminders/{id}` | 取消提醒 |
 | POST | `/api/v1/sessions/{id}/close` | 关闭会话（校验用户归属） |
+| GET | `/api/v1/voice/status` | 语音流水线运行状态（enabled/running/vad_status/config） |
+| POST | `/api/v1/voice/start` | 开启录音（已运行返 409，禁用返 400） |
+| POST | `/api/v1/voice/stop` | 停止录音 |
+| GET | `/api/v1/voice/config` | 当前配置（device_index/vad_mode 等） |
+| PUT | `/api/v1/voice/config` | 热更新配置（无效值返 400） |
+| GET | `/api/v1/voice/transcriptions` | 转录历史（`?limit=N`，默认 50，最大 200） |
+| GET | `/api/v1/voice/devices` | 可用麦克风设备列表 |
 
 Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py`，字段说明见下方"数据模型"节。
 
@@ -119,9 +127,9 @@ Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 **启动**：`uv run uvicorn app.api.main:app`
 
 **Lifespan**：
-- 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户） + `_init_voice_if_available(sched)` 初始化 VoicePipeline + VoiceRecorder（失败静默降级）
-- 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoicePipeline 转录回调推送至 scheduler
-- 关闭：`_stop_voice()` 停止录音流水线 + `ProactiveScheduler.stop()` + `close_memory_module()` FAISS落盘 + `close_client_cache()`
+- 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户） + `VoiceService.start(sched)` 初始化语音流水线（配置 enabled=False 时静默跳过，ASR/pyaudio 缺失时降级）
+- 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoiceService 转录回调推送至 scheduler
+- 关闭：`VoiceService.stop()` 停止录音流水线 + `ProactiveScheduler.stop()` + `close_memory_module()` FAISS落盘 + `close_client_cache()`
 
 **CORS**：开发用 `allow_origins=["*"]`，部署前须收敛。
 

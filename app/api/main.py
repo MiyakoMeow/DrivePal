@@ -27,10 +27,12 @@ from app.api.v1.presets import router as presets_router
 from app.api.v1.query import router as query_router
 from app.api.v1.reminders import router as reminders_router
 from app.api.v1.sessions import router as sessions_router
+from app.api.v1.voice import router as voice_router
 from app.api.v1.ws import router as ws_router
 from app.config import DATA_DIR
 from app.models.chat import close_client_cache
 from app.storage.init_data import init_storage
+from app.voice import VoiceService
 
 logger = logging.getLogger(__name__)
 
@@ -38,46 +40,6 @@ _default_webui = Path(__file__).parent.parent.parent / "webui"
 WEBUI_DIR = Path(os.getenv("WEBUI_DIR", _default_webui)).resolve()
 if not WEBUI_DIR.exists():
     WEBUI_DIR = _default_webui.resolve()
-
-
-async def _init_voice_if_available(sched: ProactiveScheduler) -> dict:
-    """尝试初始化语音流水线。返回控制字典，失败时返空。"""
-    try:
-        from app.voice.pipeline import VoicePipeline
-        from app.voice.recorder import VoiceRecorder
-
-        pipeline = VoicePipeline()
-        recorder = VoiceRecorder()
-        await recorder.start(pipeline)
-
-        async def _consume() -> None:
-            async for text in pipeline.run():
-                try:
-                    await sched.push_voice_text(text)
-                except Exception:
-                    logger.exception("Voice consumer: push failed, continuing")
-
-        task = asyncio.create_task(_consume())
-    except Exception as e:
-        logger.warning("Voice pipeline unavailable: %s", e)
-        return {}
-    logger.info("Voice pipeline started")
-    return {"pipeline": pipeline, "recorder": recorder, "task": task}
-
-
-async def _stop_voice(handle: dict) -> None:
-    """停止语音流水线。"""
-    task = handle.get("task")
-    if task is not None:
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
-    pipeline = handle.get("pipeline")
-    if pipeline is not None:
-        await pipeline.close()
-    recorder = handle.get("recorder")
-    if recorder is not None:
-        await recorder.stop()
 
 
 @asynccontextmanager
@@ -126,13 +88,14 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         sched = None
 
     # --- 语音流水线 ---
-    voice_handle: dict = {}
+    voice_service = VoiceService()
+    app.state.voice_service = voice_service
 
     if sched is not None:
-        voice_handle = await _init_voice_if_available(sched)
+        await voice_service.start(sched)
 
     yield
-    await _stop_voice(voice_handle)
+    await voice_service.stop()
     cleanup_task.cancel()
     with suppress(asyncio.CancelledError):
         await cleanup_task
@@ -168,6 +131,7 @@ API_V1.include_router(presets_router, prefix="/presets", tags=["presets"])
 API_V1.include_router(data_router, tags=["data"])
 API_V1.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
 API_V1.include_router(reminders_router, prefix="/reminders", tags=["reminders"])
+API_V1.include_router(voice_router, prefix="/voice", tags=["voice"])
 API_V1.include_router(ws_router, prefix="/ws", tags=["ws"])
 app.include_router(API_V1)
 

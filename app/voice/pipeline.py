@@ -27,6 +27,7 @@ class VoicePipeline:
         min_confidence: float | None = None,
         asr_engine: ASREngine | None = None,
         on_transcription: Callable[[str, float], None] | None = None,
+        on_vad_status: Callable[[str], None] | None = None,
     ) -> None:
         """初始化语音流水线。参数未传时从 voice.toml 读取（缺失则自动生成）。"""
         cfg = VoiceConfig.load()
@@ -54,6 +55,7 @@ class VoicePipeline:
         self._asr = asr_engine
         self._min_confidence = min_confidence
         self._on_transcription = on_transcription
+        self._on_vad_status = on_vad_status
         self._audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
         self._running = False
 
@@ -78,6 +80,8 @@ class VoicePipeline:
                 continue
 
             status = self._vad.process_frame(chunk)
+            if self._on_vad_status:
+                self._on_vad_status(status.name.lower())
             if status is VADStatus.SPEECH_START:
                 buffer = bytearray(chunk)
             elif status is VADStatus.SPEECH:

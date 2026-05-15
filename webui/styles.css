@@ -214,3 +214,42 @@ details.stage summary:hover { background: #eee; }
     text-align: center;
     padding: 20px 0;
 }
+
+/* 侧边栏 tab */
+.sidebar-tabs { display: flex; border-bottom: 2px solid #e0e0e0; margin-bottom: 12px; }
+.tab-btn { flex: 1; padding: 8px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 500; color: #888; transition: all .2s; }
+.tab-btn.active { color: #007bff; border-bottom: 2px solid #007bff; margin-bottom: -2px; }
+.tab-btn:hover { color: #555; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* 语音控制 */
+.voice-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.voice-status-text { font-size: 12px; color: #888; }
+.vad-indicator { padding: 6px 10px; border-radius: 4px; font-size: 13px; margin-bottom: 10px; }
+.vad-indicator.idle { background: #f0f0f0; color: #888; }
+.vad-indicator.speech { background: #d4edda; color: #155724; }
+.vad-indicator.silence { background: #f0f0f0; color: #888; }
+.voice-config-form { padding: 8px 0; }
+
+/* 转录区域 */
+.voice-transcription-area {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 12px;
+  min-height: 120px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.transcription-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.transcription-item:last-child { border-bottom: none; }
+.trans-text { font-size: 14px; font-weight: 500; color: #333; }
+.trans-time { font-size: 11px; color: #999; }
+.voice-history-list { max-height: 300px; overflow-y: auto; }
