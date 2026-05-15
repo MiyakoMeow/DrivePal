@@ -43,8 +43,8 @@ flowchart LR
 
 | 类型 | 匹配方式 | 示例 |
 |------|---------|------|
-| travel | patterns文本+参数解析 | "提醒到家" → location触发 |
-| action | patterns文本 | "取消提醒"→cancel_last, "延迟"→snooze |
+| travel | patterns文本+参数解析 | “提醒到家” → location触发 |
+| action | patterns文本 | “取消提醒”→cancel_last, “延迟”→snooze |
 
 ## 多轮对话
 
@@ -170,5 +170,5 @@ catch 模式：
 | 状态 | 条件 |
 |------|------|
 | pending | 含 pending_reminder_id |
-| suppressed | result 含"取消"/"抑制" |
+| suppressed | result 含“取消”/“抑制” |
 | delivered | 即时提醒已发送 |
