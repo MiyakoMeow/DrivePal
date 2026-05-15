@@ -84,11 +84,13 @@ def _resolve_model_config(group_name: str = "default") -> dict[str, str]:
     if not providers:
         return {}
     p = providers[0]
-    return {
+    result: dict[str, str] = {
         "api_base": p.provider.base_url or "",
-        "api_key": p.provider.api_key or "",
         "model": p.provider.model,
     }
+    if p.provider.api_key:
+        result["api_key"] = p.provider.api_key
+    return result
 
 
 def _resolve_api(args: argparse.Namespace) -> dict[str, str]:
