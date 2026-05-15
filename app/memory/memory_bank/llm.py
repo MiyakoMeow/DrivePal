@@ -90,7 +90,7 @@ class LlmClient:
                     **{k: v for k, v in kwargs.items() if v is not None},
                 )
                 if not resp or not resp.strip():
-                    raise SummarizationEmpty(_EMPTY_CONTENT_MSG)
+                    raise SummarizationEmpty
                 return resp.strip()
             except AllProviderFailedError as exc:
                 err = str(exc).lower()
