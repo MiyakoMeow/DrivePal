@@ -13,6 +13,7 @@ class VoiceConfig:
     """语音流水线配置，含 VAD/ASR 参数。缺省值与 voice.toml 默认一致。"""
 
     device_index: int = 0
+    enabled: bool = True
     sample_rate: int = 16000
     vad_mode: int = 1
     min_confidence: float = 0.5
@@ -34,6 +35,7 @@ class VoiceConfig:
         return {
             "voice": {
                 "device_index": cfg.device_index,
+                "enabled": cfg.enabled,
                 "sample_rate": cfg.sample_rate,
                 "vad_mode": cfg.vad_mode,
                 "min_confidence": cfg.min_confidence,
@@ -56,6 +58,7 @@ class VoiceConfig:
             )
         return cls(
             device_index=voice_data.get("device_index", cls.device_index),
+            enabled=voice_data.get("enabled", cls.enabled),
             sample_rate=voice_data.get("sample_rate", cls.sample_rate),
             vad_mode=voice_data.get("vad_mode", cls.vad_mode),
             min_confidence=voice_data.get("min_confidence", cls.min_confidence),
