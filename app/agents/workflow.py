@@ -878,7 +878,12 @@ class AgentWorkflow:
         prompt += f"\n驾驶上下文：{json.dumps(state['context'], ensure_ascii=False)}"
         prompt += f"\n触发来源：{trigger_source}"
 
-        parsed = await self._call_llm_json(prompt)
+        try:
+            parsed = await self._call_llm_json(prompt)
+        except Exception as e:
+            logger.warning("proactive_run LLM call failed: %s", e)
+            return "主动模式不可用：LLM 调用失败", None, stages
+
         try:
             validated = JointDecisionOutput.model_validate(parsed.data or {})
             decision = validated.decision
@@ -887,8 +892,8 @@ class AgentWorkflow:
             raw = parsed.data or {}
             decision = raw.get("decision", {})
 
-        if context_override:
-            decision, _modifications = postprocess_decision(decision, context_override)
+        if stages.context:
+            decision, _modifications = postprocess_decision(decision, stages.context)
             decision["_postprocessed"] = True
 
         state["decision"] = decision
