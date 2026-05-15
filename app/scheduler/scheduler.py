@@ -112,12 +112,19 @@ class ProactiveScheduler:
         pm = self._pending_manager
         triggered = await pm.poll(ctx)
         for tr in triggered:
+            content = tr.get("content", "")
             logger.info("PendingReminder triggered: %s", tr.get("id"))
             try:
-                result, event_id, _ = await self._workflow.proactive_run(
-                    context_override=ctx,
-                    trigger_source="pending_reminder",
-                )
+                if content:
+                    result, event_id, _ = await self._workflow.execute_pending_reminder(
+                        content=content,
+                        driving_context=ctx,
+                    )
+                else:
+                    result, event_id, _ = await self._workflow.proactive_run(
+                        context_override=ctx,
+                        trigger_source="pending_reminder",
+                    )
                 if event_id:
                     logger.info(
                         "PendingReminder executed: %s → %s",

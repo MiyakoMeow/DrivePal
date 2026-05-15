@@ -922,6 +922,42 @@ class AgentWorkflow:
         event_id = state.get("event_id")
         return result, event_id, stages
 
+    async def execute_pending_reminder(
+        self,
+        content: str,
+        driving_context: dict | None = None,
+        trigger_source: str = "pending_reminder",
+    ) -> tuple[str, str | None, WorkflowStages]:
+        """对已确定内容的 pending reminder 跳过 LLM，仅走 Execution。"""
+        stages = WorkflowStages()
+        decision: dict = {
+            "should_remind": True,
+            "reminder_content": content,
+            "action": "remind",
+            "timing": "immediate",
+            "channel": "audio",
+        }
+        state: AgentState = {
+            "original_query": f"[proactive:{trigger_source}]",
+            "context": {},
+            "task": None,
+            "decision": decision,
+            "result": None,
+            "event_id": None,
+            "driving_context": driving_context,
+            "stages": stages,
+            "session_id": None,
+        }
+        try:
+            exec_result = await self._execution_node(state)
+            state.update(exec_result)
+        except Exception as e:
+            logger.warning("execute_pending_reminder failed: %s", e)
+            return "待触发提醒处理失败", None, stages
+        result = state.get("result") or "处理完成"
+        event_id = state.get("event_id")
+        return result, event_id, stages
+
     @staticmethod
     def _build_done_data(state: AgentState, session_id: str | None) -> dict:
         """构建 done 事件 data 字典。"""

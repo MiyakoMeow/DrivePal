@@ -17,6 +17,9 @@ def mock_workflow():
     wf.memory_module = MagicMock()
     wf.memory_module.write = AsyncMock()
     wf.proactive_run = AsyncMock(return_value=("result", "evt1", MagicMock()))
+    wf.execute_pending_reminder = AsyncMock(
+        return_value=("result", "evt1", MagicMock())
+    )
     return wf
 
 
@@ -61,13 +64,24 @@ async def test_drain_voice_queue_write_failure_graceful(scheduler, mock_workflow
     await scheduler._drain_voice_queue()
 
 
-async def test_poll_pending_triggers_proactive_run(scheduler, mock_workflow):
-    """Given pending reminder 满足条件, When _poll_pending, Then proactive_run 被调用。"""
+async def test_poll_pending_with_content_uses_execute_pending(scheduler, mock_workflow):
+    """Given pending reminder 有 content, When _poll_pending, Then execute_pending_reminder 被调用。"""
     scheduler._pending_manager.poll = AsyncMock(
         return_value=[{"id": "r1", "content": "提醒"}]
     )
     await scheduler._poll_pending({"scenario": "city_driving"})
+    mock_workflow.execute_pending_reminder.assert_awaited_once()
+    mock_workflow.proactive_run.assert_not_awaited()
+
+
+async def test_poll_pending_without_content_uses_proactive_run(
+    scheduler, mock_workflow
+):
+    """Given pending reminder 无 content, When _poll_pending, Then proactive_run 被调用。"""
+    scheduler._pending_manager.poll = AsyncMock(return_value=[{"id": "r1"}])
+    await scheduler._poll_pending({"scenario": "city_driving"})
     mock_workflow.proactive_run.assert_awaited_once()
+    mock_workflow.execute_pending_reminder.assert_not_awaited()
 
 
 async def test_poll_pending_failure_graceful(scheduler, mock_workflow):
