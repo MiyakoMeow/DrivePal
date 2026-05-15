@@ -29,10 +29,11 @@ class VoiceRecorder:
         """启动录音。在线程池运行 pyaudio 阻塞循环。"""
         self._running = True
 
-        def _record_loop() -> None:
+        def _record_loop(loop: asyncio.AbstractEventLoop) -> None:
             import pyaudio
 
             p = pyaudio.PyAudio()
+            stream = None
             try:
                 stream = p.open(
                     format=_FORMAT,
@@ -46,15 +47,16 @@ class VoiceRecorder:
                     data = stream.read(_FRAME_BYTES, exception_on_overflow=False)
                     asyncio.run_coroutine_threadsafe(
                         pipeline.feed_audio(data),
-                        asyncio.get_event_loop(),
+                        loop,
                     )
             finally:
-                stream.stop_stream()
-                stream.close()
+                if stream is not None:
+                    stream.stop_stream()
+                    stream.close()
                 p.terminate()
 
         loop = asyncio.get_running_loop()
-        self._task = loop.run_in_executor(None, _record_loop)
+        self._task = loop.run_in_executor(None, _record_loop, loop)
 
     async def stop(self) -> None:
         """停止录音."""
