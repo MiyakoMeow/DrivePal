@@ -38,7 +38,7 @@ class VoiceService:
         self._recorder: VoiceRecorder | None = None
         self._consume_task: asyncio.Task | None = None
         self._fire_tasks: set[asyncio.Task] = set()
-        self._fire_task_limit = 5
+        self._fire_task_limit = 5  # 并发推送 scheduler 上限，超限丢弃防止积压
         self._running = False
         self._sched: ProactiveScheduler | None = None
         self._on_transcription_external: Callable[[str, float], None] | None = None
@@ -53,7 +53,6 @@ class VoiceService:
             "enabled": self._enabled,
             "running": self._running,
             "vad_status": self._vad_status,
-            "device_index": c.device_index,
             "config": {
                 "device_index": c.device_index,
                 "sample_rate": c.sample_rate,
@@ -95,8 +94,12 @@ class VoiceService:
         else:
             # consume 丢弃 yield 值：转录文本已由 _handle_transcription 回调处理
             async def _consume() -> None:
-                async for _ in pipeline.run():
-                    pass
+                try:
+                    async for _ in pipeline.run():
+                        pass
+                except Exception:
+                    logger.exception("Voice pipeline consume failed, stopping")
+                    self._running = False
 
             task = asyncio.create_task(_consume())
             self._pipeline = pipeline
@@ -121,7 +124,15 @@ class VoiceService:
             if len(self._fire_tasks) >= self._fire_task_limit:
                 logger.debug("Fire tasks at limit, dropping voice text: %.30s", text)
                 return
-            task = asyncio.create_task(self._sched.push_voice_text(text))
+
+            sched = self._sched
+            async def _push(text: str) -> None:
+                try:
+                    await sched.push_voice_text(text)
+                except Exception:
+                    logger.exception("Failed to push voice text to scheduler")
+
+            task = asyncio.create_task(_push(text))
             self._fire_tasks.add(task)
             task.add_done_callback(self._fire_tasks.discard)
         if self._on_transcription_external is not None:
@@ -192,24 +203,24 @@ class VoiceService:
         try:
             path = get_config_root() / "voice.toml"
             c = self._config
-            raw = {
-                "voice": {
-                    "enabled": c.enabled,
-                    "device_index": c.device_index,
-                    "sample_rate": c.sample_rate,
-                    "vad_mode": c.vad_mode,
-                    "min_confidence": c.min_confidence,
-                    "silence_timeout_ms": c.silence_timeout_ms,
-                    "asr": c.asr,
-                },
+            raw_voice: dict = {
+                "enabled": c.enabled,
+                "device_index": c.device_index,
+                "sample_rate": c.sample_rate,
+                "vad_mode": c.vad_mode,
+                "min_confidence": c.min_confidence,
+                "silence_timeout_ms": c.silence_timeout_ms,
             }
+            if c.asr is not None:
+                raw_voice["asr"] = c.asr
+            raw: dict = {"voice": raw_voice}
 
             def _write_config() -> None:
                 with path.open("wb") as f:
                     tomli_w.dump(raw, f)
 
             await asyncio.to_thread(_write_config)
-        except OSError as e:
+        except (OSError, TypeError, ValueError) as e:
             logger.warning("Failed to persist config: %s", e)
         if restart_needed and self._running:
             saved_sched = self._sched
@@ -229,7 +240,11 @@ class VoiceService:
 
     async def get_devices(self) -> list[dict]:
         """列出可用麦克风设备。"""
-        import pyaudio
+        try:
+            import pyaudio
+        except ImportError:
+            logger.warning("pyaudio not available, cannot list devices")
+            return []
 
         devices: list[dict] = []
         p = pyaudio.PyAudio()

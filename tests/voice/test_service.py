@@ -52,8 +52,8 @@ async def test_status_reflects_state():
     assert st["enabled"] is True
     assert st["running"] is True
     assert st["vad_status"] == "speech"
-    assert "device_index" in st
     assert "config" in st
+    assert "device_index" in st["config"]
     assert isinstance(st["config"], dict)
 
 

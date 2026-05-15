@@ -16,6 +16,7 @@ def test_voice_status(app_client: TestClient) -> None:
     data = resp.json()
     assert "enabled" in data
     assert "running" in data
+    assert "config" in data
 
 
 def test_voice_config_get(app_client: TestClient) -> None:
