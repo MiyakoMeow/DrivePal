@@ -614,6 +614,25 @@ class AgentWorkflow:
                 "action_result": {"cancelled": cancelled},
             }
 
+        # --- 工具调用处理 ---
+        tool_calls = decision.get("tool_calls", [])
+        if tool_calls and isinstance(tool_calls, list):
+            from app.tools import get_default_executor
+
+            executor = get_default_executor()
+            tool_results: list[str] = []
+            for tc in tool_calls:
+                if isinstance(tc, dict):
+                    t_name = tc.get("tool", "")
+                    t_params = tc.get("params", {})
+                    try:
+                        t_result = await executor.execute(t_name, t_params)
+                        tool_results.append(f"[{t_name}] {t_result}")
+                    except Exception as e:
+                        tool_results.append(f"[{t_name}] 失败: {e}")
+            if tool_results:
+                logger.info("Tool call results: %s", "; ".join(tool_results))
+
         # 规则硬约束：LLM 决策后强制覆盖，不可绕过
         driving_ctx = state.get("driving_context")
         modifications: list[str] = []

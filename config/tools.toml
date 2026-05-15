@@ -1,0 +1,14 @@
+[tools.navigation]
+enabled = true
+require_voice_confirmation_driving = true
+
+[tools.communication]
+enabled = true
+max_message_length = 200
+
+[tools.vehicle]
+enabled = false
+
+[tools.memory_query]
+enabled = true
+max_results = 5
