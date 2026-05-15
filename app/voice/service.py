@@ -102,6 +102,8 @@ class VoiceService:
                 except Exception:
                     logger.exception("Voice pipeline consume failed, stopping")
                     self._running = False
+                    self._consume_task = None  # 防 self-cancel
+                    await self._cleanup()
 
             task = asyncio.create_task(_consume())
             self._consume_task = task
