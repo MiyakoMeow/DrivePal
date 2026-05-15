@@ -207,7 +207,7 @@ git worktree add .worktrees/<名> -b <名>
 | 模式 | 载体 | 说明 |
 |------|------|------|
 | **统一基类** | `AppError` | `code+message`，各模块继承 |
-| **MemoryBank 可恢复二分** | `TransientError`/`FatalError` | TransientError 瞬态可重试 vs FatalError 永久不重试，仅 MemoryBank 实现 |
+| **MemoryBank 可恢复二分** | `TransientError`/`FatalError` | TransientError 瞬态可重试 vs FatalError 永久不重试，仅 MemoryBank 实现，API 边界 `safe_call()` 统一处理 |
 | **多重继承桥接** | API 层 `AppError` 同时继承域内 `AppError` + `HTTPException` | `isinstance` 双视角：域内代码见 `AppError`，FastAPI 见 `HTTPException` |
 | **哨兵** | `SummarizationEmpty` | 非错误，控制流信号，调用方捕获返 None |
 | **独立异常** | `ValueError`/`TypeError` 子类 | 类型校验/结构误用，不入继承树 |
