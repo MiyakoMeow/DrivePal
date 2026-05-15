@@ -5,10 +5,12 @@ import math
 import re
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from weakref import WeakValueDictionary
 
 from app.storage.toml_store import TOMLStore
+from app.utils import haversine
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -64,7 +66,7 @@ class PendingReminder:
         )
 
 
-_PER_USER_LOCKS: dict[Path, asyncio.Lock] = {}
+_PER_USER_LOCKS: WeakValueDictionary[Path, asyncio.Lock] = WeakValueDictionary()
 
 
 class PendingReminderManager:
@@ -82,10 +84,11 @@ class PendingReminderManager:
             filename="pending_reminders.toml",
             default_factory=list,
         )
-        if user_dir not in _PER_USER_LOCKS:
-            _PER_USER_LOCKS[user_dir] = asyncio.Lock()
-        # 保护 read-modify-write 操作原子性，防止并发 add/poll/cancel 丢数据
-        self._lock = _PER_USER_LOCKS[user_dir]
+        lock = _PER_USER_LOCKS.get(user_dir)
+        if lock is None:
+            lock = asyncio.Lock()
+            _PER_USER_LOCKS[user_dir] = lock
+        self._lock = lock
 
     async def _read_all(self) -> list[dict]:
         return await self._store.read()
@@ -220,19 +223,6 @@ class PendingReminderManager:
         return triggered
 
     @staticmethod
-    def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """返回两点间距离（米）。"""
-        earth_radius_m = 6371000
-        phi1, phi2 = math.radians(lat1), math.radians(lat2)
-        dphi = math.radians(lat2 - lat1)
-        dlam = math.radians(lon2 - lon1)
-        a = (
-            math.sin(dphi / 2) ** 2
-            + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
-        )
-        return earth_radius_m * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-    @staticmethod
     def _check_location(reminder: dict, ctx: dict) -> bool:
         target = reminder.get("trigger_target", {})
         spatial = ctx.get("spatial") or {}
@@ -243,7 +233,7 @@ class PendingReminderManager:
         target_lon = target.get("longitude")
         if target_lat is None or target_lon is None:
             return False
-        dist = PendingReminderManager._haversine(
+        dist = haversine(
             float(cur_loc.get("latitude") or 0),
             float(cur_loc.get("longitude") or 0),
             float(target_lat),
@@ -284,8 +274,11 @@ class PendingReminderManager:
         condition = target.get("condition", "")
         if not condition or not ctx:
             return False
-        fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
-        workload = ctx.get("driver_state", {}).get("workload", "")
+        driver = ctx.get("driver_state") or ctx.get("driver", {})
+        if not isinstance(driver, dict):
+            driver = {}
+        fatigue = driver.get("fatigue_level", 0)
+        workload = driver.get("workload", "")
         try:
             if "fatigue>" in condition:
                 threshold = float(condition.split(">")[1])
@@ -339,8 +332,8 @@ def parse_duration(s: str) -> int | None:
     return None
 
 
-def parse_time(s: str) -> str | None:
-    """Parse Chinese time string to full ISO datetime HH:MM:SS."""
+def parse_time(s: str) -> datetime | None:
+    """Parse Chinese time string to tz-aware datetime."""
     s = s.strip()
     m = re.match(r"(上午|下午)?(\d+)点", s)
     if not m:
@@ -355,5 +348,8 @@ def parse_time(s: str) -> str | None:
         am_pm is None and hour < _AM_THRESHOLD
     ):
         hour += _NOON
-    today = datetime.now(UTC).date().isoformat()
-    return f"{today}T{hour:02d}:00:00"
+    now_local = datetime.now().astimezone()
+    candidate = now_local.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if candidate <= now_local:
+        candidate += timedelta(days=1)
+    return candidate

@@ -1,0 +1,155 @@
+"""工具执行器测试。"""
+
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from app.tools.executor import ToolExecutionError, ToolExecutor
+from app.tools.registry import ToolRegistry, ToolSpec
+from app.tools.tools import register_builtin_tools
+
+
+@pytest.fixture
+def registry():
+    reg = ToolRegistry()
+    reg.register(
+        ToolSpec(
+            name="test_tool",
+            description="Test tool",
+            input_schema={
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string", "maxLength": 10},
+                    "count": {"type": "integer", "minimum": 1, "maximum": 100},
+                    "mode": {"type": "string", "enum": ["fast", "slow"]},
+                },
+            },
+            handler=AsyncMock(return_value="ok"),
+        )
+    )
+    return reg
+
+
+@pytest.fixture
+def executor(registry):
+    return ToolExecutor(registry)
+
+
+async def test_unknown_tool_raises_error(executor):
+    """Given 注册表中无该工具, When execute, Then raise ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="Unknown tool"):
+        await executor.execute("no_such_tool", {})
+
+
+async def test_missing_required_param_raises_error(executor):
+    """Given 缺 required 字段, When execute, Then raise ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="missing required"):
+        await executor.execute("test_tool", {})
+
+
+async def test_type_mismatch_raises_error(executor):
+    """Given int 字段传 str, When execute, Then raise ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="expected integer"):
+        await executor.execute("test_tool", {"name": "a", "count": "not_int"})
+
+
+async def test_minimum_violation_raises_error(executor):
+    """Given value < minimum, When execute, Then raise ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="minimum"):
+        await executor.execute("test_tool", {"name": "a", "count": 0})
+
+
+async def test_max_length_violation_raises_error(executor):
+    """Given len(str) > maxLength, When execute, Then raise ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="maxLength"):
+        await executor.execute("test_tool", {"name": "a" * 11})
+
+
+async def test_enum_violation_raises_error(executor):
+    """Given value not in enum, When execute, Then raise ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="must be one of"):
+        await executor.execute("test_tool", {"name": "a", "mode": "invalid"})
+
+
+async def test_handler_exception_chained(registry):
+    """Given handler 抛 RuntimeError, When execute, Then raise ToolExecutionError 且 chain。"""
+    registry._tools["test_tool"] = ToolSpec(
+        name="test_tool",
+        description="Test tool",
+        input_schema={
+            "type": "object",
+            "required": ["name"],
+            "properties": {"name": {"type": "string"}},
+        },
+        handler=AsyncMock(side_effect=RuntimeError("boom")),
+    )
+    executor = ToolExecutor(registry)
+    with pytest.raises(ToolExecutionError) as exc_info:
+        await executor.execute("test_tool", {"name": "a"})
+    assert exc_info.value.__cause__ is not None
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
+async def test_valid_execution_returns_result(executor):
+    """Given 有效参数, When execute, Then 返回 handler 结果。"""
+    result = await executor.execute("test_tool", {"name": "valid"})
+    assert result == "ok"
+
+
+@pytest.fixture
+def builtin_executor():
+    """注册内置工具（读真实 config/tools.toml）的执行器。"""
+    registry = ToolRegistry()
+    register_builtin_tools(registry)
+    return ToolExecutor(registry)
+
+
+async def test_builtin_navigation_tool_executes(builtin_executor):
+    """Given set_navigation 注册, When execute, Then 返回导航确认。"""
+    result = await builtin_executor.execute(
+        "set_navigation", {"destination": "北京南站"}
+    )
+    assert result == "导航已设置：北京南站"
+
+
+async def test_disabled_tools_not_registered(builtin_executor):
+    """Given vehicle enabled=false, When 查注册表, Then set_climate/play_media 不存在。"""
+    registry = builtin_executor._registry
+    assert registry.get("set_climate") is None
+    assert registry.get("play_media") is None
+    with pytest.raises(ToolExecutionError, match="Unknown tool"):
+        await builtin_executor.execute("set_climate", {"temperature": 22})
+    with pytest.raises(ToolExecutionError, match="Unknown tool"):
+        await builtin_executor.execute("play_media", {"name": "test"})
+
+
+async def test_query_memory_returns_results(builtin_executor):
+    """Given mock MemoryModule 返回结果, When execute query_memory, Then 返回内容文本。"""
+    from app.memory.schemas import SearchResult
+
+    fake_results = [
+        SearchResult(
+            event={"content": "明天下午三点开会"},
+            score=0.9,
+            source="faiss",
+        ),
+    ]
+    mock_mm = AsyncMock()
+    mock_mm.search.return_value = fake_results
+
+    with (
+        patch("app.tools.tools.memory_query.get_memory_module", return_value=mock_mm),
+        patch("app.tools.tools.memory_query._load_max_results", return_value=5),
+    ):
+        result = await builtin_executor.execute("query_memory", {"query": "开会"})
+    assert "明天下午三点开会" in result
+    mock_mm.search.assert_awaited_once_with("开会", top_k=5)
+
+
+async def test_send_message_max_length_rejected(builtin_executor):
+    """Given message 超 200 字, When execute send_message, Then 抛 ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="maxLength"):
+        await builtin_executor.execute(
+            "send_message", {"recipient": "张三", "message": "a" * 201}
+        )

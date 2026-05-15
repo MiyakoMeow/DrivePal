@@ -110,7 +110,7 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 
 `decision` 还含 `_postprocessed` 布尔标志，标记已被 `postprocess_decision()` 处理过，防止重复执行。
 
-辅助类型（均在 `workflow.py`）：`LLMJsonResponse`(BaseModel, 通用JSON响应)、`TaskOutput`(任务规划输出)、`StrategyOutput`(策略决策输出)、`ReminderContent`(提醒内容, speakable/display/detailed)。
+辅助类型（均在 `workflow.py`）：`LLMJsonResponse`(BaseModel, 通用JSON响应)、`ReminderContent`(提醒内容, speakable/display/detailed)。
 
 ## 规则引擎
 

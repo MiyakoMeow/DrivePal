@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 from app.agents.state import WorkflowStages
-from app.agents.workflow import ChatModelUnavailableError
+from app.agents.workflow import WorkflowError
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
@@ -60,24 +60,26 @@ def test_query_with_context(app_client: TestClient) -> None:
 
 
 def test_query_chat_model_unavailable(app_client: TestClient) -> None:
-    """POST /api/v1/query LLM不可用时返回500."""
+    """POST /api/v1/query LLM不可用时返回503."""
     with (
         patch("app.api.v1.query.get_memory_module"),
         patch("app.api.v1.query.AgentWorkflow") as mock_wf,
     ):
         mock_instance = mock_wf.return_value
         mock_instance.run_with_stages = AsyncMock(
-            side_effect=ChatModelUnavailableError,
+            side_effect=WorkflowError(
+                code="MODEL_UNAVAILABLE", message="ChatModel not available"
+            ),
         )
         resp = app_client.post(
             "/api/v1/query",
             json={"query": "测试"},
             headers={"X-User-Id": "alice"},
         )
-        assert resp.status_code == 500
+        assert resp.status_code == 503
         body = resp.json()
-        assert body["error"]["code"] == "INTERNAL_ERROR"
-        assert body["error"]["message"] == "AI model unavailable"
+        assert body["error"]["code"] == "SERVICE_UNAVAILABLE"
+        assert body["error"]["message"] == "Service temporarily unavailable"
 
 
 def test_query_internal_error(app_client: TestClient) -> None:

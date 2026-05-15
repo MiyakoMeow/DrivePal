@@ -35,7 +35,6 @@ _CONTEXT_EXCEEDED_PATTERNS = (
     "reduce the length",
     "input length",
 )
-_EMPTY_CONTENT_MSG = "LLM returned empty content"
 _LLM_ATTEMPT_FAILED_TEMPLATE = "LLM call failed after {attempt} attempts: {exc}"
 _LLM_EXHAUSTED_TEMPLATE = "LLM call failed — all {retries} attempts exhausted"
 
@@ -90,7 +89,7 @@ class LlmClient:
                     **{k: v for k, v in kwargs.items() if v is not None},
                 )
                 if not resp or not resp.strip():
-                    raise SummarizationEmpty(_EMPTY_CONTENT_MSG)
+                    raise SummarizationEmpty
                 return resp.strip()
             except AllProviderFailedError as exc:
                 err = str(exc).lower()

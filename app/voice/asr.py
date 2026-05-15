@@ -131,23 +131,31 @@ class SherpaOnnxASREngine(ASREngine):
 
     def __init__(
         self,
-        model_path: str,
-        tokens_path: str,
+        model_path: str = "",
+        tokens_path: str = "",
         *,
-        num_threads: int = 2,
-        language: str = "zh",
-        use_itn: bool = True,
+        config: dict | None = None,
     ) -> None:
         """初始化 sherpa-onnx ASR 引擎。
 
         Args:
-            model_path: SenseVoice ONNX 模型路径。
-            tokens_path: tokens.txt 路径。
-            num_threads: 推理线程数。
-            language: 语言（zh/en/ja/ko/yue）。
-            use_itn: 是否使用逆文本正则化（数字/日期格式化）。
+            model_path: SenseVoice ONNX 模型路径。config 非空时忽略。
+            tokens_path: tokens.txt 路径。config 非空时忽略。
+            config: voice.toml 中 [voice.asr] 配置字典，优先级最高。
 
         """
+        if config is not None:
+            model_path = config.get("model", model_path or "")
+            tokens_path = config.get("tokens", tokens_path or "")
+            num_threads = config.get("num_threads", 2)
+            language = config.get("language", "zh")
+            use_itn = config.get("use_itn", True)
+        else:
+            num_threads = 2
+            language = "zh"
+            use_itn = True
+        if not (model_path and Path(model_path).exists()):
+            model_path = ""
         self._model_path = model_path
         self._tokens_path = tokens_path
         self._num_threads = num_threads

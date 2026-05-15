@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Request
 
-from app.api.errors import safe_memory_call
+from app.api.errors import safe_call
 from app.api.schemas import SavePresetRequest, ScenarioPresetResponse
 from app.config import user_data_dir
 from app.schemas.context import DrivingContext, ScenarioPreset
@@ -48,7 +48,7 @@ def _dict_to_preset_response(p: dict) -> ScenarioPresetResponse:
 async def list_presets(request: Request) -> list[ScenarioPresetResponse]:
     """查询所有场景预设."""
     store = _preset_store(request.state.user_id)
-    presets = await safe_memory_call(store.read(), "presets(list)")
+    presets = await safe_call(store.read(), "presets(list)")
     return [_dict_to_preset_response(p) for p in presets]
 
 
@@ -60,7 +60,7 @@ async def save_preset(
     user_id = request.state.user_id
     store = _preset_store(user_id)
     preset = ScenarioPreset(name=req.name, context=req.context)
-    await safe_memory_call(store.append(preset.model_dump()), "presets(save)")
+    await safe_call(store.append(preset.model_dump()), "presets(save)")
     return _dict_to_preset_response(preset.model_dump())
 
 
@@ -68,9 +68,9 @@ async def save_preset(
 async def delete_preset(preset_id: str, request: Request) -> dict[str, bool]:
     """删除场景预设."""
     store = _preset_store(request.state.user_id)
-    presets = await safe_memory_call(store.read(), "presets(read_for_delete)")
+    presets = await safe_call(store.read(), "presets(read_for_delete)")
     new_presets = [p for p in presets if p.get("id") != preset_id]
     if len(new_presets) == len(presets):
         return {"success": False}
-    await safe_memory_call(store.write(new_presets), "presets(delete)")
+    await safe_call(store.write(new_presets), "presets(delete)")
     return {"success": True}

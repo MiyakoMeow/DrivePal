@@ -6,12 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import tomli_w
 
-from app.models.chat import ChatModel, clear_semaphore_cache
+from app.models.chat import AllProviderFailedError, ChatModel, clear_semaphore_cache
 from app.models.embedding import EmbeddingModel
 from app.models.settings import (
     EmbeddingProviderConfig,
     LLMProviderConfig,
     LLMSettings,
+    NoLLMConfigurationError,
 )
 from app.models.types import ProviderConfig
 from tests._helpers import _mock_async_client
@@ -114,10 +115,10 @@ class TestLLMSettingsLoad:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """验证无 LLM 配置时抛出 RuntimeError."""
+        """验证无 LLM 配置时抛出 NoLLMConfigurationError."""
         LLMSettings.load.cache_clear()
         monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "nonexistent.toml"))
-        with pytest.raises(RuntimeError, match="No LLM configuration found"):
+        with pytest.raises(NoLLMConfigurationError, match="No LLM configuration found"):
             LLMSettings.load()
 
     def test_get_embedding_provider_remote(
@@ -334,7 +335,7 @@ class TestChatModelFallback:
                 "app.models.chat._get_cached_client",
                 AsyncMock(return_value=mock_client),
             ),
-            pytest.raises(RuntimeError, match="All LLM providers failed"),
+            pytest.raises(AllProviderFailedError, match="All LLM providers failed"),
         ):
             await chat.generate("hello")
 

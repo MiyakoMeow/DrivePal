@@ -3,8 +3,7 @@
 from enum import StrEnum
 
 _SAMPLE_RATE = 16000
-_FRAME_BYTES = 960
-_FRAMES_PER_CHUNK = _FRAME_BYTES // 2
+_FRAMES_PER_CHUNK = 480
 
 
 class VADStatus(StrEnum):

@@ -18,10 +18,10 @@ class JSONLinesStore:
     def __init__(self, user_dir: Path, filename: str) -> None:
         """初始化存储实例，指定用户目录和文件名."""
         self.filepath = user_dir / filename
+        self.filepath.parent.mkdir(parents=True, exist_ok=True)
 
     async def append(self, obj: dict[str, Any]) -> None:
         """追加写入一条 JSON 对象（新行）。"""
-        self.filepath.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(obj, ensure_ascii=False) + "\n"
         async with aiofiles.open(self.filepath, "a", encoding="utf-8") as f:
             await f.write(line)

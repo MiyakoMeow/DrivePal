@@ -35,6 +35,11 @@ class VADEngine:
         self._speech_frames = 0
         self._silence_frames = 0
 
+    @property
+    def frame_bytes(self) -> int:
+        """当前帧大小（字节）。"""
+        return self._frame_bytes
+
     def process_frame(self, audio_chunk: bytes) -> VADStatus | None:
         """返回 VADStatus 枚举或 None。"""
         speech = self.is_speech(audio_chunk)

@@ -60,7 +60,7 @@ class ShortcutResolver:
                 parsed_time = parse_time(params)
                 if parsed_time:
                     decision["timing"] = "location_time"
-                    decision["target_time"] = parsed_time
+                    decision["target_time"] = parsed_time.isoformat()
             return decision
         if sc_type == "action":
             action = shortcut.get("action", "")

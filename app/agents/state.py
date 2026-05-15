@@ -19,6 +19,7 @@ class AgentState(TypedDict):
     session_id: NotRequired[str | None]
     pending_reminder_id: NotRequired[str | None]
     action_result: NotRequired[dict | None]
+    rules_result: NotRequired[dict | None]
 
 
 @dataclass

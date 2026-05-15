@@ -16,6 +16,7 @@ ignore = [
     "RUF001",  # 全角字符检查（中文项目无需修改）
     "RUF002",  # docstring全角字符检查（中文项目无需修改）
     "RUF003",  # 注释全角字符检查（中文项目无需修改）
+    "D107",  # __init__ docstring 由类 docstring 覆盖
 ]
 exclude = [".agents/**"]
 
@@ -30,7 +31,6 @@ exclude = [".agents/**"]
 ]
 
 "app/api/v1/ws_manager.py" = [
-    "D107",  # __init__ docstring 由类 docstring 覆盖
     "SIM105",  # broadcast 中 suppress 不适用于 for 循环体内局部吞异常
     "S110",  # WebSocket 广播单连接失败不中断其余，吞异常合理
     "BLE001",  # WebSocket send 失败类型不可预测，宽捕获合理
@@ -69,8 +69,10 @@ exclude = [".agents/**"]
     "C901",  # _execution_node 含多条安全规则分支，复杂度可接受
     "PLR0912",  # _execution_node 多条件分支——快捷指令/后处理/延迟/频次/正常路径
     "PLR0915",  # _execution_node + run_stream 语句多——安全关键路径不宜强行拆分
+    "PLR0913",  # 拆分后的 _handle_postpone/_handle_immediate_send 参数多但各有所用
     "FBT001",  # setter 接受 bool 参数（消融实验标记）
     "TC003",  # AsyncGenerator 在 run_stream 返回注解中使用，无 from __future__ import annotations，运行时必需
+    "ARG002",  # _handle_cancel/_handle_postpone 中 state 参数为接口一致性保留
 ]
 
 

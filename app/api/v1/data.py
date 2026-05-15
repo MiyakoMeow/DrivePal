@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 
-from app.api.errors import AppError, AppErrorCode, safe_memory_call
+from app.api.errors import AppError, AppErrorCode, safe_call
 from app.api.schemas import (
     ExperimentResultResponse,
     ExperimentResultsResponse,
@@ -43,7 +43,7 @@ async def get_history(
     except Exception as e:
         logger.exception("get_memory_module failed in get_history")
         raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
-    events = await safe_memory_call(
+    events = await safe_call(
         mm.get_history(limit=limit, mode=MemoryMode.MEMORY_BANK, user_id=user_id),
         "get_history",
     )
@@ -119,7 +119,7 @@ async def get_experiment_results() -> ExperimentResultsResponse:
     实验数据为系统级（VehicleMemBench 全局 benchmark），非 per-user，故无需用户上下文。
     """
     try:
-        data = read_benchmark()
+        data = await read_benchmark()
     except (OSError, ValueError) as e:
         logger.warning("Failed to read experiment benchmark: %s", e)
         data = {}

@@ -8,14 +8,17 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_LENGTH = 200
+_max_length_cache: list[int | None] = [None]
 
 
 def _load_message_max_length() -> int:
-    """从 tools.toml 读取 max_message_length，失败返回默认值。"""
+    """从 tools.toml 读取 max_message_length，首次加载后缓存。"""
+    if _max_length_cache[0] is not None:
+        return _max_length_cache[0]
     try:
         with Path("config/tools.toml").open("rb") as f:
             data = tomllib.load(f)
-        return (
+        _max_length_cache[0] = (
             data.get("tools", {})
             .get("communication", {})
             .get("max_message_length", _DEFAULT_MAX_LENGTH)
@@ -25,7 +28,9 @@ def _load_message_max_length() -> int:
             "Failed to read tools.toml max_message_length, using default %s",
             _DEFAULT_MAX_LENGTH,
         )
+        # 不缓存 fallback，允许瞬态错误后自动恢复
         return _DEFAULT_MAX_LENGTH
+    return _max_length_cache[0]
 
 
 async def send_message(params: dict[str, Any]) -> str:

@@ -7,12 +7,13 @@ import contextlib
 import copy
 import logging
 import tomllib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.agents.pending import PendingReminderManager
 from app.config import user_data_dir
+from app.exceptions import AppError
 from app.memory.schemas import EVENT_TYPE_PASSIVE_VOICE, MemoryEvent
 from app.scheduler.context_monitor import ContextDelta, ContextMonitor
 from app.scheduler.memory_scanner import MemoryScanner
@@ -25,8 +26,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_REVIEW_HOUR = 8
-_REVIEW_WINDOW_MINUTES = 5
 _FATIGUE_HIGH = 0.7
 
 
@@ -88,6 +87,14 @@ class ProactiveScheduler:
         self._current_context: dict = {}
         self._pending_manager: PendingReminderManager | None = None
         self._last_review_date: str | None = None
+        self._enable_periodic_review: bool = _cfg.get("enable_periodic_review", True)
+        self._review_time: str = str(_cfg.get("review_time", "08:00"))
+        self._review_window_minutes: int = 5
+        try:
+            parts = self._review_time.split(":")
+            self._review_hour = int(parts[0])
+        except ValueError, IndexError, AttributeError:
+            self._review_hour = 8
 
     async def push_voice_text(self, text: str) -> None:
         """推入一条被动语音文本到队列。"""
@@ -118,7 +125,7 @@ class ProactiveScheduler:
                         tr.get("id"),
                         result,
                     )
-            except (OSError, RuntimeError, ValueError, TypeError) as e:
+            except AppError as e:
                 logger.warning(
                     "PendingReminder execution failed: %s",
                     e,
@@ -172,20 +179,33 @@ class ProactiveScheduler:
                 )
             )
 
-        today = datetime.now(UTC)
-        today_str = today.strftime("%Y-%m-%d")
-        if (
-            today.hour == _REVIEW_HOUR
-            and today.minute < _REVIEW_WINDOW_MINUTES
-            and self._last_review_date != today_str
-        ):
-            self._last_review_date = today_str
-            signals.append(
-                TriggerSignal(source="periodic", priority=0, context=ctx_copy)
+        if self._enable_periodic_review:
+            now_local = datetime.now().astimezone()
+            window_before = 60 - self._review_window_minutes
+            in_window = (
+                now_local.hour == self._review_hour
+                and now_local.minute < self._review_window_minutes
+            ) or (
+                now_local.hour == (self._review_hour - 1) % 24
+                and now_local.minute >= window_before
             )
+            if in_window:
+                # review 所在日去重；pre-window 跨午夜时（_review_hour=0, hour=23）
+                # 日期 +1 天，使同一 session 使用相同 key
+                session_key = now_local.strftime("%Y-%m-%d")
+                if (
+                    now_local.hour == (self._review_hour - 1) % 24
+                    and self._review_hour == 0
+                ):
+                    session_key = (now_local + timedelta(days=1)).strftime("%Y-%m-%d")
+                if self._last_review_date != session_key:
+                    self._last_review_date = session_key
+                    signals.append(
+                        TriggerSignal(source="periodic", priority=0, context=ctx_copy)
+                    )
 
-        fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
-        workload = ctx.get("driver_state", {}).get("workload", "")
+        fatigue = ctx.get("driver", {}).get("fatigue_level", 0)
+        workload = ctx.get("driver", {}).get("workload", "")
         if fatigue > _FATIGUE_HIGH or workload == "overloaded":
             signals.append(
                 TriggerSignal(
@@ -227,7 +247,7 @@ class ProactiveScheduler:
                                     "interrupt_level": decision.interrupt_level,
                                 },
                             )
-                except (OSError, RuntimeError, ValueError, TypeError) as e:
+                except AppError as e:
                     logger.warning("proactive_run failed for %s: %s", sig.source, e)
 
     async def _drain_voice_queue(self) -> None:
@@ -247,7 +267,7 @@ class ProactiveScheduler:
                     event, user_id=self._workflow.current_user
                 )
                 logger.info("Passive voice memory written: %.50s", text)
-            except (OSError, RuntimeError, ValueError, TypeError) as e:
+            except AppError as e:
                 logger.warning("Failed to write passive voice: %s", e)
 
     async def _tick(self) -> None:

@@ -5,14 +5,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.exceptions import AppError
+
 if TYPE_CHECKING:
     from app.tools.registry import ToolRegistry, ToolSpec
 
 logger = logging.getLogger(__name__)
 
 
-class ToolExecutionError(RuntimeError):
+class ToolExecutionError(AppError):
     """工具执行异常。"""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(code="TOOL_ERROR", message=message)
 
 
 class ToolExecutor:
