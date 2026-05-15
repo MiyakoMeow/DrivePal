@@ -80,7 +80,7 @@ def simulate_feedback(
     noise = 0.1 + fatigue * 0.2
     fb_prob = 0.8
     if workload == "overloaded":
-        fb_prob -= 0.2
+        fb_prob -= 0.1
     if fatigue > get_fatigue_threshold():
         fb_prob -= 0.1
     fb_prob = max(0.3, fb_prob)

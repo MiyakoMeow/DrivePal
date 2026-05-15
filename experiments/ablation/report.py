@@ -59,9 +59,13 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
             ]
             worst_p = max(p_values) if p_values else 1.0
             worst_d = max(d_values) if d_values else 0.0
+            # 动态计算合规率——从 metrics 中各变体的 compliance_rate 提取
+            full_rate = gr.metrics.get("full", {}).get("compliance_rate", 0)
+            no_rules_rate = gr.metrics.get("no-rules", {}).get("compliance_rate", 0)
+            gap_pp = round((full_rate - no_rules_rate) * 100)
             entry["statistical_note"] = {
                 "note": (
-                    f"合规率 8pp 提升（Full 66% vs NO_RULES 58%），"
+                    f"合规率 {gap_pp}pp 提升（Full {full_rate:.0%} vs NO_RULES {no_rules_rate:.0%}），"
                     f"但 Cohen's d={worst_d:.2f}, Wilcoxon p={worst_p:.2f}，"
                     f"未达统计显著（α={_ALPHA}）。建议 n=200+ 复验。"
                 ),

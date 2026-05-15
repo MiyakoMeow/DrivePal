@@ -169,7 +169,12 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
         elif group_name == "architecture":
-            metrics = compute_quality_metrics(scores, variant_results)
+            complexity_map = {
+                s.id: classify_complexity(s.synthesis_dims)
+                for s in score_scenarios
+                if s.synthesis_dims
+            }
+            metrics = compute_quality_metrics(scores, variant_results, complexity_map)
         elif group_name == "personalization":
             summary_path = run_dir / group_name / "results.summary.json"
             try:
@@ -361,7 +366,7 @@ def _prepare_group_scenarios(
                     n_simple,
                     stratify_key=arch_stratum,
                     min_per_stratum=1,
-                    seed=seed + 2,
+                    seed=seed + 3,
                 )
             )
         if not sampled:

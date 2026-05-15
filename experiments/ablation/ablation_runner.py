@@ -125,7 +125,8 @@ class AblationRunner:
             "query": scenario.user_query,
             "context": scenario.driving_context,
         }
-        # MemoryBank 只读检索——与 Full 变体对齐记忆上下文，解混"架构 vs 有无记忆"
+        # MemoryBank 只读检索——两变体各行隔离 memory space，保证代码路径一致，
+        # 解混"架构 vs 有无记忆检索"变量
         try:
             mm = get_memory_module()
             mem_results = await mm.search(
