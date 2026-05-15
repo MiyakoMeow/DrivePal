@@ -18,6 +18,7 @@ import logging
 import os
 import pathlib
 import sys
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -33,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 TAG = "DRIVEPAL_BANK"
 USER_ID_PREFIX = "drivepal"
-STORE_NAME = "drivepal_memorybank"
 
 # 默认 benchmark 数据目录（相对 DrivePal 项目根）
 _DEFAULT_DATA_DIR = (
@@ -241,7 +241,7 @@ def init_test_state(
 ) -> dict[str, Any]:
     """初始化共享状态：创建数据目录 + 客户端注册表。"""
     data_dir = _resolve_data_dir(args)
-    return {"data_dir": data_dir, "clients": []}
+    return {"data_dir": data_dir, "clients": [], "_lock": threading.Lock()}
 
 
 def build_test_client(
@@ -256,7 +256,9 @@ def build_test_client(
     user_data_dir = data_dir / user_id
     user_data_dir.mkdir(parents=True, exist_ok=True)
     client = DrivePalMemClient(data_dir=user_data_dir, user_id=user_id)
-    shared_state["clients"].append(client)
+    lock: threading.Lock = shared_state["_lock"]
+    with lock:
+        shared_state["clients"].append(client)
     return client
 
 

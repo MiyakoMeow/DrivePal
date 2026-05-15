@@ -23,10 +23,13 @@ config/llm.toml 读取。可用 --model-group 切换模型组（默认 "default"
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ── VehicleMemBench 路径 ──
 
@@ -73,7 +76,10 @@ def _resolve_model_config(group_name: str = "default") -> dict[str, str]:
 
         settings = LLMSettings.load()
         providers = settings.get_model_group_providers(group_name)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Failed to resolve model config for group %r: %s", group_name, exc
+        )
         return {}
     if not providers:
         return {}
@@ -141,6 +147,7 @@ def _build_cli() -> argparse.ArgumentParser:
         help="写入 history 至 DrivePal MemoryBank",
     )
     _add_vmb_arg(mem_add_p)
+    mem_add_p.add_argument("--memory-url", "--memory_url", type=str, default=None)
     mem_add_p.add_argument("--history-dir", "--history_dir", type=str, required=True)
     mem_add_p.add_argument("--file-range", "--file_range", type=str, default=None)
     mem_add_p.add_argument("--max-workers", "--max_workers", type=int, default=4)
@@ -154,6 +161,7 @@ def _build_cli() -> argparse.ArgumentParser:
     mem_test_p.add_argument(
         "--benchmark-dir", "--benchmark_dir", type=str, required=True
     )
+    mem_test_p.add_argument("--memory-url", "--memory_url", type=str, default=None)
     mem_test_p.add_argument("--model-group", "--model_group", type=str, default=None)
     mem_test_p.add_argument("--api-base", "--api_base", type=str, default=None)
     mem_test_p.add_argument("--api-key", "--api_key", type=str, default=None)
@@ -170,6 +178,8 @@ def _build_cli() -> argparse.ArgumentParser:
         help="全量运行 5 组评测（none/gold/summary/key_value + drivepal）",
     )
     _add_vmb_arg(all_p)
+    all_p.add_argument("--output-dir", "--output_dir", type=str, default=None)
+    all_p.add_argument("--memory-url", "--memory_url", type=str, default=None)
     all_p.add_argument("--model-group", "--model_group", type=str, default=None)
     all_p.add_argument("--api-base", "--api_base", type=str, default=None)
     all_p.add_argument("--api-key", "--api_key", type=str, default=None)
@@ -218,7 +228,6 @@ def _cmd_model(args: argparse.Namespace) -> None:
 def _cmd_memory_add(args: argparse.Namespace) -> None:
     vmb_root = _resolve_vmb_root(args)
     _sync_adapter_vmb_root(vmb_root)
-    _ensure_vmb_on_path(vmb_root)
     from experiments.vehicle_mem_bench.adapter import run_add
 
     run_add(args)
@@ -276,8 +285,9 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
         raise RuntimeError(msg)
 
     model_slug = api["model"].replace("/", "_")
-    base_out = (
-        Path(__file__).resolve().parent.parent.parent / "data" / "vehicle_mem_bench"
+    base_out = Path(
+        args.output_dir
+        or Path(__file__).resolve().parent.parent.parent / "data" / "vehicle_mem_bench"
     )
     base_out.mkdir(parents=True, exist_ok=True)
 
@@ -323,6 +333,7 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
         history_dir=history_dir,
         file_range=file_range,
         max_workers=max_workers,
+        memory_url=args.memory_url,
     )
     print(f"\n{'=' * 60}")
     print("[run-all] DrivePal MemoryBank: 写入历史")
