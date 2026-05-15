@@ -43,7 +43,7 @@ flowchart LR
 |------|---------|------|
 | `workflow.py` | `AgentWorkflow` | 三阶段工作流编排，入口 `run_with_stages`/`run_stream`/`proactive_run` |
 | `workflow.py` | `ContextOutput`, `JointDecisionOutput`, `LLMJsonResponse`, `ReminderContent` | 输出 Pydantic 模型，支持别名兜底 |
-| `shortcuts.py` | `ShortcutResolver` | 从 TOML 加载快捷指令，匹配则跳 LLM |
+| `shortcuts.py` | `ShortcutResolver` | 从 TOML 加载快捷指令，匹配则跳过 LLM |
 | `conversation.py` | `ConversationManager` | 多轮对话 TTL 30min/10轮上限 |
 | `outputs.py` | `OutputRouter` | 输出路由 → `MultiFormatContent` |
 | `outputs.py` | `OutputChannel`, `InterruptLevel` | 输出通道/打断枚举 |
@@ -57,13 +57,13 @@ flowchart LR
 
 ## 关键类/接口
 
-`AgentWorkflow.run_with_stages(query, context_override, session_id) → WorkflowStages` — 三阶段同步返回。
+`AgentWorkflow.run_with_stages(user_input, driving_context=None, session_id=None) → tuple[str, str | None, WorkflowStages]` — 三阶段同步返回。
 
-`AgentWorkflow.run_stream(query, context_override, session_id) → AsyncGenerator[SSEEvent, None]` — 逐阶段 yield SSE。
+`AgentWorkflow.run_stream(user_input, driving_context=None, session_id=None) → AsyncGenerator[dict]` — 逐阶段 yield SSE。
 
-`AgentWorkflow.proactive_run(context_override, memory_hints, trigger_source, session_id) → WorkflowStages` — 无 query 模式。
+`AgentWorkflow.proactive_run(context_override=None, memory_hints=None, trigger_source="scheduler") → tuple[str, str | None, WorkflowStages]` — 无 query 模式。
 
-`WorkflowStages`(dataclass，4字段)：context / decision / execution / raw_llm_output。
+`WorkflowStages`(dataclass，4字段)：context / task / decision / execution。
 
 `AgentState`(TypedDict，13字段)：含 `rules_result` 规则引擎输出。
 
@@ -74,6 +74,8 @@ flowchart LR
 `PendingReminderManager` — 5 trigger_type (time/location/context/state/periodic)，`poll(driving_context)`，`postpone`，`cancel_last()`。
 
 `OutputRouter.route() → MultiFormatContent` — speakable_text(≤15) / display_text(≤20) / detailed / channel / interrupt_level。
+
+`AgentWorkflow.execute_pending_reminder(content, driving_context=None, trigger_source="pending_reminder") → tuple[str, str | None, WorkflowStages]` — 待触发提醒对接入口，跳过 LLM 仅走 Execution。
 
 ## 快捷指令
 
@@ -120,7 +122,7 @@ flowchart LR
 
 ## 规则引擎
 
-`rules.py`。`apply_rules()` 共5处静态调用。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
+`rules.py`。`apply_rules()` 共4处静态调用。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
 
 | 规则 | 条件 | 约束 | 优先级 |
 |------|------|------|--------|
@@ -138,7 +140,7 @@ flowchart LR
 
 ### 消融实验支持
 
-`_ablation_disable_rules`（`rules.py:76`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`workflow.py:44`，ContextVar）— 设 `true` 跳过记忆反馈写入。均通过对应 `set_*()` 函数设值，用于对比实验。
+`_ablation_disable_rules`（`rules.py:76`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`workflow.py:44`，ContextVar）— 设 `true` 跳过记忆反馈读取。均通过对应 `set_*()` 函数设值，用于对比实验。
 
 `AgentWorkflow._format_constraints_hint()` 约束格式化工具函数。`get_fatigue_threshold()`/`reset_fatigue_threshold_cache()` 疲劳阈值读取与缓存重置。
 
