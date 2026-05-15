@@ -37,6 +37,59 @@ flowchart LR
 | **JointDecision Agent** | 事件归因 + 策略决策 + 工具调用（合原 Task + Strategy 为一次 LLM 调用），前有规则引擎安全约束 |
 | **Execution Agent** | 存储事件，路由多格式输出，规则后处理强制覆盖，工具执行 |
 
+### 完整系统架构
+
+```mermaid
+flowchart TD
+    subgraph Input["输入层"]
+        QUERY["用户查询<br/>REST/WS"]
+        VOICE["语音<br/>Mic→VAD→ASR"]
+        CTX["驾驶上下文<br/>ContextProvider"]
+    end
+    subgraph Core["决策层"]
+        SR["ShortcutResolver"]
+        AG["AgentWorkflow<br/>Context→JointDecision→Execution"]
+        RE["规则引擎<br/>postprocess_decision"]
+    end
+    subgraph Trigger["触发层"]
+        PS["ProactiveScheduler<br/>5 种触发源"]
+        PR["PendingReminder"]
+        CM["ContextMonitor"]
+    end
+    subgraph Memory["记忆层"]
+        MB["MemoryBank<br/>FAISS + Ebbinghaus"]
+        FEED["反馈学习"]
+    end
+    subgraph Output["输出层"]
+        OR["OutputRouter<br/>speakable/display/detailed"]
+        WS["WebSocket 推送"]
+        TOOL["ToolExecutor"]
+    end
+    QUERY --> SR
+    QUERY --> AG
+    VOICE --> MB
+    VOICE --> PS
+    CTX --> CM
+    CM --> PS
+    PS --> AG
+    PR --> AG
+    AG --> RE
+    RE --> OR
+    RE --> TOOL
+    RE --> WS
+    AG --> MB
+    MB --> FEED
+    FEED --> AG
+```
+
+### 三种运行模式
+
+| 模式 | 触发方式 | 数据流 | 用途 |
+|------|---------|--------|------|
+| **被动记录** | 语音持续监听 | Mic → VAD → ASR → MemoryBank | 自动记忆，无需用户操作 |
+| **主动提醒** | 调度器轮询 5 种触发源 | ContextMonitor → ProactiveScheduler → AgentWorkflow → WS push | 恰当时机推送 |
+| **查询响应** | 用户 REST/WS 请求 | Query → AgentWorkflow → Response | 即时问答、设置提醒 |
+
 ### 记忆系统
 
 基于 MemoryBank 论文的三层记忆架构：
@@ -60,6 +113,75 @@ flowchart TD
 ### 规则引擎
 
 数据驱动的安全约束系统，基于驾驶场景和驾驶员状态自动限制提醒通道与频率（如高速仅音频、疲劳抑制、过载延后等）。规则后处理函数在 LLM 输出后强制执行，不可绕过。
+
+---
+
+## 关键设计决策
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| 三Agent 流水线 vs 单 LLM 调用 | 三阶段 | 每阶段输出可独立审查、调试；Context 阶段可跳过 LLM（有外部数据时）；解耦 prompt 职责 |
+| JointDecision 合并 Task+Strategy | 单次 LLM 调用 | 减少延迟和 token 消耗；两阶段历史原因已废弃 |
+| 规则引擎数据驱动 | TOML 配置 + 代码后处理 | 规则可配置不改代码；`postprocess_decision` 不可绕过确保安全 |
+| MemoryBank vs 简单 KV 存储 | FAISS + Ebbinghaus | 语义检索 + 遗忘曲线更接近人类记忆机制，适合记忆关联提醒 |
+| ASR 本地离线 vs 云端 | sherpa-onnx 本地 | 车载场景网络不稳定；隐私敏感；延迟要求 |
+| 主动调度轮询 vs 事件驱动 | 固定间隔轮询 | 实现简单可靠；15s 间隔满足车载场景实时性；去抖防止轰炸 |
+| 工具调用嵌入 JointDecision | LLM 输出 tool_calls 字段 | 不改变现有 prompt/response 格式；规则引擎统一管辖 |
+| WebSocket 推送 vs SSE | WS + SSE 并存 | SSE 用于流式响应；WS 用于服务端主动推送（reminder 事件） |
+
+## 数据流全景
+
+```mermaid
+flowchart LR
+    subgraph Reactive["查询响应"]
+        U["用户"] -->|REST/WS| Q["/api/v1/query"]
+        Q --> WF["AgentWorkflow"]
+        WF -->|响应| U
+    end
+    subgraph Passive["被动记录"]
+        M["麦克风"] --> VP["VoicePipeline"]
+        VP -->|ASR 文本| SCH["ProactiveScheduler"]
+        SCH -->|MemoryEvent| MEM["MemoryBank"]
+    end
+    subgraph Proactive["主动提醒"]
+        CTXM["ContextMonitor"] -->|增量变化| SCH
+        SCH -->|proactive_run| WF
+        WF -->|reminder| WSP["WS push"]
+        WSP -->|浏览器| U
+    end
+    subgraph Memory["记忆反馈"]
+        MEM -->|检索| WF
+        U -->|accept/ignore| FB["/api/v1/feedback"]
+        FB -->|权重调整| STRAT["strategies.toml"]
+    end
+```
+
+## 模块依赖关系
+
+```
+app/api/main.py  (生命周期管理)
+  ├── app/agents/workflow.py  (决策核心)
+  │   ├── app/agents/rules.py
+  │   ├── app/agents/pending.py
+  │   ├── app/agents/outputs.py
+  │   ├── app/agents/conversation.py
+  │   └── app/agents/shortcuts.py
+  ├── app/memory/  (记忆存储)
+  ├── app/models/  (LLM + Embedding)
+  ├── app/scheduler/scheduler.py  (主动触发)
+  │   ├── app/scheduler/context_monitor.py
+  │   ├── app/scheduler/memory_scanner.py
+  │   └── app/scheduler/trigger_evaluator.py
+  ├── app/voice/  (语音输入)
+  │   ├── app/voice/pipeline.py
+  │   ├── app/voice/recorder.py
+  │   ├── app/voice/vad.py
+  │   └── app/voice/asr.py
+  └── app/tools/  (工具执行)
+      ├── app/tools/registry.py
+      ├── app/tools/executor.py
+      └── app/tools/tools/
+```
 
 ---
 
@@ -198,6 +320,19 @@ DELETE /api/data?current_user=default    # 删除数据
 - LLM API（DeepSeek / OpenAI 兼容接口 / 本地 vLLM）
 - sherpa-onnx 自动安装，运行时需要 onnxruntime==1.24.4（自动安装）
 
+## 环境变量速查
+
+核心配置见 `config/AGENTS.md` 完整表格，常用变量：
+
+| 变量 | 必填 | 默认 | 说明 |
+|------|------|------|------|
+| `DEEPSEEK_API_KEY` | ✅ | — | LLM API Key |
+| `OPENROUTER_API_KEY` | 可选 | — | Embedding 模型用 |
+| `CONFIG_PATH` | 否 | `config/llm.toml` | 自定义 LLM 配置路径 |
+| `DATA_DIR` | 否 | `data` | 数据存储根目录 |
+| `MEMORYBANK_ENABLE_FORGETTING` | 否 | `0` | 启用 Ebbinghaus 遗忘曲线 |
+| `FATIGUE_THRESHOLD` | 否 | `0.7` | 疲劳规则触发阈值 |
+
 ### 安装与启动
 
 ```bash
@@ -222,6 +357,53 @@ uv run uvicorn app.api.main:app
 - REST API 文档：http://localhost:8000/docs（Swagger UI）
 
 > **注意：** ASR 模型约 1GB 下载量。首次启动时系统自动创建 onnxruntime 符号链接（约 1 秒）。若 ASR 模型未下载，语音流水线静默降级返回空文本，不影响其他功能。
+
+---
+
+## 开发指南
+
+### 工作流
+
+```bash
+# 1. 创建工作树（隔离开发环境）
+git worktree add .worktrees/<功能名> -b <分支名>
+
+# 2. 安装依赖
+cd .worktrees/<功能名> && uv sync
+
+# 3. 修改代码后运行检查
+uv run ruff check --fix
+uv run ruff format
+uv run ty check
+uv run pytest -x -q
+
+# 4. 提交（Conventional Commits）
+git commit -m "feat: 新功能"   # 新功能
+git commit -m "fix: 修 bug"    # 修复
+git commit -m "refactor: 重构" # 重构
+git commit -m "docs: 文档"     # 文档
+
+# 5. 推送并创建 PR
+git push -u origin <分支名>
+```
+
+### 代码规范
+
+- **注释**：中文，释 why 非 what。代码表达 what
+- **函数**：一事一函数，超 30 行需有理由
+- **嵌套**：错误处理等小分支提前 return/continue/break
+- **不可变**：`const`/`final` 优先，新对象优先于 mutate
+- **测试**：一事一测。Given→When→Then。名称含场景+期望
+- **内联抑制**：禁 `# noqa`/`# type:`/`# ty:`。改不了在 ruff.toml/ty.toml 忽略
+
+### 模块添加规范
+
+添加新模块时，同步更新：
+1. 本文件 `项目结构` 节
+2. 根 `AGENTS.md` 的结构图和技术栈表
+3. 创建 `app/<模块>/AGENTS.md`（组件表/架构图/配置/异常/测试）
+4. `tests/` 下对应目录
+5. `config/` 下对应 TOML（如需）
 
 ---
 
