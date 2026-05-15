@@ -29,18 +29,38 @@ def arch_stratum(s: Scenario) -> str:
     return f"{d['scenario']}:{d['task_type']}"
 
 
-# 配置包含两种场景过滤模式：
-# - is_arch_scenario：低难度（非高速、疲劳≤阈值、非过载）
-# - is_hard_arch_scenario：高难度（高速 + 高疲劳/过载）
+def classify_complexity(dims: dict) -> bool:
+    """判断场景是否复杂：highway OR 高疲劳 OR 过载。
+
+    阈值与 _io.get_fatigue_threshold() 对齐。
+    用于架构组 2x2 的指标分层。
+    """
+    return (
+        dims.get("scenario") == "highway"
+        or float(dims.get("fatigue_level", 0)) > get_fatigue_threshold()
+        or dims.get("workload") == "overloaded"
+    )
 
 
-def make_architecture_config() -> GroupConfig:
-    """构造架构组配置（含 stage_scores post_hook）。"""
+def make_architecture_config(
+    scenario_complexity_map: dict[str, bool] | None = None,
+) -> GroupConfig:
+    """构造架构组配置（含 stage_scores post_hook）。
+
+    scenario_complexity_map: scenario_id → is_complex，用于指标分层。
+    None 或空 dict 时 metrics 保持扁平（向后兼容）。
+    """
+
+    def _metrics(scores: list[JudgeScores], results: list[VariantResult]) -> dict:
+        return compute_quality_metrics(
+            scores, results, complexity_map=scenario_complexity_map or {}
+        )
+
     return GroupConfig(
         group_name="architecture",
         variants=[Variant.FULL, Variant.SINGLE_LLM],
-        scenario_filter=is_arch_scenario,
-        metrics_computer=compute_quality_metrics,
+        scenario_filter=lambda _: True,
+        metrics_computer=_metrics,
         post_hook=_stage_scores_hook,
     )
 
@@ -64,10 +84,11 @@ async def _stage_scores_hook(
     )
 
 
-def compute_quality_metrics(
-    scores: list[JudgeScores], results: list[VariantResult]
-) -> dict:
-    """计算决策质量指标（评分均值、P50/P90 延迟）。"""
+def _compute_variant_metrics(
+    scores: list[JudgeScores],
+    results: list[VariantResult],
+) -> dict[str, dict]:
+    """按 variant 分组计算指标（共享逻辑）。"""
     by_variant: dict[str, list[JudgeScores]] = {}
     for s in scores:
         by_variant.setdefault(s.variant.value, []).append(s)
@@ -100,9 +121,50 @@ def compute_quality_metrics(
             "latency_p50_ms": p50,
             "latency_p90_ms": p90,
         }
-    metrics["_judge_degradation"] = detect_judge_degradation(scores)
-    metrics["_comparison"] = compute_comparison(scores)
     return metrics
+
+
+def _split_by_complexity(
+    scores: list[JudgeScores],
+    results: list[VariantResult],
+    complexity_map: dict[str, bool],
+) -> tuple:
+    """将 scores/results 按复杂度分为 simple/complex 两组。"""
+    simple_scores = [s for s in scores if not complexity_map.get(s.scenario_id, False)]
+    complex_scores = [s for s in scores if complexity_map.get(s.scenario_id, False)]
+    simple_results = [
+        r for r in results if not complexity_map.get(r.scenario_id, False)
+    ]
+    complex_results = [r for r in results if complexity_map.get(r.scenario_id, False)]
+    return simple_scores, complex_scores, simple_results, complex_results
+
+
+def compute_quality_metrics(
+    scores: list[JudgeScores],
+    results: list[VariantResult],
+    complexity_map: dict[str, bool] | None = None,
+) -> dict:
+    """计算决策质量指标（评分均值、P50/P90 延迟）。
+
+    传 complexity_map 时输出双层结构（simple/complex），
+    不传或空 dict 时输出扁平结构（向后兼容）。
+    """
+    if not complexity_map:
+        metrics = _compute_variant_metrics(scores, results)
+        metrics["_judge_degradation"] = detect_judge_degradation(scores)
+        metrics["_comparison"] = compute_comparison(scores)
+        return metrics
+
+    simple_scores, complex_scores, simple_results, complex_results = (
+        _split_by_complexity(scores, results, complexity_map)
+    )
+    return {
+        "simple": _compute_variant_metrics(simple_scores, simple_results),
+        "complex": _compute_variant_metrics(complex_scores, complex_results),
+        "comparison_simple": compute_comparison(simple_scores),
+        "comparison_complex": compute_comparison(complex_scores),
+        "_judge_degradation": detect_judge_degradation(scores),
+    }
 
 
 async def _aggregate_full_stage_scores(
@@ -143,26 +205,3 @@ async def _aggregate_full_stage_scores(
         "task": sum(task_scores) / len(task_scores) if task_scores else 0.0,
         "decision": sum(dec_scores) / len(dec_scores) if dec_scores else 0.0,
     }
-
-
-def is_arch_scenario(s: Scenario) -> bool:
-    """判定场景是否属于架构组——使用合成维度。"""
-    d = s.synthesis_dims
-    if not d:
-        return False
-    return (
-        d["scenario"] != "highway"
-        and float(d["fatigue_level"]) <= get_fatigue_threshold()
-        and d["workload"] != "overloaded"
-    )
-
-
-def is_hard_arch_scenario(s: Scenario) -> bool:
-    """高难度架构测试场景：约束冲突组合（高速 + 高疲劳/过载）。"""
-    d = s.synthesis_dims
-    if not d:
-        return False
-    return d["scenario"] == "highway" and (
-        float(d["fatigue_level"]) > get_fatigue_threshold()
-        or d["workload"] == "overloaded"
-    )
