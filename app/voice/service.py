@@ -34,6 +34,7 @@ class VoiceService:
         self._recorder: VoiceRecorder | None = None
         self._consume_task: asyncio.Task | None = None
         self._fire_tasks: set[asyncio.Task] = set()
+        self._fire_task_limit = 5
         self._running = False
         self._sched: ProactiveScheduler | None = None
         self._on_transcription_external: Callable[[str, float], None] | None = None
@@ -106,6 +107,9 @@ class VoiceService:
             }
         )
         if self._sched is not None:
+            if len(self._fire_tasks) >= self._fire_task_limit:
+                logger.debug("Fire tasks at limit, dropping voice text: %.30s", text)
+                return
             task = asyncio.create_task(self._sched.push_voice_text(text))
             self._fire_tasks.add(task)
             task.add_done_callback(self._fire_tasks.discard)
@@ -130,6 +134,12 @@ class VoiceService:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._consume_task
             self._consume_task = None
+        if self._fire_tasks:
+            for t in list(self._fire_tasks):
+                t.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.gather(*self._fire_tasks, return_exceptions=True)
+            self._fire_tasks.clear()
         if self._pipeline is not None:
             await self._pipeline.close()
             self._pipeline = None
