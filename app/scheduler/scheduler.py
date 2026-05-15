@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import logging
 import tomllib
 from datetime import UTC, datetime
