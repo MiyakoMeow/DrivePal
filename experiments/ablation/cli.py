@@ -24,8 +24,8 @@ from ._io import (
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     arch_stratum,
+    classify_complexity,
     compute_quality_metrics,
-    is_arch_scenario,
     make_architecture_config,
 )
 from .judge import Judge
@@ -328,7 +328,11 @@ def _prepare_group_scenarios(
         used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
-        arch_pool = [s for s in all_scenarios if is_arch_scenario(s)]
+        arch_pool = [
+            s
+            for s in all_scenarios
+            if s.synthesis_dims and not classify_complexity(s.synthesis_dims)
+        ]
         arch_available = [s for s in arch_pool if s.id not in used_ids]
         target_n = min(50, len(arch_available))
         if len(arch_available) < 50:
