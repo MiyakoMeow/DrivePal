@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from app.voice.asr import ASREngine, SherpaOnnxASREngine
@@ -30,7 +31,16 @@ class VoicePipeline:
     ) -> None:
         """初始化语音流水线."""
         self._vad = VADEngine(mode=vad_mode, sample_rate=sample_rate)
-        self._asr = asr_engine or SherpaOnnxASREngine("", "")
+        if asr_engine is None:
+            # 默认尝试加载 data/models/sense_voice/ 下的模型
+            default_model = "data/models/sense_voice/model.int8.onnx"
+            default_tokens = "data/models/sense_voice/tokens.txt"
+            asr_engine = (
+                SherpaOnnxASREngine(default_model, default_tokens)
+                if os.path.exists(default_model) and os.path.exists(default_tokens)
+                else SherpaOnnxASREngine("", "")
+            )
+        self._asr = asr_engine
         self._min_confidence = min_confidence
         self._on_transcription = on_transcription
         self._audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
