@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Request
 
-from app.agents.workflow import AgentWorkflow, ChatModelUnavailableError
+from app.agents.workflow import AgentWorkflow, WorkflowError
 from app.api.errors import AppError, AppErrorCode
 from app.api.schemas import ProcessQueryResponse
 from app.config import DATA_DIR
@@ -44,7 +44,7 @@ async def process_query(
                 "execution": stages.execution,
             },
         )
-    except ChatModelUnavailableError as e:
+    except WorkflowError as e:
         raise AppError(
             AppErrorCode.INTERNAL_ERROR,
             "AI model unavailable",

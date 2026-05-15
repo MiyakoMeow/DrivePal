@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 from app.agents.state import WorkflowStages
-from app.agents.workflow import ChatModelUnavailableError
+from app.agents.workflow import WorkflowError
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
@@ -67,7 +67,9 @@ def test_query_chat_model_unavailable(app_client: TestClient) -> None:
     ):
         mock_instance = mock_wf.return_value
         mock_instance.run_with_stages = AsyncMock(
-            side_effect=ChatModelUnavailableError,
+            side_effect=WorkflowError(
+                code="MODEL_UNAVAILABLE", message="ChatModel not available"
+            ),
         )
         resp = app_client.post(
             "/api/v1/query",

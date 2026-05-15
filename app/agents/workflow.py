@@ -33,6 +33,7 @@ from app.agents.rules import apply_rules, postprocess_decision
 from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
 from app.config import user_data_dir
+from app.exceptions import AppError
 from app.memory.memory import MemoryModule
 from app.memory.privacy import sanitize_context
 from app.memory.types import MemoryMode
@@ -62,12 +63,13 @@ _PREFERENCE_WEIGHT_LOW: float = 0.5
 _INTENT_CONFIDENCE_THRESHOLD: float = 0.3
 
 
-class ChatModelUnavailableError(RuntimeError):
-    """ChatModel 不可用时抛出的异常."""
+class WorkflowError(AppError):
+    """工作流异常（模型不可用等）。"""
 
-    def __init__(self) -> None:
-        """初始化 ChatModel 不可用错误."""
-        super().__init__("ChatModel not available")
+    def __init__(self, code: str = "WORKFLOW_ERROR", message: str = "") -> None:
+        if not message:
+            message = "Workflow error"
+        super().__init__(code=code, message=message)
 
 
 class LLMJsonResponse(BaseModel):
@@ -363,7 +365,9 @@ class AgentWorkflow:
 
     async def _call_llm_json(self, user_prompt: str) -> LLMJsonResponse:
         if not self.memory_module.chat_model:
-            raise ChatModelUnavailableError
+            raise WorkflowError(
+                code="MODEL_UNAVAILABLE", message="ChatModel not available"
+            )
         result = await self.memory_module.chat_model.generate(
             user_prompt,
             json_mode=True,
