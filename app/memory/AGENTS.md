@@ -97,14 +97,15 @@ flowchart LR
 
 ### 继承树
 
-```
-MemoryBankError(AppError)
-  ├─ TransientError
-  │    └─ LLMCallFailedError
-  ├─ FatalError
-  │    ├─ ConfigError
-  │    └─ IndexIntegrityError
-  └─ SummarizationEmpty   哨兵（非错误）
+```mermaid
+graph TD
+    AppError[AppError] --> MemoryBankError[MemoryBankError]
+    MemoryBankError --> TransientError[TransientError]
+    MemoryBankError --> FatalError[FatalError]
+    MemoryBankError --> SummarizationEmpty[SummarizationEmpty<br/>哨兵/非错误]
+    TransientError --> LLMCallFailedError[LLMCallFailedError]
+    FatalError --> ConfigError[ConfigError]
+    FatalError --> IndexIntegrityError[IndexIntegrityError]
 ```
 
 | 异常 | 说明 |
