@@ -32,6 +32,12 @@ tests/
 │   ├── test_llm_json_validation.py
 │   ├── test_sse_stream.py
 │   └── test_workflow_llm_json.py
+├── voice/
+│   └── test_vad.py
+├── scheduler/
+│   └── test_scheduler.py
+├── tools/
+│   └── test_registry.py
 ├── api/
 │   └── test_rest.py
 ├── memory/
