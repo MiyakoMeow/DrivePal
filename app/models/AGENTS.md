@@ -10,7 +10,7 @@
 - JSON mode支持（`response_format={"type": "json_object"}`）
 - DeepSeek reasoning_content 流式累积
 - `generate_stream()` 支持 tool_calls 分块累积
-- API key解析：`_resolve_api_key()` 指定 `api_key_env` 时强制从环境变量读取，缺失/空则抛 ValueError；无 `api_key_env` 时才回退 `api_key` 字段（`settings.py:170`）
+- API key解析：`_resolve_api_key()` 指定 `api_key_env` 时强制从环境变量读取，缺失/空则抛 ValueError；无 `api_key_env` 时才回退 `api_key` 字段（`settings.py:207`）
 
 ## 模块
 
@@ -44,10 +44,10 @@
 | `ChatError` | `AppError` | `chat.py:79` | LLM通用失败 |
 | `NoProviderError` | `ChatError` | `chat.py:86` | provider空 |
 | `AllProviderFailedError` | `ChatError` | `chat.py:95` | 全部provider失败 |
-| `NoLLMConfigurationError` | `AppError` | `settings.py:16` | 无LLM配置 |
-| `MissingModelFieldError` | `AppError` | `settings.py:23` | 缺model字段 |
-| `NoDefaultModelGroupError` | `AppError` | `settings.py:32` | 无默认model group |
-| `NoJudgeModelConfiguredError` | `AppError` | `settings.py:41` | 缺评测模型 |
+| `NoLLMConfigurationError` | `AppError` | `settings.py:45` | 无LLM配置 |
+| `MissingModelFieldError` | `AppError` | `settings.py:52` | 缺model字段 |
+| `NoDefaultModelGroupError` | `AppError` | `settings.py:61` | 无默认model group |
+| `NoJudgeModelConfiguredError` | `AppError` | `settings.py:70` | 缺评测模型 |
 
 ### 独立异常（不入继承树）
 

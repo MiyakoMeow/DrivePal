@@ -21,7 +21,8 @@ flowchart TD
 
 | 文件 | 类 | 职责 |
 |------|-----|------|
-| `scheduler.py` | `ProactiveScheduler` | 主循环：start/stop/run/tick。`_load_config()` 静态方法加载 scheduler.toml。协调其余组件 |
+| `scheduler.py` | `ProactiveScheduler` | 主循环：start/stop/run/tick。`SchedulerConfig.load()` 在 `__init__` 中加载 scheduler.toml。协调其余组件 |
+| `config.py` | `SchedulerConfig` | 配置 dataclass，`load()` 类方法读取/生成 scheduler.toml，`_toml_defaults()` 从字段默认值生成 TOML 结构 |
 | `context_monitor.py` | `ContextMonitor` | 缓存上次 driving_context，检测增量变化 |
 | `context_monitor.py` | `ContextDelta` | 变化增量 dataclass（5 字段） |
 | `memory_scanner.py` | `MemoryScanner` | 按场景/位置变化检索 MemoryBank |
@@ -53,7 +54,7 @@ stop() → cancel task
 | `debounce_seconds` | `float \| None` | config 值 / 30s | 去抖间隔（秒） |
 | `ws_manager` | `WSManager \| None` | `None` | WebSocket 管理器，用于广播提醒 |
 
-`_FATIGUE_HIGH = 0.7` 模块级常量，`_build_signals()` 中 state 触发源以此判定疲劳高阈值。
+`_build_signals()` 中 state 触发源通过 `get_fatigue_threshold()`（`app/agents/rules.py:65`）获取疲劳高阈值，默认 0.7，可通过环境变量 `DRIVEPAL_FATIGUE_THRESHOLD` 配置。
 
 ### _tick() 顺序
 
@@ -135,7 +136,7 @@ Scheduler 为 **不跨层原则** 典型——tick 内不传播异常。
 - 主循环 `except Exception` 兜底防崩溃，log 后继续
 - `except AppError` 捕获工作流异常，log 后不中断
 - ASR 缺失时 `_drain_voice_queue` 静默消耗空字符串
-- 配置加载 `except OSError, tomllib.TOMLDecodeError` → 默认值
+- 配置加载由 `app/config.py` 的 `ensure_config()` 统一处理，`OSError`/`PermissionError`/`tomllib.TOMLDecodeError` 均日志警告并返回默认值
 
 ## 测试
 

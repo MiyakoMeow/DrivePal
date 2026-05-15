@@ -83,7 +83,7 @@ flowchart LR
 - **确定性模式**（默认）：retention < 0.3 标记 forgotten=True
 - **概率性模式**：`MEMORYBANK_FORGET_MODE=probabilistic`，逐条独立掷骰
 - **回忆强化**：检索命中 memory_strength += 1（上限10）
-- **节流**：`FORGET_INTERVAL_SECONDS=300`
+- **节流**：`MEMORYBANK_FORGET_INTERVAL_SECONDS=300`
 
 ### 摘要与人格
 
@@ -118,7 +118,7 @@ graph TD
 | `SummarizationEmpty` | 哨兵，LLM返空。调用方捕获返 None，不上报 |
 | `InvalidActionError` | 独立异常（`schemas.py`），继承 `ValueError`，不入继承树 |
 
-catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储读写 `except (json.JSONDecodeError, OSError, TypeError, ValueError)` 自动恢复。FAISS 逐类损坏恢复。`except LLMCallFailedError` 在 summarizer 内独立处理。
+catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储读写 `except (json.JSONDecodeError, OSError, TypeError, ValueError)` 自动恢复。FAISS 逐类损坏恢复。`except LLMCallFailedError` 在 lifecycle 层独立处理。
 
 ## 阈值
 
@@ -134,6 +134,7 @@ catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储
 | save_interval_seconds | 30s |
 | retrieval_alpha | 0.7 |
 | max_memory_strength | 10 |
+| bm25_fallback_enabled | true |
 | bm25_fallback_threshold | 0.5 |
 | embedding_batch_size | 100 |
 | shutdown_timeout_seconds | 30s |

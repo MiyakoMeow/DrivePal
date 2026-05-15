@@ -11,7 +11,7 @@ uv run pytest tests/ -v --test-embedding  # 真实embedding
 uv run pytest tests/ -v --run-integration  # 完整服务
 ```
 
-pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, filterwarnings ignore:builtin type Swig:DeprecationWarning。
+pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, filterwarnings ignore:builtin type Swig:DeprecationWarning + ignore::DeprecationWarning:webrtcvad。
 
 conftest.py 注册 integration/llm/embedding 三个 marker，未提供对应选项时跳过标记者。
 
@@ -33,6 +33,7 @@ flowchart RL
         AG8["test_sse_stream.py"]
         AG9["test_workflow_llm_json.py"]
         AG10["test_workflow_proactive.py"]
+        AG11["test_workflow_tool.py"]
     end
     subgraph Voice["tests/voice/"]
         VO["test_vad.py"]

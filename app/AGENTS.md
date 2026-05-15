@@ -8,7 +8,7 @@
 | voice/ | 语音流水线（录音→VAD→ASR） | voice/AGENTS.md |
 | scheduler/ | 主动调度器（后台轮询触发） | scheduler/AGENTS.md |
 | tools/ | 工具调用框架 | tools/AGENTS.md |
-| api/ | REST路由、SSE流式、服务生命周期 | api/AGENTS.md |
+| api/ | REST路由、WebSocket流式、服务生命周期 | api/AGENTS.md |
 | memory/ | MemoryBank(FAISS+Ebbinghaus)、隐私保护 | memory/AGENTS.md |
 | models/ | LLM多provider fallback、Embedding | models/AGENTS.md |
 | schemas/ | 驾驶上下文Pydantic模型、查询Schema | schemas/AGENTS.md |

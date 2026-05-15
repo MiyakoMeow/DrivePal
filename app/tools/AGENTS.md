@@ -65,36 +65,44 @@ class ToolSpec:
 - 默认 top_k=5，读 `config/tools.toml` 的 `[tools.memory_query] max_results`
 - 失败返回 `"记忆查询失败"`（不抛异常）
 
-## Execution 节点（`_execution_node` 内流程）
+## 工具执行（`_handle_tool_calls`）
 
-执行节点在 `app/agents/workflow.py` 中的流程顺序：
+工具调用执行已提取为独立方法 `_handle_tool_calls()`（`app/agents/workflow.py:581`）。`_execution_node` 内流程顺序：
 
 1. 规则后处理 `postprocess_decision()` — 强制覆盖
-2. **工具调用执行** — 见下方代码
+2. **工具调用执行** — `_handle_tool_calls()`
 3. 待触发提醒创建 — `postpone`/`timing` 分支生成 PendingReminder
 4. `_check_frequency_guard()` — 频次抑制
 
 ```python
-tool_calls = decision.get("tool_calls", [])
-if tool_calls and isinstance(tool_calls, list):
+async def _handle_tool_calls(self, decision: dict) -> None:
+    tool_calls = decision.get("tool_calls", [])
+    if not tool_calls or not isinstance(tool_calls, list):
+        return
     executor = get_default_executor()
     tool_results: list[str] = []
     for tc in tool_calls:
-        if isinstance(tc, dict):               # 类型守卫
+        if isinstance(tc, dict):
             t_name = tc.get("tool", "")
             t_params = tc.get("params", {})
             try:
                 t_result = await executor.execute(t_name, t_params)
                 tool_results.append(f"[{t_name}] {t_result}")
-            except Exception as e:
-                tool_results.append(f"[{t_name}] 失败: {e}")  # 追加错误，不抛
+            except WorkflowError:
+                raise
+            except ToolExecutionError as e:
+                tool_results.append(f"[{t_name}] 失败: {e}")
+            except AppError:
+                raise
     if tool_results:
         logger.info("Tool call results: %s", "; ".join(tool_results))
 ```
 
 结果仅 log，不写回 state——工具调用的副作用（导航设置/消息发送等）已在 handler 内完成。
 
-## 配置 (`config/tools.toml`)
+## 配置
+
+值来源 `config/tools.toml`（不存在于源码——首次调用 `ToolsConfig.load()` 时由 `ensure_config()` 自动生成，内容为 dataclass 默认值）。
 
 ```toml
 [tools.navigation]
@@ -123,7 +131,7 @@ max_results = 5
 |------|------|------|------|
 | `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
 
-catch 模式：`_execution_node` 逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`register_builtin_tools()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → `_load_tools_config()` 返 `{}`，但仍以默认参数（`enabled=True`, `max_message_length=200`）注册全部工具。注册表不会因配置缺失变空。
+catch 模式：`_handle_tool_calls()` 逐工具 `except ToolExecutionError` → 错误文本追加至 `tool_results`，**不抛**；`WorkflowError`/`AppError` 透传。配置由 `ToolsConfig.load()` → `ensure_config()` 处理——文件缺失/损坏时自动用 dataclass 默认值生成 `config/tools.toml`。注册表不会因配置缺失变空。
 
 ## 安全约束
 

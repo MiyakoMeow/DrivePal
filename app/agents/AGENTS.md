@@ -107,6 +107,8 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 | ContextOutput | driver_state | driver, state |
 | ContextOutput | spatial | location, position |
 | ContextOutput | traffic | traffic_status |
+| ContextOutput | current_datetime | datetime, time |
+| ContextOutput | related_events | events, history |
 
 `decision` 字段为原始 dict，无Pydantic校验。含 `should_remind`/`timing`/`is_emergency`/`reminder_content`/`reason`。`should_remind` 可被 `postprocess_decision()` 强制设 false。
 
@@ -118,7 +120,7 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 
 `rules.py`。7条规则数据驱动加载自 `config/rules.toml`。`apply_rules()` 共5处静态调用。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
 
-TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码规则：highway_audio_only / fatigue_suppress / overloaded_postpone / parked_all_channels）。
+TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:91-141`，7条硬编码规则：highway_audio_only / fatigue_suppress / overloaded_postpone / parked_all_channels / city_driving_limit / traffic_jam_calm / passenger_present_relax）。
 
 | 规则 | 条件 | 约束 | 优先级 |
 |------|------|------|--------|
@@ -136,9 +138,9 @@ TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码
 
 ### 消融实验支持
 
-`_ablation_disable_rules`（`rules.py:70`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`workflow.py:43`，ContextVar）— 设 `true` 跳过记忆反馈写入。均通过对应 `set_*()` 函数设值，用于对比实验。
+`_ablation_disable_rules`（`rules.py:76`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`workflow.py:44`，ContextVar）— 设 `true` 跳过记忆反馈写入。均通过对应 `set_*()` 函数设值，用于对比实验。
 
-`format_constraints()` 约束格式化工具函数。`get_fatigue_threshold()`/`reset_fatigue_threshold_cache()` 疲劳阈值读取与缓存重置。
+`AgentWorkflow._format_constraints_hint()` 约束格式化工具函数。`get_fatigue_threshold()`/`reset_fatigue_threshold_cache()` 疲劳阈值读取与缓存重置。
 
 ### 频次约束
 
@@ -158,7 +160,7 @@ TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码
 
 | 异常 | 文件 | 继承 | 说明 |
 |------|------|------|------|
-| `WorkflowError` | `workflow.py:65` | `AppError` | 模型不可用等，code=WORKFLOW_ERROR |
+| `WorkflowError` | `workflow.py:66` | `AppError` | 模型不可用等，code=WORKFLOW_ERROR |
 | `AppError`(catch) | 各工作流方法 | — | **不 catch 具体子类型**，统一 except→log→回退 |
 
 catch 模式：

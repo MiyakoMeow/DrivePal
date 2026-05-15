@@ -154,7 +154,7 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 
 ### ruff
 
-`ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/COM812/E501/RUF001-003。`tests/**` 豁免24条。
+`ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/D107/COM812/E501/RUF001-003 — D107: `__init__` 的 docstring 由类 docstring 覆盖。`tests/**` 豁免24条。
 
 ### ty
 
