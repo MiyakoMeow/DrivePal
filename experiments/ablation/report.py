@@ -59,17 +59,22 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
             ]
             worst_p = max(p_values) if p_values else 1.0
             worst_d = max(d_values) if d_values else 0.0
-            # 动态计算各变体合规率
-            full_rate = gr.metrics.get("full", {}).get("compliance_rate", 0)
-            no_rules_rate = gr.metrics.get("no-rules", {}).get("compliance_rate", 0)
-            no_prob_rate = gr.metrics.get("no-prob", {}).get("compliance_rate", 0)
-            max_rate = max(full_rate, no_rules_rate, no_prob_rate)
-            min_rate = min(full_rate, no_rules_rate, no_prob_rate)
+            # 动态计算各变体合规率——从 metrics 中遍历所有非 _ 前缀变体
+            variant_rates: dict[str, float] = {
+                k: v.get("compliance_rate", 0)
+                for k, v in gr.metrics.items()
+                if not k.startswith("_") and isinstance(v, dict)
+            }
+            rates_list = list(variant_rates.values())
+            max_rate = max(rates_list) if rates_list else 0.0
+            min_rate = min(rates_list) if rates_list else 0.0
             gap_pp = round((max_rate - min_rate) * 100)
+            rates_desc = ", ".join(
+                f"{k.upper()} {v:.0%}" for k, v in variant_rates.items()
+            )
             entry["statistical_note"] = {
                 "note": (
-                    f"合规率 Full {full_rate:.0%}, NO_RULES {no_rules_rate:.0%}, "
-                    f"NO_PROB {no_prob_rate:.0%}（极差 {gap_pp}pp），"
+                    f"合规率 {rates_desc}（极差 {gap_pp}pp），"
                     f"但 Cohen's d={worst_d:.2f}, Wilcoxon p={worst_p:.2f}，"
                     f"未达统计显著（α={_ALPHA}）。建议 n=200+ 复验。"
                 ),
