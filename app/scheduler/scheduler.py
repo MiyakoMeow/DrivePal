@@ -114,7 +114,12 @@ class ProactiveScheduler:
         for tr in triggered:
             raw_content = tr.get("content")
             if isinstance(raw_content, dict):
-                content = (raw_content.get("speakable_text") or "").strip()
+                content = ""
+                for key in ("speakable_text", "text", "content", "body"):
+                    val = raw_content.get(key)
+                    if val and isinstance(val, str):
+                        content = val.strip()
+                        break
             elif isinstance(raw_content, str):
                 content = raw_content.strip()
             else:

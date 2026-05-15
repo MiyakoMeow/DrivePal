@@ -188,8 +188,10 @@ def _extract_location_target(driving_ctx: dict | None) -> dict:
     if driving_ctx:
         spatial = driving_ctx.get("spatial", {}) or {}
         dest = spatial.get("destination", {}) or {}
-        if dest.get("latitude") is not None:
-            return {"latitude": dest["latitude"], "longitude": dest["longitude"]}
+        lat = dest.get("latitude")
+        lon = dest.get("longitude")
+        if lat is not None and lon is not None:
+            return {"latitude": lat, "longitude": lon}
     return {}
 
 
