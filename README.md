@@ -1,6 +1,6 @@
 # 知行车秘 - 车载AI智能体原型系统
 
-基于大语言模型的车载智能提醒与日程管理智能体，支持多Agent工作流、情境感知规则引擎和基于遗忘曲线的长期记忆管理。
+基于大语言模型的车载智能提醒与日程管理智能体，支持多Agent工作流、情境感知规则引擎和基于遗忘曲线的长期记忆管理。集成语音被动记录、主动提醒调度与工具调用能力。
 
 ---
 
@@ -34,8 +34,8 @@ flowchart LR
 | Agent | 说明 |
 |-------|------|
 | **Context Agent** | 有外部数据时直接使用，无数据时 LLM 推断 |
-| **JointDecision Agent** | 事件归因 + 策略决策（合原 Task + Strategy 为一次 LLM 调用），前有规则引擎安全约束 |
-| **Execution Agent** | 存储事件，路由多格式输出，规则后处理强制覆盖 |
+| **JointDecision Agent** | 事件归因 + 策略决策 + 工具调用（合原 Task + Strategy 为一次 LLM 调用），前有规则引擎安全约束 |
+| **Execution Agent** | 存储事件，路由多格式输出，规则后处理强制覆盖，工具执行 |
 
 ### 记忆系统
 
@@ -67,8 +67,10 @@ flowchart TD
 
 | 能力 | 说明 |
 |------|------|
+| **语音被动记录** | 车载麦克风持续监听 → VAD 切分 → ASR 转录 → 自动写 Memory |
+| **主动提醒** | 后台调度器轮询 5 种触发源（场景变化/位置接近/定时/状态/周期性） |
+| **工具调用** | 导航/通信/车控/记忆查询等内置工具，JointDecision 决策时触发 |
 | **多格式输出** | visual（屏幕文字）、audio（语音播报）、detailed（详细图文） |
-| **主动触发** | 定时、定位、延时三种触发模式 |
 | **SSE 流式** | 按 Agent 阶段推送进度事件 |
 | **多轮对话** | session-based 连续对话 |
 | **快捷指令** | 预定义高频场景，跳过 LLM 流水线 |
@@ -91,6 +93,20 @@ app/
 │   ├── shortcuts.py   #   快捷指令
 │   ├── probabilistic.py # 概率推断
 │   └── state.py       #   工作流状态定义
+├── voice/             # 语音流水线（录音→VAD→ASR）
+│   ├── pipeline.py    #   VAD→ASR 编排
+│   ├── recorder.py    #   麦克风录音
+│   ├── vad.py         #   语音活动检测
+│   └── asr.py         #   sherpa-onnx ASR 引擎
+├── scheduler/         # 主动调度器（后台触发引擎）
+│   ├── scheduler.py   #   主循环
+│   ├── context_monitor.py  # 上下文变化检测
+│   ├── memory_scanner.py   # 记忆检索
+│   └── trigger_evaluator.py# 触发评估
+├── tools/             # 工具调用框架
+│   ├── registry.py    #   工具注册表
+│   ├── executor.py    #   工具执行器
+│   └── tools/         #   内置工具（导航/通信/车控/记忆查询）
 ├── api/               # REST API (FastAPI)
 │   ├── main.py        #   应用入口 + SSE 端点
 │   ├── stream.py      #   流式响应
@@ -103,8 +119,9 @@ app/
 ├── schemas/           # 驾驶上下文 Pydantic 数据模型
 ├── storage/           # TOML/JSONL 持久化引擎
 └── config.py          # 应用配置
-config/                # 模型/规则/快捷指令 TOML 配置
+config/                # 模型/规则/快捷指令/语音/调度/工具 TOML 配置
 data/                  # 运行时数据（用户隔离）
+data/models/           # ASR 模型文件（需手动下载）
 webui/                 # 模拟测试工作台（纯前端）
 tests/                 # 测试（镜像 app/ 结构）
 scripts/               # 工具脚本
@@ -179,6 +196,7 @@ DELETE /api/data?current_user=default    # 删除数据
 
 - Python 3.14+
 - LLM API（DeepSeek / OpenAI 兼容接口 / 本地 vLLM）
+- sherpa-onnx 自动安装，运行时需要 onnxruntime==1.24.4（自动安装）
 
 ### 安装与启动
 
@@ -189,12 +207,21 @@ uv sync
 # 2. 配置 LLM（编辑 config/llm.toml 或设置环境变量）
 export DEEPSEEK_API_KEY="your-api-key"
 
-# 3. 启动服务（数据目录自动初始化）
+# 3. （可选）下载 ASR 模型—启用语音被动记录
+mkdir -p data/models
+wget -qO- https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2 \
+  | tar -xj -C data/models/
+mv data/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17 data/models/sense_voice
+# 小资源环境可用 int8 量化版：编辑 config/voice.toml 将 model 路径指向 model.int8.onnx
+
+# 4. 启动服务（数据目录和 ASR 模型自动初始化）
 uv run uvicorn app.api.main:app
 ```
 
 - 模拟测试工作台：http://localhost:8000
 - REST API 文档：http://localhost:8000/docs（Swagger UI）
+
+> **注意：** ASR 模型约 1GB 下载量。首次启动时系统自动创建 onnxruntime 符号链接（约 1 秒）。若 ASR 模型未下载，语音流水线静默降级返回空文本，不影响其他功能。
 
 ---
 

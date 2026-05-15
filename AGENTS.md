@@ -11,12 +11,13 @@ Python 3.14 + `uv`。
 ## 技术栈
 
 | 类 | 术 |
-|---|---|
+|----|----|
 | Web | FastAPI + Uvicorn |
 | AI流水线 | 三Agent + 规则引擎 |
 | LLM | DeepSeek |
 | Embedding | BGE-M3 (OpenRouter, 远程) |
 | 记忆 | MemoryBank (FAISS + Ebbinghaus) |
+| 语音 | sherpa-onnx (SenseVoice) + webrtcvad |
 | 存储 | TOML + JSONL |
 | 开发 | uv, pytest(asyncio_mode=auto), ruff, ty |
 
@@ -26,6 +27,9 @@ Python 3.14 + `uv`。
 main.py                # Uvicorn 入口
 app/
 ├── agents/            → agents/AGENTS.md
+├── voice/             # 语音流水线（录音/VAD/ASR）
+├── scheduler/         # 主动调度器（后台轮询触发）
+├── tools/             # 工具调用框架
 ├── api/               → api/AGENTS.md
 ├── models/            → models/AGENTS.md
 ├── memory/            → memory/AGENTS.md
@@ -33,8 +37,9 @@ app/
 ├── storage/           → storage/AGENTS.md
 ├── config.py
 tests/                 → tests/AGENTS.md
-config/                → config/AGENTS.md
+config/                → config/AGENTS.md (含 voice/scheduler/tools TOML)
 data/                  # init_storage() 运行时创建
+data/models/           # ASR 模型（需手动下载）
 archive/               → archive/AGENTS.md
 experiments/           → experiments/ablation/AGENTS.md
 ```
@@ -95,3 +100,5 @@ git worktree add .worktrees/<名> -b <名>
 ## 未解决
 
 1. 突发事件：JointDecision + 规则引擎联合覆盖，无独立模块
+2. ASR 引擎（SherpaOnnxASREngine）当前为 SenseVoice 离线模式，Speaker Identification / 唤醒词尚未接入
+3. 真实车辆 ContextProvider：driving_context 当前由 WebUI/API 注入，无车辆总线集成
