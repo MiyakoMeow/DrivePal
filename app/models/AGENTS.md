@@ -20,7 +20,7 @@ flowchart LR
 |------|------|
 | chat.py | `ChatModel` — LLM对话模型，多provider fallback、semaphore并发控制、`generate()`/`generate_stream()`（DeepSeek reasoning_content累积、tool_calls分块）、`batch_generate()`（并行批量，semaphore限流）。工厂函数 `get_chat_model()`/`get_judge_model()` |
 | embedding.py | `EmbeddingModel` — 文本嵌入，OpenAI兼容远程，`encode()`/`batch_encode()`，3次指数退避重试。缓存管理：`get_cached_embedding_model()`/`clear_embedding_model_cache()`/`reset_embedding_singleton()` |
-| settings.py | `LLMSettings` dataclass（`load()` / `get_model_group_providers()` / `get_embedding_provider()`），`LLMProviderConfig` dataclass（temperature/concurrency/api_key 配置），`EmbeddingProviderConfig` dataclass（provider 配置）。TOML配置加载（`@cache`，运行时改TOML不生效）。`_resolve_api_key()` 见下文 |
+| settings.py | `LLMSettings` dataclass（`load()` / `get_model_group_providers()` / `get_embedding_provider()`），`LLMProviderConfig` dataclass（temperature/concurrency/api_key 配置），`EmbeddingProviderConfig` dataclass（provider 配置）。TOML配置加载（`@cache`，运行时改TOML不生效）。`_resolve_api_key()` — 按 `api_key_env` 环境变量优先读取，回退 `api_key` 字段 |
 | model_string.py | 模型引用字符串解析（`provider/model`） |
 | types.py | `ResolvedModel`/`ProviderConfig` 等基础类型 |
 | exceptions.py | 基础异常；其余8个异常分散在各模块 |

@@ -28,6 +28,7 @@ flowchart LR
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
 | `asr.py` | `SherpaOnnxASREngine` | SenseVoice 离线 ASR。`_ensure_onnx_lib()` 自动创建 onnxruntime 符号链接。`_UNAVAILABLE` 哨兵对象 |
 | `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE=16000`、`_FRAMES_PER_CHUNK=480`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
+| `config.py` | `VoiceConfig` | 语音流水线配置加载 + 默认值生成 + TOML 自动创建 |
 | `cli.py` | `main`, `_parse_args` | 命令行入口。`--list-devices` 列设备，`--device INDEX` 选设备。实时转录输出 |
 | `server.py` | `app` | 独立 FastAPI 服务。自管 VoiceService 生命周期，挂 /api/v1/voice 路由 + WebUI 静态文件。`python -m app.voice.server` 启动 |
 
@@ -45,6 +46,7 @@ feed_audio(chunk) → Queue → run() 循环:
 - 帧大小由 `VADEngine` 自行计算（`sample_rate * 2 * frame_ms / 1000`，默认 960），`VoicePipeline` 通过 `self._vad.frame_bytes` 获取
 - `min_confidence` 默认 0.5，< 此值丢弃
 - `on_transcription(text, confidence)` 可选回调（供 Scheduler 实时消费）
+- `on_vad_status(status_name)` 可选回调（供 VoiceService 更新 VAD 状态）
 - `close()` — 停止循环并释放 ASR 资源
 - `run()` 校验帧尺寸：`len(chunk) != self._expected_frame_bytes` 时日志警告并跳过，防止尺寸异常导致 VAD 结果不可靠。`feed_audio(chunk)` 仅入队列，无校验
 
@@ -77,6 +79,7 @@ sherpa-onnx 依赖 `libonnxruntime.so`。`_ensure_onnx_lib()` 在模块首次使
 
 ```toml
 [voice]
+enabled = true             # 流水线总开关（false 时静默跳过）
 device_index = 0           # 麦克风设备 ID
 sample_rate = 16000
 vad_mode = 1

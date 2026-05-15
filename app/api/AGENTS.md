@@ -44,10 +44,10 @@
 | POST | `/api/v1/voice/stop` | 停止录音 |
 | GET | `/api/v1/voice/config` | 当前配置（device_index/vad_mode 等） |
 | PUT | `/api/v1/voice/config` | 热更新配置（无效值返 400） |
-| GET | `/api/v1/voice/transcriptions` | 转录历史（`?limit=N`，默认 50，最大 200） |
+| GET | `/api/v1/voice/transcriptions` | 转录历史（`?limit=N`，默认 50，`<1` 返空） |
 | GET | `/api/v1/voice/devices` | 可用麦克风设备列表 |
 
-Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py`，字段说明见下方"数据模型"节。
+Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py` + `app/schemas/context.py`，字段说明见下方"数据模型"节。
 
 ### WebSocket
 
@@ -76,7 +76,7 @@ Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py`，字段说明见
 ### 查询Schema (`query.py`)
 
 - **ProcessQueryRequest**: query, context(DrivingContext|None), session_id
-- **ProcessQueryResult**: status(delivered/pending/suppressed), event_id, session_id, result, pending_reminder_id, trigger_text, reason, cancelled
+端点实际响应为 `ProcessQueryResponse`（`app/api/schemas.py:14`）：result, event_id, stages（WorkflowStages dict）。`ProcessQueryResult`（`app/schemas/query.py:24`）为内部工作流结果模型，非端点直返。
 
 ## 异常处理
 
@@ -120,7 +120,7 @@ Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 
 ## 中间件
 
-`UserIdentityMiddleware`：从 `X-User-Id` header 提取用户 ID，注入 `request.state.user_id`。仅处理 HTTP，WS 端点直接读 `ws.headers`。
+`UserIdentityMiddleware`：从 `X-User-Id` header 提取用户 ID，注入 `request.state.user_id`。仅处理 HTTP。WS 端点按优先级：`query_params["user_id"]` > `x-user-id` header > 默认 `"default"`。
 
 ## 服务入口
 

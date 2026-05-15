@@ -29,7 +29,8 @@ flowchart LR
 ```
 
 存储分两层：项目级（`data/experiment_benchmark.toml`）+ 用户级（`data/users/{user_id}/`）。旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移。迁移范围：
-- `data/*.jsonl`、`data/*.toml` → `data/users/default/`
+- jsonl: `events.jsonl`、`interactions.jsonl`、`feedback.jsonl` → `data/users/default/`（`feedback_log.jsonl` 不在迁移范围）
+- toml: `contexts.toml`、`preferences.toml`、`strategies.toml`、`scenario_presets.toml` → `data/users/default/`（`experiment_benchmark.toml` 不在迁移范围）
 - `data/memorybank/` → `data/users/default/memorybank/`（整体目录）
 - `data/memorybank/user_{id}/` → `data/users/{id}/memorybank/`（按用户拆分）
 - `data/user_{id}/`（平铺目录）→ `data/users/{id}/`（按用户拆分）
@@ -62,7 +63,7 @@ JSONL追加写，用于高频写入数据(events/interactions/feedback)。
 
 ## 存储初始化 (`init_data.py`)
 
-`init_storage(data_dir)` 创建目录 + `_migrate_legacy()` + `init_user_dir("default")`。
+`init_storage(data_dir=None)` 创建目录 + `_migrate_legacy()` + `init_user_dir("default")`。`data_dir` 可选，默认回退 `DATA_DIR`。
 `init_user_dir(user_id)` 创建4个jsonl + 4个toml文件并写默认值。默认值：
 - `preferences.toml`：`{"language": "zh-CN"}`
 - `strategies.toml`：6字段 — `preferred_time_offset: 15`、`preferred_method: "visual"`、`reminder_weights: {}`、`ignored_patterns: []`、`modified_keywords: []`、`cooldown_periods: {}`

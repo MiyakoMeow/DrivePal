@@ -54,12 +54,12 @@ stop() → cancel task
 | `debounce_seconds` | `float \| None` | config 值 / 30s | 去抖间隔（秒） |
 | `ws_manager` | `WSManager \| None` | `None` | WebSocket 管理器，用于广播提醒 |
 
-`_build_signals()` 中 state 触发源通过 `get_fatigue_threshold()`（`app/agents/rules.py:65`）获取疲劳高阈值，默认 0.7，可通过环境变量 `DRIVEPAL_FATIGUE_THRESHOLD` 配置。
+`_build_signals()` 中 state 触发源通过 `get_fatigue_threshold()`（`app/agents/rules.py:70`）获取疲劳高阈值，默认 0.7，可通过环境变量 `DRIVEPAL_FATIGUE_THRESHOLD` 配置。
 
 ### _tick() 顺序
 
 1. `_drain_voice_queue()` — ASR 文本写 Memory（passive_voice）
-2. `_poll_pending(ctx)` — PendingReminderManager.poll() + proactive_run（仅在 `ctx` 非空时执行）
+2. `_poll_pending(ctx)` — PendingReminderManager.poll() → execute_pending_reminder（有 content）/ proactive_run（无 content），仅在 `ctx` 非空时执行
 3. `ContextMonitor.update(ctx)` — 检测场景/位置/状态增量
 4. `_scan_context_changes(ctx, delta)` — 场景切换/位置变化时检索记忆
 5. `_build_signals(ctx, delta, hints)` — 构造 TriggerSignal 列表
@@ -139,3 +139,4 @@ fatigue_delta_threshold = 0.1
 ## 测试
 
 `tests/scheduler/test_scheduler.py` — ContextMonitor 增量检测 + TriggerEvaluator 去抖。
+`tests/scheduler/test_tick.py` — tick 全流程（voice queue drain / pending poll / context monitor / trigger evaluation）。

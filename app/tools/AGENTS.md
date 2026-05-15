@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart LR
-    LLM["JointDecision LLM"] -->|tool_calls| EXEC["_execution_node"]
+    LLM["JointDecision LLM"] -->|tool_calls| EXEC["ExecutionAgent._handle_tool_calls()"]
     EXEC --> TE["ToolExecutor"]
     TE --> REG["ToolRegistry"]
     REG --> NAV["set_navigation"]
@@ -87,10 +87,10 @@ class ToolSpec:
 4. `_check_frequency_guard()` — 频次抑制
 
 ```python
-async def _handle_tool_calls(self, decision: dict, state: AgentState) -> None:
+async def _handle_tool_calls(self, decision: dict, state: AgentState) -> list[str]:
     tool_calls = decision.get("tool_calls", [])
     if not tool_calls or not isinstance(tool_calls, list):
-        return
+        return []
     executor = get_default_executor()
     tool_results: list[str] = []
     for tc in tool_calls:
@@ -111,8 +111,9 @@ async def _handle_tool_calls(self, decision: dict, state: AgentState) -> None:
             except AppError:
                 raise
     if tool_results:
-        state["tool_results"] = tool_results
         logger.info("Tool call results: %s", "; ".join(tool_results))
+        state["tool_results"] = tool_results
+    return tool_results
 ```
 
 结果写入 `state["tool_results"]`，由 `_build_done_data()` 纳入 SSE done 事件。
@@ -165,3 +166,4 @@ catch 模式：`_handle_tool_calls()` 逐工具 `except ToolExecutionError` → 
 ## 测试
 
 `tests/tools/test_registry.py` — 注册 + 重复注册检测。
+`tests/tools/test_executor.py` — 参数校验、确认条件、内置工具执行测试。
