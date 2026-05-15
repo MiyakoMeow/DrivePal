@@ -1,10 +1,13 @@
 """记忆查询工具。"""
 
+import logging
 import tomllib
 from pathlib import Path
 from typing import Any
 
 from app.memory.singleton import get_memory_module
+
+logger = logging.getLogger(__name__)
 
 _TOP_K = 5
 
@@ -16,6 +19,9 @@ def _load_max_results() -> int:
             data = tomllib.load(f)
         return data.get("tools", {}).get("memory_query", {}).get("max_results", _TOP_K)
     except OSError, tomllib.TOMLDecodeError:
+        logger.warning(
+            "Failed to read tools.toml max_results, using default %s", _TOP_K
+        )
         return _TOP_K
 
 
@@ -33,4 +39,5 @@ async def query_memory(params: dict[str, Any]) -> str:
         texts = [r.event.get("content", "") for r in results if r.event]
         return "\n".join(texts[:top_k])
     except Exception:
+        logger.exception("Memory query failed for query=%s", query)
         return "记忆查询失败"

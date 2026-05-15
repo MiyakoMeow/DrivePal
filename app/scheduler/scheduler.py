@@ -50,8 +50,8 @@ class ProactiveScheduler:
         workflow: AgentWorkflow,
         memory_module: MemoryModule,
         user_id: str = "default",
-        tick_interval: float = 15.0,
-        debounce_seconds: float = 30.0,
+        tick_interval: float | None = None,
+        debounce_seconds: float | None = None,
         ws_manager: WSManager | None = None,
     ) -> None:
         """初始化 ProactiveScheduler。
@@ -69,10 +69,16 @@ class ProactiveScheduler:
         self._memory_scanner = MemoryScanner(memory_module, user_id)
         # 从 config/scheduler.toml 读取配置，参数可覆盖
         _cfg = self._load_config()
-        tick_interval = tick_interval or _cfg.get("tick_interval_seconds", 15)
-        debounce_seconds = debounce_seconds or _cfg.get("debounce_seconds", 30)
+        if tick_interval is None:
+            tick_interval = _cfg.get("tick_interval_seconds", 15)
+        if debounce_seconds is None:
+            debounce_seconds = _cfg.get("debounce_seconds", 30)
         proximity = _cfg.get("location_proximity_meters", 500)
-        self._context_monitor = ContextMonitor(proximity_meters=proximity)
+        context_monitor_cfg = _cfg.get("context_monitor", {})
+        fatigue_delta = context_monitor_cfg.get("fatigue_delta_threshold", 0.1)
+        self._context_monitor = ContextMonitor(
+            proximity_meters=proximity, fatigue_delta_threshold=fatigue_delta
+        )
         self._trigger_evaluator = TriggerEvaluator(debounce_seconds)
         self._tick_interval = tick_interval
         self._ws_manager = ws_manager
@@ -228,6 +234,9 @@ class ProactiveScheduler:
         """消费语音队列，写入被动语音记忆。"""
         while not self._voice_queue.empty():
             text = await self._voice_queue.get()
+            text = text.strip()
+            if not text:
+                continue
             event = MemoryEvent(
                 content=text,
                 type=EVENT_TYPE_PASSIVE_VOICE,
@@ -243,27 +252,48 @@ class ProactiveScheduler:
 
     async def _tick(self) -> None:
         """单次 tick：语音消费、PendingReminder 轮询、上下文变化检测、触发执行。"""
-        await self._drain_voice_queue()
+        try:
+            await self._drain_voice_queue()
+        except Exception as e:
+            logger.warning("Voice queue drain failed: %s", e)
 
         ctx: dict | None = self._current_context
         if not ctx:
             ctx = {}
 
-        if ctx:
-            await self._poll_pending(ctx)
+        try:
+            if ctx:
+                await self._poll_pending(ctx)
+        except Exception as e:
+            logger.warning("Pending poll failed: %s", e)
 
-        delta = (
-            self._context_monitor.update(ctx)
-            if ctx
-            else self._context_monitor.update({})
-        )
+        try:
+            delta = (
+                self._context_monitor.update(ctx)
+                if ctx
+                else self._context_monitor.update({})
+            )
+        except Exception as e:
+            logger.warning("Context monitor update failed: %s", e)
+            delta = ContextDelta()
 
         memory_hints: list[dict] = []
         if ctx:
-            memory_hints = await self._scan_context_changes(ctx, delta)
+            try:
+                memory_hints = await self._scan_context_changes(ctx, delta)
+            except Exception as e:
+                logger.warning("Context scan failed: %s", e)
 
-        signals = self._build_signals(ctx, delta, memory_hints) if ctx else []
-        await self._evaluate_and_execute(signals, ctx)
+        try:
+            signals = self._build_signals(ctx, delta, memory_hints) if ctx else []
+        except Exception as e:
+            logger.warning("Build signals failed: %s", e)
+            signals = []
+
+        try:
+            await self._evaluate_and_execute(signals, ctx)
+        except Exception as e:
+            logger.warning("Evaluate and execute failed: %s", e)
 
     async def run(self) -> None:
         """调度器主循环。"""

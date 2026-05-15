@@ -1,5 +1,7 @@
 """工具注册表测试。"""
 
+import pytest
+
 from app.tools.registry import ToolRegistry, ToolSpec
 
 
@@ -21,8 +23,6 @@ def test_duplicate_register_raises():
     reg.register(
         ToolSpec(name="dup", description="", input_schema={}, handler=_fake_handler)
     )
-    import pytest
-
     with pytest.raises(ValueError, match="already registered"):
         reg.register(
             ToolSpec(name="dup", description="", input_schema={}, handler=_fake_handler)

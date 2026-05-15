@@ -55,7 +55,7 @@ class ToolSpec:
 |------|------|------|
 | `set_navigation` | `destination: str` | `"导航已设置：{dest}"` |
 | `send_message` | `recipient: str`, `message: str(max 200)` | `"消息已发送给 {r}"` |
-| `query_memory` | `query: str` | top-3 记忆内容 |
+| `query_memory` | `query: str` | top-5 记忆内容 |
 | `set_climate` | `temperature: number(16-32)` | `"车控功能尚未接入"` |
 | `play_media` | `name: str`, `type: music\|podcast` | `"媒体功能尚未接入"` |
 

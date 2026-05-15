@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.voice.pipeline import VoicePipeline
 
-from app.voice.constants import _FRAME_BYTES, _SAMPLE_RATE
+from app.voice.constants import _FRAMES_PER_CHUNK, _SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +41,10 @@ class VoiceRecorder:
                     rate=_SAMPLE_RATE,
                     input=True,
                     input_device_index=self._device_index,
-                    frames_per_buffer=_FRAME_BYTES,
+                    frames_per_buffer=_FRAMES_PER_CHUNK,
                 )
                 while self._running:
-                    data = stream.read(_FRAME_BYTES // 2, exception_on_overflow=False)
+                    data = stream.read(_FRAMES_PER_CHUNK, exception_on_overflow=False)
                     asyncio.run_coroutine_threadsafe(
                         pipeline.feed_audio(data),
                         loop,

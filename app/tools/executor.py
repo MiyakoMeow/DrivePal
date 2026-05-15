@@ -22,6 +22,43 @@ class ToolExecutor:
         """注入已注册工具列表。"""
         self._registry = registry
 
+    @staticmethod
+    def _validate_constraints(tool_name: str, key: str, value: Any, prop: dict) -> None:
+        """校验 JSON Schema 约束（minimum/maximum/maxLength/enum）。"""
+        ptype = prop.get("type")
+        if (
+            "minimum" in prop
+            and ptype in ("number", "integer")
+            and isinstance(value, (int, float))
+            and value < prop["minimum"]
+        ):
+            msg = f"Tool {tool_name}: param '{key}' minimum {prop['minimum']}, got {value}"
+            raise ToolExecutionError(msg)
+        if (
+            "maximum" in prop
+            and ptype in ("number", "integer")
+            and isinstance(value, (int, float))
+            and value > prop["maximum"]
+        ):
+            msg = f"Tool {tool_name}: param '{key}' maximum {prop['maximum']}, got {value}"
+            raise ToolExecutionError(msg)
+        if (
+            "maxLength" in prop
+            and ptype == "string"
+            and isinstance(value, str)
+            and len(value) > prop["maxLength"]
+        ):
+            msg = f"Tool {tool_name}: param '{key}' maxLength {prop['maxLength']}, got {len(value)}"
+            raise ToolExecutionError(msg)
+        if (
+            "enum" in prop
+            and ptype == "string"
+            and isinstance(value, str)
+            and value not in prop["enum"]
+        ):
+            msg = f"Tool {tool_name}: param '{key}' must be one of {prop['enum']}, got '{value}'"
+            raise ToolExecutionError(msg)
+
     def _validate_params(
         self, tool_name: str, spec: ToolSpec, params: dict[str, Any]
     ) -> None:
@@ -57,6 +94,8 @@ class ToolExecutor:
                     if not isinstance(value, expected):
                         msg = f"Tool {tool_name}: param '{key}' expected {prop['type']}, got {type(value).__name__}"
                         raise ToolExecutionError(msg)
+
+            self._validate_constraints(tool_name, key, value, prop)
 
     async def execute(self, tool_name: str, params: dict[str, Any]) -> str:
         """按名称执行工具，返回执行结果字符串。"""

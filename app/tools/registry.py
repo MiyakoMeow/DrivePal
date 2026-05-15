@@ -9,7 +9,7 @@ from typing import Any
 ToolHandler = Callable[[dict[str, Any]], Awaitable[str]]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ToolSpec:
     """工具规格说明。"""
 

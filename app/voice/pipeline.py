@@ -116,7 +116,6 @@ class VoicePipeline:
             elif status is VADStatus.SPEECH:
                 buffer.extend(chunk)
             elif status is VADStatus.SPEECH_END:
-                buffer.extend(chunk)
                 if len(buffer) > _FRAME_BYTES:
                     result = await self._asr.transcribe(bytes(buffer))
                     if result.text and result.confidence >= self._min_confidence:

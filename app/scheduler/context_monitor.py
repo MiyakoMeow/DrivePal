@@ -6,7 +6,7 @@ import copy
 import math
 from dataclasses import dataclass
 
-_FATIGUE_DELTA_THRESHOLD = 0.1
+_DEFAULT_FATIGUE_DELTA = 0.1
 
 
 def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -36,15 +36,19 @@ class ContextDelta:
 class ContextMonitor:
     """监测驾驶上下文增量变化。"""
 
-    def __init__(self, proximity_meters: float = 500.0) -> None:
+    def __init__(
+        self, proximity_meters: float = 500.0, fatigue_delta_threshold: float = 0.1
+    ) -> None:
         """初始化 ContextMonitor。
 
         Args:
             proximity_meters: 位置变化判定的距离阈值（米）。
+            fatigue_delta_threshold: 疲劳变化判定的增量阈值。
 
         """
         self._last: dict | None = None
         self._proximity_meters = proximity_meters
+        self._fatigue_delta_threshold = fatigue_delta_threshold
 
     def update(self, ctx: dict) -> ContextDelta:
         """更新上下文并返回增量变化。首次调用返回空 delta。"""
@@ -77,7 +81,7 @@ class ContextMonitor:
             )
             new_fatigue = float(ctx.get("driver_state", {}).get("fatigue_level", 0))
             delta.fatigue_increased = (
-                new_fatigue > old_fatigue + _FATIGUE_DELTA_THRESHOLD
+                new_fatigue > old_fatigue + self._fatigue_delta_threshold
             )
         except ValueError, TypeError:
             pass
