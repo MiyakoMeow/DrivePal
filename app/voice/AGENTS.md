@@ -41,7 +41,7 @@ feed_audio(chunk) → Queue → run() 循环:
 - `min_confidence` 默认 0.5，< 此值丢弃
 - `on_transcription(text, confidence)` 可选回调（供 Scheduler 实时消费）
 - `close()` — 停止循环并释放 ASR 资源
-- `feed_audio(chunk)` 校验帧尺寸：`len(chunk) != _FRAME_BYTES` 时日志警告并跳过，防止尺寸异常导致 VAD 结果不可靠
+- `run()` 校验帧尺寸：`len(chunk) != _FRAME_BYTES` 时日志警告并跳过，防止尺寸异常导致 VAD 结果不可靠。`feed_audio(chunk)` 仅入队列，无校验
 
 ## VADEngine
 

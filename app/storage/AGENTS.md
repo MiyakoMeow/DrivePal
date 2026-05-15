@@ -62,7 +62,7 @@ JSONL追加写，用于高频写入数据(events/interactions/feedback)。
 `init_storage(data_dir)` 创建目录 + `_migrate_legacy()` + `init_user_dir("default")`。
 `init_user_dir(user_id)` 创建4个jsonl + 4个toml文件并写默认值。默认值：
 - `preferences.toml`：`{"language": "zh-CN"}`
-- `strategies.toml`：7字段 — `preferred_time_offset: 15`、`preferred_method: "visual"`、`reminder_weights: {}`、`ignored_patterns: []`、`modified_keywords: []`、`cooldown_periods: {}`
+- `strategies.toml`：6字段 — `preferred_time_offset: 15`、`preferred_method: "visual"`、`reminder_weights: {}`、`ignored_patterns: []`、`modified_keywords: []`、`cooldown_periods: {}`
 - `scenario_presets.toml`：`{"_list": []}`
 `_MIGRATED_FLAG` 标记保证幂等。
 

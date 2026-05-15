@@ -33,9 +33,9 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 - 服务端→客户端：`{"type": "stage_start"|"context_done"|"decision"|"done"|"error"|"reminder", "payload": {...}}`
 - 心跳：客户端每30s发 `{"type": "ping"}`，服务端返 `{"type": "pong", "payload": {}}`；服务端 60s 读超时（`_HEARTBEAT_TIMEOUT = 60.0`），超时则断连
 - 非法 JSON：返回 `{"type": "error", "payload": {"code": "INVALID_JSON", "message": "Malformed JSON"}}`，不断连
-- payload 非 object：返回 `{"code": "INVALID_PAYLOAD", "message": "Payload must be an object"}`
-- 未知 type：返回 `{"code": "INVALID_MESSAGE", "message": "Unknown type: ..."}`
-- 查询初始化/处理失败：返回 `{"code": "QUERY_FAILED", "message": "..."}`
+- payload 非 object：返回 `{"type": "error", "payload": {"code": "INVALID_PAYLOAD", "message": "Payload must be an object"}}`
+- 未知 type：返回 `{"type": "error", "payload": {"code": "INVALID_MESSAGE", "message": "Unknown type: ..."}}`
+- 查询初始化/处理失败：返回 `{"type": "error", "payload": {"code": "QUERY_FAILED", "message": "..."}}`
 
 ## 错误处理
 
