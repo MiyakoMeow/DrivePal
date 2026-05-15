@@ -148,19 +148,11 @@ class ForgettingCurve:
 
     def maybe_forget(
         self, metadata: list[dict], reference_date: str | None = None
-    ) -> list[int] | None:
-        """对达到遗忘阈值的条目标记 forgotten=True。
+    ) -> tuple[list[int], dict[int, dict[str, object]]] | None:
+        """返回 (forgotten_faiss_ids, changeset) 或 None（节流）。
 
-        概率模式下同时返回应硬删除的 FAISS ID 列表。
-
-        Args:
-            metadata: 记忆条目列表（会被原地修改 forgotten 标记）。
-            reference_date: 参考日期，默认当天 UTC。
-
-        Returns:
-            None 当节流（未执行）；FAISS ID 列表（概率模式返回新遗忘的 ID，
-            确定性模式返回空列表）。
-
+        changeset: {meta_index → {"forgotten": True}}
+        不修改传入的 metadata。
         """
         now = time.monotonic()
         if now - self._last_forget_time < self._config.forget_interval_seconds:
@@ -168,7 +160,8 @@ class ForgettingCurve:
         self._last_forget_time = now
         today = reference_date or datetime.now(UTC).strftime("%Y-%m-%d")
         forgotten_ids: list[int] = []
-        for entry in metadata:
+        changeset: dict[int, dict[str, object]] = {}
+        for idx, entry in enumerate(metadata):
             if entry.get("type") == "daily_summary":
                 continue
             if entry.get("forgotten"):
@@ -194,9 +187,9 @@ class ForgettingCurve:
                 should_forget = retention < self._config.soft_forget_threshold
 
             if should_forget:
-                entry["forgotten"] = True
+                changeset[idx] = {"forgotten": True}
                 if self._rng is not None:
                     fid = entry.get("faiss_id")
                     if fid is not None:
                         forgotten_ids.append(fid)
-        return forgotten_ids
+        return forgotten_ids, changeset

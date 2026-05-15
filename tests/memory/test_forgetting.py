@@ -57,9 +57,14 @@ class TestDeterministicForgetting:
                 "forgotten": False,
             }
         ]
+        original = [dict(m) for m in meta]
         result = fc.maybe_forget(meta, reference_date="2020-02-01")  # 31 days
         assert result is not None  # not throttled
-        assert meta[0]["forgotten"] is True
+        forgotten_ids, changeset = result
+        assert 0 in changeset
+        assert changeset[0]["forgotten"] is True
+        # metadata 未被原地修改
+        assert meta == original
 
     def test_retention_above_threshold_not_forgotten(self):
         config = MemoryBankConfig(
@@ -82,7 +87,8 @@ class TestDeterministicForgetting:
         ]
         result = fc.maybe_forget(meta, reference_date="2020-02-01")
         assert result is not None
-        assert meta[0]["forgotten"] is False
+        _, changeset = result
+        assert len(changeset) == 0
 
     def test_daily_summary_skipped(self):
         config = MemoryBankConfig(
@@ -103,8 +109,11 @@ class TestDeterministicForgetting:
                 "forgotten": False,
             }
         ]
-        fc.maybe_forget(meta, reference_date="2020-02-01")
-        assert meta[0]["forgotten"] is False
+        result = fc.maybe_forget(meta, reference_date="2020-02-01")
+        if result is not None:
+            _, changeset = result
+            assert len(changeset) == 0
+        assert meta[0].get("forgotten") is False
 
 
 class TestThrottle:

@@ -61,12 +61,18 @@ class MemoryLifecycle:
             True 表示实际执行了删除；节流跳过时返回 False。
 
         """
-        forgotten_ids = self._forget.maybe_forget(
+        result = self._forget.maybe_forget(
             metadata,
             reference_date=self._resolve_reference_date(),
         )
-        if forgotten_ids is None:
-            return False  # 节流跳过
+        if result is None:
+            return False
+
+        forgotten_ids, changeset = result
+        for idx, fields in changeset.items():
+            if 0 <= idx < len(metadata):
+                metadata[idx].update(fields)
+
         if not forgotten_ids:
             forgotten_ids = [m["faiss_id"] for m in metadata if m.get("forgotten")]
         if forgotten_ids:
