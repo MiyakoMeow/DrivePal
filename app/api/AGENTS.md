@@ -131,7 +131,7 @@ Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 - 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoiceService 转录回调推送至 scheduler
 - 关闭：`VoiceService.stop()` 停止录音流水线 + `ProactiveScheduler.stop()` + `close_memory_module()` FAISS落盘 + `close_client_cache()`
 
-**CORS**：开发用 `allow_origins=["*"]`，部署前须收敛。
+**CORS**：`origins` 由 `DRIVEPAL_CORS_ORIGINS` 环境变量配置（默认 `*`，逗号分隔多值）。wildcard 时禁用 credentials（`allow_credentials=False`），非 wildcard 时启用。
 
 **静态文件**：`/static` → WebUI，`GET /` → index.html。静态路径由 `WEBUI_DIR` 环境变量覆盖（默认 `webui/`）。
 
