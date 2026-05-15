@@ -14,6 +14,7 @@ def test_variant_enum_values():
     assert Variant.FULL == "full"
     assert Variant.NO_RULES == "no-rules"
     assert Variant.NO_PROB == "no-prob"
+    assert Variant.NO_SAFETY == "no-safety"
     assert Variant.SINGLE_LLM == "single-llm"
     assert Variant.NO_FEEDBACK == "no-feedback"
 
