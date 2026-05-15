@@ -54,7 +54,7 @@ def _build_stages(
 
 def pers_stratum(s: Scenario) -> str:
     """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
-    return getattr(s, "expected_task_type", None) or "unknown"
+    return s.expected_task_type or "unknown"
 
 
 async def run_personalization_group(

@@ -148,6 +148,13 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         for vr in variant_results:
             scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
 
+        # 先构建 score_scenarios 列表，确保架构组 complexity_map 不论走哪条路径都能引用
+        score_scenarios = [
+            scenario_by_id[sid]
+            for sid in scenarios_for_results
+            if sid in scenario_by_id
+        ]
+
         existing_scores = await _try_load_existing_scores(
             run_dir / group_name / "scores.json",
             variant_results,
@@ -156,11 +163,6 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             scores = existing_scores
             print(f"{group_name} 组复用已有评分: {len(scores)} 条")
         else:
-            score_scenarios = [
-                scenario_by_id[sid]
-                for sid in scenarios_for_results
-                if sid in scenario_by_id
-            ]
             scores = await score_scenarios_concurrent(
                 judge, score_scenarios, variant_results
             )

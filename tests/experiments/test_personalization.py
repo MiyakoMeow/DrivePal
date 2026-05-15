@@ -1,5 +1,8 @@
 """测试个性化组指标."""
 
+import random
+from unittest import mock
+
 from experiments.ablation.preference_metrics import (
     _compute_convergence_speed,
     _compute_decision_divergence,
@@ -271,3 +274,223 @@ def test_convergence_speed_target_type_tie_uses_lexical_tiebreaker():
     ]
     result = _compute_convergence_speed(wh)
     assert 0.0 <= result <= 1.0  # "a" 应胜出（字典序< "z"）
+
+
+# ── simulate_feedback 三要素模型 ──
+
+
+def test_simulate_alignment_high_freq():
+    """high-freq 阶段 alignment 正确决定反馈方向。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
+
+        rng = random.Random(0)
+        assert (
+            simulate_feedback(
+                {"should_remind": True}, "high-freq", rng, driving_context=ctx
+            )
+            == "accept"
+        )
+
+        rng = random.Random(0)
+        assert (
+            simulate_feedback(
+                {"should_remind": False}, "high-freq", rng, driving_context=ctx
+            )
+            == "ignore"
+        )
+
+
+def test_simulate_alignment_silent():
+    """silent 阶段 alignment 正确决定反馈方向。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
+
+        rng = random.Random(0)
+        assert (
+            simulate_feedback(
+                {"should_remind": False}, "silent", rng, driving_context=ctx
+            )
+            == "accept"
+        )
+
+        rng = random.Random(0)
+        assert (
+            simulate_feedback(
+                {"should_remind": True, "is_emergency": True},
+                "silent",
+                rng,
+                driving_context=ctx,
+            )
+            == "accept"
+        )
+
+        rng = random.Random(0)
+        assert (
+            simulate_feedback(
+                {"should_remind": True, "is_emergency": False},
+                "silent",
+                rng,
+                driving_context=ctx,
+            )
+            == "ignore"
+        )
+
+
+def test_simulate_alignment_visual_detail():
+    """visual-detail 阶段 alignment 正确决定反馈方向。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
+
+        rng = random.Random(0)
+        decision_with = {"reminder_content": {"display_text": "会议 · 15:00"}}
+        assert (
+            simulate_feedback(decision_with, "visual-detail", rng, driving_context=ctx)
+            == "accept"
+        )
+
+        rng = random.Random(0)
+        assert (
+            simulate_feedback({}, "visual-detail", rng, driving_context=ctx) == "ignore"
+        )
+
+
+def test_simulate_alignment_mixed():
+    """mixed 阶段 alignment=0.5，直通 ignore。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
+        rng = random.Random(0)
+        assert simulate_feedback({}, "mixed", rng, driving_context=ctx) == "ignore"
+
+
+def test_simulate_noise_flip():
+    """alignment=1.0 但 noise 触发时，结果可能为 ignore（用户误反馈）。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 1.0, "workload": "normal"}}
+        rng = random.Random(3)
+        expected = simulate_feedback(
+            {"should_remind": True}, "high-freq", rng, driving_context=ctx
+        )
+        assert expected == "ignore", f"应因噪声翻转为 ignore，实际为 {expected}"
+
+
+def test_simulate_noise_high_fatigue():
+    """high fatigue → noise > low fatigue，同 seed 下噪声表现不同。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=1.0,
+    ):
+        decision = {"should_remind": True}
+
+        rng_low = random.Random(1)
+        rng_high = random.Random(1)
+
+        result_low = simulate_feedback(
+            decision,
+            "high-freq",
+            rng_low,
+            driving_context={"driver": {"fatigue_level": 0.0, "workload": "normal"}},
+        )
+        result_high = simulate_feedback(
+            decision,
+            "high-freq",
+            rng_high,
+            driving_context={"driver": {"fatigue_level": 1.0, "workload": "normal"}},
+        )
+        assert result_low != result_high, "不同疲劳度下的噪声阈值应导致不同输出"
+
+
+def test_simulate_feedback_suppression_overloaded():
+    """overloaded workload → fb_prob 降低，更可能返回 None。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        decision = {"should_remind": True}
+
+        rng_normal = random.Random(5)
+        rng_overloaded = random.Random(5)
+
+        result_normal = simulate_feedback(
+            decision,
+            "high-freq",
+            rng_normal,
+            driving_context={"driver": {"fatigue_level": 0.0, "workload": "normal"}},
+        )
+        result_overloaded = simulate_feedback(
+            decision,
+            "high-freq",
+            rng_overloaded,
+            driving_context={
+                "driver": {"fatigue_level": 0.0, "workload": "overloaded"}
+            },
+        )
+        assert result_normal == "accept"
+        assert result_overloaded is None
+
+
+def test_simulate_feedback_suppression_high_fatigue():
+    """high fatigue → fb_prob 降低，更可能返回 None。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.7,
+    ):
+        decision = {"should_remind": True}
+
+        rng_low = random.Random(5)
+        rng_high = random.Random(5)
+
+        result_low = simulate_feedback(
+            decision,
+            "high-freq",
+            rng_low,
+            driving_context={"driver": {"fatigue_level": 0.0, "workload": "normal"}},
+        )
+        result_high = simulate_feedback(
+            decision,
+            "high-freq",
+            rng_high,
+            driving_context={"driver": {"fatigue_level": 0.8, "workload": "normal"}},
+        )
+        assert result_low == "accept"
+        assert result_high is None
+
+
+def test_simulate_no_driving_context():
+    """driving_context=None 不应抛异常，回退默认值。"""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    rng = random.Random(0)
+    result = simulate_feedback({"should_remind": True}, "high-freq", rng)
+    assert result in ("accept", "ignore", None)
