@@ -31,7 +31,7 @@ class PendingReminder:
     id: str
     event_id: str
     content: dict[str, object]  # MultiFormatContent.model_dump()
-    trigger_type: str  # "location" | "time" | "context"
+    trigger_type: str  # "location" | "time" | "context" | "state" | "periodic"
     trigger_target: dict[str, object]
     trigger_text: str  # 人类可读触发条件
     status: str  # "pending" | "triggered" | "cancelled"
@@ -193,6 +193,11 @@ class PendingReminderManager:
                         trigger_type == "context"
                         and self._check_context(r, driving_context)
                     )
+                    or (
+                        trigger_type == "state"
+                        and self._check_state(r, driving_context)
+                    )
+                    or (trigger_type == "periodic" and self._check_periodic(r))
                 ):
                     r["status"] = "triggered"
                     triggered.append(r)
@@ -260,6 +265,16 @@ class PendingReminderManager:
         prev = target.get("previous_scenario", "")
         current = ctx.get("scenario", "")
         return bool(prev) and bool(current) and prev != current
+
+    @staticmethod
+    def _check_state(reminder: dict, ctx: dict) -> bool:
+        """State 触发：当前 fatigue/workload 匹配记忆条件。暂未实现。"""
+        return False
+
+    @staticmethod
+    def _check_periodic(reminder: dict) -> bool:
+        """Periodic 触发：当前时间匹配周期性窗口。暂未实现。"""
+        return False
 
 
 def parse_duration(s: str) -> int | None:

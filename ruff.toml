@@ -57,6 +57,7 @@ exclude = [".agents/**"]
 
 "app/agents/pending.py" = [
     "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
+    "ARG004",  # _check_state/_check_periodic 接收参数为后续实现预留
 ]
 "app/agents/rules.py" = [
     "C901",  # postprocess_decision 含三约束分支+修改追踪，复杂度可接受
