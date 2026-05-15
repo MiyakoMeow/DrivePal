@@ -64,9 +64,15 @@ class WSManager:
             else:
                 self._conns.pop(user_id, None)
 
-    async def send_to(self, ws: WebSocket, message: dict) -> None:
-        """向单个连接发送消息."""
-        await ws.send_json(message)
+    async def send_to(self, ws: WebSocket, message: dict) -> bool:
+        """向单个连接发送消息。发送失败时 log 并返 False。"""
+        try:
+            await ws.send_json(message)
+        except Exception:
+            logger.debug("WS send_to failed")
+            return False
+        else:
+            return True
 
 
 ws_manager = WSManager()

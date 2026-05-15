@@ -15,13 +15,14 @@ from app.models.embedding import (
     reset_embedding_singleton,
 )
 from app.models.settings import LLMProviderConfig, LLMSettings
-from tests.fixtures import reset_all_singletons
+from tests.fixtures import (
+    MODULES_WITH_DATA_DIR,
+    MODULES_WITH_DATA_ROOT,
+    reset_all_singletons,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-
-_MODULES_WITH_DATA_DIR = ["app.config", "app.api.main", "app.memory.singleton"]
-_MODULES_WITH_DATA_ROOT = ["app.config"]
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -126,9 +127,9 @@ def app_client(
     monkeypatch.setenv("DATA_DIR", str(data_dir))
     target = Path(data_dir)
     with ExitStack() as stack:
-        for mod in _MODULES_WITH_DATA_DIR:
+        for mod in MODULES_WITH_DATA_DIR:
             stack.enter_context(patch(f"{mod}.DATA_DIR", target))
-        for mod in _MODULES_WITH_DATA_ROOT:
+        for mod in MODULES_WITH_DATA_ROOT:
             stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
         reset_all_singletons()
         with TestClient(app) as c:

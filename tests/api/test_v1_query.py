@@ -59,7 +59,7 @@ def test_query_with_context(app_client: TestClient) -> None:
 
 
 def test_query_chat_model_unavailable(app_client: TestClient) -> None:
-    """POST /api/v1/query LLM不可用时返回503."""
+    """POST /api/v1/query LLM不可用时返回500."""
     from app.agents.workflow import ChatModelUnavailableError
 
     with (
@@ -75,9 +75,9 @@ def test_query_chat_model_unavailable(app_client: TestClient) -> None:
             json={"query": "测试"},
             headers={"X-User-Id": "alice"},
         )
-        assert resp.status_code == 503
+        assert resp.status_code == 500
         body = resp.json()
-        assert body["error"]["code"] == "STORAGE_ERROR"
+        assert body["error"]["code"] == "INTERNAL_ERROR"
         assert body["error"]["message"] == "AI model unavailable"
 
 

@@ -46,9 +46,8 @@ async def process_query(
         )
     except ChatModelUnavailableError as e:
         raise AppError(
-            AppErrorCode.STORAGE_ERROR,
+            AppErrorCode.INTERNAL_ERROR,
             "AI model unavailable",
-            503,
         ) from e
     except AppError:
         raise

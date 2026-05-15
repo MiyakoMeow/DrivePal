@@ -82,12 +82,26 @@ async def _handle_query(ws: WebSocket, user_id: str, payload: dict) -> None:
     context_raw = payload.get("context")
     session_id = payload.get("session_id")
 
-    mm = get_memory_module()
-    workflow = AgentWorkflow(
-        data_dir=DATA_DIR,
-        memory_module=mm,
-        current_user=user_id,
-    )
+    try:
+        mm = get_memory_module()
+        workflow = AgentWorkflow(
+            data_dir=DATA_DIR,
+            memory_module=mm,
+            current_user=user_id,
+        )
+    except Exception:
+        logger.exception("WS workflow init failed")
+        await ws_manager.send_to(
+            ws,
+            {
+                "type": "error",
+                "payload": {
+                    "code": "QUERY_FAILED",
+                    "message": "Query initialization failed",
+                },
+            },
+        )
+        return
 
     try:
         async for event in workflow.run_stream(

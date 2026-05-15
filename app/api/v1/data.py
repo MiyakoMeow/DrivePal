@@ -38,7 +38,11 @@ async def get_history(
     """查询历史记忆事件."""
     limit = max(1, min(limit, 100))
     user_id = request.state.user_id
-    mm = get_memory_module()
+    try:
+        mm = get_memory_module()
+    except Exception as e:
+        logger.exception("get_memory_module failed in get_history")
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
     events = await safe_memory_call(
         mm.get_history(limit=limit, mode=MemoryMode.MEMORY_BANK, user_id=user_id),
         "get_history",
@@ -67,16 +71,20 @@ async def export_data(
         return ExportDataResponse(files=files)
 
     allowed = _allowed_suffixes(export_type)
-    for fpath in u_dir.rglob("*"):
-        if "memorybank" in fpath.parts or fpath.suffix not in allowed:
-            continue
-        if fpath.is_file():
-            try:
-                content = fpath.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
+    try:
+        for fpath in u_dir.rglob("*"):
+            if "memorybank" in fpath.parts or fpath.suffix not in allowed:
                 continue
-            rel = str(fpath.relative_to(u_dir))
-            files[rel] = content
+            if fpath.is_file():
+                try:
+                    content = fpath.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                rel = str(fpath.relative_to(u_dir))
+                files[rel] = content
+    except OSError as e:
+        logger.warning("Failed to export data: %s", e)
+        raise AppError(AppErrorCode.STORAGE_ERROR, "Failed to export user data") from e
     return ExportDataResponse(files=files)
 
 

@@ -11,7 +11,11 @@ from fastapi.testclient import TestClient
 from starlette.responses import PlainTextResponse
 
 from app.api.middleware import UserIdentityMiddleware
-from tests.fixtures import reset_all_singletons
+from tests.fixtures import (
+    MODULES_WITH_DATA_DIR,
+    MODULES_WITH_DATA_ROOT,
+    reset_all_singletons,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -29,10 +33,6 @@ def _make_app() -> FastAPI:
     return api
 
 
-_MODULES_WITH_DATA_DIR = ["app.config", "app.api.main", "app.memory.singleton"]
-_MODULES_WITH_DATA_ROOT = ["app.config"]
-
-
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient]:
     """提供带 UserIdentityMiddleware 的 TestClient."""
@@ -40,9 +40,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     monkeypatch.setenv("DATA_DIR", str(data_dir))
     target = Path(data_dir)
     with ExitStack() as stack:
-        for mod in _MODULES_WITH_DATA_DIR:
+        for mod in MODULES_WITH_DATA_DIR:
             stack.enter_context(patch(f"{mod}.DATA_DIR", target))
-        for mod in _MODULES_WITH_DATA_ROOT:
+        for mod in MODULES_WITH_DATA_ROOT:
             stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
         reset_all_singletons()
         with TestClient(_make_app()) as c:

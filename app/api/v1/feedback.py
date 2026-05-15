@@ -52,6 +52,9 @@ async def _handle_memory_feedback(
     )
 
     user_dir = user_data_dir(user_id)
+    # append_feedback 记录用户原始 action（如 modify），FeedbackData 记录 memory 映射后的 accept。
+    # 两处 action 不同是刻意的：feedback_log 用于策略权重聚合（modify 有独立 delta），
+    # memory 层统一视为 accept。
     await safe_memory_call(
         append_feedback(user_dir, req.event_id, req.action, actual_type),
         "feedback(append)",
@@ -105,6 +108,12 @@ async def _handle_snooze(req: FeedbackRequest, user_id: str) -> None:
             trigger_text="延后 5 分钟",
         ),
         "snooze(add_pending)",
+    )
+    # snooze 不影响策略权重，但记录用户行为以供后续分析
+    user_dir = user_data_dir(user_id)
+    await safe_memory_call(
+        append_feedback(user_dir, req.event_id, "snooze", actual_type),
+        "snooze(append_feedback)",
     )
 
 

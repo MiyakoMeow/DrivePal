@@ -57,6 +57,8 @@ async def aggregate_weights(user_dir: Path) -> dict[str, float]:
             delta = -0.1
         elif action == "modify":
             delta = 0.05
+        elif action == "snooze":
+            delta = 0.0
         else:
             logger.warning("Unknown action %r in feedback_log, skipping record", action)
             continue
