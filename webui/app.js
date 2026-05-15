@@ -411,3 +411,117 @@ setInterval(() => {
     const ws = state.getWs();
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
 }, 30000);
+
+// ===== 语音控制台 =====
+let _voicePollingTimer = null;
+let _voiceTranscriptionTimer = null;
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${tab}"]`).classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  document.getElementById(`panel-${tab}`).style.display = 'block';
+  document.getElementById(`panel-${tab}-right`).style.display = 'block';
+  if (tab === 'voice') {
+    startVoicePolling();
+    loadVoiceDevices();
+  } else {
+    stopVoicePolling();
+  }
+}
+
+function startVoicePolling() {
+  stopVoicePolling();
+  _voicePollingTimer = setInterval(pollVoiceStatus, 500);
+  _voiceTranscriptionTimer = setInterval(pollVoiceTranscriptions, 1000);
+  pollVoiceStatus();
+  pollVoiceTranscriptions();
+}
+
+function stopVoicePolling() {
+  if (_voicePollingTimer) { clearInterval(_voicePollingTimer); _voicePollingTimer = null; }
+  if (_voiceTranscriptionTimer) { clearInterval(_voiceTranscriptionTimer); _voiceTranscriptionTimer = null; }
+}
+
+async function pollVoiceStatus() {
+  try {
+    const data = await api('GET', '/api/v1/voice/status');
+    const running = data.running;
+    const btn = document.getElementById('voiceRecordBtn');
+    btn.textContent = running ? '■ 停止录音' : '● 开始录音';
+    btn.className = running ? 'btn btn-secondary btn-sm' : 'btn btn-success btn-sm';
+    document.getElementById('voiceStatusText').textContent = running ? '运行中' : '已停止';
+    const vadEl = document.getElementById('voiceVadIndicator');
+    const vadStatus = data.vad_status || 'idle';
+    vadEl.className = `vad-indicator ${vadStatus}`;
+    const labels = { idle: '⚪ 空闲', speech: '🟢 说话中', silence: '⚪ 静音' };
+    vadEl.textContent = labels[vadStatus] || `⚪ ${vadStatus}`;
+  } catch (e) { /* 静默 */ }
+}
+
+async function pollVoiceTranscriptions() {
+  try {
+    const items = await api('GET', '/api/v1/voice/transcriptions?limit=10');
+    if (!items || items.length === 0) return;
+    const area = document.getElementById('voiceTranscriptionArea');
+    area.innerHTML = items.slice(-3).reverse().map(t =>
+      `<div class="transcription-item"><span class="trans-text">${escapeHtml(t.text)}</span><span class="trans-time">${new Date(t.timestamp).toLocaleTimeString()}</span></div>`
+    ).join('');
+    const history = document.getElementById('voiceHistoryList');
+    history.innerHTML = items.slice().reverse().map(t =>
+      `<div class="history-item"><span class="meta">${new Date(t.timestamp).toLocaleString()}</span> ${escapeHtml(t.text)}</div>`
+    ).join('');
+    area.scrollTop = area.scrollHeight;
+  } catch (e) { /* 静默 */ }
+}
+
+async function toggleVoiceRecording() {
+  try {
+    const data = await api('GET', '/api/v1/voice/status');
+    if (data.running) {
+      await api('POST', '/api/v1/voice/stop');
+    } else {
+      await api('POST', '/api/v1/voice/start');
+    }
+    pollVoiceStatus();
+  } catch (e) {
+    showToast('录音控制失败: ' + e.message, 'error');
+  }
+}
+
+async function loadVoiceDevices() {
+  try {
+    const devices = await api('GET', '/api/v1/voice/devices');
+    const sel = document.getElementById('voiceDeviceSelect');
+    sel.innerHTML = '<option value="">-- 选择设备 --</option>';
+    devices.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.index;
+      opt.textContent = `${d.name} (${d.channels} ch)`;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    document.getElementById('voiceDeviceSelect').innerHTML = '<option value="">设备加载失败</option>';
+  }
+}
+
+async function changeVoiceDevice(index) {
+  if (!index) return;
+  try {
+    await api('PUT', '/api/v1/voice/config', { device_index: parseInt(index) });
+    showToast('设备已切换，请重新开始录音', 'info');
+  } catch (e) {
+    showToast('设备切换失败: ' + e.message, 'error');
+  }
+}
+
+async function applyVoiceConfig() {
+  const vadMode = parseInt(document.getElementById('voiceVadMode').value);
+  const minConf = parseFloat(document.getElementById('voiceMinConfidence').value);
+  try {
+    await api('PUT', '/api/v1/voice/config', { vad_mode: vadMode, min_confidence: minConf });
+    showToast('配置已应用', 'success');
+  } catch (e) {
+    showToast('配置应用失败: ' + e.message, 'error');
+  }
+}
