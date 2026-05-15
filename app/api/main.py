@@ -56,10 +56,41 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 logger.exception("Periodic conversation cleanup failed")
 
     cleanup_task = asyncio.create_task(_periodic_cleanup())
+
+    # 主动调度器
+    from app.agents.workflow import AgentWorkflow
+    from app.api.v1.ws_manager import ws_manager as ws_mgr
+    from app.memory.singleton import get_memory_module
+    from app.scheduler import ProactiveScheduler
+
+    _schedulers: dict[str, ProactiveScheduler] = {}
+
+    async def _init_scheduler(user_id: str) -> ProactiveScheduler:
+        wf = AgentWorkflow(current_user=user_id)
+        mm = get_memory_module()
+        sched = ProactiveScheduler(
+            workflow=wf,
+            memory_module=mm,
+            user_id=user_id,
+            ws_manager=ws_mgr,
+        )
+        await sched.start()
+        _schedulers[user_id] = sched
+        return sched
+
+    try:
+        await _init_scheduler("default")
+        logger.info("ProactiveScheduler started for default user")
+    except Exception as e:
+        logger.warning("Failed to start scheduler: %s", e)
+
     yield
     cleanup_task.cancel()
     with suppress(asyncio.CancelledError):
         await cleanup_task
+    for uid, sched in _schedulers.items():
+        await sched.stop()
+        logger.info("Scheduler stopped for %s", uid)
     mm = _memory_module_state[0]
     if mm is not None:
         await mm.close()

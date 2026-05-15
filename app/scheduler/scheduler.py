@@ -17,6 +17,7 @@ from app.scheduler.trigger_evaluator import TriggerEvaluator, TriggerSignal
 
 if TYPE_CHECKING:
     from app.agents.workflow import AgentWorkflow
+    from app.api.v1.ws_manager import WSManager
     from app.memory.memory import MemoryModule
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class ProactiveScheduler:
         user_id: str = "default",
         tick_interval: float = 15.0,
         debounce_seconds: float = 30.0,
+        ws_manager: WSManager | None = None,
     ) -> None:
         """初始化 ProactiveScheduler。
 
@@ -44,6 +46,7 @@ class ProactiveScheduler:
             user_id: 目标用户 ID。
             tick_interval: 轮询间隔（秒）。
             debounce_seconds: 去抖间隔（秒）。
+            ws_manager: WebSocket 管理器实例，用于广播主动提醒。
 
         """
         self._workflow = workflow
@@ -51,6 +54,7 @@ class ProactiveScheduler:
         self._context_monitor = ContextMonitor()
         self._trigger_evaluator = TriggerEvaluator(debounce_seconds)
         self._tick_interval = tick_interval
+        self._ws_manager = ws_manager
         self._task: asyncio.Task | None = None
         self._running = False
         self._voice_queue: asyncio.Queue[str] = asyncio.Queue()
@@ -151,6 +155,15 @@ class ProactiveScheduler:
                             result,
                             event_id,
                         )
+                        if self._ws_manager:
+                            await self._ws_manager.broadcast_reminder(
+                                self._workflow.current_user,
+                                {
+                                    "content": {"speakable_text": result or ""},
+                                    "trigger_source": sig.source,
+                                    "interrupt_level": decision.interrupt_level,
+                                },
+                            )
                 except (OSError, RuntimeError, ValueError, TypeError) as e:
                     logger.warning("proactive_run failed for %s: %s", sig.source, e)
 

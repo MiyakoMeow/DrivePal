@@ -20,6 +20,14 @@ ignore = [
 exclude = [".agents/**"]
 
 [lint.per-file-ignores]
+"app/api/main.py" = [
+    "PLC0415",  # lifespan 内局部导入以避免循环导入
+    "BLE001",  # scheduler 启动失败应 log 继续，不终止 lifespan
+]
+"app/scheduler/scheduler.py" = [
+    "PLR0913",  # __init__ 参数多（依赖注入），功能聚合合理
+]
+
 "app/api/v1/ws_manager.py" = [
     "D107",  # __init__ docstring 由类 docstring 覆盖
     "SIM105",  # broadcast 中 suppress 不适用于 for 循环体内局部吞异常
