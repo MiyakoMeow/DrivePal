@@ -319,81 +319,90 @@ def _prepare_group_scenarios(
     *,
     seed: int,
 ) -> dict[str, list[Scenario]]:
-    """预采样：组间互斥 + 分层，避免同一场景进入多组实验。"""
+    """预采样：组间互斥 + 分层。安全组和架构组从 complex 池按比例分配。"""
     used_ids: set[str] = set()
     group_scenarios: dict[str, list[Scenario]] = {}
 
+    complex_pool = [
+        s
+        for s in all_scenarios
+        if s.synthesis_dims and classify_complexity(s.synthesis_dims)
+    ]
+    simple_pool = [
+        s
+        for s in all_scenarios
+        if not (s.synthesis_dims and classify_complexity(s.synthesis_dims))
+    ]
+
     if "safety" in groups_to_run:
+        safety_candidates = [s for s in complex_pool if s.safety_relevant]
+        n_safety = min(50, len(safety_candidates))
         group_scenarios["safety"] = sample_scenarios(
-            all_scenarios,
-            50,
-            safety_only=True,
+            safety_candidates,
+            n_safety,
             stratify_key=safety_stratum,
             min_per_stratum=1,
             seed=seed,
         )
-        used_ids |= {s.id for s in group_scenarios["safety"]}
+        chosen_ids = {s.id for s in group_scenarios["safety"]}
+        complex_pool = [s for s in complex_pool if s.id not in chosen_ids]
+        simple_pool = [s for s in simple_pool if s.id not in chosen_ids]
+        used_ids |= chosen_ids
 
     if "architecture" in groups_to_run:
-        remaining = [s for s in all_scenarios if s.id not in used_ids]
-        complex_scenarios = [
-            s
-            for s in remaining
-            if s.synthesis_dims and classify_complexity(s.synthesis_dims)
-        ]
-        simple_scenarios = [
-            s
-            for s in remaining
-            if not s.synthesis_dims or not classify_complexity(s.synthesis_dims)
-        ]
+        n_arch_complex = min(25, len(complex_pool))
+        n_arch_simple = min(50 - n_arch_complex, len(simple_pool))
 
-        n_complex = min(25, len(complex_scenarios))
-        n_simple = min(50 - n_complex, len(simple_scenarios))
-
-        sampled: list[Scenario] = []
-        if complex_scenarios and n_complex > 0:
-            sampled.extend(
+        arch_sampled: list[Scenario] = []
+        if complex_pool and n_arch_complex > 0:
+            arch_sampled.extend(
                 sample_scenarios(
-                    complex_scenarios,
-                    n_complex,
+                    complex_pool,
+                    n_arch_complex,
                     stratify_key=arch_stratum,
                     min_per_stratum=1,
                     seed=seed + 1,
                 )
             )
-        if simple_scenarios and n_simple > 0:
-            sampled.extend(
+        if simple_pool and n_arch_simple > 0:
+            arch_sampled.extend(
                 sample_scenarios(
-                    simple_scenarios,
-                    n_simple,
+                    simple_pool,
+                    n_arch_simple,
                     stratify_key=arch_stratum,
                     min_per_stratum=1,
                     seed=seed + 3,
                 )
             )
-        if not sampled:
+        chosen_ids = {s.id for s in arch_sampled}
+        complex_pool = [s for s in complex_pool if s.id not in chosen_ids]
+        simple_pool = [s for s in simple_pool if s.id not in chosen_ids]
+        if not arch_sampled:
             logger.warning("架构组无可用场景，跳过架构组实验。")
             group_scenarios["architecture"] = []
         else:
-            target_n = min(50, len(sampled))
-            if len(sampled) < 50:
+            target_n = min(50, len(arch_sampled))
+            if len(arch_sampled) < 50:
                 logger.warning(
                     "架构组可用场景仅 %d（不足 50），降级使用全部可用场景。",
-                    len(sampled),
+                    len(arch_sampled),
                 )
-            group_scenarios["architecture"] = sampled[:target_n]
+            group_scenarios["architecture"] = arch_sampled[:target_n]
             used_ids |= {s.id for s in group_scenarios["architecture"]}
 
     if "personalization" in groups_to_run:
-        group_scenarios["personalization"] = sample_scenarios(
-            all_scenarios,
-            32,
-            safety_only=False,
-            exclude_ids=used_ids,
-            stratify_key=pers_stratum,
-            min_per_stratum=2,
-            seed=seed + 2,
-        )
+        remaining = complex_pool + simple_pool
+        if not remaining:
+            logger.warning("无剩余场景，跳过个性化组实验。")
+            group_scenarios["personalization"] = []
+        else:
+            group_scenarios["personalization"] = sample_scenarios(
+                remaining,
+                min(32, len(remaining)),
+                stratify_key=pers_stratum,
+                min_per_stratum=2,
+                seed=seed + 2,
+            )
 
     return group_scenarios
 
