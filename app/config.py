@@ -54,15 +54,20 @@ def reset_config_root_cache() -> None:
 def ensure_config(path: Path, default_dict: dict) -> dict:
     """确保配置文件存在，缺失则从 default_dict 生成。返回 tomllib 解析结果。
 
-    权限不足时日志警告并尝试读取已有文件；读取失败时返回默认 dict 保证运行。
+    所有 I/O 异常均日志警告并返回默认 dict，不传播。
+    mkdir/PermissionError/读失败均不会影响调用方正常运行。
     """
     if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except (OSError, PermissionError) as e:
+            logger.warning("Cannot create config dir %s: %s", path.parent, e)
+            return dict(default_dict)
         try:
             with path.open("wb") as f:
                 tomli_w.dump(default_dict, f)
-        except PermissionError:
-            logger.warning("Permission denied writing %s, using defaults", path)
+        except (OSError, PermissionError) as e:
+            logger.warning("Cannot write %s: %s, using defaults", path, e)
     try:
         with path.open("rb") as f:
             return tomllib.load(f)

@@ -1,7 +1,6 @@
 """工具调用框架配置."""
 
 from dataclasses import asdict, dataclass, field
-from functools import cache
 
 from app.config import ensure_config, get_config_root
 
@@ -64,9 +63,12 @@ class ToolsConfig:
         }
 
     @classmethod
-    @cache
     def load(cls) -> ToolsConfig:
-        """加载 tools.toml，文件缺失则自动生成。结果缓存避免重复文件读取。"""
+        """加载 tools.toml，文件缺失则自动生成。
+
+        不缓存：许可瞬态 I/O 错误后自动恢复，防止错误的默认值被 pin 住。
+        文件仅 267 字节，重复读取的开销可忽略。
+        """
         path = get_config_root() / "tools.toml"
         raw = ensure_config(path, cls._toml_defaults())
         tools_data = raw.get("tools", {})

@@ -248,8 +248,11 @@ _RULES_TOML_DEFAULTS: dict = {
 
 
 _RULES_PATH: Path = get_config_root() / "rules.toml"
-# 首次导入时确保配置文件存在
-ensure_config(_RULES_PATH, _RULES_TOML_DEFAULTS)
+# 首次导入时确保配置文件存在。加载失败由 load_rules 内 _FALLBACK_RULES 兜底。
+try:
+    ensure_config(_RULES_PATH, _RULES_TOML_DEFAULTS)
+except (OSError, PermissionError) as e:
+    logger.warning("Cannot ensure rules config at import time: %s", e)
 SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
 
 
