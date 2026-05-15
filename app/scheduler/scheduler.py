@@ -7,7 +7,7 @@ import contextlib
 import copy
 import logging
 import tomllib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -181,7 +181,6 @@ class ProactiveScheduler:
 
         if self._enable_periodic_review:
             now_local = datetime.now().astimezone()
-            today_str = now_local.strftime("%Y-%m-%d")
             window_before = 60 - self._review_window_minutes
             in_window = (
                 now_local.hour == self._review_hour
@@ -190,11 +189,20 @@ class ProactiveScheduler:
                 now_local.hour == (self._review_hour - 1) % 24
                 and now_local.minute >= window_before
             )
-            if in_window and self._last_review_date != today_str:
-                self._last_review_date = today_str
-                signals.append(
-                    TriggerSignal(source="periodic", priority=0, context=ctx_copy)
-                )
+            if in_window:
+                # review 所在日去重；pre-window 跨午夜时（_review_hour=0, hour=23）
+                # 日期 +1 天，使同一 session 使用相同 key
+                session_key = now_local.strftime("%Y-%m-%d")
+                if (
+                    now_local.hour == (self._review_hour - 1) % 24
+                    and self._review_hour == 0
+                ):
+                    session_key = (now_local + timedelta(days=1)).strftime("%Y-%m-%d")
+                if self._last_review_date != session_key:
+                    self._last_review_date = session_key
+                    signals.append(
+                        TriggerSignal(source="periodic", priority=0, context=ctx_copy)
+                    )
 
         fatigue = ctx.get("driver", {}).get("fatigue_level", 0)
         workload = ctx.get("driver", {}).get("workload", "")
