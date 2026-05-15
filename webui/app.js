@@ -5,6 +5,8 @@ class AppState {
     #wsReconnectTimer = null;
     #pendingQuery = null;
     #reconnectAttempts = 0;
+    #voicePollTimer = null;
+    #voiceTranscriptionTimer = null;
 
     getCurrentEventId() { return this.#currentEventId; }
     setCurrentEventId(id) { this.#currentEventId = id; }
@@ -28,6 +30,11 @@ class AppState {
 
     getPendingQuery() { return this.#pendingQuery; }
     setPendingQuery(q) { this.#pendingQuery = q; }
+
+    getVoicePollTimer() { return this.#voicePollTimer; }
+    setVoicePollTimer(t) { this.#voicePollTimer = t; }
+    getVoiceTranscriptionTimer() { return this.#voiceTranscriptionTimer; }
+    setVoiceTranscriptionTimer(t) { this.#voiceTranscriptionTimer = t; }
 
     reset() {
         this.#currentEventId = null;
@@ -432,15 +439,17 @@ function switchTab(tab) {
 
 function startVoicePolling() {
   stopVoicePolling();
-  _voicePollingTimer = setInterval(pollVoiceStatus, 500);
-  _voiceTranscriptionTimer = setInterval(pollVoiceTranscriptions, 1000);
+  state.setVoicePollTimer(setInterval(pollVoiceStatus, 500));
+  state.setVoiceTranscriptionTimer(setInterval(pollVoiceTranscriptions, 1000));
   pollVoiceStatus();
   pollVoiceTranscriptions();
 }
 
 function stopVoicePolling() {
-  if (_voicePollingTimer) { clearInterval(_voicePollingTimer); _voicePollingTimer = null; }
-  if (_voiceTranscriptionTimer) { clearInterval(_voiceTranscriptionTimer); _voiceTranscriptionTimer = null; }
+  const pt = state.getVoicePollTimer();
+  if (pt) { clearInterval(pt); state.setVoicePollTimer(null); }
+  const tt = state.getVoiceTranscriptionTimer();
+  if (tt) { clearInterval(tt); state.setVoiceTranscriptionTimer(null); }
 }
 
 async function pollVoiceStatus() {
@@ -456,7 +465,14 @@ async function pollVoiceStatus() {
     vadEl.className = `vad-indicator ${vadStatus}`;
     const labels = { idle: '⚪ 空闲', speech: '🟢 说话中', silence: '⚪ 静音' };
     vadEl.textContent = labels[vadStatus] || `⚪ ${vadStatus}`;
-  } catch (e) { /* 静默 */ }
+    // 同步回读配置
+    const vadModeEl = document.getElementById('voiceVadMode');
+    const minConfEl = document.getElementById('voiceMinConfidence');
+    if (data.config) {
+      if (vadModeEl && data.config.vad_mode != null) vadModeEl.value = data.config.vad_mode;
+      if (minConfEl && data.config.min_confidence != null) minConfEl.value = data.config.min_confidence;
+    }
+  } catch (e) { console.warn('[Voice] status poll failed:', e.message); }
 }
 
 async function pollVoiceTranscriptions() {
@@ -472,7 +488,7 @@ async function pollVoiceTranscriptions() {
       `<div class="history-item"><span class="meta">${new Date(t.timestamp).toLocaleString()}</span> ${escapeHtml(t.text)}</div>`
     ).join('');
     area.scrollTop = area.scrollHeight;
-  } catch (e) { /* 静默 */ }
+  } catch (e) { console.warn('[Voice] transcriptions poll failed:', e.message); }
 }
 
 async function toggleVoiceRecording() {
@@ -508,7 +524,7 @@ async function loadVoiceDevices() {
 async function changeVoiceDevice(index) {
   if (!index) return;
   try {
-    await api('PUT', '/api/v1/voice/config', { device_index: parseInt(index) });
+    await api('PUT', '/api/v1/voice/config', { device_index: parseInt(index, 10) });
     showToast('设备已切换，请重新开始录音', 'info');
   } catch (e) {
     showToast('设备切换失败: ' + e.message, 'error');
