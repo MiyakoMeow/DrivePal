@@ -158,6 +158,23 @@ exclude = [".agents/**"]
     "ANN401",  # _safe_read_weights 接受 Any 输入做运行时类型校验（TOML 输出无固定类型）
 ]
 
+"experiments/vehicle_mem_bench/__init__.py" = ["D301"]  # 用法示例含反斜杠
+"experiments/vehicle_mem_bench/__main__.py" = [
+    "D301",     # 用法示例含反斜杠
+    "PLC0415",  # VehicleMemBench 跨项目导入需函数内执行
+    "BLE001",   # _resolve_default_model_config 宽捕获，config 加载失败不阻塞
+    "TRY300",   # 成功路径 return 在 try/except 后 else 块之外
+    "T201",     # CLI 进度用 print 输出，非生产日志
+]
+"experiments/vehicle_mem_bench/adapter.py" = [
+    "PLC0415",  # VehicleMemBench 跨项目导入需函数内执行
+    "BLE001",   # 跨线程宽捕获 Exception 合理（Worker 失败不中断 batch）
+    "TRY300",   # processor 成功/失败路径在 try/except/else/finally 中
+    "ANN401",   # format_search_results 接受外部队列异构结果
+    "S101",     # assert 缩小 _store 类型联合，ty checker 要求 Narrowing
+    "PLW0603",  # list 容器模拟 mutable global，替代 global 语句
+]
+
 "app/memory/memory_bank/lifecycle.py" = [
     "PLR0913",  # __init__ 参数≥6合理（含多个依赖注入）
     "BLE001",  # 后台摘要失败不阻塞主流程，宽捕获 Exception 合理
