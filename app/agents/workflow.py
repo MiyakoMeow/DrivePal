@@ -15,7 +15,6 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
-    field_validator,
 )
 
 from app.agents.conversation import _conversation_manager
@@ -128,59 +127,6 @@ class ContextOutput(BaseModel):
         validation_alias=AliasChoices("related_events", "events", "history"),
     )
     conversation_history: list | None = None
-
-
-class TaskOutput(BaseModel):
-    """Task Agent JSON 输出模型，extra forbid。
-
-    .. deprecated::
-        JointDecisionOutput 替代。保留供外部模块兼容导入，新代码勿用。
-
-    validation_alias 兜底 LLM 字段名漂移——不同模型/温度下可能产出
-    task_type / task_attribution 代替 type，events / event_list 代替 entities。
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: str = Field(
-        default="general",
-        validation_alias=AliasChoices("type", "task_type", "task_attribution"),
-    )
-    confidence: float = Field(
-        default=0.0,
-        validation_alias=AliasChoices("confidence", "conf"),
-    )
-    description: str = ""
-    entities: list = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("entities", "events", "event_list"),
-    )
-
-
-class StrategyOutput(BaseModel):
-    """Strategy Agent JSON 输出模型，extra forbid."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    should_remind: bool = True
-    timing: str = "now"
-    is_emergency: bool = False
-    target_time: str = ""
-    delay_seconds: int = 300
-    reminder_content: str | dict | None = ""
-    type: str = "general"
-    reason: str = ""
-    allowed_channels: list = []
-    action: str = ""
-    postpone: bool = False
-
-    @field_validator("reminder_content", mode="before")
-    @classmethod
-    def _normalize_reminder_content(cls, v: str | dict | None) -> str | dict:
-        """LLM 可能返回 null，归一化为空字符串。"""
-        if v is None:
-            return ""
-        return v
 
 
 class JointDecisionOutput(BaseModel):
@@ -320,22 +266,21 @@ class AgentWorkflow:
         )
 
     @staticmethod
-    def _format_constraints_hint(driving_context: dict | None) -> str:
-        """apply_rules → 自然语言约束提示."""
-        if not driving_context:
+    def _format_constraints_hint(rules_result: dict) -> str:
+        """从规则结果生成自然语言约束提示."""
+        if not rules_result:
             return ""
-        constraints = apply_rules(driving_context)
         hints: list[str] = []
-        channels = constraints.get("allowed_channels")
+        channels = rules_result.get("allowed_channels")
         if channels:
             ch_str = ", ".join(channels)
             hints.append(f"当前仅建议通过 {ch_str} 通道提醒。")
-        max_freq = constraints.get("max_frequency_minutes")
+        max_freq = rules_result.get("max_frequency_minutes")
         if max_freq is not None:
             hints.append(f"两次提醒建议至少间隔 {max_freq} 分钟。")
-        if constraints.get("only_urgent"):
+        if rules_result.get("only_urgent"):
             hints.append("当前仅紧急提醒适合发送。")
-        if constraints.get("postpone"):
+        if rules_result.get("postpone"):
             hints.append("当前应延后非紧急提醒。")
         return " ".join(hints)
 
@@ -383,7 +328,7 @@ class AgentWorkflow:
             )
             if events:
                 return [e.to_public() for e in events]
-        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
+        except AppError as e:
             logger.warning("Memory search failed: %s", e)
         return None
 
@@ -395,7 +340,7 @@ class AgentWorkflow:
                 user_id=self.current_user,
             )
             return [e.model_dump() for e in history]
-        except (OSError, ValueError, RuntimeError, TypeError, KeyError) as e:
+        except AppError as e:
             logger.warning("Memory get_history failed: %s", e)
             return []
 
@@ -492,7 +437,9 @@ class AgentWorkflow:
         driving_context = state.get("driving_context")
         stages = state.get("stages")
 
-        constraints_hint = self._format_constraints_hint(driving_context)
+        rules_result = apply_rules(driving_context) if driving_context else {}
+        state["rules_result"] = rules_result
+        constraints_hint = self._format_constraints_hint(rules_result)
         preference_hint = await self._format_preference_hint()
 
         prob_hint = ""
@@ -553,9 +500,8 @@ class AgentWorkflow:
             }
 
         # postpone 由规则引擎决定
-        if driving_context:
-            constraints = apply_rules(driving_context)
-            decision["postpone"] = constraints.get("postpone", False)
+        if rules_result:
+            decision["postpone"] = rules_result.get("postpone", False)
 
         if stages is not None:
             stages.task = task
@@ -570,12 +516,13 @@ class AgentWorkflow:
 
     async def _check_frequency_guard(
         self,
-        driving_ctx: dict | None,
+        state: AgentState,
     ) -> str | None:
         """检查频次约束，返回抑制消息或 None。"""
+        driving_ctx = state.get("driving_context")
         if not driving_ctx:
             return None
-        constraints = apply_rules(driving_ctx)
+        constraints = state.get("rules_result") or {}
         max_freq = constraints.get("max_frequency_minutes")
         if max_freq is None:
             return None
@@ -596,172 +543,136 @@ class AgentWorkflow:
                 return f"提醒已抑制：距上次提醒不足 {max_freq} 分钟"
         return None
 
-    async def _execution_node(self, state: AgentState) -> dict:
-        decision = state.get("decision") or {}
-        stages = state.get("stages")
-
-        # --- 快捷指令 action 处理 ---
-        action = decision.get("action", "")
-        if action == "cancel_last":
-            pm = PendingReminderManager(user_data_dir(self.current_user))
-            cancelled = await pm.cancel_last()
-            result = "提醒已取消" if cancelled else "暂无待取消的提醒"
-            if stages is not None:
-                stages.execution = {
-                    "content": None,
-                    "event_id": None,
-                    "result": result,
-                    "cancelled": cancelled,
-                }
-            return {
-                "result": result,
-                "event_id": None,
-                "action_result": {"cancelled": cancelled},
-            }
-
-        # 规则硬约束：LLM 决策后强制覆盖，不可绕过
-        driving_ctx = state.get("driving_context")
-        modifications: list[str] = []
-        if driving_ctx:
-            if decision.get("_postprocessed"):
-                modifications = []
-            else:
-                decision, modifications = postprocess_decision(decision, driving_ctx)
-
-        # 同步 stages.decision 为 post-postprocess 版本——
-        # 消融实验通过 stages.decision 读取最终决策送 Judge 评分，
-        # 若不同步则 Full 流水线送 pre-postprocess（含违规）而 SingleLLM 送 post-postprocess，
-        # 造成不公平比较。
+    async def _handle_cancel(
+        self,
+        state: AgentState,
+        stages: WorkflowStages | None,
+    ) -> dict:
+        pm = PendingReminderManager(user_data_dir(self.current_user))
+        cancelled = await pm.cancel_last()
+        result = "提醒已取消" if cancelled else "暂无待取消的提醒"
         if stages is not None:
-            stages.decision = decision
-
-        # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
-        if not decision.get("should_remind", True):
-            result = "提醒已取消：安全规则禁止发送"
-            if stages is not None:
-                stages.execution = {
-                    "content": None,
-                    "event_id": None,
-                    "result": result,
-                    "modifications": modifications,
-                }
-            return {"result": result, "event_id": None}
-
-        # --- 工具调用处理（在规则后处理、should_remind 检查之后，避免未审核副作用）---
-        tool_calls = decision.get("tool_calls", [])
-        if tool_calls and isinstance(tool_calls, list):
-            executor = get_default_executor()
-            tool_results: list[str] = []
-            for tc in tool_calls:
-                if isinstance(tc, dict):
-                    t_name = tc.get("tool", "")
-                    t_params = tc.get("params", {})
-                    try:
-                        t_result = await executor.execute(t_name, t_params)
-                        tool_results.append(f"[{t_name}] {t_result}")
-                    except Exception as e:
-                        tool_results.append(f"[{t_name}] 失败: {e}")
-            if tool_results:
-                logger.info("Tool call results: %s", "; ".join(tool_results))
-
-        postpone = decision.get("postpone", False)
-        timing = decision.get("timing", "")
-
-        # 延迟 / 位置触发 → 创建 PendingReminder
-        if postpone or timing in ("delay", "location", "location_time"):
-            output_router = OutputRouter()
-            rules_result = {}
-            if driving_ctx:
-                rules_result = apply_rules(driving_ctx)
-            output_content = output_router.route(decision, rules_result)
-
-            pm = PendingReminderManager(user_data_dir(self.current_user))
-            trigger_type, trigger_target, trigger_text = _map_pending_trigger(
-                decision, driving_ctx
-            )
-            pending_ids: list[str] = []
-
-            if trigger_type == "location_time":
-                loc_target = trigger_target.get("location", {})
-                time_target = trigger_target.get("time", "")
-                if (
-                    loc_target.get("latitude") is not None
-                    and loc_target.get("longitude") is not None
-                ):
-                    pr1 = await pm.add(
-                        content=output_content,
-                        trigger_type="location",
-                        trigger_target=loc_target,
-                        event_id="",
-                        trigger_text="到达目的地时",
-                    )
-                    pending_ids.append(pr1.id)
-                if time_target:
-                    pr2 = await pm.add(
-                        content=output_content,
-                        trigger_type="time",
-                        trigger_target={"time": time_target},
-                        event_id="",
-                        trigger_text=f"{_format_time_for_display(time_target)} 时",
-                    )
-                    pending_ids.append(pr2.id)
-            else:
-                pr = await pm.add(
-                    content=output_content,
-                    trigger_type=trigger_type,
-                    trigger_target=trigger_target,
-                    event_id="",
-                    trigger_text=trigger_text,
-                )
-                pending_ids = [pr.id]
-
-            reason = decision.get("reason", "")
-            result = (
-                f"提醒已延后：{reason}。将在条件满足时提醒"
-                if reason
-                else "提醒已延后，将在条件满足时提醒"
-            )
-            if stages is not None:
-                stages.execution = {
-                    "content": None,
-                    "event_id": None,
-                    "result": result,
-                    "pending_reminder_ids": pending_ids,
-                    "modifications": modifications,
-                }
-            return {
-                "result": result,
+            stages.execution = {
+                "content": None,
                 "event_id": None,
-                "output_content": output_content.model_dump(),
-                "pending_reminder_id": pending_ids[0] if pending_ids else None,
+                "result": result,
+                "cancelled": cancelled,
             }
+        return {
+            "result": result,
+            "event_id": None,
+            "action_result": {"cancelled": cancelled},
+        }
 
-        # 频次约束检查
-        freq_msg = await self._check_frequency_guard(driving_ctx)
-        if freq_msg is not None:
-            if stages is not None:
-                stages.execution = {
-                    "content": None,
-                    "event_id": None,
-                    "result": freq_msg,
-                    "modifications": modifications,
-                }
-            return {"result": freq_msg, "event_id": None}
+    async def _handle_tool_calls(self, decision: dict) -> None:
+        tool_calls = decision.get("tool_calls", [])
+        if not tool_calls or not isinstance(tool_calls, list):
+            return
+        executor = get_default_executor()
+        tool_results: list[str] = []
+        for tc in tool_calls:
+            if isinstance(tc, dict):
+                t_name = tc.get("tool", "")
+                t_params = tc.get("params", {})
+                try:
+                    t_result = await executor.execute(t_name, t_params)
+                    tool_results.append(f"[{t_name}] {t_result}")
+                except Exception as e:
+                    tool_results.append(f"[{t_name}] 失败: {e}")
+        if tool_results:
+            logger.info("Tool call results: %s", "; ".join(tool_results))
 
+    async def _handle_postpone(
+        self,
+        decision: dict,
+        state: AgentState,
+        driving_ctx: dict | None,
+        rules_result: dict,
+        modifications: list[str],
+        stages: WorkflowStages | None,
+    ) -> dict:
+        output_router = OutputRouter()
+        output_content = output_router.route(decision, rules_result)
+
+        pm = PendingReminderManager(user_data_dir(self.current_user))
+        trigger_type, trigger_target, trigger_text = _map_pending_trigger(
+            decision, driving_ctx
+        )
+        pending_ids: list[str] = []
+
+        if trigger_type == "location_time":
+            loc_target = trigger_target.get("location", {})
+            time_target = trigger_target.get("time", "")
+            if (
+                loc_target.get("latitude") is not None
+                and loc_target.get("longitude") is not None
+            ):
+                pr1 = await pm.add(
+                    content=output_content,
+                    trigger_type="location",
+                    trigger_target=loc_target,
+                    event_id="",
+                    trigger_text="到达目的地时",
+                )
+                pending_ids.append(pr1.id)
+            if time_target:
+                pr2 = await pm.add(
+                    content=output_content,
+                    trigger_type="time",
+                    trigger_target={"time": time_target},
+                    event_id="",
+                    trigger_text=f"{_format_time_for_display(time_target)} 时",
+                )
+                pending_ids.append(pr2.id)
+        else:
+            pr = await pm.add(
+                content=output_content,
+                trigger_type=trigger_type,
+                trigger_target=trigger_target,
+                event_id="",
+                trigger_text=trigger_text,
+            )
+            pending_ids = [pr.id]
+
+        reason = decision.get("reason", "")
+        result = (
+            f"提醒已延后：{reason}。将在条件满足时提醒"
+            if reason
+            else "提醒已延后，将在条件满足时提醒"
+        )
+        if stages is not None:
+            stages.execution = {
+                "content": None,
+                "event_id": None,
+                "result": result,
+                "pending_reminder_ids": pending_ids,
+                "modifications": modifications,
+            }
+        return {
+            "result": result,
+            "event_id": None,
+            "output_content": output_content.model_dump(),
+            "pending_reminder_id": pending_ids[0] if pending_ids else None,
+        }
+
+    async def _handle_immediate_send(
+        self,
+        decision: dict,
+        state: AgentState,
+        driving_ctx: dict | None,
+        rules_result: dict,
+        modifications: list[str],
+        stages: WorkflowStages | None,
+    ) -> dict:
         content = self._extract_content(decision)
         original_query = state.get("original_query", "")
 
-        # --- 多格式输出路由 ---
         output_router = OutputRouter()
-        rules_result = {}
-        if driving_ctx:
-            rules_result = apply_rules(driving_ctx)
         output_content = output_router.route(decision, rules_result)
 
-        # 隐私脱敏：写入前脱敏 driving_ctx 中的位置信息
         safe_ctx = sanitize_context(driving_ctx) if driving_ctx else None
         if safe_ctx is not None and stages is not None:
-            stages.context = safe_ctx  # 更新 stages 中上下文为脱敏版本
+            stages.context = safe_ctx
 
         interaction_result = await self.memory_module.write_interaction(
             original_query,
@@ -790,6 +701,69 @@ class AgentWorkflow:
             "event_id": event_id,
             "output_content": output_content.model_dump(),
         }
+
+    async def _execution_node(self, state: AgentState) -> dict:
+        decision = state.get("decision") or {}
+        stages = state.get("stages")
+
+        action = decision.get("action", "")
+        if action == "cancel_last":
+            return await self._handle_cancel(state, stages)
+
+        driving_ctx = state.get("driving_context")
+        modifications: list[str] = []
+        if driving_ctx:
+            if decision.get("_postprocessed"):
+                modifications = []
+            else:
+                decision, modifications = postprocess_decision(decision, driving_ctx)
+
+        # 同步 stages.decision 为 post-postprocess 版本——
+        # 消融实验通过 stages.decision 读取最终决策送 Judge 评分，
+        # 若不同步则 Full 流水线送 pre-postprocess（含违规）而 SingleLLM 送 post-postprocess，
+        # 造成不公平比较。
+        if stages is not None:
+            stages.decision = decision
+
+        if not decision.get("should_remind", True):
+            result = "提醒已取消：安全规则禁止发送"
+            if stages is not None:
+                stages.execution = {
+                    "content": None,
+                    "event_id": None,
+                    "result": result,
+                    "modifications": modifications,
+                }
+            return {"result": result, "event_id": None}
+
+        await self._handle_tool_calls(decision)
+
+        rules_result = state.get("rules_result") or (
+            apply_rules(driving_ctx) if driving_ctx else {}
+        )
+
+        postpone = decision.get("postpone", False)
+        timing = decision.get("timing", "")
+
+        if postpone or timing in ("delay", "location", "location_time"):
+            return await self._handle_postpone(
+                decision, state, driving_ctx, rules_result, modifications, stages
+            )
+
+        freq_msg = await self._check_frequency_guard(state)
+        if freq_msg is not None:
+            if stages is not None:
+                stages.execution = {
+                    "content": None,
+                    "event_id": None,
+                    "result": freq_msg,
+                    "modifications": modifications,
+                }
+            return {"result": freq_msg, "event_id": None}
+
+        return await self._handle_immediate_send(
+            decision, state, driving_ctx, rules_result, modifications, stages
+        )
 
     async def run_with_stages(
         self,
@@ -892,7 +866,8 @@ class AgentWorkflow:
                 logger.warning("proactive_run context_node failed: %s", e)
                 return "主动模式不可用：无法获取上下文", None, stages
 
-        constraints_hint = self._format_constraints_hint(context_override)
+        rules_result = apply_rules(context_override) if context_override else {}
+        constraints_hint = self._format_constraints_hint(rules_result)
         preference_hint = await self._format_preference_hint()
 
         prompt = PROACTIVE_JOINT_DECISION_PROMPT.format(

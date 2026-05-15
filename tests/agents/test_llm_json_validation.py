@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import ValidationError
 
+from app.agents.rules import apply_rules
 from app.agents.workflow import (
     AgentWorkflow,
     ContextOutput,
     JointDecisionOutput,
     LLMJsonResponse,
-    StrategyOutput,
 )
 
 
@@ -122,30 +122,14 @@ class TestJointDecisionOutput:
             pass
 
 
-class TestStrategyOutput:
-    def test_valid_minimal(self):
-        """最小合法输入，使用默认值。"""
-        obj = StrategyOutput()
-        assert obj.should_remind is True
-        assert obj.timing == "now"
-        assert obj.delay_seconds == 300
-        assert obj.postpone is False
-
-    def test_extra_rejected(self):
-        """含额外字段 → ValidationError。"""
-        data = {"should_remind": True, "unknown": "x"}
-        try:
-            StrategyOutput.model_validate(data)
-            pytest.fail("应抛 ValidationError")
-        except ValidationError:
-            pass
-
-
 class TestWorkflowValidationPath:
     @pytest.mark.asyncio
     async def test_context_node_validation_success(self, tmp_path):
         """LLM 返回合法 JSON 时走 validate 分支，不抛异常。"""
-        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+        mm = MagicMock()
+        mm.search = AsyncMock(return_value=[])
+        mm.get_history = AsyncMock(return_value=[])
+        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=mm)
         workflow._call_llm_json = AsyncMock(
             return_value=LLMJsonResponse(
                 raw='{"scenario":"highway","driver_state":{},'
@@ -221,16 +205,16 @@ class TestWorkflowValidationPath:
 class TestFormatConstraintsHint:
     """_format_constraints_hint 纯单元测试。"""
 
-    def test_none_context(self):
-        assert AgentWorkflow._format_constraints_hint(None) == ""
+    def test_none_rules_result(self):
+        assert AgentWorkflow._format_constraints_hint({}) == ""
 
-    def test_empty_context(self):
+    def test_empty_rules_result(self):
         assert AgentWorkflow._format_constraints_hint({}) == ""
 
     def test_parked_allows_visual(self):
         """parked → allowed_channels 含 visual/audio/detailed。"""
-        # _format_constraints_hint 内调 apply_rules，为真实逻辑路径
-        result = AgentWorkflow._format_constraints_hint({"scenario": "parked"})
+        rules_result = apply_rules({"scenario": "parked"})
+        result = AgentWorkflow._format_constraints_hint(rules_result)
         assert "通道" in result
 
 
