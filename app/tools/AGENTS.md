@@ -1,0 +1,112 @@
+# 工具调用框架
+
+`app/tools/` — 结构化工具定义、注册、执行。JointDecision LLM 输出 `tool_calls` 字段时触发。
+
+## 架构
+
+```mermaid
+flowchart LR
+    LLM["JointDecision LLM"] -->|tool_calls| EXEC["_execution_node"]
+    EXEC --> TE["ToolExecutor"]
+    TE --> REG["ToolRegistry"]
+    REG --> NAV["set_navigation"]
+    REG --> MEM["query_memory"]
+    REG --> SND["send_message"]
+    REG --> CLI["set_climate"]
+    REG --> MED["play_media"]
+```
+
+## 组件
+
+| 文件 | 类/函数 | 职责 |
+|------|---------|------|
+| `registry.py` | `ToolRegistry` | 注册/发现/描述工具 |
+| `registry.py` | `ToolSpec` | 工具规范 dataclass（name/description/input_schema/handler） |
+| `registry.py` | `ToolHandler` | `Callable[[dict], Awaitable[str]]` 类型 |
+| `executor.py` | `ToolExecutor` | 参数校验 → handler 执行 → 结果文本 |
+| `executor.py` | `ToolExecutionError` | 执行异常 |
+| `__init__.py` | `get_default_executor()` | 默认单例 executor（注册全部内置工具） |
+| `tools/navigation.py` | `navigate_to` | 导航目的地设置 |
+| `tools/communication.py` | `send_message` | 消息发送 |
+| `tools/vehicle.py` | `set_climate` / `play_media` | 车控预留（返回"未接入"）|
+| `tools/memory_query.py` | `query_memory` | 记忆查询（使用单例 MemoryModule）|
+
+## ToolSpec
+
+```python
+@dataclass
+class ToolSpec:
+    name: str                      # 唯一工具名
+    description: str               # LLM 用描述
+    input_schema: dict[str, Any]   # JSON Schema
+    handler: ToolHandler           # async (dict) → str
+```
+
+## ToolRegistry
+
+- `register(spec)` — 注册，重复名抛 `ValueError`
+- `get(name)` — 按名查找
+- `list_tools()` — 列出全部
+- `to_llm_description()` — 格式化工具清单供 LLM prompt
+
+## 内置工具
+
+| 工具 | 参数 | 返回 |
+|------|------|------|
+| `set_navigation` | `destination: str` | `"导航已设置：{dest}"` |
+| `send_message` | `recipient: str`, `message: str(max 200)` | `"消息已发送给 {r}"` |
+| `query_memory` | `query: str` | top-3 记忆内容 |
+| `set_climate` | `temperature: number(16-32)` | `"车控功能尚未接入"` |
+| `play_media` | `name: str`, `type: music\|podcast` | `"媒体功能尚未接入"` |
+
+### query_memory
+
+- 使用 `get_memory_module()` 单例获取 MemoryModule
+- `top_k=3` 硬编码（当前未读 config）
+- 失败返回 `"记忆查询失败"`（不抛异常）
+
+## Execution 节点集成
+
+`app/agents/workflow.py` `_execution_node` 中，`cancel_last` 处理后、规则后处理前：
+
+```python
+tool_calls = decision.get("tool_calls", [])
+if tool_calls and isinstance(tool_calls, list):
+    executor = get_default_executor()
+    for tc in tool_calls:
+        t_name = tc.get("tool", "")
+        t_params = tc.get("params", {})
+        t_result = await executor.execute(t_name, t_params)
+        tool_results.append(f"[{t_name}] {t_result}")
+```
+
+结果仅 log，不写回 state——工具调用的副作用（导航设置/消息发送等）已在 handler 内完成。
+
+## 配置 (`config/tools.toml`)
+
+```toml
+[tools.navigation]
+enabled = true
+require_voice_confirmation_driving = true
+
+[tools.communication]
+enabled = true
+max_message_length = 200
+
+[tools.vehicle]
+enabled = false
+
+[tools.memory_query]
+enabled = true
+max_results = 5
+```
+
+当前 `enabled` 标志为预留字段，未在代码中强制执行。
+
+## 安全约束
+
+工具调用受规则引擎 `postprocess_decision()` 统一管辖（`proactive_run` 路径必走规则后处理）。当前规则引擎不区分工具类型——所有 `tool_calls` 在 LLM 输出中存在即被执行，工具级别约束待后续细化。
+
+## 测试
+
+`tests/tools/test_registry.py` — 注册 + 重复注册检测。
