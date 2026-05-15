@@ -7,6 +7,7 @@ class AppState {
     #reconnectAttempts = 0;
     #voicePollTimer = null;
     #voiceTranscriptionTimer = null;
+    #voicePollGen = 0;
 
     getCurrentEventId() { return this.#currentEventId; }
     setCurrentEventId(id) { this.#currentEventId = id; }
@@ -35,6 +36,8 @@ class AppState {
     setVoicePollTimer(t) { this.#voicePollTimer = t; }
     getVoiceTranscriptionTimer() { return this.#voiceTranscriptionTimer; }
     setVoiceTranscriptionTimer(t) { this.#voiceTranscriptionTimer = t; }
+    getVoicePollGen() { return this.#voicePollGen; }
+    incVoicePollGen() { this.#voicePollGen += 1; }
 
     reset() {
         this.#currentEventId = null;
@@ -438,18 +441,21 @@ function switchTab(tab) {
 
 function startVoicePolling() {
   if (state.getVoicePollTimer()) return; // 已运行，防叠加
-  state.setVoicePollTimer(true);
-  state.setVoiceTranscriptionTimer(true);
-  pollVoiceStatus();
-  pollVoiceTranscriptions();
+  state.incVoicePollGen();
+  const gen = state.getVoicePollGen();
+  state.setVoicePollTimer(gen);
+  state.setVoiceTranscriptionTimer(gen);
+  pollVoiceStatus(gen);
+  pollVoiceTranscriptions(gen);
 }
 
 function stopVoicePolling() {
-  state.setVoicePollTimer(false);
-  state.setVoiceTranscriptionTimer(false);
+  state.incVoicePollGen();
+  state.setVoicePollTimer(null);
+  state.setVoiceTranscriptionTimer(null);
 }
 
-async function pollVoiceStatus() {
+async function pollVoiceStatus(gen) {
   try {
     const data = await api('GET', '/api/v1/voice/status');
     const running = data.running;
@@ -470,10 +476,10 @@ async function pollVoiceStatus() {
       if (minConfEl && data.config.min_confidence != null) minConfEl.value = data.config.min_confidence;
     }
   } catch (e) { console.warn('[Voice] status poll failed:', e.message); }
-  if (state.getVoicePollTimer()) setTimeout(pollVoiceStatus, 500);
+  if (state.getVoicePollGen() === gen) setTimeout(() => pollVoiceStatus(gen), 500);
 }
 
-async function pollVoiceTranscriptions() {
+async function pollVoiceTranscriptions(gen) {
   try {
     const items = await api('GET', '/api/v1/voice/transcriptions?limit=10');
     if (!items || items.length === 0) return;
@@ -487,7 +493,7 @@ async function pollVoiceTranscriptions() {
     ).join('');
     area.scrollTop = area.scrollHeight;
   } catch (e) { console.warn('[Voice] transcriptions poll failed:', e.message); }
-  if (state.getVoiceTranscriptionTimer()) setTimeout(pollVoiceTranscriptions, 1000);
+  if (state.getVoicePollGen() === gen) setTimeout(() => pollVoiceTranscriptions(gen), 1000);
 }
 
 async function toggleVoiceRecording() {
