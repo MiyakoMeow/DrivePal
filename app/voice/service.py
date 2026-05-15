@@ -155,8 +155,10 @@ class VoiceService:
             if key in ("vad_mode", "sample_rate", "device_index", "asr"):
                 restart_needed = True
         if restart_needed and self._running:
+            saved_sched = self._sched
+            saved_cb = self._on_transcription_external
             await self.stop()
-            await self.start()
+            await self.start(sched=saved_sched, on_transcription=saved_cb)
         return {
             "applied": list(cfg.keys()),
             "requires_restart": restart_needed,

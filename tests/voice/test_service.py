@@ -1,6 +1,6 @@
 """测试 VoiceService 生命周期."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -92,6 +92,32 @@ async def test_update_config_invalid_vad_mode():
     svc = VoiceService(config=MagicMock(enabled=True))
     with pytest.raises(ValueError, match="vad_mode must be 0-3"):
         await svc.update_config({"vad_mode": 9})
+
+
+@pytest.mark.asyncio
+async def test_toggle_recording_start():
+    """Given 未启动, When toggle_recording(True), Then 调用 start。"""
+    svc = VoiceService(config=MagicMock(enabled=True))
+    svc.start = AsyncMock(return_value=True)  # type: ignore[assignment]
+    result = await svc.toggle_recording(start=True)
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_toggle_recording_stop():
+    """Given 已启动, When toggle_recording(False), Then 调用 stop。"""
+    svc = VoiceService(config=MagicMock(enabled=True))
+    svc.stop = AsyncMock()  # type: ignore[assignment]
+    result = await svc.toggle_recording(start=False)
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_update_config_invalid_min_confidence():
+    """Given min_confidence=1.5, When update_config(), Then 抛 ValueError。"""
+    svc = VoiceService(config=MagicMock(enabled=True))
+    with pytest.raises(ValueError, match="min_confidence must be 0.0-1.0"):
+        await svc.update_config({"min_confidence": 1.5})
 
 
 @pytest.mark.asyncio
