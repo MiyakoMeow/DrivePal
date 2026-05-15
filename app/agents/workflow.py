@@ -28,6 +28,7 @@ from app.agents.probabilistic import (
     is_enabled,
 )
 from app.agents.prompts import SYSTEM_PROMPTS
+from app.agents.prompts_proactive import PROACTIVE_JOINT_DECISION_PROMPT
 from app.agents.rules import apply_rules, postprocess_decision
 from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
@@ -821,6 +822,88 @@ class AgentWorkflow:
             if session_id:
                 self._log_conversation_turn(state, session_id, user_input)
             return result, event_id, stages
+
+    async def proactive_run(
+        self,
+        context_override: dict | None = None,
+        memory_hints: list[dict] | None = None,
+        trigger_source: str = "scheduler",
+    ) -> tuple[str, str | None, WorkflowStages]:
+        """主动模式：无用户 query，由 scheduler/context 变化触发。
+
+        Args:
+            context_override: 外部提供的驾驶上下文（非 None 时跳过 LLM context 推断）
+            memory_hints: 预检索的相关记忆列表
+            trigger_source: 触发来源（scheduler/location/time/state）
+
+        Returns:
+            (result, event_id, stages) 同 run_with_stages
+
+        """
+        stages = WorkflowStages()
+        state: AgentState = {
+            "original_query": f"[proactive:{trigger_source}]",
+            "context": {},
+            "task": None,
+            "decision": None,
+            "result": None,
+            "event_id": None,
+            "driving_context": context_override,
+            "stages": stages,
+            "session_id": None,
+        }
+
+        if context_override:
+            context = dict(context_override)
+            context["current_datetime"] = datetime.now(UTC).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            context["related_events"] = memory_hints or []
+            state["context"] = context
+        else:
+            try:
+                updates = await self._context_node(state)
+                state.update(updates)
+            except Exception as e:
+                logger.warning("proactive_run context_node failed: %s", e)
+                return "主动模式不可用：无法获取上下文", None, stages
+
+        constraints_hint = self._format_constraints_hint(context_override)
+        preference_hint = await self._format_preference_hint()
+
+        prompt = PROACTIVE_JOINT_DECISION_PROMPT.format(
+            constraints_hint=constraints_hint or "无特殊约束。",
+            preference_hint=preference_hint or "无特殊偏好。",
+        )
+        prompt += f"\n驾驶上下文：{json.dumps(state['context'], ensure_ascii=False)}"
+        prompt += f"\n触发来源：{trigger_source}"
+
+        parsed = await self._call_llm_json(prompt)
+        try:
+            validated = JointDecisionOutput.model_validate(parsed.data or {})
+            decision = validated.decision
+        except Exception as e:
+            logger.warning("proactive_run JointDecision validation failed: %s", e)
+            raw = parsed.data or {}
+            decision = raw.get("decision", {})
+
+        if context_override:
+            decision, _modifications = postprocess_decision(decision, context_override)
+            decision["_postprocessed"] = True
+
+        state["decision"] = decision
+        state["task"] = {"type": "proactive", "confidence": 1.0, "entities": []}
+
+        try:
+            exec_result = await self._execution_node(state)
+            state.update(exec_result)
+        except Exception as e:
+            logger.warning("proactive_run execution_node failed: %s", e)
+            return "主动提醒处理失败", None, stages
+
+        result = state.get("result") or "处理完成"
+        event_id = state.get("event_id")
+        return result, event_id, stages
 
     @staticmethod
     def _build_done_data(state: AgentState, session_id: str | None) -> dict:
