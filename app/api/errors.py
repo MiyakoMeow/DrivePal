@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.agents.workflow import WorkflowError
 from app.exceptions import AppError as BaseAppError
 from app.memory.exceptions import FatalError, TransientError
 from app.tools.executor import ToolExecutionError
@@ -117,6 +118,11 @@ async def safe_call[T](
     except ToolExecutionError as e:
         logger.exception("%s: tool error", context_msg)
         raise AppError(AppErrorCode.INTERNAL_ERROR, "Tool execution failed") from e
+    except WorkflowError as e:
+        logger.exception("%s: workflow error", context_msg)
+        raise AppError(
+            AppErrorCode.STORAGE_ERROR, "Service temporarily unavailable"
+        ) from e
     except BaseAppError as e:
         if isinstance(e, HTTPException):
             raise

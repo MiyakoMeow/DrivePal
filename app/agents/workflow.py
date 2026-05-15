@@ -458,7 +458,7 @@ class AgentWorkflow:
                     )
                 if risk >= OVERLOADED_WARNING_THRESHOLD:
                     prob_hint += "⚠ 当前打断风险较高，请谨慎决定。"
-            except (OSError, RuntimeError, ValueError, TypeError) as e:
+            except AppError as e:
                 logger.warning("Probabilistic inference failed: %s", e)
 
         prompt_parts: list[str] = [

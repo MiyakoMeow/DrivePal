@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.exceptions import AppError
 from app.scheduler.context_monitor import ContextDelta
 from app.scheduler.scheduler import ProactiveScheduler
 from app.scheduler.trigger_evaluator import TriggerDecision, TriggerSignal
@@ -54,8 +55,8 @@ async def test_drain_voice_queue_skips_empty_text(scheduler, mock_workflow):
 
 
 async def test_drain_voice_queue_write_failure_graceful(scheduler, mock_workflow):
-    """Given write 抛异常, When _tick, Then 不崩溃。"""
-    mock_workflow.memory_module.write.side_effect = RuntimeError("boom")
+    """Given write 抛 AppError, When _tick, Then 不崩溃。"""
+    mock_workflow.memory_module.write.side_effect = AppError("TEST_ERROR", "boom")
     await scheduler._voice_queue.put("hello")
     await scheduler._drain_voice_queue()
 
@@ -70,9 +71,9 @@ async def test_poll_pending_triggers_proactive_run(scheduler, mock_workflow):
 
 
 async def test_poll_pending_failure_graceful(scheduler, mock_workflow):
-    """Given proactive_run 抛异常, When _poll_pending, Then 不崩溃。"""
+    """Given proactive_run 抛 AppError, When _poll_pending, Then 不崩溃。"""
     scheduler._pending_manager.poll = AsyncMock(return_value=[{"id": "r1"}])
-    mock_workflow.proactive_run.side_effect = RuntimeError("fail")
+    mock_workflow.proactive_run.side_effect = AppError("TEST_ERROR", "fail")
     await scheduler._poll_pending({"scenario": "parked"})
 
 

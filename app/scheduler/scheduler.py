@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from app.agents.pending import PendingReminderManager
 from app.config import user_data_dir
+from app.exceptions import AppError
 from app.memory.schemas import EVENT_TYPE_PASSIVE_VOICE, MemoryEvent
 from app.scheduler.context_monitor import ContextDelta, ContextMonitor
 from app.scheduler.memory_scanner import MemoryScanner
@@ -125,7 +126,7 @@ class ProactiveScheduler:
                         tr.get("id"),
                         result,
                     )
-            except (OSError, RuntimeError, ValueError, TypeError) as e:
+            except AppError as e:
                 logger.warning(
                     "PendingReminder execution failed: %s",
                     e,
@@ -235,7 +236,7 @@ class ProactiveScheduler:
                                     "interrupt_level": decision.interrupt_level,
                                 },
                             )
-                except (OSError, RuntimeError, ValueError, TypeError) as e:
+                except AppError as e:
                     logger.warning("proactive_run failed for %s: %s", sig.source, e)
 
     async def _drain_voice_queue(self) -> None:
@@ -255,7 +256,7 @@ class ProactiveScheduler:
                     event, user_id=self._workflow.current_user
                 )
                 logger.info("Passive voice memory written: %.50s", text)
-            except (OSError, RuntimeError, ValueError, TypeError) as e:
+            except AppError as e:
                 logger.warning("Failed to write passive voice: %s", e)
 
     async def _tick(self) -> None:
