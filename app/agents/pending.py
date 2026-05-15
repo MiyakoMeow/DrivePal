@@ -114,6 +114,15 @@ class PendingReminderManager:
                     ttl_seconds = int(max(delta, 0)) + _TTL_EXTRA_FOR_TIME
                 except ValueError, TypeError:
                     ttl_seconds = _DEFAULT_TTL_SECONDS
+            elif trigger_type == "periodic":
+                interval = trigger_target.get("interval_hours", 0)
+                try:
+                    interval = float(interval)
+                except ValueError, TypeError:
+                    interval = 0
+                ttl_seconds = (
+                    int(interval * 3600 * 2) if interval > 0 else _DEFAULT_TTL_SECONDS
+                )
             else:
                 ttl_seconds = _DEFAULT_TTL_SECONDS
 
@@ -289,7 +298,11 @@ class PendingReminderManager:
     @staticmethod
     def _check_periodic(reminder: dict) -> bool:
         target = reminder.get("trigger_target", {})
-        interval_hours = target.get("interval_hours", 0)
+        raw_interval = target.get("interval_hours", 0)
+        try:
+            interval_hours = float(raw_interval)
+        except ValueError, TypeError:
+            return False
         if interval_hours <= 0:
             return False
         created_str = reminder.get("created_at", "")

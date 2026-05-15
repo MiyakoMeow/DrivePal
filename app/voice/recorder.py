@@ -44,7 +44,7 @@ class VoiceRecorder:
                     frames_per_buffer=_FRAME_BYTES,
                 )
                 while self._running:
-                    data = stream.read(_FRAME_BYTES, exception_on_overflow=False)
+                    data = stream.read(_FRAME_BYTES // 2, exception_on_overflow=False)
                     asyncio.run_coroutine_threadsafe(
                         pipeline.feed_audio(data),
                         loop,

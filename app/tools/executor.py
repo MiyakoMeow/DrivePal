@@ -40,16 +40,23 @@ class ToolExecutor:
             if prop is None:
                 continue
             if "type" in prop:
-                type_map = {
+                type_map: dict[str, type | tuple[type, ...]] = {
                     "string": str,
                     "number": (int, float),
                     "integer": int,
                     "boolean": bool,
                 }
                 expected = type_map.get(prop["type"])
-                if expected is not None and not isinstance(value, expected):
-                    msg = f"Tool {tool_name}: param '{key}' expected {prop['type']}, got {type(value).__name__}"
-                    raise ToolExecutionError(msg)
+                if expected is not None:
+                    # bool 是 int 的子类，int/float 校验前先排除 bool
+                    if prop["type"] in ("integer", "number") and isinstance(
+                        value, bool
+                    ):
+                        msg = f"Tool {tool_name}: param '{key}' expected {prop['type']}, got bool"
+                        raise ToolExecutionError(msg)
+                    if not isinstance(value, expected):
+                        msg = f"Tool {tool_name}: param '{key}' expected {prop['type']}, got {type(value).__name__}"
+                        raise ToolExecutionError(msg)
 
     async def execute(self, tool_name: str, params: dict[str, Any]) -> str:
         """按名称执行工具，返回执行结果字符串。"""

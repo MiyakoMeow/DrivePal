@@ -54,7 +54,10 @@ async def _init_voice_if_available(sched: ProactiveScheduler) -> dict:
 
         async def _consume() -> None:
             async for text in pipeline.run():
-                await sched.push_voice_text(text)
+                try:
+                    await sched.push_voice_text(text)
+                except Exception:
+                    logger.exception("Voice consumer: push failed, continuing")
 
         task = asyncio.create_task(_consume())
     except Exception as e:

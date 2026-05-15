@@ -27,7 +27,7 @@ class MemoryScanner:
 
     async def scan_by_context(self, ctx: dict, top_k: int = 10) -> list[dict]:
         """根据当前上下文检索相关记忆。"""
-        scenario = ctx.get("scenario", "")
+        scenario = str(ctx.get("scenario", ""))
         location = ctx.get("spatial", {}).get("current_location", {})
         query_parts: list[str] = [scenario]
         if location:

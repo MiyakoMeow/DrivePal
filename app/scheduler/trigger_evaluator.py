@@ -46,7 +46,7 @@ class TriggerEvaluator:
         self, signal: TriggerSignal, driving_context: dict | None
     ) -> TriggerDecision:
         """评估触发信号，返回是否触发及原因。"""
-        now = time.time()
+        now = time.monotonic()
         last = self._last_trigger_time.get(signal.source, 0)
         if now - last < self._debounce_seconds:
             return TriggerDecision(

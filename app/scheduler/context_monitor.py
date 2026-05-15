@@ -60,18 +60,27 @@ class ContextMonitor:
         old_loc = self._last.get("spatial", {}).get("current_location", {})
         new_loc = ctx.get("spatial", {}).get("current_location", {})
         if old_loc and new_loc:
-            dist = _haversine(
-                float(old_loc.get("latitude", 0)),
-                float(old_loc.get("longitude", 0)),
-                float(new_loc.get("latitude", 0)),
-                float(new_loc.get("longitude", 0)),
-            )
-            delta.location_changed = dist > self._proximity_meters
-            delta.location_proximity = dist
+            try:
+                lat1 = float(old_loc.get("latitude", 0))
+                lon1 = float(old_loc.get("longitude", 0))
+                lat2 = float(new_loc.get("latitude", 0))
+                lon2 = float(new_loc.get("longitude", 0))
+                dist = _haversine(lat1, lon1, lat2, lon2)
+                delta.location_changed = dist > self._proximity_meters
+                delta.location_proximity = dist
+            except ValueError, TypeError:
+                pass
 
-        old_fatigue = self._last.get("driver_state", {}).get("fatigue_level", 0)
-        new_fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
-        delta.fatigue_increased = new_fatigue > old_fatigue + _FATIGUE_DELTA_THRESHOLD
+        try:
+            old_fatigue = float(
+                self._last.get("driver_state", {}).get("fatigue_level", 0)
+            )
+            new_fatigue = float(ctx.get("driver_state", {}).get("fatigue_level", 0))
+            delta.fatigue_increased = (
+                new_fatigue > old_fatigue + _FATIGUE_DELTA_THRESHOLD
+            )
+        except ValueError, TypeError:
+            pass
 
         old_wl = self._last.get("driver_state", {}).get("workload")
         new_wl = ctx.get("driver_state", {}).get("workload")

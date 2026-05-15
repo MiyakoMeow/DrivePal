@@ -31,26 +31,50 @@ def _load_asr_config() -> dict:
         return {}
 
 
+def _load_voice_config() -> dict:
+    """从 voice.toml 读取顶层语音配置。"""
+    try:
+        with _CONFIG_PATH.open("rb") as f:
+            data = tomllib.load(f)
+        return data.get("voice", {})
+    except OSError, tomllib.TOMLDecodeError:
+        return {}
+
+
 class VoicePipeline:
     """VAD → ASR 编排。yield 逐条转录结果。"""
 
     def __init__(
         self,
-        vad_mode: int = 1,
-        sample_rate: int = 16000,
-        min_confidence: float = 0.5,
+        vad_mode: int | None = None,
+        sample_rate: int | None = None,
+        min_confidence: float | None = None,
         asr_engine: ASREngine | None = None,
         on_transcription: Callable[[str, float], None] | None = None,
     ) -> None:
-        """初始化语音流水线."""
-        self._vad = VADEngine(mode=vad_mode, sample_rate=sample_rate)
+        """初始化语音流水线。参数未传时从 config/voice.toml 读取。"""
+        cfg = _load_voice_config()
+        if vad_mode is None:
+            vad_mode = cfg.get("vad_mode", 1)
+        if sample_rate is None:
+            sample_rate = cfg.get("sample_rate", 16000)
+        if min_confidence is None:
+            min_confidence = cfg.get("min_confidence", 0.5)
+        silence_ms = cfg.get("silence_timeout_ms", 500)
+        silence_frames = max(1, silence_ms // 30)
+
+        self._vad = VADEngine(
+            mode=vad_mode,
+            sample_rate=sample_rate,
+            silence_timeout_frames=silence_frames,
+        )
         if asr_engine is None:
-            cfg = _load_asr_config()
-            model_path = cfg.get("model", "data/models/sense_voice/model.int8.onnx")
-            tokens_path = cfg.get("tokens", "data/models/sense_voice/tokens.txt")
-            num_threads = cfg.get("num_threads", 2)
-            language = cfg.get("language", "zh")
-            use_itn = cfg.get("use_itn", True)
+            asr_cfg = _load_asr_config()
+            model_path = asr_cfg.get("model", "data/models/sense_voice/model.int8.onnx")
+            tokens_path = asr_cfg.get("tokens", "data/models/sense_voice/tokens.txt")
+            num_threads = asr_cfg.get("num_threads", 2)
+            language = asr_cfg.get("language", "zh")
+            use_itn = asr_cfg.get("use_itn", True)
             if Path(model_path).exists() and Path(tokens_path).exists():
                 asr_engine = SherpaOnnxASREngine(
                     model_path,

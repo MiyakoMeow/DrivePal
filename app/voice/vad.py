@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 class VADEngine:
     """VAD 引擎，检测语音起止并切分。"""
 
-    def __init__(self, mode: int = 1, sample_rate: int = 16000) -> None:
+    def __init__(
+        self, mode: int = 1, sample_rate: int = 16000, silence_timeout_frames: int = 17
+    ) -> None:
         """初始化 VAD 引擎."""
         self._vad = webrtcvad.Vad(mode)
         self._sample_rate = sample_rate
@@ -20,7 +22,7 @@ class VADEngine:
         self._frame_bytes = int(sample_rate * 2 * self._frame_ms / 1000)
         self._silence_frames = 0
         self._speech_frames = 0
-        self._silence_timeout_frames = 17
+        self._silence_timeout_frames = silence_timeout_frames
 
     def is_speech(self, audio_chunk: bytes) -> bool:
         """检测音频帧是否包含语音."""
@@ -45,7 +47,7 @@ class VADEngine:
         self._silence_frames += 1
         if (
             self._speech_frames > 0
-            and self._silence_frames > self._silence_timeout_frames
+            and self._silence_frames >= self._silence_timeout_frames
         ):
             self.reset()
             return VADStatus.SPEECH_END
