@@ -1,6 +1,12 @@
-"""查询端点输入/输出 schema."""
+"""查询端点输入/输出 schema.
+
+同步 POST /api/v1/query 返回 list[dict]，其中最后一个元素即 done 结果，
+包含 status/event_id/result 等字段。此 schema 作为返回值契约的文档化参考。
+"""
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -16,13 +22,9 @@ class ProcessQueryRequest(BaseModel):
 
 
 class ProcessQueryResult(BaseModel):
-    """SSE 'done' 事件 data schema。
+    """POST /api/v1/query 同步响应 done 结果契约."""
 
-    注意：当前 SSE 端点（stream.py）使用 run_stream() 返回的 list[dict]
-    直接构造事件，未用此 schema 校验。此 schema 作为文档化的契约参考。
-    """
-
-    status: str = "delivered"  # "delivered" | "pending" | "suppressed"
+    status: Literal["delivered", "pending", "suppressed"] = "delivered"
     event_id: str | None = None
     session_id: str | None = None
     result: dict | None = None  # MultiFormatContent.model_dump()

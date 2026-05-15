@@ -35,7 +35,7 @@ def test_cancel_reminder(app_client: TestClient) -> None:
     """DELETE /api/v1/reminders/{id} 取消提醒."""
     with patch("app.api.v1.reminders.PendingReminderManager") as mock_pm_cls:
         pm = AsyncMock()
-        pm.cancel.return_value = None
+        pm.cancel.return_value = True
         mock_pm_cls.return_value = pm
         resp = app_client.delete(
             "/api/v1/reminders/pr1",

@@ -13,7 +13,7 @@ async def test_connect_and_disconnect() -> None:
     await manager.connect(ws, "alice")
     assert ws in manager._conns["alice"]
 
-    manager.disconnect(ws, "alice")
+    await manager.disconnect(ws, "alice")
     assert ws not in manager._conns.get("alice", [])
 
 

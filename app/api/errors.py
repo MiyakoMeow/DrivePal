@@ -28,22 +28,35 @@ class AppErrorCode(StrEnum):
     STREAM_ERROR = "STREAM_ERROR"
 
 
+_CODE_TO_HTTP: dict[AppErrorCode, int] = {
+    AppErrorCode.NOT_FOUND: 404,
+    AppErrorCode.INVALID_INPUT: 422,
+    AppErrorCode.STORAGE_ERROR: 503,
+    AppErrorCode.INTERNAL_ERROR: 500,
+    AppErrorCode.STREAM_ERROR: 500,
+}
+
+
 class AppError(HTTPException):
     """统一应用异常，携带错误码与 HTTP 状态码.
 
     响应体格式：{"error": {"code": ..., "message": ...}}
+    status_code 由 code 自动派生，无需调用者指定。
     """
 
     def __init__(
         self,
         code: AppErrorCode,
         message: str,
-        status_code: int = 500,
+        status_code: int | None = None,
     ) -> None:
         """初始化应用异常."""
         self.code = code
         self.app_message = message
-        super().__init__(status_code=status_code, detail=message)
+        resolved = (
+            status_code if status_code is not None else _CODE_TO_HTTP.get(code, 500)
+        )
+        super().__init__(status_code=resolved, detail=message)
 
 
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:

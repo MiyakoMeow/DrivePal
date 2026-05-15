@@ -34,5 +34,5 @@ async def cancel_pending_reminder(
 ) -> dict[str, bool]:
     """取消指定 ID 的待触发提醒."""
     pm = PendingReminderManager(user_data_dir(request.state.user_id))
-    await safe_memory_call(pm.cancel(reminder_id), "reminders(cancel)")
-    return {"success": True}
+    result = await safe_memory_call(pm.cancel(reminder_id), "reminders(cancel)")
+    return {"success": result}

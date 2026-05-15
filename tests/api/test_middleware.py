@@ -1,6 +1,5 @@
 """用户身份中间件测试."""
 
-import os
 from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -35,10 +34,10 @@ _MODULES_WITH_DATA_ROOT = ["app.config"]
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> Generator[TestClient]:
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient]:
     """提供带 UserIdentityMiddleware 的 TestClient."""
     data_dir = tmp_path / "data"
-    os.environ["DATA_DIR"] = str(data_dir)
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
     target = Path(data_dir)
     with ExitStack() as stack:
         for mod in _MODULES_WITH_DATA_DIR:
@@ -46,7 +45,8 @@ def client(tmp_path: Path) -> Generator[TestClient]:
         for mod in _MODULES_WITH_DATA_ROOT:
             stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
         reset_all_singletons()
-        yield TestClient(_make_app())
+        with TestClient(_make_app()) as c:
+            yield c
         reset_all_singletons()
 
 

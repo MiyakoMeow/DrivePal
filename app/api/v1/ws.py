@@ -72,7 +72,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     except Exception:
         logger.exception("WS error: user=%s", user_id)
     finally:
-        ws_manager.disconnect(ws, user_id)
+        await ws_manager.disconnect(ws, user_id)
 
 
 async def _handle_query(ws: WebSocket, user_id: str, payload: dict) -> None:

@@ -1,6 +1,5 @@
 """共享测试配置和 fixtures."""
 
-import os
 from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -119,10 +118,12 @@ def embedding() -> Generator[EmbeddingModel]:
 
 
 @pytest.fixture
-def app_client(tmp_path: Path) -> Generator[TestClient]:
-    """提供 TestClient 实例，隔离数据目录。"""
+def app_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[TestClient]:
+    """提供 TestClient 实例，隔离数据目录."""
     data_dir = tmp_path / "data"
-    os.environ["DATA_DIR"] = str(data_dir)
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
     target = Path(data_dir)
     with ExitStack() as stack:
         for mod in _MODULES_WITH_DATA_DIR:
@@ -130,5 +131,6 @@ def app_client(tmp_path: Path) -> Generator[TestClient]:
         for mod in _MODULES_WITH_DATA_ROOT:
             stack.enter_context(patch(f"{mod}.DATA_ROOT", target))
         reset_all_singletons()
-        yield TestClient(app)
+        with TestClient(app) as c:
+            yield c
         reset_all_singletons()

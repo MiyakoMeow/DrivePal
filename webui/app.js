@@ -23,7 +23,6 @@ class AppState {
     reset() {
         this.#currentEventId = null;
         this.reconnectAttempts = 0;
-        this.destroyChart();
         document.getElementById('feedbackRow').style.display = 'none';
         ['context', 'task', 'decision', 'execution'].forEach(s => {
             document.getElementById(`stage-${s}-body`).innerHTML =
@@ -105,16 +104,24 @@ function resetContext(rootEl) {
 }
 
 function connectWS() {
+    const existing = state.getWs();
+    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+        return existing;
+    }
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${location.host}/api/v1/ws`;
     const ws = new WebSocket(wsUrl);
+    state.setWs(ws);
     ws.onopen = () => {
-        state.setWs(ws);
         state.reconnectAttempts = 0;
     };
     ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        handleWSMessage(msg.type, msg.payload);
+        try {
+            const msg = JSON.parse(event.data);
+            handleWSMessage(msg.type, msg.payload);
+        } catch (e) {
+            console.warn('WS message handling failed:', e);
+        }
     };
     ws.onclose = () => {
         state.setWs(null);
@@ -126,6 +133,12 @@ function connectWS() {
 }
 
 function scheduleReconnect() {
+    const oldTimer = state.getWsReconnectTimer();
+    if (oldTimer) clearTimeout(oldTimer);
+    const existing = state.getWs();
+    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+        return;
+    }
     const delay = Math.min(1000 * Math.pow(2, state.reconnectAttempts), 30000);
     state.reconnectAttempts += 1;
     const timer = setTimeout(() => connectWS(), delay);
@@ -142,8 +155,12 @@ function handleWSMessage(type, data) {
                 document.getElementById('stage-decision-body').innerHTML =
                     '<span class="empty-hint">处理中...</span>';
             } else {
-                document.getElementById(`stage-${stage}-body`).innerHTML =
-                    '<span class="empty-hint">处理中...</span>';
+                const el = document.getElementById(`stage-${stage}-body`);
+                if (el) {
+                    el.innerHTML = '<span class="empty-hint">处理中...</span>';
+                } else {
+                    console.warn('Unknown stage:', stage);
+                }
             }
             break;
         }

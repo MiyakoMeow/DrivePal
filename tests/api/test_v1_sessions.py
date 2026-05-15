@@ -19,6 +19,7 @@ def test_close_session_success(app_client: TestClient) -> None:
         )
         assert resp.status_code == 200
         assert resp.json()["success"] is True
+        mock_cm.close.assert_called_once_with("sess_001", user_id="alice")
 
 
 def test_close_session_not_owner(app_client: TestClient) -> None:
@@ -31,3 +32,4 @@ def test_close_session_not_owner(app_client: TestClient) -> None:
         )
         assert resp.status_code == 200
         assert resp.json()["success"] is False
+        mock_cm.close.assert_called_once_with("sess_001", user_id="bob")
