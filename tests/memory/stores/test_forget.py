@@ -51,13 +51,16 @@ class TestForgettingCurve:
                 "last_recall_date": "2026-05-05",
             }
         ]
-        fc.maybe_forget(entries, reference_date="2026-05-05")
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        if result is not None:
+            _, changeset = result
+            assert 0 not in changeset
         assert entries[0].get("forgotten") is None
 
     def test_old_entry_marked_forgotten(self):
         """验证旧条目被标记遗忘。"""
         fc = ForgettingCurve(MemoryBankConfig(forget_mode="deterministic"))
-        entries = [
+        original = [
             {
                 "faiss_id": 0,
                 "memory_strength": 1,
@@ -65,8 +68,14 @@ class TestForgettingCurve:
                 "last_recall_date": "2026-01-01",
             }
         ]
-        fc.maybe_forget(entries, reference_date="2026-05-05")
-        assert entries[0].get("forgotten") is True
+        entries = [dict(e) for e in original]
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert result is not None
+        _, changeset = result
+        assert 0 in changeset
+        assert changeset[0]["forgotten"] is True
+        # metadata 未被原地修改
+        assert entries == original
 
     def test_daily_summary_exempt(self):
         """验证每日摘要不被遗忘。"""
@@ -79,7 +88,10 @@ class TestForgettingCurve:
                 "type": "daily_summary",
             }
         ]
-        fc.maybe_forget(entries, reference_date="2026-05-05")
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        if result is not None:
+            _, changeset = result
+            assert len(changeset) == 0
         assert entries[0].get("forgotten") is None
 
     def test_throttle_skips_second_call(self):
@@ -95,11 +107,8 @@ class TestForgettingCurve:
         ]
         result = fc.maybe_forget(entries, reference_date="2026-05-05")
         assert result is not None  # 首次调用应执行
-        assert entries[0].get("forgotten") is True
-        entries[0]["forgotten"] = False
         result = fc.maybe_forget(entries, reference_date="2026-05-05")
         assert result is None  # 节流，未执行
-        assert entries[0].get("forgotten") is False
 
 
 class TestProbabilisticForgetting:
@@ -123,11 +132,15 @@ class TestProbabilisticForgetting:
                 "last_recall_date": "2026-05-05",
             },
         ]
-        ids = fc.maybe_forget(entries, reference_date="2026-05-05")
-        assert ids is not None
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert result is not None
+        ids, changeset = result
         # 第一条 strength=1, 125天 → retention≈0, 必遗忘
         assert 0 in ids
-        assert entries[0].get("forgotten") is True
+        assert 0 in changeset
+        assert changeset[0]["forgotten"] is True
+        # metadata 未被原地修改
+        assert entries[0].get("forgotten") is None
 
     def test_deterministic_returns_empty_ids(self):
         """确定性模式 maybe_forget 返回空列表。"""
@@ -140,8 +153,11 @@ class TestProbabilisticForgetting:
                 "last_recall_date": "2026-01-01",
             },
         ]
-        ids = fc.maybe_forget(entries, reference_date="2026-05-05")
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert result is not None
+        ids, changeset = result
         assert ids == []
+        assert len(changeset) > 0
 
     def test_summary_exempt_in_probabilistic(self):
         """概率模式下每日摘要豁免遗忘。"""
@@ -155,8 +171,11 @@ class TestProbabilisticForgetting:
                 "type": "daily_summary",
             },
         ]
-        ids = fc.maybe_forget(entries, reference_date="2026-05-05")
+        result = fc.maybe_forget(entries, reference_date="2026-05-05")
+        assert result is not None
+        ids, changeset = result
         assert ids == []
+        assert len(changeset) == 0
 
     def test_probabilistic_reproducible_with_seed(self):
         """固定 seed 产生可复现的遗忘结果。"""
@@ -211,9 +230,9 @@ class TestProbabilisticForgetting:
             }
             for i in range(20)
         ]
-        ids_ext = fc_ext.maybe_forget(entries_ext, reference_date="2026-05-05")
-        ids_int = fc_int.maybe_forget(entries_int, reference_date="2026-05-05")
-        assert ids_ext == ids_int
+        result_ext = fc_ext.maybe_forget(entries_ext, reference_date="2026-05-05")
+        result_int = fc_int.maybe_forget(entries_int, reference_date="2026-05-05")
+        assert result_ext == result_int
 
 
 class TestIngestionForget:

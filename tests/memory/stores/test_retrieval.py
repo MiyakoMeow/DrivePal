@@ -14,10 +14,10 @@ from app.memory.memory_bank.index import FaissIndex
 from app.memory.memory_bank.retrieval import (
     RetrievalPipeline,
     _clean_search_result,
+    _compute_memory_strength_updates,
     _get_effective_chunk_size,
     _merge_overlapping_results,
     _strip_source_prefix,
-    _update_memory_strengths,
     _word_in_text,
 )
 
@@ -39,9 +39,9 @@ async def test_search_empty_index_returns_empty_list(mock_embedding):
         pipe = RetrievalPipeline(
             idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
         )
-        results, updated = await pipe.search("anything")
+        results, updates = await pipe.search("anything")
         assert results == []
-        assert updated is False
+        assert len(updates) == 0
 
 
 @pytest.mark.asyncio
@@ -61,7 +61,7 @@ async def test_search_returns_results(mock_embedding):
         pipe = RetrievalPipeline(
             idx, EmbeddingClient(mock_embedding), MemoryBankConfig()
         )
-        results, _updated = await pipe.search("Gary seat")
+        results, _updates = await pipe.search("Gary seat")
         assert len(results) >= 1
 
 
@@ -190,10 +190,10 @@ def test_update_memory_strength_refreshes_recall_date():
     results = [
         {"_meta_idx": 0, "_all_meta_indices": [0], "score": 0.9},
     ]
-    updated = _update_memory_strengths(results, meta, config=MemoryBankConfig())
-    assert updated
+    updates = _compute_memory_strength_updates(results, meta, config=MemoryBankConfig())
+    assert len(updates) > 0
     today = datetime.now(UTC).strftime("%Y-%m-%d")
-    assert meta[0]["last_recall_date"] == today
+    assert updates[0]["last_recall_date"] == today
 
 
 def test_memory_strength_capped():
@@ -211,13 +211,15 @@ def test_memory_strength_capped():
         {"_meta_idx": 0, "score": 1.0, "_merged_indices": [0]},
     ]
     config = MemoryBankConfig(max_memory_strength=10)
-    _update_memory_strengths(results, meta, config=config)
-    assert meta[0]["memory_strength"] == 10.0, (
-        f"expected 10.0 (capped), got {meta[0]['memory_strength']}"
+    updates = _compute_memory_strength_updates(results, meta, config=config)
+    assert updates[0]["memory_strength"] == 10.0, (
+        f"expected 10.0 (capped), got {updates[0]['memory_strength']}"
     )
-    _update_memory_strengths(results, meta, config=config)
-    assert meta[0]["memory_strength"] == 10.0, (
-        f"expected 10.0 (still capped), got {meta[0]['memory_strength']}"
+    # 再次调用：已经最大值
+    meta[0]["memory_strength"] = 10.0
+    updates2 = _compute_memory_strength_updates(results, meta, config=config)
+    assert updates2[0]["memory_strength"] == 10.0, (
+        f"expected 10.0 (still capped), got {updates2[0]['memory_strength']}"
     )
 
 
