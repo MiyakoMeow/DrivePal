@@ -395,13 +395,21 @@ def test_disable_rules_skips_postprocess() -> None:
         set_ablation_disable_rules(False)
 
 
-def test_shortcut_decision_marked_postprocessed():
-    """shortcut 路径的 decision 应标记 _postprocessed。"""
-    decision = {"should_remind": True, "_postprocessed": True}
-    driving_ctx = {"scenario": "highway"}
-    result, mods = postprocess_decision(decision, driving_ctx)
+def test_ensure_postprocessed_skips_already_processed():
+    """ensure_postprocessed 对已处理 decision 直接返回，不重复应用规则。"""
+    from app.agents.execution_agent import ExecutionAgent
+
+    # fatigue 上下文：若规则被执行，should_remind 会被改为 False
+    decision = {
+        "should_remind": True,
+        "reminder_content": "测试",
+        "_postprocessed": True,
+    }
+    driving_ctx = {"scenario": "highway", "driver": {"fatigue_level": 0.9}}
+
+    result, mods = ExecutionAgent.ensure_postprocessed(decision, driving_ctx)
     assert result["should_remind"] is True
-    assert len(mods) == 0
+    assert mods == []
 
 
 def test_fatigue_threshold_cached(monkeypatch):
