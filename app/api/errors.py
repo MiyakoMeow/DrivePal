@@ -104,19 +104,16 @@ async def safe_memory_call[T](
         raise AppError(
             AppErrorCode.STORAGE_ERROR,
             "Internal storage error",
-            503,
         ) from e
     except ValueError as e:
         logger.exception("%s failed", context_msg)
         raise AppError(
             AppErrorCode.INVALID_INPUT,
             "Invalid request data",
-            422,
         ) from e
     except Exception as e:
         logger.exception("%s failed", context_msg)
         raise AppError(
             AppErrorCode.INTERNAL_ERROR,
             "Internal server error",
-            500,
         ) from e
