@@ -1,7 +1,10 @@
+"""通信工具。"""
+
 from typing import Any
 
 
 async def send_message(params: dict[str, Any]) -> str:
+    """发送消息给联系人。"""
     recipient = params.get("recipient", "")
     message = params.get("message", "")
     if not recipient or not message:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _REVIEW_HOUR = 8
+_REVIEW_WINDOW_MINUTES = 5
 _FATIGUE_HIGH = 0.7
 
 
@@ -59,6 +61,8 @@ class ProactiveScheduler:
         self._running = False
         self._voice_queue: asyncio.Queue[str] = asyncio.Queue()
         self._current_context: dict = {}
+        self._pending_manager: PendingReminderManager | None = None
+        self._last_review_date: str | None = None
 
     async def push_voice_text(self, text: str) -> None:
         """推入一条被动语音文本到队列。"""
@@ -70,7 +74,11 @@ class ProactiveScheduler:
 
     async def _poll_pending(self, ctx: dict) -> None:
         """轮询 PendingReminder 触发条件。"""
-        pm = PendingReminderManager(user_data_dir(self._workflow.current_user))
+        if self._pending_manager is None:
+            self._pending_manager = PendingReminderManager(
+                user_data_dir(self._workflow.current_user)
+            )
+        pm = self._pending_manager
         triggered = await pm.poll(ctx)
         for tr in triggered:
             logger.info("PendingReminder triggered: %s", tr.get("id"))
@@ -109,29 +117,59 @@ class ProactiveScheduler:
     ) -> list[TriggerSignal]:
         """根据上下文变化构建触发信号列表。"""
         signals: list[TriggerSignal] = []
+        ctx_copy = copy.deepcopy(ctx)
 
         if delta.scenario_changed:
             signals.append(
                 TriggerSignal(
                     source="context_change",
                     priority=1,
-                    context=ctx,
+                    context=ctx_copy,
+                    memory_hints=memory_hints,
+                )
+            )
+        if delta.location_changed:
+            signals.append(
+                TriggerSignal(
+                    source="location",
+                    priority=1,
+                    context=ctx_copy,
                     memory_hints=memory_hints,
                 )
             )
         if delta.fatigue_increased or delta.workload_changed:
-            signals.append(TriggerSignal(source="state", priority=2, context=ctx))
-
-        now = datetime.now(UTC)
-        if now.hour == _REVIEW_HOUR and now.minute < 1:
             signals.append(
-                TriggerSignal(source="periodic", priority=0, context=ctx or None)
+                TriggerSignal(
+                    source="state",
+                    priority=2,
+                    context=ctx_copy,
+                    memory_hints=memory_hints,
+                )
+            )
+
+        today = datetime.now(UTC)
+        today_str = today.strftime("%Y-%m-%d")
+        if (
+            today.hour == _REVIEW_HOUR
+            and today.minute < _REVIEW_WINDOW_MINUTES
+            and self._last_review_date != today_str
+        ):
+            self._last_review_date = today_str
+            signals.append(
+                TriggerSignal(source="periodic", priority=0, context=ctx_copy)
             )
 
         fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
         workload = ctx.get("driver_state", {}).get("workload", "")
         if fatigue > _FATIGUE_HIGH or workload == "overloaded":
-            signals.append(TriggerSignal(source="state", priority=2, context=ctx))
+            signals.append(
+                TriggerSignal(
+                    source="state",
+                    priority=2,
+                    context=ctx_copy,
+                    memory_hints=memory_hints,
+                )
+            )
 
         return signals
 
@@ -196,7 +234,9 @@ class ProactiveScheduler:
             await self._poll_pending(ctx)
 
         delta = (
-            self._context_monitor.update(ctx) if ctx else ContextMonitor().update({})
+            self._context_monitor.update(ctx)
+            if ctx
+            else self._context_monitor.update({})
         )
 
         memory_hints: list[dict] = []

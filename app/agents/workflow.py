@@ -38,6 +38,7 @@ from app.memory.privacy import sanitize_context
 from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
+from app.tools import get_default_executor
 
 _ablation_disable_feedback: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "_ablation_disable_feedback", default=False
@@ -614,25 +615,6 @@ class AgentWorkflow:
                 "action_result": {"cancelled": cancelled},
             }
 
-        # --- 工具调用处理 ---
-        tool_calls = decision.get("tool_calls", [])
-        if tool_calls and isinstance(tool_calls, list):
-            from app.tools import get_default_executor
-
-            executor = get_default_executor()
-            tool_results: list[str] = []
-            for tc in tool_calls:
-                if isinstance(tc, dict):
-                    t_name = tc.get("tool", "")
-                    t_params = tc.get("params", {})
-                    try:
-                        t_result = await executor.execute(t_name, t_params)
-                        tool_results.append(f"[{t_name}] {t_result}")
-                    except Exception as e:
-                        tool_results.append(f"[{t_name}] 失败: {e}")
-            if tool_results:
-                logger.info("Tool call results: %s", "; ".join(tool_results))
-
         # 规则硬约束：LLM 决策后强制覆盖，不可绕过
         driving_ctx = state.get("driving_context")
         modifications: list[str] = []
@@ -648,6 +630,23 @@ class AgentWorkflow:
         # 造成不公平比较。
         if stages is not None:
             stages.decision = decision
+
+        # --- 工具调用处理（在规则后处理之后，避免未审核的副作用）---
+        tool_calls = decision.get("tool_calls", [])
+        if tool_calls and isinstance(tool_calls, list):
+            executor = get_default_executor()
+            tool_results: list[str] = []
+            for tc in tool_calls:
+                if isinstance(tc, dict):
+                    t_name = tc.get("tool", "")
+                    t_params = tc.get("params", {})
+                    try:
+                        t_result = await executor.execute(t_name, t_params)
+                        tool_results.append(f"[{t_name}] {t_result}")
+                    except Exception as e:
+                        tool_results.append(f"[{t_name}] 失败: {e}")
+            if tool_results:
+                logger.info("Tool call results: %s", "; ".join(tool_results))
 
         # 硬约束禁止发送（如 only_urgent 拦截非紧急类型）
         if not decision.get("should_remind", True):

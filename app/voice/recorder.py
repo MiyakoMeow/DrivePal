@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.voice.pipeline import VoicePipeline
 
+from app.voice.constants import _FRAME_BYTES, _SAMPLE_RATE
+
 logger = logging.getLogger(__name__)
 
-_FRAME_BYTES = 960
-_SAMPLE_RATE = 16000
 _CHANNELS = 1
 _FORMAT = 8
 

@@ -12,6 +12,8 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+_UNAVAILABLE = object()
+
 _onnx_lib_setup_done: list[bool] = [False]
 
 
@@ -87,7 +89,7 @@ def _create_onnx_symlink(onnx_lib: Path) -> None:
                     lib_dir = p.parent
                     break
     except ImportError, TypeError, OSError:
-        pass
+        logger.warning("Failed to locate sherpa_onnx package files")
 
     if lib_dir is None or not lib_dir.is_dir():
         return
@@ -160,11 +162,11 @@ class SherpaOnnxASREngine(ASREngine):
             return
         if not self._model_path or not self._tokens_path:
             logger.warning("ASR model paths not configured, returning empty results")
-            self._recognizer = "unavailable"
+            self._recognizer = _UNAVAILABLE
             return
         if not Path(self._model_path).exists():
             logger.warning("ASR model not found: %s", self._model_path)
-            self._recognizer = "unavailable"
+            self._recognizer = _UNAVAILABLE
             return
         _ensure_onnx_lib()
         import sherpa_onnx
@@ -189,7 +191,7 @@ class SherpaOnnxASREngine(ASREngine):
         await self._ensure_loaded()
         if not audio_bytes:
             return ASRResult(text="", confidence=0.0)
-        if self._recognizer == "unavailable":
+        if self._recognizer is _UNAVAILABLE:
             return ASRResult(text="", confidence=0.0)
 
         # 转换 PCM int16 → float32 (归一化到 [-1, 1])

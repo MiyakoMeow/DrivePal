@@ -4,6 +4,8 @@ import logging
 
 import webrtcvad
 
+from app.voice.constants import VADStatus
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,20 +33,20 @@ class VADEngine:
         self._speech_frames = 0
         self._silence_frames = 0
 
-    def process_frame(self, audio_chunk: bytes) -> str | None:
-        """返回 'speech_start'/'speech_end'/'silence'/'speech' 或 None。"""
+    def process_frame(self, audio_chunk: bytes) -> VADStatus | None:
+        """返回 VADStatus 枚举或 None。"""
         speech = self.is_speech(audio_chunk)
         if speech:
             self._speech_frames += 1
             self._silence_frames = 0
             if self._speech_frames == 1:
-                return "speech_start"
-            return "speech"
+                return VADStatus.SPEECH_START
+            return VADStatus.SPEECH
         self._silence_frames += 1
         if (
             self._speech_frames > 0
             and self._silence_frames > self._silence_timeout_frames
         ):
             self.reset()
-            return "speech_end"
-        return "silence"
+            return VADStatus.SPEECH_END
+        return VADStatus.SILENCE
