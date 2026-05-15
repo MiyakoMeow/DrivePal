@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.agents.pending import PendingReminderManager
+from app.agents.rules import get_fatigue_threshold
 from app.config import user_data_dir
 from app.exceptions import AppError
 from app.memory.schemas import EVENT_TYPE_PASSIVE_VOICE, MemoryEvent
@@ -25,8 +26,6 @@ if TYPE_CHECKING:
     from app.memory.memory import MemoryModule
 
 logger = logging.getLogger(__name__)
-
-_FATIGUE_HIGH = 0.7
 
 
 class ProactiveScheduler:
@@ -206,7 +205,7 @@ class ProactiveScheduler:
 
         fatigue = ctx.get("driver", {}).get("fatigue_level", 0)
         workload = ctx.get("driver", {}).get("workload", "")
-        if fatigue > _FATIGUE_HIGH or workload == "overloaded":
+        if fatigue > get_fatigue_threshold() or workload == "overloaded":
             signals.append(
                 TriggerSignal(
                     source="state",
