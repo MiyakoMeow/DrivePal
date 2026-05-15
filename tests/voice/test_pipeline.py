@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
-
-import pytest
 
 from app.voice.asr import ASRResult
 from app.voice.constants import VADStatus
@@ -51,9 +50,6 @@ async def _collect_yields(pipeline, max_items: int = 10):
     except TimeoutError:
         task.cancel()
     return results
-
-
-import asyncio
 
 
 class TestPipelineVadAsrYield:
