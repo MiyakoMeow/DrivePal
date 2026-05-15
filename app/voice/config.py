@@ -1,8 +1,11 @@
 """语音流水线配置."""
 
+import logging
 from dataclasses import dataclass, field
 
 from app.config import ensure_config, get_config_root
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -46,6 +49,10 @@ class VoiceConfig:
         raw = ensure_config(path, cls._toml_defaults())
         voice_data = raw.get("voice", {})
         asr_data = voice_data.get("asr")
+        if isinstance(asr_data, dict) and not asr_data:
+            logger.warning(
+                "Empty [voice.asr] section in %s, using built-in defaults", path
+            )
         return cls(
             device_index=voice_data.get("device_index", cls.device_index),
             sample_rate=voice_data.get("sample_rate", cls.sample_rate),

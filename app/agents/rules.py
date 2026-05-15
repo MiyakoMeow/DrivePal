@@ -271,16 +271,10 @@ _RULES_TOML_DEFAULTS: dict = {
 
 
 _RULES_PATH: Path = get_config_root() / "rules.toml"
-try:
-    ensure_config(_RULES_PATH, _RULES_TOML_DEFAULTS)
-    SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
-except (OSError, PermissionError, tomllib.TOMLDecodeError, ValueError, TypeError) as e:
-    logger.warning(
-        "Cannot load rules config, using %d fallback rules: %s",
-        len(_FALLBACK_RULES),
-        e,
-    )
-    SAFETY_RULES = list(_FALLBACK_RULES)
+# ensure_config 内部全 catch（I/O 失败返默认 dict），
+# load_rules 内部有 _FALLBACK_RULES 兜底，两者均不抛。
+ensure_config(_RULES_PATH, _RULES_TOML_DEFAULTS)
+SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
 
 
 def apply_rules(
