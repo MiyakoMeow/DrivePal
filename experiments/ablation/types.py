@@ -10,6 +10,7 @@ class Variant(StrEnum):
     FULL = "full"
     NO_RULES = "no-rules"
     NO_PROB = "no-prob"
+    NO_SAFETY = "no-safety"
     SINGLE_LLM = "single-llm"
     NO_FEEDBACK = "no-feedback"
 

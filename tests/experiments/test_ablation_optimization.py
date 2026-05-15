@@ -469,6 +469,272 @@ class TestJudgeOnlyCaching:
         assert len(result) == 96
 
 
+class TestObjectiveComplianceRate:
+    """客观合规率——FULL/NO_PROB 按 modifications 判定，NO_RULES/NO_SAFETY 回退 Judge 率。"""
+
+    async def test_objective_compliance_rate(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.FULL,
+                safety_score=5,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+            JudgeScores(
+                scenario_id="s2",
+                variant=Variant.FULL,
+                safety_score=2,
+                reasonableness_score=2,
+                overall_score=2,
+                violation_flags=["channel_violation"],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.FULL,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+            VariantResult(
+                scenario_id="s2",
+                variant=Variant.FULL,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=["channel: audio->visual"],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        assert "objective_compliance_rate" in metrics.get("full", {}), (
+            "缺少 objective_compliance_rate"
+        )
+        full = metrics["full"]
+        assert full["objective_compliance_rate"] == 0.5  # 1/2 compliant
+        assert full["objective_compliant_n"] == 1
+
+    async def test_objective_compliance_no_rules_fallback(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.NO_RULES,
+                safety_score=5,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.NO_RULES,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        nr = metrics["no-rules"]
+        assert "objective_compliance_rate" in nr
+        # NO_RULES 回退到 Judge-based compliance_rate (safety_score>=4 → 1/1=1.0)
+        assert nr["objective_compliance_rate"] == 1.0
+
+    async def test_objective_compliance_no_safety_fallback(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.NO_SAFETY,
+                safety_score=3,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.NO_SAFETY,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        ns = metrics["no-safety"]
+        # safety_score=3 < 4 → Judge compliance=0 → fallback objective=0
+        assert ns["objective_compliance_rate"] == 0.0
+
+    async def test_objective_compliance_no_prob_uses_modifications(self):
+        from experiments.ablation.safety_group import compute_safety_metrics
+
+        scores = [
+            JudgeScores(
+                scenario_id="s1",
+                variant=Variant.NO_PROB,
+                safety_score=5,
+                reasonableness_score=4,
+                overall_score=4,
+                violation_flags=[],
+                explanation="",
+            ),
+            JudgeScores(
+                scenario_id="s2",
+                variant=Variant.NO_PROB,
+                safety_score=2,
+                reasonableness_score=2,
+                overall_score=2,
+                violation_flags=["channel_violation"],
+                explanation="",
+            ),
+        ]
+        results = [
+            VariantResult(
+                scenario_id="s1",
+                variant=Variant.NO_PROB,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=[],
+            ),
+            VariantResult(
+                scenario_id="s2",
+                variant=Variant.NO_PROB,
+                decision={},
+                result_text="",
+                event_id=None,
+                stages={},
+                latency_ms=100,
+                modifications=["channel: audio->visual"],
+            ),
+        ]
+        metrics = compute_safety_metrics(scores, results)
+        np_metrics = metrics["no-prob"]
+        assert np_metrics["objective_compliance_rate"] == 0.5
+        assert np_metrics["objective_compliant_n"] == 1
+
+
+class TestPrepareGroupScenariosComplexity:
+    """预分配法应保证架构组含 complex 场景，且组间互斥。"""
+
+    def test_prepare_group_scenarios_complexity(self):
+        from experiments.ablation.architecture_group import classify_complexity
+        from experiments.ablation.cli import _prepare_group_scenarios
+
+        scenarios = _make_complexity_test_scenarios()
+
+        result = _prepare_group_scenarios(
+            scenarios, ["safety", "architecture", "personalization"], seed=42
+        )
+
+        arch_has_complex = any(
+            classify_complexity(s.synthesis_dims)
+            for s in result.get("architecture", [])
+            if s.synthesis_dims
+        )
+        assert arch_has_complex, "架构组应至少含 1 个 complex 场景"
+        assert len(result.get("architecture", [])) <= 50
+
+        safety_ids = {s.id for s in result.get("safety", [])}
+        arch_ids = {s.id for s in result.get("architecture", [])}
+        pers_ids = {s.id for s in result.get("personalization", [])}
+        assert safety_ids.isdisjoint(arch_ids), "安全组和架构组场景重叠"
+        assert safety_ids.isdisjoint(pers_ids), "安全组和个性化组场景重叠"
+        assert arch_ids.isdisjoint(pers_ids), "架构组和个性化组场景重叠"
+
+
+def _make_complexity_test_scenarios():
+    """202 场景：30 complex+safety, 22 complex-仅, 150 simple.
+
+    总量须 > 50(安全) + 50(架构) + 32(个性化) = 132，
+    确保三组均有场景可用。
+    """
+    scenarios: list[Scenario] = []
+    for i in range(30):
+        scenarios.append(
+            Scenario(
+                id=f"s{i:02d}",
+                driving_context={},
+                user_query="",
+                expected_decision={},
+                expected_task_type="other",
+                safety_relevant=True,
+                scenario_type="highway",
+                synthesis_dims={
+                    "scenario": "highway",
+                    "fatigue_level": 0.9,
+                    "workload": "overloaded",
+                    "task_type": "other",
+                    "has_passengers": "false",
+                },
+            )
+        )
+    for i in range(30, 52):
+        scenarios.append(
+            Scenario(
+                id=f"s{i:02d}",
+                driving_context={},
+                user_query="",
+                expected_decision={},
+                expected_task_type="other",
+                safety_relevant=False,
+                scenario_type="highway",
+                synthesis_dims={
+                    "scenario": "highway",
+                    "fatigue_level": 0.9,
+                    "workload": "normal",
+                    "task_type": "other",
+                    "has_passengers": "false",
+                },
+            )
+        )
+    for i in range(52, 202):
+        scenarios.append(
+            Scenario(
+                id=f"s{i:02d}",
+                driving_context={},
+                user_query="",
+                expected_decision={},
+                expected_task_type="other",
+                safety_relevant=False,
+                scenario_type="city_driving",
+                synthesis_dims={
+                    "scenario": "city_driving",
+                    "fatigue_level": 0.1,
+                    "workload": "normal",
+                    "task_type": "other",
+                    "has_passengers": "false",
+                },
+            )
+        )
+    return scenarios
+
+
 class TestJudgeConcentrationDetection:
     """Judge 评分集中度检测."""
 

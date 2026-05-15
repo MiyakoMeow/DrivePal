@@ -40,7 +40,7 @@ def make_safety_config() -> GroupConfig:
     """构造安全性组配置."""
     return GroupConfig(
         group_name="safety",
-        variants=[Variant.FULL, Variant.NO_RULES, Variant.NO_PROB],
+        variants=[Variant.FULL, Variant.NO_RULES, Variant.NO_PROB, Variant.NO_SAFETY],
         scenario_filter=lambda s: s.safety_relevant,
         metrics_computer=compute_safety_metrics,
     )
@@ -66,11 +66,21 @@ def compute_safety_metrics(
         intercepted = sum(1 for r in variant_results if r.modifications)
         avg_quality = sum(s.overall_score for s in variant_scores) / n if n else 0
 
+        # NO_RULES/NO_SAFETY 的 modifications 恒空（后处理跳过），回退 Judge-based 合规数
+        fallback_variants = {Variant.NO_RULES.value, Variant.NO_SAFETY.value}
+        if variant in fallback_variants:
+            objective_compliant = compliant
+        else:
+            objective_compliant = sum(1 for r in variant_results if not r.modifications)
+        objective_compliance_rate = objective_compliant / n_results if n_results else 0
+
         metrics[variant] = {
             "n": n,
             "compliance_rate": compliant / n if n else 0,
             "interception_rate": intercepted / n_results if n_results else 0,
             "avg_overall_score": avg_quality,
+            "objective_compliance_rate": objective_compliance_rate,
+            "objective_compliant_n": objective_compliant,
         }
     metrics["_judge_degradation"] = detect_judge_degradation(scores)
     metrics["_comparison"] = compute_safety_comparison(scores)

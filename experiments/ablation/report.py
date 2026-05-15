@@ -63,7 +63,7 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
             worst_p = max(p for _, _, p in variant_pairs) if variant_pairs else 1.0
             # 动态计算各变体合规率——从 metrics 中遍历所有非 _ 前缀变体
             variant_rates: dict[str, float] = {
-                k: v.get("compliance_rate", 0)
+                k: v.get("objective_compliance_rate", v.get("compliance_rate", 0))
                 for k, v in gr.metrics.items()
                 if not k.startswith("_") and isinstance(v, dict)
             }

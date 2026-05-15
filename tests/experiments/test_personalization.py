@@ -3,6 +3,8 @@
 import random
 from unittest import mock
 
+import pytest
+
 from experiments.ablation.preference_metrics import (
     _compute_convergence_speed,
     _compute_decision_divergence,
@@ -554,3 +556,43 @@ def test_simulate_no_driving_context_returns_valid_choice():
     rng = random.Random(0)
     result = simulate_feedback({"should_remind": True}, "high-freq", rng)
     assert result in ("accept", "ignore", None)
+
+
+# ── _adaptive_delta 自适应步长 ──
+
+
+async def test_adaptive_delta_convergence():
+    """同向 3 次 → 步长 0.15，反向 → 0.075。不同 user_id+task_type 隔离。"""
+    from experiments.ablation.feedback_simulator import (
+        _adaptive_delta,
+        _current_delta,
+        _recent_feedback,
+    )
+
+    _current_delta.clear()
+    _recent_feedback.clear()
+
+    d1 = _adaptive_delta("user1", "meeting", "accept")
+    assert d1 == 0.1, f"info不足应 0.1, got {d1}"
+
+    d2 = _adaptive_delta("user1", "meeting", "accept")
+    assert d2 == 0.1, f"信息不足应 0.1, got {d2}"
+
+    d3 = _adaptive_delta("user1", "meeting", "accept")
+    assert d3 == pytest.approx(0.15), f"同向 3 次应 0.15, got {d3}"
+
+    d4 = _adaptive_delta("user1", "meeting", "ignore")
+    assert d4 == pytest.approx(0.075), f"反向应 0.075, got {d4}"
+
+    # 不同 user_id + task_type 隔离
+    _current_delta.clear()
+    _recent_feedback.clear()
+    d = _adaptive_delta("user2", "shopping", "ignore")
+    assert d == 0.1
+
+    # 同一 task_type 不同 user_id 隔离
+    d_user2 = _adaptive_delta("user2", "meeting", "accept")
+    assert d_user2 == 0.1  # user2 的 meeting 历史为空
+
+    _current_delta.clear()
+    _recent_feedback.clear()
