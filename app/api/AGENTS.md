@@ -45,7 +45,7 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 | STORAGE_ERROR | 503 | 存储不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 
-`safe_memory_call` 包装所有存储/记忆调用。`ChatModelUnavailableError` → 503。
+`safe_memory_call` 包装所有存储/记忆调用。`ChatModelUnavailableError` → 500。
 
 ## 中间件
 

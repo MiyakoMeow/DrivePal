@@ -16,8 +16,6 @@ async def close_session(session_id: str, request: Request) -> dict[str, bool]:
     """关闭指定会话（校验用户归属）."""
     try:
         ok = _conversation_manager.close(session_id, user_id=request.state.user_id)
-    except AppError:
-        raise
     except Exception:
         logger.exception("close_session failed")
         raise AppError(AppErrorCode.INTERNAL_ERROR, "Failed to close session") from None

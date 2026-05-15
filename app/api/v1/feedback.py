@@ -27,7 +27,11 @@ async def _handle_memory_feedback(
     memory_action: Literal["accept", "ignore"],
 ) -> None:
     """accept/ignore/modify 的 memory 反馈路径."""
-    mm = get_memory_module()
+    try:
+        mm = get_memory_module()
+    except Exception as e:
+        logger.exception("get_memory_module failed in _handle_memory_feedback")
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
     mode = MemoryMode.MEMORY_BANK
 
     actual_type = await safe_memory_call(
@@ -77,7 +81,11 @@ async def _handle_memory_feedback(
 
 async def _handle_snooze(req: FeedbackRequest, user_id: str) -> None:
     """Snooze 路径：创建延后提醒."""
-    mm = get_memory_module()
+    try:
+        mm = get_memory_module()
+    except Exception as e:
+        logger.exception("get_memory_module failed in _handle_snooze")
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
     mode = MemoryMode.MEMORY_BANK
     actual_type = await safe_memory_call(
         mm.get_event_type(req.event_id, mode=mode),
