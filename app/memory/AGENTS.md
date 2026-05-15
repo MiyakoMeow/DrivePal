@@ -30,7 +30,7 @@ flowchart LR
 
 ### 架构
 
-`write()`/`write_batch()`/`write_interaction()` 直接写 FAISS entry。`format_search_results()` 返回分组格式化文本供 LLM 注入。`finalize()` 串行遍历日期，per-date 生成 daily_summary+daily_personality → overall_summary → overall_personality。
+`write()`/`write_batch()`/`write_interaction()` 直接写 FAISS entry。`format_search_results()` 返回分组格式化文本供 LLM 注入。`finalize_ingestion()` 编排摘要 → 遗忘 → 持久化，内部调用 `finalize()` 串行遍历日期，per-date 生成 daily_summary+daily_personality → overall_summary → overall_personality。
 
 ### 数据模型 (`schemas.py`)
 
@@ -40,6 +40,11 @@ flowchart LR
 | InteractionRecord | id, event_id, query, response, timestamp, memory_strength, last_recall_date | 原始交互（仅测试用） |
 | FeedbackData | event_id, action(accept\|ignore), type, timestamp, modified_content | 用户反馈 |
 | SearchResult | event, score, source, interactions; to_public() 返回不含内部字段的纯事件数据 | 检索结果包装 |
+| InteractionResult | event_id, interaction_id | `write_interaction()` 返回类型 |
+
+`schemas.py` 底部还暴露了 **事件类型常量**：`EVENT_TYPE_REMINDER = "reminder"`、`EVENT_TYPE_PASSIVE_VOICE = "passive_voice"`、`EVENT_TYPE_TOOL_CALL = "tool_call"`。
+
+`types.py` 定义 `MemoryMode(StrEnum)`，含 `MEMORY_BANK = "memory_bank"`，工厂注册表以此键控。
 
 ### FAISS索引
 
@@ -139,7 +144,7 @@ catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储
 
 ### MemoryModule
 
-`memory.py`。Facade主实现。工厂注册表管理 store 生命周期，`_get_store()` 返回 per-user MemoryBankStore。
+`memory.py`。Facade主实现。工厂注册表（由 `MemoryMode` 键控）管理 store 生命周期，`_get_store()` 返回 per-user MemoryBankStore。
 
 ### 单例
 
@@ -157,10 +162,14 @@ catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储
 
 `embedding_client.py`。薄代理。`encode_batch()` 含数量+维度双重校验。重试由 EmbeddingModel 内部处理。
 
+### 工具函数
+
+`utils.py`。`cosine_similarity(a, b)` 计算余弦相似度；`compute_events_hash(events)` 计算事件内容 SHA256 hash 用于摘要变更检测。
+
 ### MemoryStore接口
 
-`interfaces.py`。Protocol定义 write/search/get_history/update_feedback/get_event_type/write_interaction/close 七方法。
+`interfaces.py`。Protocol定义七方法（write/search/get_history/update_feedback/get_event_type/write_interaction/close）和四个类属性（`store_name`、`requires_embedding`、`requires_chat`、`supports_interaction`）。
 
 ## 隐私保护
 
-`privacy.py`。`sanitize_context()` 由 Execution 节点调用（非记忆模块自动执行）。经纬度截断2位（~1km），地址只保留街道级。
+`privacy.py`。`sanitize_context()` 由 Execution 节点调用（非记忆模块自动执行）。处理 `spatial["current_location"]` 和 `spatial["destination"]` 嵌套字典路径。经纬度截断2位（~1km），地址只保留街道级。

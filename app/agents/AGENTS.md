@@ -64,6 +64,8 @@ flowchart LR
 | channel | audio/visual/detailed | |
 | interrupt_level | 0/1/2 | |
 
+`OutputChannel` 和 `InterruptLevel` 枚举（均在 `outputs.py`），定义输出通道类型和打断等级。
+
 ## 待触发提醒
 
 `pending.py`。`PendingReminderManager` 管理五种 trigger_type：
@@ -84,7 +86,7 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 
 ## 状态
 
-`state.py`。`AgentState`(TypedDict, 12字段) + `WorkflowStages`(dataclass, 4字段)，工作流共享状态。
+`state.py`。`AgentState`(TypedDict, 13字段，含 `rules_result` 规则引擎输出) + `WorkflowStages`(dataclass, 4字段)，工作流共享状态。
 
 ## 提示词
 
@@ -110,11 +112,11 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 
 `decision` 还含 `_postprocessed` 布尔标志，标记已被 `postprocess_decision()` 处理过，防止重复执行。
 
-辅助类型（均在 `workflow.py`）：`LLMJsonResponse`(BaseModel, 通用JSON响应)、`ReminderContent`(提醒内容, speakable/display/detailed)。
+辅助类型（均在 `workflow.py`）：`LLMJsonResponse`(BaseModel, 通用JSON响应)、`ReminderContent`(提醒内容, text/content)。
 
 ## 规则引擎
 
-`rules.py`。7条规则数据驱动加载自 `config/rules.toml`。`apply_rules()` 共6处静态调用。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
+`rules.py`。7条规则数据驱动加载自 `config/rules.toml`。`apply_rules()` 共5处静态调用。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
 
 TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码规则：highway_audio_only / fatigue_suppress / overloaded_postpone / parked_all_channels）。
 
@@ -136,6 +138,8 @@ TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码
 
 `_ablation_disable_rules`（`rules.py:70`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`workflow.py:43`，ContextVar）— 设 `true` 跳过记忆反馈写入。均通过对应 `set_*()` 函数设值，用于对比实验。
 
+`format_constraints()` 约束格式化工具函数。`get_fatigue_threshold()`/`reset_fatigue_threshold_cache()` 疲劳阈值读取与缓存重置。
+
 ### 频次约束
 
 `max_frequency_minutes` 由 `apply_rules()` 合并，Execution 节点 `_check_frequency_guard()` 运行时检查。距上次提醒不足则抑制。
@@ -148,6 +152,7 @@ TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码
 2. **打断风险** `compute_interrupt_risk`：`0.4×fatigue + 0.3×workload + 0.2×scenario + 0.1×speed`
 3. **高风险阈值**：`OVERLOADED_WARNING_THRESHOLD=0.36`，≥ 此值追加警告
 4. **开关**：`PROBABILISTIC_INFERENCE_ENABLED`（默认 `1` 启用，设 `0` 关闭）
+`set_probabilistic_enabled()`/`get_probabilistic_enabled()` 消融实验运行时开关。
 
 ## 异常
 

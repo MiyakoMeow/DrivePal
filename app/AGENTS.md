@@ -15,3 +15,5 @@
 | storage/ | TOML异步存储、JSONL追加写入 | storage/AGENTS.md |
 
 `config.py` — 应用级配置（数据目录路径等），无独立文档。
+`exceptions.py` — 全局异常基类 `AppError` 定义（`code + message`），各模块异常继承之。
+`utils.py` — 共享工具函数，含 `haversine()`（两点间球面距离，米）。

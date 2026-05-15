@@ -19,12 +19,12 @@ flowchart LR
 
 | 文件 | 类/函数 | 职责 |
 |------|---------|------|
-| `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。持有 `asyncio.Queue` 接收音频帧 |
-| `recorder.py` | `VoiceRecorder` | pyaudio 麦克风录音。`start(pipeline)` 在线程池运行阻塞录音循环，`run_coroutine_threadsafe` 喂帧 |
+| `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。`_load_voice_config()` 加载 voice.toml 配置。持有 `asyncio.Queue` 接收音频帧 |
+| `recorder.py` | `VoiceRecorder` | pyaudio 麦克风录音。`_CHANNELS=1`、`_FORMAT=8` 录音参数。`start(pipeline)` 在线程池运行阻塞录音循环，`run_coroutine_threadsafe` 喂帧 |
 | `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence` |
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
-| `asr.py` | `SherpaOnnxASREngine` | SenseVoice 离线 ASR。`_ensure_onnx_lib()` 自动创建 onnxruntime 符号链接 |
-| `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE`、`_FRAMES_PER_CHUNK`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
+| `asr.py` | `SherpaOnnxASREngine` | SenseVoice 离线 ASR。`_ensure_onnx_lib()` 自动创建 onnxruntime 符号链接。`_UNAVAILABLE` 哨兵对象 |
+| `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE=16000`、`_FRAMES_PER_CHUNK=480`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
 
 ## VoicePipeline
 
@@ -96,7 +96,7 @@ mv data/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17 data/models/se
 ## 静默降级
 
 - ASR 模型未存在时 — `SherpaOnnxASREngine("", "")` 总是返回空文本
-- onnxruntime 缺失时 — `_ensure_onnx_lib()` 日志警告并安全返回，但 `_ensure_loaded()` 中无保护的 `import sherpa_onnx`（行 172）**仍可能抛出 ImportError**。降级仅部分生效
+- onnxruntime 缺失时 — `_ensure_onnx_lib()` 日志警告并安全返回，但 `_ensure_loaded()` 中无保护的 `import sherpa_onnx`（行 180）**仍可能抛出 ImportError**。降级仅部分生效
 - 不影响其他模块
 
 ## 测试
