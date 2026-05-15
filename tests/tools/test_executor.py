@@ -1,6 +1,6 @@
 """工具执行器测试。"""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -138,9 +138,11 @@ async def test_query_memory_returns_results(builtin_executor):
     mock_mm = AsyncMock()
     mock_mm.search.return_value = fake_results
 
+    mock_cfg = MagicMock()
+    mock_cfg.memory_query.max_results = 5
     with (
         patch("app.tools.tools.memory_query.get_memory_module", return_value=mock_mm),
-        patch("app.tools.tools.memory_query._load_max_results", return_value=5),
+        patch("app.tools.tools.memory_query.ToolsConfig.load", return_value=mock_cfg),
     ):
         result = await builtin_executor.execute("query_memory", {"query": "开会"})
     assert "明天下午三点开会" in result

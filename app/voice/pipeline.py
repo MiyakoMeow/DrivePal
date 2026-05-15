@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import tomllib
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.voice.asr import ASREngine, SherpaOnnxASREngine
+from app.voice.config import VoiceConfig
 from app.voice.constants import VADStatus
 from app.voice.vad import VADEngine
 
@@ -16,19 +15,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
 logger = logging.getLogger(__name__)
-
-_CONFIG_PATH = Path("config/voice.toml")
-
-
-def _load_voice_config() -> dict:
-    """从 voice.toml 读取完整语音配置。"""
-    try:
-        with _CONFIG_PATH.open("rb") as f:
-            data = tomllib.load(f)
-        return data.get("voice", {})
-    except OSError, tomllib.TOMLDecodeError:
-        logger.warning("Failed to read %s, using defaults", _CONFIG_PATH)
-        return {}
 
 
 class VoicePipeline:
@@ -42,17 +28,15 @@ class VoicePipeline:
         asr_engine: ASREngine | None = None,
         on_transcription: Callable[[str, float], None] | None = None,
     ) -> None:
-        """初始化语音流水线。参数未传时从 config/voice.toml 读取。"""
-        cfg = _load_voice_config()
+        """初始化语音流水线。参数未传时从 voice.toml 读取（缺失则自动生成）。"""
+        cfg = VoiceConfig.load()
         if vad_mode is None:
-            vad_mode = cfg.get("vad_mode", 1)
+            vad_mode = cfg.vad_mode
         if sample_rate is None:
-            sample_rate = cfg.get("sample_rate", 16000)
+            sample_rate = cfg.sample_rate
         if min_confidence is None:
-            min_confidence = cfg.get("min_confidence", 0.5)
-        # VADEngine 帧时长硬编码 30ms，此处须与之对齐
-        silence_ms = cfg.get("silence_timeout_ms", 500)
-        silence_frames = max(1, silence_ms // 30)
+            min_confidence = cfg.min_confidence
+        silence_frames = max(1, cfg.silence_timeout_ms // VADEngine.FRAME_MS)
 
         self._vad = VADEngine(
             mode=vad_mode,
@@ -61,13 +45,12 @@ class VoicePipeline:
         )
         self._expected_frame_bytes = self._vad.frame_bytes
         if asr_engine is None:
-            asr_cfg = cfg.get("asr")
-            if asr_cfg is None:
+            if cfg.asr is None:
                 logger.warning(
                     "No [voice.asr] config found, ASR will use defaults "
                     "(likely unavailable without model paths)"
                 )
-            asr_engine = SherpaOnnxASREngine(config=asr_cfg)
+            asr_engine = SherpaOnnxASREngine(config=cfg.asr)
         self._asr = asr_engine
         self._min_confidence = min_confidence
         self._on_transcription = on_transcription

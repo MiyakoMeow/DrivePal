@@ -1,9 +1,8 @@
 """内置工具集合入口。"""
 
 import logging
-import tomllib
-from pathlib import Path
 
+from app.tools.config import ToolsConfig
 from app.tools.registry import ToolRegistry, ToolSpec
 from app.tools.tools.communication import send_message
 from app.tools.tools.memory_query import query_memory
@@ -13,30 +12,14 @@ from app.tools.tools.vehicle import play_media, set_climate
 logger = logging.getLogger(__name__)
 
 
-def _load_tools_config() -> dict:
-    """从 tools.toml 读取工具配置，失败返回空字典。"""
-    try:
-        with Path("config/tools.toml").open("rb") as f:
-            data = tomllib.load(f)
-        return data.get("tools", {})
-    except OSError, tomllib.TOMLDecodeError:
-        logger.warning("Failed to read config/tools.toml")
-        return {}
+def register_builtin_tools(
+    registry: ToolRegistry, cfg: ToolsConfig | None = None
+) -> None:
+    """注册所有内置工具到给定注册表。cfg 未传时读 tools.toml（缺失则自动生成）。"""
+    if cfg is None:
+        cfg = ToolsConfig.load()
 
-
-def register_builtin_tools(registry: ToolRegistry) -> None:
-    """注册所有内置工具到给定注册表。"""
-    cfg = _load_tools_config()
-    comm_cfg = cfg.get("communication", {})
-    max_msg_len = comm_cfg.get("max_message_length", 200)
-    vehicle_cfg = cfg.get("vehicle", {})
-    temp_min = vehicle_cfg.get("temperature_min", 16)
-    temp_max = vehicle_cfg.get("temperature_max", 32)
-
-    def is_enabled(name: str) -> bool:
-        return cfg.get(name, {}).get("enabled", True)
-
-    if is_enabled("navigation"):
+    if cfg.navigation.enabled:
         registry.register(
             ToolSpec(
                 name="set_navigation",
@@ -54,7 +37,7 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
                 handler=navigate_to,
             )
         )
-    if is_enabled("memory_query"):
+    if cfg.memory_query.enabled:
         registry.register(
             ToolSpec(
                 name="query_memory",
@@ -69,7 +52,7 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
                 handler=query_memory,
             )
         )
-    if is_enabled("communication"):
+    if cfg.communication.enabled:
         registry.register(
             ToolSpec(
                 name="send_message",
@@ -78,14 +61,17 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
                     "type": "object",
                     "properties": {
                         "recipient": {"type": "string"},
-                        "message": {"type": "string", "maxLength": max_msg_len},
+                        "message": {
+                            "type": "string",
+                            "maxLength": cfg.communication.max_message_length,
+                        },
                     },
                     "required": ["recipient", "message"],
                 },
                 handler=send_message,
             )
         )
-    if is_enabled("vehicle"):
+    if cfg.vehicle.enabled:
         registry.register(
             ToolSpec(
                 name="set_climate",
@@ -95,8 +81,8 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
                     "properties": {
                         "temperature": {
                             "type": "number",
-                            "minimum": temp_min,
-                            "maximum": temp_max,
+                            "minimum": cfg.vehicle.temperature_min,
+                            "maximum": cfg.vehicle.temperature_max,
                         },
                     },
                     "required": ["temperature"],

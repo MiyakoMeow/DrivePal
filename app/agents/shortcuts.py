@@ -1,14 +1,56 @@
 """快捷指令解析器——高频场景不走 LLM 流水线."""
 
+from __future__ import annotations
+
 import logging
-import tomllib
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from app.agents.pending import parse_duration, parse_time
+from app.config import ensure_config, get_config_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_SHORTCUTS_PATH = Path(__file__).resolve().parents[2] / "config" / "shortcuts.toml"
+_SHORTCUTS_TOML_DEFAULTS: dict = {
+    "shortcuts": [
+        {
+            "patterns": ["提醒到家", "到家提醒", "到家叫我"],
+            "type": "travel",
+            "location": "home",
+            "speakable_text": "到家提醒已设",
+            "display_text": "到家提醒 · 已设",
+            "priority": 10,
+        },
+        {
+            "patterns": ["提醒到公司", "到公司提醒", "公司提醒"],
+            "type": "travel",
+            "location": "office",
+            "speakable_text": "公司提醒已设",
+            "display_text": "公司提醒 · 已设",
+            "priority": 9,
+        },
+        {
+            "patterns": ["取消提醒"],
+            "type": "action",
+            "action": "cancel_last",
+            "speakable_text": "提醒已取消",
+            "display_text": "已取消",
+            "priority": 8,
+        },
+        {
+            "patterns": ["延迟"],
+            "type": "action",
+            "action": "snooze",
+            "speakable_text": "已延迟",
+            "display_text": "已延迟",
+            "priority": 5,
+        },
+    ],
+}
+
+_SHORTCUTS_PATH: Path = get_config_root() / "shortcuts.toml"
 
 
 class ShortcutResolver:
@@ -20,12 +62,9 @@ class ShortcutResolver:
         self._load()
 
     def _load(self) -> None:
-        try:
-            with _SHORTCUTS_PATH.open("rb") as f:
-                data = tomllib.load(f)
-            self._shortcuts = data.get("shortcuts", [])
-        except OSError, tomllib.TOMLDecodeError:
-            self._shortcuts = []
+        """加载快捷键配置。ensure_config 内部全 catch，不抛 I/O 异常。"""
+        data = ensure_config(_SHORTCUTS_PATH, _SHORTCUTS_TOML_DEFAULTS)
+        self._shortcuts = data.get("shortcuts", [])
 
     def resolve(self, query: str) -> dict | None:
         """匹配查询返回预构建 decision dict，未命中返回 None."""

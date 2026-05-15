@@ -30,7 +30,15 @@ def mock_memory():
 
 @pytest.fixture
 def scheduler(mock_workflow, mock_memory):
-    with patch.object(ProactiveScheduler, "_load_config", return_value={}):
+    with patch("app.scheduler.scheduler.SchedulerConfig.load") as mock_load:
+        mock_load.return_value = MagicMock(
+            tick_interval_seconds=1,
+            debounce_seconds=0,
+            enable_periodic_review=True,
+            review_time="08:00",
+            location_proximity_meters=500,
+            fatigue_delta_threshold=0.1,
+        )
         s = ProactiveScheduler(
             workflow=mock_workflow,
             memory_module=mock_memory,

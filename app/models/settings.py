@@ -7,10 +7,39 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+from app.config import ensure_config, get_config_root
 from app.exceptions import AppError
 from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
 from app.models.model_string import resolve_model_string
 from app.models.types import ProviderConfig
+
+_LLM_TOML_DEFAULTS: dict = {
+    "model_groups": {
+        "default": {"models": ["deepseek/deepseek-v4-flash?temperature=0.0"]},
+        "smart": {"models": ["deepseek/deepseek-v4-flash?temperature=0.0"]},
+        "fast": {"models": ["deepseek/deepseek-v4-flash?temperature=0.0"]},
+        "balanced": {"models": ["deepseek/deepseek-v4-flash?temperature=0.0"]},
+        "judge": {"models": ["deepseek/deepseek-v4-pro?temperature=0.1"]},
+    },
+    "model_providers": {
+        "deepseek": {
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key_env": "DEEPSEEK_API_KEY",
+            "concurrency": 8,
+        },
+        "zhipu-coding": {
+            "base_url": "https://open.bigmodel.cn/api/coding/paas/v4",
+            "api_key_env": "ZHIPU_API_KEY",
+            "concurrency": 3,
+        },
+        "openrouter": {
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key_env": "OPENROUTER_API_KEY",
+            "concurrency": 16,
+        },
+    },
+    "embedding": {"model": "openrouter/baai/bge-m3"},
+}
 
 
 class NoLLMConfigurationError(AppError):
@@ -84,19 +113,26 @@ class LLMSettings:
     @classmethod
     @cache
     def load(cls) -> LLMSettings:
-        """按优先级链加载配置，找不到任何 LLM 配置则抛 RuntimeError."""
-        config_data: dict = {}
-        config_path_env = os.environ.get("CONFIG_PATH", "config/llm.toml")
-        if Path(config_path_env).is_absolute():
+        """按优先级链加载配置，缺失则自动生成默认配置。"""
+        config_path_env = os.environ.get("CONFIG_PATH")
+        if config_path_env:
+            # 用户显式指定路径：使用指定路径，不自动生成
             config_path = Path(config_path_env)
+            if not config_path.is_absolute():
+                config_path = Path(__file__).resolve().parents[2] / config_path_env
+            if config_path.is_file():
+                with config_path.open("rb") as f:
+                    config_data = tomllib.load(f)
+            else:
+                config_data = {}
         else:
-            config_path = Path(__file__).resolve().parents[2] / config_path_env
-        if config_path.is_file():
-            with config_path.open("rb") as f:
-                config_data = tomllib.load(f)
+            config_path = get_config_root() / "llm.toml"
+            config_data = ensure_config(config_path, _LLM_TOML_DEFAULTS)
 
-        model_groups = dict(config_data.get("model_groups", {}))
-        model_providers = dict(config_data.get("model_providers", {}))
+        raw_groups = config_data.get("model_groups")
+        model_groups = dict(raw_groups) if isinstance(raw_groups, dict) else {}
+        raw_providers = config_data.get("model_providers")
+        model_providers = dict(raw_providers) if isinstance(raw_providers, dict) else {}
 
         if not model_groups:
             raise NoLLMConfigurationError

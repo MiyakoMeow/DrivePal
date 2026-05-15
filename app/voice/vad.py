@@ -12,13 +12,16 @@ logger = logging.getLogger(__name__)
 class VADEngine:
     """VAD 引擎，检测语音起止并切分。"""
 
+    # WebRTC VAD 固定帧时长（仅支持 10/20/30ms），本系统使用 30ms
+    FRAME_MS: int = 30
+
     def __init__(
         self, mode: int = 1, sample_rate: int = 16000, silence_timeout_frames: int = 17
     ) -> None:
         """初始化 VAD 引擎."""
         self._vad = webrtcvad.Vad(mode)
         self._sample_rate = sample_rate
-        self._frame_ms = 30
+        self._frame_ms = self.FRAME_MS
         self._frame_bytes = int(sample_rate * 2 * self._frame_ms / 1000)
         self._silence_frames = 0
         self._speech_frames = 0
