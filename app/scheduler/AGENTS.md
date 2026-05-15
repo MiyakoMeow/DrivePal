@@ -130,8 +130,6 @@ fatigue_delta_threshold = 0.1
 
 ## 异常
 
-Scheduler 为 **不跨层原则** 典型——tick 内不传播异常。
-
 - 各步骤独立 `try/except`，单步失败不影响后续
 - 主循环 `except Exception` 兜底防崩溃，log 后继续
 - `except AppError` 捕获工作流异常，log 后不中断
