@@ -3,7 +3,8 @@ class AppState {
     #experimentChart = null;
     #ws = null;
     #wsReconnectTimer = null;
-    reconnectAttempts = 0;
+    #pendingQuery = null;
+    #reconnectAttempts = 0;
 
     getCurrentEventId() { return this.#currentEventId; }
     setCurrentEventId(id) { this.#currentEventId = id; }
@@ -18,11 +19,18 @@ class AppState {
     setWs(ws) { this.#ws = ws; }
     getWs() { return this.#ws; }
 
+    getReconnectAttempts() { return this.#reconnectAttempts; }
+    resetReconnectAttempts() { this.#reconnectAttempts = 0; }
+    incrementReconnectAttempts() { this.#reconnectAttempts += 1; }
+
     setWsReconnectTimer(timer) { this.#wsReconnectTimer = timer; }
+
+    getPendingQuery() { return this.#pendingQuery; }
+    setPendingQuery(q) { this.#pendingQuery = q; }
 
     reset() {
         this.#currentEventId = null;
-        this.reconnectAttempts = 0;
+        this.#pendingQuery = null;
         document.getElementById('feedbackRow').style.display = 'none';
         ['context', 'task', 'decision', 'execution'].forEach(s => {
             document.getElementById(`stage-${s}-body`).innerHTML =
@@ -109,11 +117,16 @@ function connectWS() {
         return existing;
     }
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${location.host}/api/v1/ws`;
+    const wsUrl = `${protocol}//${location.host}/api/v1/ws?user_id=default`;
     const ws = new WebSocket(wsUrl);
     state.setWs(ws);
     ws.onopen = () => {
-        state.reconnectAttempts = 0;
+        state.resetReconnectAttempts();
+        const pending = state.getPendingQuery();
+        if (pending) {
+            state.setPendingQuery(null);
+            ws.send(JSON.stringify(pending));
+        }
     };
     ws.onmessage = (event) => {
         try {
@@ -139,8 +152,8 @@ function scheduleReconnect() {
     if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
         return;
     }
-    const delay = Math.min(1000 * Math.pow(2, state.reconnectAttempts), 30000);
-    state.reconnectAttempts += 1;
+    const delay = Math.min(1000 * Math.pow(2, state.getReconnectAttempts()), 30000);
+    state.incrementReconnectAttempts();
     const timer = setTimeout(() => connectWS(), delay);
     state.setWsReconnectTimer(timer);
 }
@@ -207,17 +220,16 @@ async function sendQuery() {
     if (!query) return;
     const context = buildContext(document.querySelector('.panel-left'));
     const ws = state.getWs();
+    const payload = { type: 'query', payload: { query, context, session_id: 'webui-' + Date.now() } };
     if (!ws || ws.readyState !== WebSocket.OPEN) {
         showToast('WebSocket 未连接，正在重连...', 'error');
+        state.setPendingQuery(payload);
         connectWS();
         return;
     }
     setLoading(true);
     state.reset();
-    ws.send(JSON.stringify({
-        type: 'query',
-        payload: { query, context, session_id: 'webui-' + Date.now() },
-    }));
+    ws.send(JSON.stringify(payload));
 }
 
 function showToast(message, type = 'info') {

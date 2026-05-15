@@ -21,9 +21,10 @@ _HEARTBEAT_TIMEOUT = 60.0
 async def websocket_endpoint(ws: WebSocket) -> None:
     """WebSocket 端点。
 
-    BaseHTTPMiddleware 不处理 WS 连接，从 ws.headers 直接读 X-User-Id。
+    BaseHTTPMiddleware 不处理 WS 连接，从 query parameter 读 user_id，
+    兼容浏览器 WebSocket API（无法传自定义 header）。
     """
-    user_id = ws.headers.get("x-user-id", "default")
+    user_id = ws.query_params.get("user_id") or ws.headers.get("x-user-id", "default")
     await ws_manager.connect(ws, user_id)
     logger.info("WS connected: user=%s", user_id)
 

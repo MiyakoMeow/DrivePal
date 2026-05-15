@@ -26,7 +26,7 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 
 ## WebSocket
 
-`WS /api/v1/ws`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。
+`WS /api/v1/ws?user_id=xxx`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。
 
 消息格式（统一用 `payload` 键）：
 - 客户端→服务端：`{"type": "query", "payload": {"query": "...", "context": {...}, "session_id": "..."}}`

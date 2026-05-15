@@ -55,15 +55,14 @@ class WSManager:
         async with self._lock:
             current = self._conns.get(user_id)
             if current is None:
-                if alive:
-                    self._conns[user_id] = alive
+                # disconnect 已清空用户，不复活
+                return
+            dead_ids = {id(ws) for ws in snapshot if ws not in alive}
+            merged = [ws for ws in current if id(ws) not in dead_ids]
+            if merged:
+                self._conns[user_id] = merged
             else:
-                dead_ids = {id(ws) for ws in snapshot if ws not in alive}
-                merged = [ws for ws in current if id(ws) not in dead_ids]
-                if merged:
-                    self._conns[user_id] = merged
-                else:
-                    self._conns.pop(user_id, None)
+                self._conns.pop(user_id, None)
 
     async def send_to(self, ws: WebSocket, message: dict) -> None:
         """向单个连接发送消息."""

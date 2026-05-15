@@ -25,7 +25,6 @@ class AppErrorCode(StrEnum):
     INVALID_INPUT = "INVALID_INPUT"
     STORAGE_ERROR = "STORAGE_ERROR"
     INTERNAL_ERROR = "INTERNAL_ERROR"
-    STREAM_ERROR = "STREAM_ERROR"
 
 
 _CODE_TO_HTTP: dict[AppErrorCode, int] = {
@@ -33,7 +32,6 @@ _CODE_TO_HTTP: dict[AppErrorCode, int] = {
     AppErrorCode.INVALID_INPUT: 422,
     AppErrorCode.STORAGE_ERROR: 503,
     AppErrorCode.INTERNAL_ERROR: 500,
-    AppErrorCode.STREAM_ERROR: 500,
 }
 
 
@@ -80,7 +78,9 @@ async def validation_error_handler(
     details = "; ".join(str(e) for e in exc.errors())
     return JSONResponse(
         status_code=422,
-        content={"error": {"code": "INVALID_INPUT", "message": details}},
+        content={
+            "error": {"code": AppErrorCode.INVALID_INPUT.value, "message": details}
+        },
     )
 
 
