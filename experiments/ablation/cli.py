@@ -373,6 +373,7 @@ def _prepare_group_scenarios(
             )
         if not sampled:
             logger.warning("架构组无可用场景，跳过架构组实验。")
+            group_scenarios["architecture"] = []
         else:
             target_n = min(50, len(sampled))
             if len(sampled) < 50:

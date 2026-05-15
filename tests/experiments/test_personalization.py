@@ -289,7 +289,7 @@ def test_simulate_alignment_high_freq():
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
 
-        rng = random.Random(0)
+        rng = random.Random(1)
         assert (
             simulate_feedback(
                 {"should_remind": True}, "high-freq", rng, driving_context=ctx
@@ -297,7 +297,7 @@ def test_simulate_alignment_high_freq():
             == "accept"
         )
 
-        rng = random.Random(0)
+        rng = random.Random(1)
         assert (
             simulate_feedback(
                 {"should_remind": False}, "high-freq", rng, driving_context=ctx
@@ -316,7 +316,7 @@ def test_simulate_alignment_silent():
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
 
-        rng = random.Random(0)
+        rng = random.Random(1)
         assert (
             simulate_feedback(
                 {"should_remind": False}, "silent", rng, driving_context=ctx
@@ -324,7 +324,7 @@ def test_simulate_alignment_silent():
             == "accept"
         )
 
-        rng = random.Random(0)
+        rng = random.Random(1)
         assert (
             simulate_feedback(
                 {"should_remind": True, "is_emergency": True},
@@ -335,7 +335,7 @@ def test_simulate_alignment_silent():
             == "accept"
         )
 
-        rng = random.Random(0)
+        rng = random.Random(1)
         assert (
             simulate_feedback(
                 {"should_remind": True, "is_emergency": False},
@@ -357,14 +357,14 @@ def test_simulate_alignment_visual_detail():
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
 
-        rng = random.Random(0)
+        rng = random.Random(1)
         decision_with = {"reminder_content": {"display_text": "会议 · 15:00"}}
         assert (
             simulate_feedback(decision_with, "visual-detail", rng, driving_context=ctx)
             == "accept"
         )
 
-        rng = random.Random(0)
+        rng = random.Random(1)
         assert (
             simulate_feedback({}, "visual-detail", rng, driving_context=ctx) == "ignore"
         )
@@ -379,7 +379,7 @@ def test_simulate_alignment_mixed():
         return_value=0.9,
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
-        rng = random.Random(0)
+        rng = random.Random(1)
         assert simulate_feedback({}, "mixed", rng, driving_context=ctx) == "ignore"
 
 
@@ -392,7 +392,7 @@ def test_simulate_noise_flip():
         return_value=0.9,
     ):
         ctx = {"driver": {"fatigue_level": 1.0, "workload": "normal"}}
-        rng = random.Random(3)
+        rng = random.Random(7)
         expected = simulate_feedback(
             {"should_remind": True}, "high-freq", rng, driving_context=ctx
         )
@@ -409,8 +409,8 @@ def test_simulate_noise_high_fatigue():
     ):
         decision = {"should_remind": True}
 
-        rng_low = random.Random(1)
-        rng_high = random.Random(1)
+        rng_low = random.Random(7)
+        rng_high = random.Random(7)
 
         result_low = simulate_feedback(
             decision,
@@ -437,8 +437,8 @@ def test_simulate_feedback_suppression_overloaded():
     ):
         decision = {"should_remind": True}
 
-        rng_normal = random.Random(5)
-        rng_overloaded = random.Random(5)
+        rng_normal = random.Random(6)
+        rng_overloaded = random.Random(6)
 
         result_normal = simulate_feedback(
             decision,
@@ -468,8 +468,8 @@ def test_simulate_feedback_suppression_high_fatigue():
     ):
         decision = {"should_remind": True}
 
-        rng_low = random.Random(5)
-        rng_high = random.Random(5)
+        rng_low = random.Random(6)
+        rng_high = random.Random(6)
 
         result_low = simulate_feedback(
             decision,

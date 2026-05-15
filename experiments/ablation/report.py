@@ -75,8 +75,12 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
             entry["statistical_note"] = {
                 "note": (
                     f"合规率 {rates_desc}（极差 {gap_pp}pp），"
-                    f"但 Cohen's d={worst_d:.2f}, Wilcoxon p={worst_p:.2f}，"
-                    f"未达统计显著（α={_ALPHA}）。建议 n=200+ 复验。"
+                    f"Cohen's d={worst_d:.2f}, Wilcoxon p={worst_p:.2f}，"
+                    + (
+                        f"未达统计显著（α={_ALPHA}）。建议 n=200+ 复验。"
+                        if worst_p >= _ALPHA
+                        else f"达统计显著（α={_ALPHA}）。"
+                    )
                 ),
                 "cohens_d": round(worst_d, 2),
                 "p_value": round(worst_p, 2),

@@ -85,10 +85,10 @@ def simulate_feedback(
         fb_prob -= 0.1
     fb_prob = max(0.3, fb_prob)
 
-    if rng.random() < noise:
-        return "accept" if rng.random() < 0.5 else "ignore"
     if rng.random() > fb_prob:
         return None
+    if rng.random() < noise:
+        return "accept" if rng.random() < 0.5 else "ignore"
     return "accept" if alignment > 0.5 else "ignore"
 
 
