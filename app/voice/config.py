@@ -55,6 +55,6 @@ class VoiceConfig:
                 "silence_timeout_ms", cls.silence_timeout_ms
             ),
             # cls.asr 在 dataclass 上返回 Field descriptor（因使用 default_factory）
-            # 需用 cls().asr 取实例默认值
-            asr=asr_data if isinstance(asr_data, dict) else cls().asr,
+            # 需用 cls().asr 取实例默认值。同时避免空 dict {} 通过
+            asr=asr_data if isinstance(asr_data, dict) and asr_data else cls().asr,
         )

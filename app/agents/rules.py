@@ -110,14 +110,10 @@ _FALLBACK_RULES: list[Rule] = [
         priority=15,
     ),
     Rule(
-        name="passenger_present_relax",
-        condition=lambda ctx: (
-            bool(ctx.get("passengers"))
-            and bool(ctx.get("scenario"))
-            and ctx.get("scenario") != "highway"
-        ),
-        constraint={"extra_channels": ["visual"]},
-        priority=3,
+        name="parked_all_channels",
+        condition=lambda ctx: ctx.get("scenario") == "parked",
+        constraint={"allowed_channels": ["visual", "audio", "detailed"]},
+        priority=5,
     ),
     Rule(
         name="city_driving_limit",

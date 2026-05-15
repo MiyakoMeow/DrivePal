@@ -241,7 +241,7 @@ class ProactiveScheduler:
                         )
                         if self._ws_manager:
                             await self._ws_manager.broadcast_reminder(
-                                self._workflow.current_user,
+                                self._user_id,
                                 {
                                     "content": {"speakable_text": result or ""},
                                     "trigger_source": sig.source,
@@ -264,9 +264,7 @@ class ProactiveScheduler:
                 created_at=datetime.now(UTC).isoformat(),
             )
             try:
-                await self._workflow.memory_module.write(
-                    event, user_id=self._workflow.current_user
-                )
+                await self._workflow.memory_module.write(event, user_id=self._user_id)
                 logger.info("Passive voice memory written: %.50s", text)
             except AppError as e:
                 logger.warning("Failed to write passive voice: %s", e)
