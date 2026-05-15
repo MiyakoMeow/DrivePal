@@ -1,11 +1,12 @@
 """工具执行器测试。"""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.tools.executor import ToolExecutionError, ToolExecutor
 from app.tools.registry import ToolRegistry, ToolSpec
+from app.tools.tools import register_builtin_tools
 
 
 @pytest.fixture
@@ -94,3 +95,61 @@ async def test_valid_execution_returns_result(executor):
     """Given 有效参数, When execute, Then 返回 handler 结果。"""
     result = await executor.execute("test_tool", {"name": "valid"})
     assert result == "ok"
+
+
+@pytest.fixture
+def builtin_executor():
+    """注册内置工具（读真实 config/tools.toml）的执行器。"""
+    registry = ToolRegistry()
+    register_builtin_tools(registry)
+    return ToolExecutor(registry)
+
+
+async def test_builtin_navigation_tool_executes(builtin_executor):
+    """Given set_navigation 注册, When execute, Then 返回导航确认。"""
+    result = await builtin_executor.execute(
+        "set_navigation", {"destination": "北京南站"}
+    )
+    assert result == "导航已设置：北京南站"
+
+
+async def test_disabled_tools_not_registered(builtin_executor):
+    """Given vehicle enabled=false, When 查注册表, Then set_climate/play_media 不存在。"""
+    registry = builtin_executor._registry
+    assert registry.get("set_climate") is None
+    assert registry.get("play_media") is None
+    with pytest.raises(ToolExecutionError, match="Unknown tool"):
+        await builtin_executor.execute("set_climate", {"temperature": 22})
+    with pytest.raises(ToolExecutionError, match="Unknown tool"):
+        await builtin_executor.execute("play_media", {"name": "test"})
+
+
+async def test_query_memory_returns_results(builtin_executor):
+    """Given mock MemoryModule 返回结果, When execute query_memory, Then 返回内容文本。"""
+    from app.memory.schemas import SearchResult
+
+    fake_results = [
+        SearchResult(
+            event={"content": "明天下午三点开会"},
+            score=0.9,
+            source="faiss",
+        ),
+    ]
+    mock_mm = AsyncMock()
+    mock_mm.search.return_value = fake_results
+
+    with (
+        patch("app.tools.tools.memory_query.get_memory_module", return_value=mock_mm),
+        patch("app.tools.tools.memory_query._load_max_results", return_value=5),
+    ):
+        result = await builtin_executor.execute("query_memory", {"query": "开会"})
+    assert "明天下午三点开会" in result
+    mock_mm.search.assert_awaited_once_with("开会", top_k=5)
+
+
+async def test_send_message_max_length_rejected(builtin_executor):
+    """Given message 超 200 字, When execute send_message, Then 抛 ToolExecutionError。"""
+    with pytest.raises(ToolExecutionError, match="maxLength"):
+        await builtin_executor.execute(
+            "send_message", {"recipient": "张三", "message": "a" * 201}
+        )
