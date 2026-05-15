@@ -27,11 +27,14 @@ async def process_query(
         logger.exception("get_memory_module failed")
         raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
 
-    workflow = AgentWorkflow(
-        data_dir=DATA_DIR,
-        memory_module=mm,
-        current_user=request.state.user_id,
-    )
+    try:
+        workflow = AgentWorkflow(
+            data_dir=DATA_DIR,
+            memory_module=mm,
+            current_user=request.state.user_id,
+        )
+    except ValueError as e:
+        raise AppError(AppErrorCode.INVALID_INPUT, "Invalid user configuration") from e
     ctx = req.context.model_dump() if req.context else None
     result, event_id, stages = await safe_call(
         workflow.run_with_stages(req.query, ctx, session_id=req.session_id),

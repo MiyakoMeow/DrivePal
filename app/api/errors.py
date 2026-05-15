@@ -128,7 +128,7 @@ async def safe_call[T](
     except BaseAppError as e:
         if isinstance(e, HTTPException):
             raise
-        raise AppError(AppErrorCode.INTERNAL_ERROR, e.message) from e
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Internal error") from e
     except OSError as e:
         logger.exception("%s: IO error", context_msg)
         raise AppError(

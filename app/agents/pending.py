@@ -274,8 +274,8 @@ class PendingReminderManager:
         condition = target.get("condition", "")
         if not condition or not ctx:
             return False
-        fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
-        workload = ctx.get("driver_state", {}).get("workload", "")
+        fatigue = ctx.get("driver", {}).get("fatigue_level", 0)
+        workload = ctx.get("driver", {}).get("workload", "")
         try:
             if "fatigue>" in condition:
                 threshold = float(condition.split(">")[1])

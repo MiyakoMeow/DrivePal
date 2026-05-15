@@ -13,4 +13,6 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         math.sin(dphi / 2) ** 2
         + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
     )
+    # 浮点精度可能使 a 略超 [0,1]，clamp 防止 sqrt 负数
+    a = max(0.0, min(1.0, a))
     return earth_radius_m * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))

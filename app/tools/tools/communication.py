@@ -28,7 +28,8 @@ def _load_message_max_length() -> int:
             "Failed to read tools.toml max_message_length, using default %s",
             _DEFAULT_MAX_LENGTH,
         )
-        _max_length_cache[0] = _DEFAULT_MAX_LENGTH
+        # 不缓存 fallback，允许瞬态错误后自动恢复
+        return _DEFAULT_MAX_LENGTH
     return _max_length_cache[0]
 
 

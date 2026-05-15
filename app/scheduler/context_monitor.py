@@ -64,18 +64,16 @@ class ContextMonitor:
                 pass
 
         try:
-            old_fatigue = float(
-                self._last.get("driver_state", {}).get("fatigue_level", 0)
-            )
-            new_fatigue = float(ctx.get("driver_state", {}).get("fatigue_level", 0))
+            old_fatigue = float(self._last.get("driver", {}).get("fatigue_level", 0))
+            new_fatigue = float(ctx.get("driver", {}).get("fatigue_level", 0))
             delta.fatigue_increased = (
                 new_fatigue > old_fatigue + self._fatigue_delta_threshold
             )
         except ValueError, TypeError:
             pass
 
-        old_wl = self._last.get("driver_state", {}).get("workload")
-        new_wl = ctx.get("driver_state", {}).get("workload")
+        old_wl = self._last.get("driver", {}).get("workload")
+        new_wl = ctx.get("driver", {}).get("workload")
         delta.workload_changed = old_wl != new_wl
 
         self._last = copy.deepcopy(ctx)

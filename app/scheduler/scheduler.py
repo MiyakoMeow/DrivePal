@@ -192,8 +192,8 @@ class ProactiveScheduler:
                     TriggerSignal(source="periodic", priority=0, context=ctx_copy)
                 )
 
-        fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
-        workload = ctx.get("driver_state", {}).get("workload", "")
+        fatigue = ctx.get("driver", {}).get("fatigue_level", 0)
+        workload = ctx.get("driver", {}).get("workload", "")
         if fatigue > _FATIGUE_HIGH or workload == "overloaded":
             signals.append(
                 TriggerSignal(

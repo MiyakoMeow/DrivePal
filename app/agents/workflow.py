@@ -741,6 +741,9 @@ class AgentWorkflow:
         rules_result = state.get("rules_result") or (
             apply_rules(driving_ctx) if driving_ctx else {}
         )
+        # shortcut/proactive 路径跳过 _joint_decision_node，此处补写
+        if "rules_result" not in state:
+            state["rules_result"] = rules_result
 
         postpone = decision.get("postpone", False)
         timing = decision.get("timing", "")

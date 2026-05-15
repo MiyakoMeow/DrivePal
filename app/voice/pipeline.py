@@ -60,7 +60,12 @@ class VoicePipeline:
         )
         self._expected_frame_bytes = self._vad.frame_bytes
         if asr_engine is None:
-            asr_cfg = cfg.get("asr", {})
+            asr_cfg = cfg.get("asr")
+            if asr_cfg is None:
+                logger.warning(
+                    "No [voice.asr] config found, ASR will use defaults "
+                    "(likely unavailable without model paths)"
+                )
             asr_engine = SherpaOnnxASREngine(config=asr_cfg)
         self._asr = asr_engine
         self._min_confidence = min_confidence
