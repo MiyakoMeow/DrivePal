@@ -39,54 +39,53 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 
 ## 异常处理
 
-`app/api/errors.py` — API 是异常体系最终边界。
+`app/api/errors.py` — 异常体系之最终边界。
 
 ### 多重继承桥接
 
 ```python
 class AppError(BaseAppError, HTTPException):
-    # isinstance(e, BaseAppError) → True  域内代码可 catch
-    # isinstance(e, HTTPException) → True FastAPI handler 可 catch
+    # isinstance(e, BaseAppError) → True  域内 catch
+    # isinstance(e, HTTPException) → True FastAPI handler catch
 ```
 
-`BaseAppError` 即 `app.exceptions.AppError`（全系统基类），`HTTPException` 为 FastAPI 异常。
-桥接模式实现了域内域外双重视角——业务流程看作 `AppError`，HTTP 管道看作 `HTTPException`。
+`BaseAppError`（`app.exceptions.AppError`）+ `HTTPException`（FastAPI）。双重视角——业务流程见 `AppError`，HTTP 管道见 `HTTPException`。
 
-### AppErrorCode → HTTP 映射
+### AppErrorCode → HTTP
 
-| AppErrorCode | HTTP | 场景 |
-|---|---|---|
+| Code | HTTP | 场景 |
+|------|------|------|
 | NOT_FOUND | 404 | 资源不存在 |
-| INVALID_INPUT | 422 | 请求参数不合法 |
+| INVALID_INPUT | 422 | 参数不合法 |
 | STORAGE_ERROR | 503 | 存储不可用 |
 | SERVICE_UNAVAILABLE | 503 | 模型/工作流不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 
-### safe_call() 映射规则
+### safe_call() 映射
 
-`safe_call()` 统一包装所有存储/记忆/工作流调用。异常精确映射：
+统一包装存储/记忆/工作流调用：
 
-| 源异常 | HTTP | 消息 |
-|--------|------|------|
+| 源异常 | HTTP | 响应消息 |
+|--------|------|---------|
 | `TransientError` | 503 | Service temporarily unavailable |
 | `FatalError` | 500 | Internal storage error |
 | `ToolExecutionError` | 500 | Tool execution failed |
 | `WorkflowError` | 503 | Service temporarily unavailable |
-| `BaseAppError` (非HTTP) | 500 | Internal error |
-| `BaseAppError` (含 API AppError) | 直抛 | 原样 |
+| `BaseAppError`(非HTTP) | 500 | Internal error |
+| `BaseAppError`(含API) | 直抛 | 原样 |
 | `ValueError` | 422 | Invalid request data |
 | `OSError` | 503 | Service temporarily unavailable |
-| 其余 Exception | 500 | Internal server error |
+| 其余 | 500 | Internal server error |
 
-日志统一 `logger.exception()` 持久化，但响应消息泛化防止信息泄露。
+日志 `logger.exception()` 持久化，消息泛化防泄露。
 
-### 统一响应信封
+### 响应信封
 
 ```json
 {"error": {"code": "STORAGE_ERROR", "message": "Service temporarily unavailable"}}
 ```
 
-Pydantic 校验失败由 `validation_error_handler` 统一转换为 `422 INVALID_INPUT`。
+Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 
 ## 中间件
 

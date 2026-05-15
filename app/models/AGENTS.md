@@ -35,19 +35,19 @@
 
 ## 异常
 
-两类异常体系并存——域内异常继承 `AppError`，类型校验继承内置异常。
+两类并存：域内继承 `AppError`，类型校验继承内置。
 
-### AppError 子类（走 API 映射路径）
+### AppError 子类（走 API 映射）
 
 | 异常 | 父类 | 文件 | 说明 |
 |------|------|------|------|
-| `ChatError` | `AppError` | `chat.py:79` | LLM调用通用失败 |
-| `NoProviderError` | `ChatError` | `chat.py:86` | provider列表为空 |
+| `ChatError` | `AppError` | `chat.py:79` | LLM通用失败 |
+| `NoProviderError` | `ChatError` | `chat.py:86` | provider空 |
 | `AllProviderFailedError` | `ChatError` | `chat.py:95` | 全部provider失败 |
 | `NoLLMConfigurationError` | `AppError` | `settings.py:16` | 无LLM配置 |
 | `MissingModelFieldError` | `AppError` | `settings.py:23` | 缺model字段 |
 | `NoDefaultModelGroupError` | `AppError` | `settings.py:32` | 无默认model group |
-| `NoJudgeModelConfiguredError` | `AppError` | `settings.py:41` | 未配置评测模型 |
+| `NoJudgeModelConfiguredError` | `AppError` | `settings.py:41` | 缺评测模型 |
 
 ### 独立异常（不入继承树）
 
@@ -55,9 +55,9 @@
 |------|------|------|------|
 | `ProviderNotFoundError` | `ValueError` | `exceptions.py:4` | provider未配置 |
 | `ModelGroupNotFoundError` | `KeyError` | `exceptions.py:12` | model_group未找到 |
-| `InvalidModelStringError` | `ValueError` | `model_string.py:9` | 引用字符串格式错 |
+| `InvalidModelStringError` | `ValueError` | `model_string.py:9` | 引用格式错 |
 
-catch 模式：provider 调用 `except (openai.APIError, OSError, ValueError, TypeError, RuntimeError)` → 下一provider fallback。全部失败 → `AllProviderFailedError`。
+catch 模式：provider 调用 `except (openai.APIError, OSError, ValueError, TypeError, RuntimeError)` → 下一provider fallback。全失败 → `AllProviderFailedError`。
 
 ## 阈值
 

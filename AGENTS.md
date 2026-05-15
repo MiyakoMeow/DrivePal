@@ -173,8 +173,8 @@ git worktree add .worktrees/<名> -b <名>
 
 ## 异常处理范式
 
-`app/exceptions.py:AppError(Exception)` — 全系统异常基类。统一 `code: str` + `message: str`。
-各模块继承之，形成统一继承树。API 层通过多重继承桥接域内异常与 FastAPI。
+`AppError(Exception)` 为全系统基类，统一 `code+message`。
+各模块继承之，API 层多重继承桥接 FastAPI。
 
 > 各模块异常详情 → `app/*/AGENTS.md`。
 
@@ -182,20 +182,20 @@ git worktree add .worktrees/<名> -b <名>
 
 | 模式 | 载体 | 说明 |
 |------|------|------|
-| **统一基类** | `AppError(Exception)` | 全系统异常基类，`code+message`。各模块异常继承之 |
-| **可恢复性二分** | `TransientError` vs `FatalError` | MemoryBank首创。可重试瞬态 vs 不可恢复永久 |
-| **多重继承桥接** | `AppError(BaseAppError, HTTPException)` | `isinstance(e, BaseAppError)` 域内 catch；`isinstance(e, HTTPException)` FastAPI handler catch |
-| **哨兵异常** | `SummarizationEmpty` | 非错误，控制流信号。调用方捕获后返 None，不上报 |
-| **独立异常** | `ValueError`/`TypeError` 子类 | 非域内错误（类型校验/结构误用）不纳入继承树 |
-| **不跨层** | 各层 catch→reinterpret | 下层抛特定异常，上层包装为本层类型再上抛 |
+| **统一基类** | `AppError` | `code+message`，各模块继承 |
+| **可恢复二分** | `TransientError`/`FatalError` | 瞬态可重试 vs 永久不重试 |
+| **多重继承桥接** | `AppError(BaseAppError, HTTPException)` | 域内 catch + FastAPI handler 双视角 |
+| **哨兵** | `SummarizationEmpty` | 非错误，控制流信号，调用方捕获返 None |
+| **独立异常** | `ValueError`/`TypeError` 子类 | 类型校验/结构误用，不入继承树 |
+| **不跨层** | 下层抛→上层 reinterpret | 各层包装本层类型再上抛 |
 
-### 关键原则
+### 原则
 
-1. **新增异常先判断归属**：域内异常继承 `AppError`，类型校验/结构误用继承 Python 内置异常
-2. **不跨层传播底层类型**：catch 后 reinterpret，抛上层类型
-3. **哨兵模式显式标注**：需在类型标注 + 文档说明"非错误"
-4. **瞬态 vs 永久区分**：沿用 `TransientError`/`FatalError` 二分
-5. **各模块具体异常 → 对应 `AGENTS.md`**
+1. 域内异常继承 `AppError`，类型校验继承内置
+2. catch 后 reinterpret，不传播底层类型
+3. 哨兵显式标注"非错误"
+4. 沿用 Transient/Fatal 二分
+5. 各模块具体异常 → 对应 `AGENTS.md`
 
 ## Benchmark
 

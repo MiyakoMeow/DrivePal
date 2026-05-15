@@ -121,9 +121,9 @@ max_results = 5
 
 | 异常 | 文件 | 继承 | 说明 |
 |------|------|------|------|
-| `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验失败/handler异常。code=TOOL_ERROR |
+| `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
 
-catch 模式：`_execution_node`（`agents/workflow.py`）内逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`get_default_executor()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → 空注册表。
+catch 模式：`_execution_node` 逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`get_default_executor()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → 空注册表。
 
 ## 安全约束
 

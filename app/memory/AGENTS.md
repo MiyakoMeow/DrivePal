@@ -86,33 +86,33 @@ flowchart LR
 
 ## 异常
 
-`MemoryBankError(AppError)` 为基类。异常按可恢复性二分，瞬态/永久模式全项目通用。
+`MemoryBankError(AppError)` 为基类。按可恢复性二分，模式全项目通用。
 
-### 可恢复性二分
+### 可恢复二分
 
-| 类 | 性质 | 重试 | 说明 |
+| 类 | 性质 | 重试 | 场景 |
 |----|------|------|------|
-| `TransientError` | 瞬态 | 可重试 (`retry_after`) | 网络/超时/限速 |
-| `FatalError` | 永久 | 不重试 | 配置错误/数据损坏 |
+| `TransientError` | 瞬态 | 可重试 | 网络/超时/限速 |
+| `FatalError` | 永久 | 不重试 | 配置错/数据损坏 |
 
 ### 继承树
 
 ```
 MemoryBankError(AppError)
-  ├─ TransientError             瞬态可重试
-  │    └─ LLMCallFailedError    LLM 调用失败
-  ├─ FatalError                 不可恢复
-  │    ├─ ConfigError           配置错误
-  │    └─ IndexIntegrityError   FAISS 索引损坏
-  └─ SummarizationEmpty         哨兵异常（非错误）
+  ├─ TransientError
+  │    └─ LLMCallFailedError
+  ├─ FatalError
+  │    ├─ ConfigError
+  │    └─ IndexIntegrityError
+  └─ SummarizationEmpty   哨兵（非错误）
 ```
 
 | 异常 | 说明 |
 |------|------|
-| `SummarizationEmpty` | 哨兵异常，LLM返回空内容。调用方捕获后返 None，不上报 |
+| `SummarizationEmpty` | 哨兵，LLM返空。调用方捕获返 None，不上报 |
 | `InvalidActionError` | 独立异常（`schemas.py`），继承 `ValueError`，不入继承树 |
 
-catch 模式：`except ValueError, TypeError:` 包裹内部数据校验（PEP-758）。存储读写：`except (json.JSONDecodeError, OSError, TypeError, ValueError)` 自动恢复。FAISS 索引：逐类损坏恢复（metadata格式错/计数不匹配/索引类型不对）。`except LLMCallFailedError` 在 summarizer 内独立处理。
+catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储读写 `except (json.JSONDecodeError, OSError, TypeError, ValueError)` 自动恢复。FAISS 逐类损坏恢复。`except LLMCallFailedError` 在 summarizer 内独立处理。
 
 ## 阈值
 

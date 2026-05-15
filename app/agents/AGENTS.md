@@ -154,14 +154,14 @@ TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码
 | 异常 | 文件 | 继承 | 说明 |
 |------|------|------|------|
 | `WorkflowError` | `workflow.py:65` | `AppError` | 模型不可用等，code=WORKFLOW_ERROR |
-| `AppError` (catch) | 各工作流方法 | — | 工作流内 **不 catch 具体子类型**，统一 `except AppError` → log → 回退或继续 |
+| `AppError`(catch) | 各工作流方法 | — | **不 catch 具体子类型**，统一 except→log→回退 |
 
 catch 模式：
-- LLM JSON 解析：`except json.JSONDecodeError` → 回退原始文本（`LLMJsonResponse.from_llm()`）
-- Pydantic 校验：`except ValidationError` → 回退至原始 output
-- 工作流步骤：`except AppError` → log → raise 或 yield error event
-- 数据校验：`except ValueError, TypeError:` → log → 安全回退
-- 配置加载：`except (OSError, tomllib.TOMLDecodeError, ValueError)` → 使用 fallback 规则
+- LLM JSON 解析：`except json.JSONDecodeError` → 回退原文本
+- Pydantic：`except ValidationError` → 回退原始 output
+- 工作流步骤：`except AppError` → log→raise 或 yield error
+- 数据校验：`except ValueError, TypeError:` → log→安全回退
+- 配置加载：`except OSError, tomllib.TOMLDecodeError, ValueError` → fallback 规则
 
 ### 状态输出
 

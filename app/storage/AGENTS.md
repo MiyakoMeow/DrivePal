@@ -44,14 +44,14 @@ flowchart LR
 - **`default_factory`**：`__init__` 可选参数，控制文件不存在时写入的默认值。默认 `dict`，传 `list` 以支持列表模式
 - **API**：read/write/append(列表)/update(字典)/merge_dict_key(字典)
 
-### 异常（独立异常，不入 AppError 继承树）
+### 异常（独立，不入 AppError 继承树）
 
 | 异常 | 父类 | 触发 |
 |------|------|------|
 | `AppendError` | `TypeError` | 非列表存储调 append |
 | `UpdateError` | `TypeError` | 非字典存储调 update/merge_dict_key |
 
-性质：结构误用（调用了当前存储模式不支持的 API），非域内业务错误。继承 `TypeError` 而非 `AppError`，不经过 API `safe_call()` 映射路径。
+性质：结构误用（当前模式不支持 API），非域内业务错误。继承 `TypeError`，不经过 `safe_call()` 映射路径。
 
 ## JSONLinesStore (`jsonl_store.py`)
 
