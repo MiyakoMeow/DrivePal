@@ -109,14 +109,21 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
-# CORS：开发用，部署前须收敛 origin 列表
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+
+def _build_cors_config() -> dict:
+    origins_str = os.getenv("DRIVEPAL_CORS_ORIGINS", "*")
+    origins = [o.strip() for o in origins_str.split(",") if o.strip()]
+    is_wildcard = origins == ["*"]
+    return {
+        "allow_origins": origins,
+        "allow_credentials": not is_wildcard,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+
+
+app.add_middleware(CORSMiddleware, **_build_cors_config())
 app.add_middleware(UserIdentityMiddleware)
 app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)

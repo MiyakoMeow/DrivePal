@@ -176,3 +176,30 @@ async def test_app_error_not_wrapped():
     executor = ToolExecutor(registry)
     with pytest.raises(CustomError):
         await executor.execute("fail_tool", {})
+
+
+async def _echo_handler(params: dict) -> str:
+    return f"echo: {params}"
+
+
+def test_tool_spec_require_confirmation_default():
+    """ToolSpec 默认 require_confirmation_when 为 None。"""
+    spec = ToolSpec(
+        name="test",
+        description="test",
+        input_schema={},
+        handler=_echo_handler,
+    )
+    assert spec.require_confirmation_when is None
+
+
+def test_tool_spec_require_confirmation_driving():
+    """ToolSpec 可设置 require_confirmation_when='driving'。"""
+    spec = ToolSpec(
+        name="test",
+        description="test",
+        input_schema={},
+        handler=_echo_handler,
+        require_confirmation_when="driving",
+    )
+    assert spec.require_confirmation_when == "driving"

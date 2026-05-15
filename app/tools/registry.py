@@ -17,6 +17,7 @@ class ToolSpec:
     description: str
     input_schema: dict[str, Any]
     handler: ToolHandler
+    require_confirmation_when: str | None = None
 
 
 class ToolRegistry:

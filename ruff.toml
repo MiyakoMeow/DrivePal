@@ -87,6 +87,22 @@ exclude = [".agents/**"]
     "TC003",  # AsyncGenerator 在 run_stream 返回注解中使用，无 from __future__ import annotations，运行时必需
     "ARG002",  # _handle_cancel/_handle_postpone 中 state 参数为接口一致性保留
 ]
+"app/agents/context_agent.py" = [
+    "BLE001",  # _safe_memory_search/_safe_memory_history 宽捕获——降级返回空结果
+    "TC001",  # MemoryModule/ConversationManager/AgentState 仅用于类型注解
+]
+"app/agents/joint_decision_agent.py" = [
+    "BLE001",  # run_proactive 校验回退需宽捕获
+    "FBT001",  # setter 接受 bool 参数（消融实验标记）
+    "TC001",  # AgentState/MemoryModule/TOMLStore 仅用于类型注解
+    "C901",  # run 含概率推断+规则约束+偏好+校验多分支，复杂度可接受
+]
+"app/agents/execution_agent.py" = [
+    "BLE001",  # _safe_memory_history 宽捕获——降级返回空列表
+    "TC001",  # AgentState/WorkflowStages/MemoryModule 仅用于类型注解
+    "ARG002",  # _handle_cancel/_handle_postpone 中 state 参数为接口一致性保留
+    "PLR0913",  # _handle_postpone/_handle_immediate_send 参数多但各有所用
+]
 
 "app/agents/pending.py" = [
     "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）

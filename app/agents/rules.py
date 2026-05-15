@@ -41,7 +41,9 @@ def _get_fatigue_threshold() -> float:
     global _cached_fatigue_threshold
     if _cached_fatigue_threshold is not None:
         return _cached_fatigue_threshold
-    raw = os.environ.get("FATIGUE_THRESHOLD", "0.7")
+    raw = os.environ.get("DRIVEPAL_FATIGUE_THRESHOLD") or os.environ.get(
+        "FATIGUE_THRESHOLD", "0.7"
+    )
     try:
         value = float(raw)
     except ValueError:
