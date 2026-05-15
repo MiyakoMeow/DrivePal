@@ -127,9 +127,9 @@ Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 **启动**：`uv run uvicorn app.api.main:app`
 
 **Lifespan**：
-- 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户） + `_init_voice_if_available(sched)` 初始化 VoicePipeline + VoiceRecorder（失败静默降级）
-- 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoicePipeline 转录回调推送至 scheduler
-- 关闭：`_stop_voice()` 停止录音流水线 + `ProactiveScheduler.stop()` + `close_memory_module()` FAISS落盘 + `close_client_cache()`
+- 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户） + `VoiceService.start(sched)` 初始化语音流水线（配置 enabled=False 时静默跳过，ASR/pyaudio 缺失时降级）
+- 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoiceService 转录回调推送至 scheduler
+- 关闭：`VoiceService.stop()` 停止录音流水线 + `ProactiveScheduler.stop()` + `close_memory_module()` FAISS落盘 + `close_client_cache()`
 
 **CORS**：开发用 `allow_origins=["*"]`，部署前须收敛。
 

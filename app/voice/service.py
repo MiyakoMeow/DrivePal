@@ -9,6 +9,10 @@ from collections import deque
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import tomli_w
+
+from app.config import get_config_root
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -154,10 +158,6 @@ class VoiceService:
 
     async def update_config(self, cfg: dict) -> dict:
         """热更新配置。无效配置抛 ValueError。修改持久化到 self._config。需重建的标记 requires_restart。"""
-        import tomli_w
-
-        from app.config import get_config_root
-
         restart_needed = False
         for key, val in cfg.items():
             if not hasattr(self._config, key):
@@ -170,7 +170,16 @@ class VoiceService:
                 msg = "min_confidence must be 0.0-1.0"
                 raise ValueError(msg)
             setattr(self._config, key, val)
-            if key in ("vad_mode", "sample_rate", "device_index", "asr"):
+            if key == "enabled":
+                self._enabled = bool(val)
+            if key in (
+                "vad_mode",
+                "sample_rate",
+                "device_index",
+                "asr",
+                "min_confidence",
+                "silence_timeout_ms",
+            ):
                 restart_needed = True
         # 持久化到 TOML 文件
         try:
@@ -187,7 +196,6 @@ class VoiceService:
                     "asr": c.asr,
                 },
             }
-            import asyncio
 
             def _write_config() -> None:
                 with path.open("wb") as f:
