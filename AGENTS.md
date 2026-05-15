@@ -145,41 +145,6 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 - **不可变**：const/final 优先
 - **测试**：一事一测。Given→When→Then。名含场景+期望
 
-## 开发指南
-
-### 工作流
-
-```bash
-# 1. 创建工作树（隔离开发环境）
-git worktree add .worktrees/<功能名> -b <分支名>
-
-# 2. 安装依赖
-cd .worktrees/<功能名> && uv sync
-
-# 3. 修改代码后运行检查
-uv run ruff check --fix
-uv run ruff format
-uv run ty check
-uv run pytest -x -q
-
-# 4. 提交（Conventional Commits）
-git commit -m "feat: 新功能"   # 新功能
-git commit -m "fix: 修 bug"    # 修复
-git commit -m "refactor: 重构" # 重构
-git commit -m "docs: 文档"     # 文档
-
-# 5. 推送并创建 PR
-git push -u origin <分支名>
-```
-
-### 模块添加规范
-
-添加新模块时，同步更新：
-1. 本文件 `结构` 节和技术栈表
-2. 创建 `app/<模块>/AGENTS.md`（组件表/架构图/配置/异常/测试）
-3. `tests/` 下对应测试目录
-4. `config/` 下对应 TOML（如需）
-
 ## 设计文档
 
 系统级设计文档存放于 `docs/superpowers/specs/`（仅本分支存在，合入 main 前移除）。包含完整的设计决策、方案权衡和实现计划。阅读顺序：
