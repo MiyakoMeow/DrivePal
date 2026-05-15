@@ -22,6 +22,7 @@ _TTL_EXTRA_FOR_TIME = 1800
 _MAX_HOUR = 23
 _NOON = 12
 _AM_THRESHOLD = 8  # < 8 且无 AM/PM 标记时视为 PM
+_PERIODIC_WINDOW_SECONDS = 60  # 周期性触发的时间窗口（秒）
 
 
 @dataclass
@@ -31,7 +32,7 @@ class PendingReminder:
     id: str
     event_id: str
     content: dict[str, object]  # MultiFormatContent.model_dump()
-    trigger_type: str  # "location" | "time" | "context"
+    trigger_type: str  # "location" | "time" | "context" | "state" | "periodic"
     trigger_target: dict[str, object]
     trigger_text: str  # 人类可读触发条件
     status: str  # "pending" | "triggered" | "cancelled"
@@ -113,6 +114,17 @@ class PendingReminderManager:
                     ttl_seconds = int(max(delta, 0)) + _TTL_EXTRA_FOR_TIME
                 except ValueError, TypeError:
                     ttl_seconds = _DEFAULT_TTL_SECONDS
+            elif trigger_type == "periodic":
+                interval = trigger_target.get("interval_hours", 0)
+                try:
+                    interval = float(interval)
+                except ValueError, TypeError:
+                    interval = 0
+                ttl_seconds = (
+                    int(interval * 3600 * 2)
+                    if math.isfinite(interval) and interval > 0
+                    else _DEFAULT_TTL_SECONDS
+                )
             else:
                 ttl_seconds = _DEFAULT_TTL_SECONDS
 
@@ -193,6 +205,11 @@ class PendingReminderManager:
                         trigger_type == "context"
                         and self._check_context(r, driving_context)
                     )
+                    or (
+                        trigger_type == "state"
+                        and self._check_state(r, driving_context)
+                    )
+                    or (trigger_type == "periodic" and self._check_periodic(r))
                 ):
                     r["status"] = "triggered"
                     triggered.append(r)
@@ -260,6 +277,51 @@ class PendingReminderManager:
         prev = target.get("previous_scenario", "")
         current = ctx.get("scenario", "")
         return bool(prev) and bool(current) and prev != current
+
+    @staticmethod
+    def _check_state(reminder: dict, ctx: dict) -> bool:
+        target = reminder.get("trigger_target", {})
+        condition = target.get("condition", "")
+        if not condition or not ctx:
+            return False
+        fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
+        workload = ctx.get("driver_state", {}).get("workload", "")
+        try:
+            if "fatigue>" in condition:
+                threshold = float(condition.split(">")[1])
+                return fatigue > threshold
+            if "workload=" in condition:
+                expected = condition.split("=")[1].strip()
+                return workload == expected
+        except ValueError, IndexError, TypeError:
+            return False
+        return False
+
+    @staticmethod
+    def _check_periodic(reminder: dict) -> bool:
+        target = reminder.get("trigger_target", {})
+        raw_interval = target.get("interval_hours", 0)
+        try:
+            interval_hours = float(raw_interval)
+        except ValueError, TypeError:
+            return False
+        if interval_hours <= 0:
+            return False
+        created_str = reminder.get("created_at", "")
+        if not created_str:
+            return False
+        try:
+            created = datetime.fromisoformat(created_str)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=UTC)
+            elapsed = (datetime.now(UTC) - created).total_seconds()
+            period_seconds = interval_hours * 3600
+            return (
+                elapsed >= period_seconds
+                and (elapsed % period_seconds) < _PERIODIC_WINDOW_SECONDS
+            )
+        except ValueError, TypeError:
+            return False
 
 
 def parse_duration(s: str) -> int | None:

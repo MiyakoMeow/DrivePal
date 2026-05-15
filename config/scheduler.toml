@@ -1,0 +1,9 @@
+[scheduler]
+tick_interval_seconds = 15
+debounce_seconds = 30
+enable_periodic_review = true
+review_time = "08:00"
+location_proximity_meters = 500
+
+[scheduler.context_monitor]
+fatigue_delta_threshold = 0.1

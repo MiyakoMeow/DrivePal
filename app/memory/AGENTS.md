@@ -8,19 +8,21 @@
 
 ### 文件
 
-```
-memory_bank/
-├── config.py         # pydantic-settings, MEMORYBANK_前缀
-├── index.py          # FAISS IndexIDMap(IndexFlatIP) + LoadResult降级恢复
-├── index_reader.py   # IndexReader Protocol 只读视图
-├── retrieval.py      # 检索管道
-├── forget.py         # Ebbinghaus遗忘曲线
-├── summarizer.py     # 分层摘要+人格生成
-├── llm.py            # LLM封装（上下文截断重试）
-├── lifecycle.py      # 写入/遗忘/摘要编排
-├── store.py          # MemoryBankStore Facade
-├── observability.py  # MemoryBankMetrics
-└── bg_tasks.py       # 后台任务管理器（预留）
+```mermaid
+flowchart LR
+    subgraph MB["memory_bank/"]
+        CF["config.py<br/>pydantic-settings"]
+        IX["index.py<br/>FAISS IndexIDMap"]
+        IR["index_reader.py<br/>只读视图"]
+        RT["retrieval.py<br/>检索管道"]
+        FG["forget.py<br/>Ebbinghaus遗忘曲线"]
+        SM["summarizer.py<br/>分层摘要+人格"]
+        LL["llm.py<br/>LLM封装"]
+        LC["lifecycle.py<br/>写入/遗忘/摘要"]
+        ST["store.py<br/>MemoryBankStore"]
+        OB["observability.py<br/>Metrics"]
+        BG["bg_tasks.py<br/>后台任务（预留）"]
+    end
 ```
 
 `memory/stores/` — 多store切换扩展点，当前仅re-export MemoryBankStore。

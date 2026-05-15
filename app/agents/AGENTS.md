@@ -6,9 +6,13 @@
 
 ShortcutResolver 匹配快捷指令 → 命中则跳至 Execution，否则走三阶段：
 
-```
-输入 → [ShortcutResolver] ─命中→ Execution
-                         └否→ Context → JointDecision → Execution
+```mermaid
+flowchart LR
+    Input["输入"] --> SR{ShortcutResolver}
+    SR -->|命中| Exec[Execution]
+    SR -->|否| Ctx[Context]
+    Ctx --> JD[JointDecision]
+    JD --> Exec
 ```
 
 | Agent | 入→出 | 要点 |
@@ -18,6 +22,8 @@ ShortcutResolver 匹配快捷指令 → 命中则跳至 Execution，否则走三
 | Execution | 决策 → 结果+event_id | 频次抑制、PendingReminder、隐私脱敏 |
 
 `run_with_stages()` 返回各阶段输出（可解释性）。`run_stream()` 逐阶段 yield SSE事件。
+
+`proactive_run()` — 无用户 query 模式，由 scheduler/context 变化触发。接收 `context_override`/`memory_hints`/`trigger_source`，跳过快捷指令检查，直接 JointDecision + Execution。仍走规则后处理强制覆盖。
 
 ### SSE事件
 
@@ -58,13 +64,15 @@ ShortcutResolver 匹配快捷指令 → 命中则跳至 Execution，否则走三
 
 ## 待触发提醒
 
-`pending.py`。`PendingReminderManager` 管理三种 timing：
+`pending.py`。`PendingReminderManager` 管理五种 trigger_type：
 
-| timing | 触发条件 |
-|--------|---------|
-| delay | 当前时间 ≥ target_time |
+| trigger_type | 触发条件 |
+|-------------|---------|
+| time | 当前时间 ≥ target_time |
 | location | 距目标 <500m（停车1000m） |
-| location_time | 两者任一满足 |
+| context | 驾驶场景切换 |
+| state | 疲劳度 > 阈值 / workload 变化 |
+| periodic | 按 interval_hours 周期性触发 |
 
 `postpone` 为 decision dict 独立布尔字段，不由 timing 决定。`location_time` 拆为两条独立 pending。`poll(driving_context)` 检查触发条件。`cancel_last()` 取消最近一条。
 

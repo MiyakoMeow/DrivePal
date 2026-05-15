@@ -20,6 +20,15 @@ ignore = [
 exclude = [".agents/**"]
 
 [lint.per-file-ignores]
+"app/api/main.py" = [
+    "PLC0415",  # lifespan 内局部导入以避免循环导入
+    "BLE001",  # scheduler 启动失败应 log 继续，不终止 lifespan
+]
+"app/scheduler/scheduler.py" = [
+    "PLR0913",  # __init__ 参数多（依赖注入），功能聚合合理
+    "BLE001",  # 调度器主循环需宽捕获 Exception 防止循环意外终止
+]
+
 "app/api/v1/ws_manager.py" = [
     "D107",  # __init__ docstring 由类 docstring 覆盖
     "SIM105",  # broadcast 中 suppress 不适用于 for 循环体内局部吞异常
@@ -38,6 +47,16 @@ exclude = [".agents/**"]
 ]
 
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
+"app/voice/asr.py" = [
+    "PLC0415",  # onnxruntime/sherpa_onnx/ctypes/importlib.metadata 在函数内局部导入——可选依赖、延迟加载
+    "ASYNC240",  # _ensure_loaded 中 Path.exists() 为轻量同步调用，本原型中可接受
+    "ARG002",  # SherpaOnnxASREngine.transcribe 为占位实现，保留 audio_bytes 参数以符合 ABC 签名
+]
+"app/voice/pipeline.py" = ["PTH110"]
+
+"app/voice/recorder.py" = [
+    "PLC0415",  # pyaudio 为可选依赖（需系统 portaudio 库），函数内局部导入
+]
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 mkdir()/open() 操作，ruff 误判
 
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
@@ -57,6 +76,7 @@ exclude = [".agents/**"]
 
 "app/agents/pending.py" = [
     "PLR0913",  # PendingReminder.new / PendingReminderManager.add 参数>5合理（均为配置字段）
+    "ARG004",  # _check_state/_check_periodic 接收参数为后续实现预留
 ]
 "app/agents/rules.py" = [
     "C901",  # postprocess_decision 含三约束分支+修改追踪，复杂度可接受
@@ -67,6 +87,16 @@ exclude = [".agents/**"]
     "ANN401",  # infer_intent memory_store 为 duck-typing Any
     "FBT001",  # setter 接受 bool 参数（消融实验标记）
 ]
+
+"app/tools/executor.py" = [
+    "BLE001",  # 工具执行器需捕获任意异常以统一返回执行结果
+    "ANN401",  # _validate_constraints 接受 Any 值做运行时类型校验（来自 JSON Schema）
+]
+"app/tools/tools/memory_query.py" = [
+    "BLE001",  # 记忆查询中 httpx/FAISS 异常类型不可预测，宽捕获合理
+    "PLC0415",  # 记忆模块初始化开销大，局部导入避免启动时加载
+]
+
 "experiments/ablation/safety_group.py" = [
     "TC001",  # AblationRunner/Judge 仅用于类型注解，项目惯例不拆 TYPE_CHECKING
     "TC003",  # Path 用于类型注解及运行时 mkdir()/open() 操作，ruff 误判

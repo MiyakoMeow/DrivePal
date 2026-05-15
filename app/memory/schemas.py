@@ -87,3 +87,8 @@ class InteractionResult(BaseModel):
 
     event_id: str
     interaction_id: str = ""
+
+
+EVENT_TYPE_REMINDER = "reminder"
+EVENT_TYPE_PASSIVE_VOICE = "passive_voice"
+EVENT_TYPE_TOOL_CALL = "tool_call"

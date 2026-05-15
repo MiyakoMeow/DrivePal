@@ -74,5 +74,17 @@ class WSManager:
         else:
             return True
 
+    async def broadcast_reminder(self, user_id: str, reminder: dict) -> None:
+        """广播主动提醒事件到用户的所有 WS 连接。"""
+        message = {
+            "type": "reminder",
+            "payload": {
+                "content": reminder.get("content"),
+                "trigger_source": reminder.get("trigger_source", "scheduler"),
+                "interrupt_level": reminder.get("interrupt_level", 0),
+            },
+        }
+        await self.broadcast(user_id, message)
+
 
 ws_manager = WSManager()

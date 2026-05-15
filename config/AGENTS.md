@@ -7,6 +7,9 @@
 | llm.toml | model_groups + model_providers |
 | rules.toml | 规则引擎规则定义 |
 | shortcuts.toml | 快捷命令定义 |
+| voice.toml | 语音流水线配置（麦克风/VAD/ASR模型） |
+| scheduler.toml | 主动调度器配置（轮询间隔/去抖/周期回顾） |
+| tools.toml | 工具开关与约束 |
 
 ## llm.toml 示例
 

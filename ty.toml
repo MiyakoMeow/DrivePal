@@ -2,7 +2,7 @@
 exclude = [".agents/**"]
 
 [analysis]
-replace-imports-with-any = ["faiss", "docx"]
+replace-imports-with-any = ["faiss", "docx", "pyaudio", "sherpa_onnx"]
 
 [rules]
 all = "error"
@@ -22,6 +22,10 @@ rules = { "invalid-assignment" = "ignore" }  # mock 替换 _call_llm_json 时类
 [[overrides]]
 include = ["tests/models/test_chat.py"]
 rules = { "invalid-assignment" = "ignore", "unresolved-attribute" = "ignore" }  # mock 替换 generate 时类型不匹配
+
+[[overrides]]
+include = ["app/voice/asr.py"]
+rules = { "unresolved-attribute" = "ignore" }  # sherpa_onnx.OfflineRecognizer 为 C 扩展无类型桩
 
 [[overrides]]
 include = ["app/api/main.py"]

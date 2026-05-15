@@ -56,8 +56,9 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 **启动**：`uv run uvicorn app.api.main:app`
 
 **Lifespan**：
-- 启动：`init_storage()` + 后台每300s清理过期会话
-- 关闭：`MemoryModule.close()` FAISS落盘 + `close_client_cache()`
+- 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户）
+- 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`
+- 关闭：`ProactiveScheduler.stop()` + `MemoryModule.close()` FAISS落盘 + `close_client_cache()`
 
 **静态文件**：`/static` → WebUI，`GET /` → index.html
 
