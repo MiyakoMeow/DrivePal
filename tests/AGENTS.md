@@ -11,7 +11,7 @@ uv run pytest tests/ -v --test-embedding  # 真实embedding
 uv run pytest tests/ -v --run-integration  # 完整服务
 ```
 
-pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, filterwarnings ignore:builtin type Swig:DeprecationWarning + ignore::DeprecationWarning:webrtcvad。
+pytest.ini：testpaths=tests, asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, filterwarnings ignore:builtin type Swig:DeprecationWarning + ignore::DeprecationWarning:webrtcvad。
 
 conftest.py 注册 integration/llm/embedding 三个 marker，未提供对应选项时跳过标记者。
 
@@ -70,7 +70,7 @@ flowchart RL
         M8["test_schemas.py"]
         M9["test_privacy.py"]
         M10["test_cosine_similarity.py"]
-        M11["test_embedding.py*"]
+        M11["test_embedding.py"]
         M12["test_embedding_client.py"]
         subgraph Stores["memory/stores/"]
             S1["test_bg_tasks.py"]
@@ -92,7 +92,7 @@ flowchart RL
     end
     subgraph Storage["tests/storage/"]
         ST1["test_jsonl_store.py"]
-        ST2["test_storage.py*"]
+        ST2["test_storage.py"]
         ST3["test_experiment_results.py"]
         ST4["test_feedback_log.py"]
     end
