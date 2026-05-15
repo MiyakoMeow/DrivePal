@@ -109,16 +109,16 @@ async def test_update_config_invalid_vad_mode():
 async def test_toggle_recording_start():
     """Given 未启动, When toggle_recording(True), Then 调用 start。"""
     svc = VoiceService(config=_cfg(enabled=True))
-    svc.start = AsyncMock(return_value=True)  # type: ignore[assignment]
+    svc.start = AsyncMock(return_value=True)
     result = await svc.toggle_recording(start=True)
     assert result is True
 
 
 @pytest.mark.asyncio
 async def test_toggle_recording_stop():
-    """Given 已启动, When toggle_recording(False), Then 调用 stop。"""
+    """Given 未启动, When toggle_recording(False), Then 调用 stop。"""
     svc = VoiceService(config=_cfg(enabled=True))
-    svc.stop = AsyncMock()  # type: ignore[assignment]
+    svc.stop = AsyncMock()
     result = await svc.toggle_recording(start=False)
     assert result is False
 
