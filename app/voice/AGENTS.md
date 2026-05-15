@@ -24,6 +24,7 @@ flowchart LR
 | `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence` |
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
 | `asr.py` | `SherpaOnnxASREngine` | SenseVoice 离线 ASR。`_ensure_onnx_lib()` 自动创建 onnxruntime 符号链接 |
+| `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_FRAME_BYTES`、`_FRAMES_PER_CHUNK` 等常量定义 |
 
 ## VoicePipeline
 
@@ -36,9 +37,11 @@ feed_audio(chunk) → Queue → run() 循环:
     silence → discard
 ```
 
-- `_FRAME_BYTES = 960`（16kHz 16bit 30ms）
+- `_FRAME_BYTES`（960，16kHz 16bit 30ms）定义于 `constants.py`
 - `min_confidence` 默认 0.5，< 此值丢弃
 - `on_transcription(text, confidence)` 可选回调（供 Scheduler 实时消费）
+- `close()` — 停止循环并释放 ASR 资源
+- `run()` 校验帧尺寸：`len(chunk) != _FRAME_BYTES` 时日志警告并跳过，防止尺寸异常导致 VAD 结果不可靠。`feed_audio(chunk)` 仅入队列，无校验
 
 ## VADEngine
 
@@ -93,7 +96,7 @@ mv data/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17 data/models/se
 ## 静默降级
 
 - ASR 模型未存在时 — `SherpaOnnxASREngine("", "")` 总是返回空文本
-- onnxruntime 缺失时 — 日志警告，transcribe 返回空
+- onnxruntime 缺失时 — `_ensure_onnx_lib()` 日志警告并安全返回，但 `_ensure_loaded()` 中无保护的 `import sherpa_onnx`（行 172）**仍可能抛出 ImportError**。降级仅部分生效
 - 不影响其他模块
 
 ## 测试

@@ -11,6 +11,7 @@
 ```mermaid
 flowchart LR
     subgraph MB["memory_bank/"]
+        IN["__init__.py<br/>包初始化"]
         CF["config.py<br/>pydantic-settings"]
         IX["index.py<br/>FAISS IndexIDMap"]
         IR["index_reader.py<br/>只读视图"]
@@ -21,7 +22,7 @@ flowchart LR
         LC["lifecycle.py<br/>写入/遗忘/摘要"]
         ST["store.py<br/>MemoryBankStore"]
         OB["observability.py<br/>Metrics"]
-        BG["bg_tasks.py<br/>后台任务（预留）"]
+        BG["bg_tasks.py<br/>后台任务管理器（待接入）"]
     end
 ```
 
@@ -29,16 +30,16 @@ flowchart LR
 
 ### 架构
 
-`write()`/`write_interaction()` 直接写 FAISS entry。`finalize()` 串行遍历日期，per-date 生成 daily_summary+daily_personality → overall_summary → overall_personality。
+`write()`/`write_batch()`/`write_interaction()` 直接写 FAISS entry。`format_search_results()` 返回分组格式化文本供 LLM 注入。`finalize()` 串行遍历日期，per-date 生成 daily_summary+daily_personality → overall_summary → overall_personality。
 
 ### 数据模型 (`schemas.py`)
 
 | 类型 | 关键字段 | 说明 |
 |------|----------|------|
-| MemoryEvent | id, content, type, memory_strength, last_recall_date, speaker | 语义摘要后事件 |
-| InteractionRecord | event_id, query, response | 原始交互（仅测试用） |
-| FeedbackData | event_id, action(accept\|ignore), type | 用户反馈 |
-| SearchResult | event, score, interactions | 检索结果包装 |
+| MemoryEvent | id, created_at, content, type, description, memory_strength, last_recall_date, date_group, interaction_ids, updated_at, speaker | 语义摘要后事件 |
+| InteractionRecord | id, event_id, query, response, timestamp, memory_strength, last_recall_date | 原始交互（仅测试用） |
+| FeedbackData | event_id, action(accept\|ignore), type, timestamp, modified_content | 用户反馈 |
+| SearchResult | event, score, source, interactions; to_public() 返回不含内部字段的纯事件数据 | 检索结果包装 |
 
 ### FAISS索引
 
@@ -57,6 +58,8 @@ flowchart LR
 | Count mismatch | 以index为权威补缺失 |
 | index.faiss读失败 | 备份后删除重建 |
 | index类型非IndexIDMap | 备份全部后重建 |
+
+索引懒重建：加载时仅恢复元数据，空索引在首次写入时自动构建。
 
 ### 检索管道
 

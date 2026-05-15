@@ -11,7 +11,7 @@ uv run pytest tests/ -v --test-embedding  # 真实embedding
 uv run pytest tests/ -v --run-integration  # 完整服务
 ```
 
-pytest.ini：asyncio_mode=auto, timeout=30, addopts=-n auto, filterwarnings ignore Swig DeprecationWarning。
+pytest.ini：asyncio_mode=auto, asyncio_default_fixture_loop_scope=function, timeout=30, addopts=-n auto, filterwarnings ignore Swig DeprecationWarning。
 
 conftest.py 注册 integration/llm/embedding 三个 marker，未提供对应选项时跳过标记者。
 
@@ -32,6 +32,7 @@ flowchart RL
         AG7["test_llm_json_validation.py"]
         AG8["test_sse_stream.py"]
         AG9["test_workflow_llm_json.py"]
+        AG10["test_workflow_proactive.py"]
     end
     subgraph Voice["tests/voice/"]
         VO["test_vad.py"]
@@ -43,7 +44,16 @@ flowchart RL
         TL["test_registry.py"]
     end
     subgraph API["tests/api/"]
-        AP["test_rest.py"]
+        A01["test_rest.py"]
+        A02["test_v1_feedback.py"]
+        A03["test_v1_ws.py"]
+        A04["test_v1_reminders.py"]
+        A05["test_middleware.py"]
+        A06["test_v1_presets.py"]
+        A07["test_v1_query.py"]
+        A08["test_ws_manager.py"]
+        A09["test_v1_sessions.py"]
+        A10["test_v1_data.py"]
     end
     subgraph Mem["tests/memory/"]
         M1["test_forgetting.py"]

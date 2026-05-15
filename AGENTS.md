@@ -20,9 +20,9 @@
 |------|------|------|
 | **驾驶安全优先** | 提醒方式受规则引擎约束，高速仅音频、疲劳时抑制非紧急提醒 | 7 条硬规则 + `postprocess_decision` 不可绕过 |
 | **零配置记忆** | 语音自动转录 → MemoryBank，无需用户手动创建提醒 | `VoicePipeline` → `ProactiveScheduler` → `MemoryModule` |
-| **情境感知** | 外部数据（位置/状态/路况）直接注入，跳过 LLM 编造 | `ContextProvider` → `DrivingContext` → `AgentWorkflow` |
+| **情境感知** | 外部数据（位置/状态/路况）直接注入，跳过 LLM 编造 | `ProactiveScheduler.update_context()` / API 注入 `DrivingContext` |
 | **可解释决策** | 三阶段工作流各节点输出可独立审查 | `WorkflowStages` 保留每阶段结果 |
-| **遗忘曲线** | 记忆按 Ebbinghaus 曲线衰减，检索时按保留率加权 | `ForgettingCurve.retention()` |
+| **遗忘曲线** | 记忆按 Ebbinghaus 曲线衰减，检索时按保留率加权 | `forgetting_retention()` |
 | **静默降级** | 非核心模块（ASR/语音）缺失时系统继续运行 | 各模块 `try/except` + 空返回 |
 
 ## 系统设计
@@ -72,7 +72,7 @@ AgentWorkflow (决策核心)
   └── 依赖: MemoryModule / ChatModel / RuleEngine / ToolExecutor
 
 ProactiveScheduler (主动调度)
-  ├── 输入: VoicePipeline (语音队列) / ContextProvider (驾驶上下文)
+  ├── 输入: VoicePipeline (语音队列) / update_context() (驾驶上下文)
   ├── 引擎: ContextMonitor → MemoryScanner → TriggerEvaluator
   └── 输出: AgentWorkflow.proactive_run() + WS broadcast
 
@@ -96,7 +96,7 @@ Python 3.14 + `uv`。
 | 类 | 术 |
 |----|----|
 | Web | FastAPI + Uvicorn |
-| AI流水线 | 三Agent + 规则引擎 |
+| AI流水线 | 三阶段工作流（Context → JointDecision → Execution）+ 规则引擎 |
 | LLM | DeepSeek |
 | Embedding | BGE-M3 (OpenRouter, 远程) |
 | 记忆 | MemoryBank (FAISS + Ebbinghaus) |
@@ -127,7 +127,6 @@ flowchart LR
         T["tests/ → AGENTS.md"]
         C["config/ （TOML配置）"]
         D["data/ （运行时数据）"]
-        DM["data/models/ （ASR模型）"]
         AR["archive/ → AGENTS.md"]
         E["experiments/ → AGENTS.md"]
     end
@@ -149,7 +148,7 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 
 ### ruff
 
-`ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/COM812/E501/RUF001-003。`tests/**` 豁免约25条。
+`ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/COM812/E501/RUF001-003。`tests/**` 豁免24条。
 
 ### ty
 
@@ -165,13 +164,6 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 - **导入**：标准库→三方→内部→相对，空行分隔。禁通配
 - **不可变**：const/final 优先
 - **测试**：一事一测。Given→When→Then。名含场景+期望
-
-## 设计文档
-
-系统级设计文档存放于 `docs/superpowers/specs/`（仅本分支存在，合入 main 前移除）。包含完整的设计决策、方案权衡和实现计划。阅读顺序：
-
-1. `2026-05-15-voice-memo-assistant-design.md` — 整体架构设计
-2. `2026-05-15-voice-memo-implementation.md` — 分步实现计划
 
 ## 工作树
 
@@ -209,8 +201,7 @@ git worktree add .worktrees/<名> -b <名>
 
 6. **工具安全约束细化** — 当前 `postprocess_decision` 统一管辖所有工具，但未按工具类型差异化约束
 7. **scheduler per-user 实例** — lifespan 仅初始化 default 用户，`_schedulers` dict 支持多用户但未实际启用
-8. **voice config 自动加载** — `voice.toml` 中 `device_index/sample_rate/vad_mode` 等字段未被 `VoiceRecorder`/`VoicePipeline` 自动读取（当前硬编码默认值）
-9. **集成测试** — voice/scheduler/tools 三模块单元测试覆盖不足，缺少集成测试
+8. **集成测试** — voice/scheduler/tools 三模块单元测试覆盖不足，缺少集成测试
 
 ## 开发路线（建议）
 

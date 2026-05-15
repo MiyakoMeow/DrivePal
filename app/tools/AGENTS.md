@@ -22,7 +22,7 @@ flowchart LR
 |------|---------|------|
 | `registry.py` | `ToolRegistry` | 注册/发现/描述工具 |
 | `registry.py` | `ToolSpec` | 工具规范 dataclass（name/description/input_schema/handler） |
-| `registry.py` | `ToolHandler` | `Callable[[dict], Awaitable[str]]` 类型 |
+| `registry.py` | `ToolHandler` | `Callable[[dict[str, Any]], Awaitable[str]]` 类型 |
 | `executor.py` | `ToolExecutor` | 参数校验 → handler 执行 → 结果文本 |
 | `executor.py` | `ToolExecutionError` | 执行异常 |
 | `__init__.py` | `get_default_executor()` | 默认单例 executor（注册全部内置工具） |
@@ -34,7 +34,7 @@ flowchart LR
 ## ToolSpec
 
 ```python
-@dataclass
+@dataclass(frozen=True)
 class ToolSpec:
     name: str                      # 唯一工具名
     description: str               # LLM 用描述
@@ -45,7 +45,7 @@ class ToolSpec:
 ## ToolRegistry
 
 - `register(spec)` — 注册，重复名抛 `ValueError`
-- `get(name)` — 按名查找
+- `get(name)` — 按名查找，返回 `ToolSpec | None`（调用方需处理 None）
 - `list_tools()` — 列出全部
 - `to_llm_description()` — 格式化工具清单供 LLM prompt
 
@@ -54,7 +54,7 @@ class ToolSpec:
 | 工具 | 参数 | 返回 |
 |------|------|------|
 | `set_navigation` | `destination: str` | `"导航已设置：{dest}"` |
-| `send_message` | `recipient: str`, `message: str(max 200)` | `"消息已发送给 {r}"` |
+| `send_message` | `recipient: str`, `message: str(max 200)` | `"消息已发送给 {recipient}"` |
 | `query_memory` | `query: str` | top-5 记忆内容 |
 | `set_climate` | `temperature: number(16-32)` | `"车控功能尚未接入"` |
 | `play_media` | `name: str`, `type: music\|podcast` | `"媒体功能尚未接入"` |
@@ -65,19 +65,31 @@ class ToolSpec:
 - 默认 top_k=5，读 `config/tools.toml` 的 `[tools.memory_query] max_results`
 - 失败返回 `"记忆查询失败"`（不抛异常）
 
-## Execution 节点集成
+## Execution 节点（`_execution_node` 内流程）
 
-`app/agents/workflow.py` `_execution_node` 中，规则后处理之后、`_check_frequency_guard` 之前：
+执行节点在 `app/agents/workflow.py` 中的流程顺序：
+
+1. 规则后处理 `postprocess_decision()` — 强制覆盖
+2. **工具调用执行** — 见下方代码
+3. 待触发提醒创建 — `postpone`/`timing` 分支生成 PendingReminder
+4. `_check_frequency_guard()` — 频次抑制
 
 ```python
 tool_calls = decision.get("tool_calls", [])
 if tool_calls and isinstance(tool_calls, list):
     executor = get_default_executor()
+    tool_results: list[str] = []
     for tc in tool_calls:
-        t_name = tc.get("tool", "")
-        t_params = tc.get("params", {})
-        t_result = await executor.execute(t_name, t_params)
-        tool_results.append(f"[{t_name}] {t_result}")
+        if isinstance(tc, dict):               # 类型守卫
+            t_name = tc.get("tool", "")
+            t_params = tc.get("params", {})
+            try:
+                t_result = await executor.execute(t_name, t_params)
+                tool_results.append(f"[{t_name}] {t_result}")
+            except Exception as e:
+                tool_results.append(f"[{t_name}] 失败: {e}")  # 追加错误，不抛
+    if tool_results:
+        logger.info("Tool call results: %s", "; ".join(tool_results))
 ```
 
 结果仅 log，不写回 state——工具调用的副作用（导航设置/消息发送等）已在 handler 内完成。
@@ -95,6 +107,8 @@ max_message_length = 200
 
 [tools.vehicle]
 enabled = false
+temperature_min = 16
+temperature_max = 32
 
 [tools.memory_query]
 enabled = true

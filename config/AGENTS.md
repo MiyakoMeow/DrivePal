@@ -7,8 +7,8 @@
 | llm.toml | model_groups + model_providers |
 | rules.toml | 规则引擎规则定义 |
 | shortcuts.toml | 快捷命令定义 |
-| voice.toml | 语音流水线配置（麦克风/VAD/ASR模型） |
-| scheduler.toml | 主动调度器配置（轮询间隔/去抖/周期回顾） |
+| voice.toml | 语音流水线配置（麦克风/VAD/ASR模型），路径硬编码为 `config/voice.toml`（不受 CONFIG_PATH 影响） |
+| scheduler.toml | 主动调度器配置（轮询间隔/去抖/周期回顾/位置距离/疲劳阈值） |
 | tools.toml | 工具开关与约束 |
 
 ## llm.toml 示例
@@ -49,20 +49,32 @@ model = "openrouter/baai/bge-m3"
 | MEMORYBANK_SOFT_FORGET_THRESHOLD | 软遗忘阈值（默认0.3） |
 | MEMORYBANK_FORGET_INTERVAL_SECONDS | 遗忘间隔（默认300） |
 | MEMORYBANK_FORGETTING_TIME_SCALE | 遗忘时间尺度（默认1.0） |
+| MEMORYBANK_SEED | 遗忘随机种子（默认None） |
 | MEMORYBANK_CHUNK_SIZE | 分块大小（None=自适应） |
 | MEMORYBANK_DEFAULT_CHUNK_SIZE | 自适应回退（默认1500） |
 | MEMORYBANK_CHUNK_SIZE_MIN/MAX | 200/8192 |
 | MEMORYBANK_LLM_TEMPERATURE | 摘要温度（None→0.3） |
 | MEMORYBANK_LLM_MAX_TOKENS | 摘要max_tokens（None→400） |
+| MEMORYBANK_LLM_MAX_RETRIES | LLM摘要最大重试（默认3） |
+| MEMORYBANK_LLM_TRIM_START | 输入裁剪起始长度（默认1800） |
+| MEMORYBANK_LLM_TRIM_STEP | 输入裁剪步长（默认200） |
+| MEMORYBANK_LLM_TRIM_MIN | 输入裁剪最小保留（默认500） |
+| MEMORYBANK_LLM_ANCHOR_USER | user锚定消息（长字符串） |
+| MEMORYBANK_LLM_ANCHOR_ASSISTANT | assistant锚定回复（长字符串） |
+| MEMORYBANK_SUMMARY_SYSTEM_PROMPT | 摘要系统提示词（长字符串） |
 | MEMORYBANK_EMBEDDING_BATCH_SIZE | 嵌入批量（默认100） |
 | MEMORYBANK_SAVE_INTERVAL_SECONDS | 持久化节流（默认30s） |
 | MEMORYBANK_COARSE_SEARCH_FACTOR | 粗搜倍数（默认4） |
+| MEMORYBANK_INDEX_TYPE | FAISS索引类型（默认flat） |
+| MEMORYBANK_IVF_NLIST | IVF聚类中心数（默认128） |
 | MEMORYBANK_EMBEDDING_MIN_SIMILARITY | 最低相似度（默认0.3） |
+| MEMORYBANK_EMBEDDING_DIM | 嵌入维度（默认1536） |
 | MEMORYBANK_MAX_MEMORY_STRENGTH | 记忆强度上限（默认10） |
 | MEMORYBANK_RETRIEVAL_ALPHA | 语义vs留存权衡（默认0.7） |
 | MEMORYBANK_BM25_FALLBACK_ENABLED | BM25回退（默认true） |
 | MEMORYBANK_BM25_FALLBACK_THRESHOLD | BM25回退阈值（默认0.5） |
 | MEMORYBANK_REFERENCE_DATE | 固定参考日期 |
+| MEMORYBANK_REFERENCE_DATE_AUTO | 自动推算参考日期（默认false） |
 | MEMORYBANK_SHUTDOWN_TIMEOUT_SECONDS | 关闭超时（默认30s） |
 
 完整列表见 `app/memory/memory_bank/config.py` 的 `MemoryBankConfig`。

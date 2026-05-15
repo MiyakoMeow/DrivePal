@@ -28,7 +28,11 @@ flowchart LR
     D --> EB
 ```
 
-旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移至 `data/users/default/`。
+旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移。迁移范围：
+- `data/*.jsonl`、`data/*.toml` → `data/users/default/`
+- `data/memorybank/` → `data/users/default/memorybank/`（整体目录）
+- `data/memorybank/user_{id}/` → `data/users/{id}/memorybank/`（按用户拆分）
+- `data/user_{id}/`（平铺目录）→ `data/users/{id}/`（按用户拆分）
 
 ## TOMLStore (`toml_store.py`)
 
@@ -37,6 +41,7 @@ flowchart LR
 - **锁**：`_LOCK_REGISTRY` 每文件独立 `asyncio.Lock`
 - **列表存储**：`_list` 键包裹（TOML不支持顶层组数）
 - **None处理**：`_clean_for_toml()` 递归转空字符串
+- **`default_factory`**：`__init__` 可选参数，控制文件不存在时写入的默认值。默认 `dict`，传 `list` 以支持列表模式
 - **API**：read/write/append(列表)/update(字典)/merge_dict_key(字典)
 
 ### 异常
@@ -55,7 +60,10 @@ JSONL追加写，用于高频写入数据(events/interactions/feedback)。
 ## init_data (`init_data.py`)
 
 `init_storage(data_dir)` 创建目录 + `_migrate_legacy()` + `init_user_dir("default")`。
-`init_user_dir(user_id)` 创建4个jsonl + 4个toml文件并写默认值。
+`init_user_dir(user_id)` 创建4个jsonl + 4个toml文件并写默认值。默认值：
+- `preferences.toml`：`{"language": "zh-CN"}`
+- `strategies.toml`：6字段 — `preferred_time_offset: 15`、`preferred_method: "visual"`、`reminder_weights: {}`、`ignored_patterns: []`、`modified_keywords: []`、`cooldown_periods: {}`
+- `scenario_presets.toml`：`{"_list": []}`
 `_MIGRATED_FLAG` 标记保证幂等。
 
 ## experiment_store (`experiment_store.py`)
@@ -67,4 +75,4 @@ JSONL追加写，用于高频写入数据(events/interactions/feedback)。
 策略权重反馈原始记录。与 `feedback.jsonl`（MemoryBank记忆强度）职责分离。
 
 - `append_feedback(user_dir, event_id, action, feedback_type)` — 追加原始记录
-- `aggregate_weights(user_dir)` — 按类型聚合（accept +0.1/ignore -0.1，基值0.5，范围[0.1, 1.0]）
+- `aggregate_weights(user_dir)` — 按类型聚合（accept +0.1/ignore -0.1/modify +0.05/snooze 0.0，基值0.5，范围[0.1, 1.0]）

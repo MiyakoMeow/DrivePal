@@ -23,7 +23,7 @@ flowchart LR
 
 `run_with_stages()` 返回各阶段输出（可解释性）。`run_stream()` 逐阶段 yield SSE事件。
 
-`proactive_run()` — 无用户 query 模式，由 scheduler/context 变化触发。接收 `context_override`/`memory_hints`/`trigger_source`，跳过快捷指令检查，直接 JointDecision + Execution。仍走规则后处理强制覆盖。
+`proactive_run()` — 无用户 query 模式，由 scheduler/context 变化触发。接收 `context_override`/`memory_hints`/`trigger_source`，跳过快捷指令检查，直接 JointDecision + Execution。使用 `prompts_proactive.py` 中 `PROACTIVE_JOINT_DECISION_PROMPT`（非 `prompts.py`）。仍走规则后处理强制覆盖。
 
 ### SSE事件
 
@@ -49,6 +49,8 @@ flowchart LR
 ## 多轮对话
 
 `conversation.py`。`ConversationManager` 纯内存，TTL 30min，上限10轮。`session_id` 注入历史解析指代。
+
+模块级单例 `_conversation_manager = ConversationManager()`（`conversation.py:128`），供 `workflow.py` 和 API 层导入共享。
 
 ## 输出路由
 
@@ -86,7 +88,9 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 
 ## 提示词
 
-`prompts.py`。Context + JointDecision 各有系统提示词，中文+JSON输出。Execution 无提示词——规则引擎硬约束+代码实现。
+`prompts.py`：Context + JointDecision 各有系统提示词，中文+JSON输出。Execution 无提示词——规则引擎硬约束+代码实现。
+
+`prompts_proactive.py`：`PROACTIVE_JOINT_DECISION_PROMPT`，主动模式无用户 query，由 `proactive_run()` 使用。
 
 ## 输出鲁棒性
 
@@ -104,21 +108,33 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 
 `decision` 字段为原始 dict，无Pydantic校验。含 `should_remind`/`timing`/`is_emergency`/`reminder_content`/`reason`。`should_remind` 可被 `postprocess_decision()` 强制设 false。
 
+`decision` 还含 `_postprocessed` 布尔标志，标记已被 `postprocess_decision()` 处理过，防止重复执行。
+
+辅助类型（均在 `workflow.py`）：`LLMJsonResponse`(BaseModel, 通用JSON响应)、`TaskOutput`(任务规划输出)、`StrategyOutput`(策略决策输出)、`ReminderContent`(提醒内容, speakable/display/detailed)。
+
 ## 规则引擎
 
 `rules.py`。7条规则数据驱动加载自 `config/rules.toml`。`apply_rules()` 共6处静态调用。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
 
+TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码规则：highway_audio_only / fatigue_suppress / overloaded_postpone / parked_all_channels）。
+
 | 规则 | 条件 | 约束 | 优先级 |
 |------|------|------|--------|
 | 高速仅音频 | scenario==highway | channels:[audio], freq:30min | 10 |
-| 疲劳抑制 | fatigue>0.7 | only_urgent, channels:[audio] | 20 |
+| 疲劳抑制 | fatigue>FATIGUE_THRESHOLD | only_urgent, channels:[audio] | 20 |
 | 过载延后 | workload==overloaded | postpone | 15 |
 | 停车全通道 | scenario==parked | channels:[visual,audio,detailed] | 5 |
 | city限制 | scenario==city_driving | channels:[audio], freq:15min | 8 |
 | traffic_jam安抚 | scenario==traffic_jam | channels:[audio,visual], freq:10min | 7 |
 | 乘客放宽 | has_passengers && !=highway | extra:[visual] | 3 |
 
+`FATIGUE_THRESHOLD` 默认 0.7，通过 `FATIGUE_THRESHOLD` 环境变量可配置。
+
 合并：channels 交集（空集回退默认），extra 并集追加，freq 取最小，only_urgent/postpone 布尔或。
+
+### 消融实验支持
+
+`_ablation_disable_rules`（`rules.py:70`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`workflow.py:43`，ContextVar）— 设 `true` 跳过记忆反馈写入。均通过对应 `set_*()` 函数设值，用于对比实验。
 
 ### 频次约束
 
@@ -131,7 +147,7 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 1. **意图推断** `infer_intent`：检索top-20 → 按type聚合 → 归一化置信度。冷启动返 unknown/0.2
 2. **打断风险** `compute_interrupt_risk`：`0.4×fatigue + 0.3×workload + 0.2×scenario + 0.1×speed`
 3. **高风险阈值**：`OVERLOADED_WARNING_THRESHOLD=0.36`，≥ 此值追加警告
-4. **开关**：`PROBABILISTIC_INFERENCE_ENABLED=0` 关闭
+4. **开关**：`PROBABILISTIC_INFERENCE_ENABLED`（默认 `1` 启用，设 `0` 关闭）
 
 ## 状态输出
 
