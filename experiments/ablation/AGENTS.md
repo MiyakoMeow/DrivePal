@@ -32,7 +32,7 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 | 变体 | Full(三阶段) / SingleLLM(单次调用合并prompt) |
 | 场景 | 50个多样化场景（含简单和复杂两类）。简单：city_driving/traffic_jam/parked + 低疲劳 + 非过载；复杂：highway/高疲劳/过载 |
 
-两侧均经 `postprocess_decision` 后处理（控制规则维度）。两变体均启用 MemoryBank 检索（解混"架构 vs 有无记忆"）。指标按复杂度分层报告：`metrics["simple"]` 和 `metrics["complex"]` 各含独立 Cohen's d + Bootstrap CI + Wilcoxon。
+两侧均经 `postprocess_decision` 后处理（控制规则维度）。两变体均启用 MemoryBank 检索（解混"架构 vs 有无记忆"）。指标按复杂度分层：`metrics["simple"]` 和 `metrics["complex"]` 各含 Full/SingleLLM 的聚合指标（均分、延迟等），对应统计比较（Cohen's d、Bootstrap CI、Wilcoxon）分别在 `comparison_simple` 和 `comparison_complex` 中。
 
 评价指标：Judge 1-5分、Context/Task/Decision各阶段评分、P50/P90延迟、Cohen's d + Bootstrap CI + Wilcoxon。
 

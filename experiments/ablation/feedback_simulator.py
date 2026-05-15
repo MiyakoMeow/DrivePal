@@ -40,8 +40,14 @@ def _get_workload(driving_context: dict | None) -> str:
 
 
 def _compute_alignment(decision: dict, stage: str, stages: dict | None = None) -> float:
+    """决策与阶段偏好的对齐度 [0,1]。
+
+    high-freq/visual-detail: 二值 1.0/0.0
+    silent: 二值 1.0/0.0（含 emergency 豁免）
+    mixed: 偏置 0.6/0.4——不再固定 0.5 使 mixed 也能 resolve 为 accept/reject
+    """
     if stage == "mixed":
-        return 0.5
+        return 0.6 if decision.get("should_remind") else 0.4
     if stage == "high-freq":
         return 1.0 if decision.get("should_remind") else 0.0
     if stage == "silent":
@@ -64,7 +70,7 @@ def simulate_feedback(
     rng: random.Random,
     *,
     stages: dict | None = None,
-    scenario_id: str = "",
+    scenario_id: str = "",  # noqa: ARG001 — 保留以符合调用方接口签名，当前实现未使用
     driving_context: dict | None = None,
 ) -> Literal["accept", "ignore"] | None:
     """模拟用户反馈——三要素模型。

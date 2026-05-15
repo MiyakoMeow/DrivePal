@@ -58,7 +58,7 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
                 p = (wilcoxon.get(vname) or {}).get("p_value", 1.0)
                 variant_pairs.append((vname, abs(d), p))
             stats_desc = "; ".join(
-                f"{v.upper()} d={d:.2f} p={p:.2f}" for v, d, p in variant_pairs
+                f"{v.upper()} d={d:.2f} p={p:.3f}" for v, d, p in variant_pairs
             )
             worst_p = max(p for _, _, p in variant_pairs) if variant_pairs else 1.0
             # 动态计算各变体合规率——从 metrics 中遍历所有非 _ 前缀变体
@@ -83,7 +83,11 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
             entry["statistical_note"] = {
                 "note": note,
                 "variant_pairs": {
-                    v: {"cohens_d": round(d, 2), "p_value": round(p, 2)}
+                    v: {
+                        "cohens_d": round(d, 2),
+                        "p_value": round(p, 3),
+                        "p_value_raw": p,
+                    }
                     for v, d, p in variant_pairs
                 },
                 "significant": worst_p < _ALPHA,

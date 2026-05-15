@@ -279,8 +279,8 @@ def test_convergence_speed_target_type_tie_uses_lexical_tiebreaker():
 # ── simulate_feedback 三要素模型 ──
 
 
-def test_simulate_alignment_high_freq():
-    """high-freq 阶段 alignment 正确决定反馈方向。"""
+def test_simulate_high_freq_should_remind_returns_accept():
+    """Given high-freq stage with should_remind=True, When feedback simulated, Then returns accept."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -288,7 +288,6 @@ def test_simulate_alignment_high_freq():
         return_value=0.9,
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
-
         rng = random.Random(1)
         assert (
             simulate_feedback(
@@ -297,6 +296,16 @@ def test_simulate_alignment_high_freq():
             == "accept"
         )
 
+
+def test_simulate_high_freq_no_remind_returns_ignore():
+    """Given high-freq stage with should_remind=False, When feedback simulated, Then returns ignore."""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
         rng = random.Random(1)
         assert (
             simulate_feedback(
@@ -306,8 +315,8 @@ def test_simulate_alignment_high_freq():
         )
 
 
-def test_simulate_alignment_silent():
-    """silent 阶段 alignment 正确决定反馈方向。"""
+def test_simulate_silent_no_remind_returns_accept():
+    """Given silent stage with should_remind=False, When feedback simulated, Then returns accept."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -315,7 +324,6 @@ def test_simulate_alignment_silent():
         return_value=0.9,
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
-
         rng = random.Random(1)
         assert (
             simulate_feedback(
@@ -324,6 +332,16 @@ def test_simulate_alignment_silent():
             == "accept"
         )
 
+
+def test_simulate_silent_emergency_returns_accept():
+    """Given silent stage with is_emergency=True, When feedback simulated, Then returns accept."""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
         rng = random.Random(1)
         assert (
             simulate_feedback(
@@ -335,6 +353,16 @@ def test_simulate_alignment_silent():
             == "accept"
         )
 
+
+def test_simulate_silent_non_emergency_returns_ignore():
+    """Given silent stage with non-emergency, When should_remind=True, Then returns ignore."""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
         rng = random.Random(1)
         assert (
             simulate_feedback(
@@ -347,8 +375,8 @@ def test_simulate_alignment_silent():
         )
 
 
-def test_simulate_alignment_visual_detail():
-    """visual-detail 阶段 alignment 正确决定反馈方向。"""
+def test_simulate_visual_detail_with_content_returns_accept():
+    """Given visual-detail stage with display_text content, When feedback simulated, Then returns accept."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -356,7 +384,6 @@ def test_simulate_alignment_visual_detail():
         return_value=0.9,
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
-
         rng = random.Random(1)
         decision_with = {"reminder_content": {"display_text": "会议 · 15:00"}}
         assert (
@@ -364,14 +391,9 @@ def test_simulate_alignment_visual_detail():
             == "accept"
         )
 
-        rng = random.Random(1)
-        assert (
-            simulate_feedback({}, "visual-detail", rng, driving_context=ctx) == "ignore"
-        )
 
-
-def test_simulate_alignment_mixed():
-    """mixed 阶段 alignment=0.5，直通 ignore。"""
+def test_simulate_visual_detail_empty_returns_ignore():
+    """Given visual-detail stage with empty decision, When feedback simulated, Then returns ignore."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -380,11 +402,49 @@ def test_simulate_alignment_mixed():
     ):
         ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
         rng = random.Random(1)
-        assert simulate_feedback({}, "mixed", rng, driving_context=ctx) == "ignore"
+        assert (
+            simulate_feedback({}, "visual-detail", rng, driving_context=ctx) == "ignore"
+        )
 
 
-def test_simulate_noise_flip():
-    """alignment=1.0 但 noise 触发时，结果可能为 ignore（用户误反馈）。"""
+def test_simulate_mixed_should_remind_returns_accept():
+    """Given mixed stage with should_remind=True, alignment > 0.5, When feedback simulated, Then returns accept."""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
+        rng = random.Random(1)
+        assert (
+            simulate_feedback(
+                {"should_remind": True}, "mixed", rng, driving_context=ctx
+            )
+            == "accept"
+        )
+
+
+def test_simulate_mixed_no_remind_returns_ignore():
+    """Given mixed stage with should_remind=False, alignment < 0.5, When feedback simulated, Then returns ignore."""
+    from experiments.ablation.feedback_simulator import simulate_feedback
+
+    with mock.patch(
+        "experiments.ablation.feedback_simulator.get_fatigue_threshold",
+        return_value=0.9,
+    ):
+        ctx = {"driver": {"fatigue_level": 0.0, "workload": "normal"}}
+        rng = random.Random(1)
+        assert (
+            simulate_feedback(
+                {"should_remind": False}, "mixed", rng, driving_context=ctx
+            )
+            == "ignore"
+        )
+
+
+def test_simulate_noise_flip_returns_ignore():
+    """Given alignment=1.0 but noise triggers, When feedback simulated, Then may return ignore (user error)."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -399,8 +459,8 @@ def test_simulate_noise_flip():
         assert expected == "ignore", f"应因噪声翻转为 ignore，实际为 {expected}"
 
 
-def test_simulate_noise_high_fatigue():
-    """high fatigue → noise > low fatigue，同 seed 下噪声表现不同。"""
+def test_simulate_noise_high_fatigue_changes_output():
+    """Given high fatigue increases noise threshold, When same seed with diff fatigue, Then output differs."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -427,8 +487,8 @@ def test_simulate_noise_high_fatigue():
         assert result_low != result_high, "不同疲劳度下的噪声阈值应导致不同输出"
 
 
-def test_simulate_feedback_suppression_overloaded():
-    """overloaded workload → fb_prob 降低，更可能返回 None。"""
+def test_simulate_suppression_overloaded_returns_none():
+    """Given overloaded reduces fb_prob, When feedback simulated, Then returns None."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -458,8 +518,8 @@ def test_simulate_feedback_suppression_overloaded():
         assert result_overloaded is None
 
 
-def test_simulate_feedback_suppression_high_fatigue():
-    """high fatigue → fb_prob 降低，更可能返回 None。"""
+def test_simulate_suppression_high_fatigue_returns_none():
+    """Given high fatigue reduces fb_prob, When feedback simulated, Then returns None."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     with mock.patch(
@@ -487,8 +547,8 @@ def test_simulate_feedback_suppression_high_fatigue():
         assert result_high is None
 
 
-def test_simulate_no_driving_context():
-    """driving_context=None 不应抛异常，回退默认值。"""
+def test_simulate_no_driving_context_returns_valid_choice():
+    """Given driving_context=None, When feedback simulated, Then returns valid choice without exception."""
     from experiments.ablation.feedback_simulator import simulate_feedback
 
     rng = random.Random(0)
