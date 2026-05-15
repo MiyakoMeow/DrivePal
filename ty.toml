@@ -2,7 +2,7 @@
 exclude = [".agents/**"]
 
 [analysis]
-replace-imports-with-any = ["faiss", "docx"]
+replace-imports-with-any = ["faiss", "docx", "pyaudio"]
 
 [rules]
 all = "error"

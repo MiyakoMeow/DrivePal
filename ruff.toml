@@ -38,6 +38,12 @@ exclude = [".agents/**"]
 ]
 
 "app/models/embedding.py" = ["S311"]  # retry jitter 使用伪随机种子，非安全场景
+"app/voice/asr.py" = [
+    "ARG002",  # SherpaOnnxASREngine.transcribe 为占位实现，保留 audio_bytes 参数以符合 ABC 签名
+]
+"app/voice/recorder.py" = [
+    "PLC0415",  # pyaudio 为可选依赖（需系统 portaudio 库），函数内局部导入
+]
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 mkdir()/open() 操作，ruff 误判
 
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景

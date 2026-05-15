@@ -1,0 +1,6 @@
+[voice]
+device_index = 0
+sample_rate = 16000
+vad_mode = 1
+min_confidence = 0.5
+silence_timeout_ms = 500
