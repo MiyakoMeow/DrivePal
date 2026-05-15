@@ -360,53 +360,6 @@ uv run uvicorn app.api.main:app
 
 ---
 
-## 开发指南
-
-### 工作流
-
-```bash
-# 1. 创建工作树（隔离开发环境）
-git worktree add .worktrees/<功能名> -b <分支名>
-
-# 2. 安装依赖
-cd .worktrees/<功能名> && uv sync
-
-# 3. 修改代码后运行检查
-uv run ruff check --fix
-uv run ruff format
-uv run ty check
-uv run pytest -x -q
-
-# 4. 提交（Conventional Commits）
-git commit -m "feat: 新功能"   # 新功能
-git commit -m "fix: 修 bug"    # 修复
-git commit -m "refactor: 重构" # 重构
-git commit -m "docs: 文档"     # 文档
-
-# 5. 推送并创建 PR
-git push -u origin <分支名>
-```
-
-### 代码规范
-
-- **注释**：中文，释 why 非 what。代码表达 what
-- **函数**：一事一函数，超 30 行需有理由
-- **嵌套**：错误处理等小分支提前 return/continue/break
-- **不可变**：`const`/`final` 优先，新对象优先于 mutate
-- **测试**：一事一测。Given→When→Then。名称含场景+期望
-- **内联抑制**：禁 `# noqa`/`# type:`/`# ty:`。改不了在 ruff.toml/ty.toml 忽略
-
-### 模块添加规范
-
-添加新模块时，同步更新：
-1. 本文件 `项目结构` 节
-2. 根 `AGENTS.md` 的结构图和技术栈表
-3. 创建 `app/<模块>/AGENTS.md`（组件表/架构图/配置/异常/测试）
-4. `tests/` 下对应目录
-5. `config/` 下对应 TOML（如需）
-
----
-
 ## 基准测试
 
 基准测试独立为外部项目 [MiyakoMeow/VehicleMemBench](https://github.com/MiyakoMeow/VehicleMemBench)，提供 50 组数据集、23 个车辆模块模拟器、五种记忆策略对比。本项目的 MemoryBank 实现已与 VehicleMemBench 对齐，可直接运行对照实验。
