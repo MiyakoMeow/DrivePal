@@ -85,7 +85,9 @@ class VoiceService:
                 on_transcription=self._handle_transcription,
                 on_vad_status=lambda s: setattr(self, "_vad_status", s),
             )
+            self._pipeline = pipeline  # 提前赋值，防 start 失败时泄漏
             recorder = VoiceRecorder(device_index=self._config.device_index)
+            self._recorder = recorder
             await recorder.start(pipeline)
         except Exception:
             logger.warning("Voice service start failed", exc_info=True)
@@ -102,8 +104,6 @@ class VoiceService:
                     self._running = False
 
             task = asyncio.create_task(_consume())
-            self._pipeline = pipeline
-            self._recorder = recorder
             self._consume_task = task
             self._running = True
             logger.info("Voice service started")
@@ -126,6 +126,7 @@ class VoiceService:
                 return
 
             sched = self._sched
+
             async def _push(text: str) -> None:
                 try:
                     await sched.push_voice_text(text)
@@ -150,7 +151,7 @@ class VoiceService:
         logger.info("Voice service stopped")
 
     async def _cleanup(self) -> None:
-        """清理内部资源。"""
+        """清理内部资源。各步骤独立 try/except 防泄漏。"""
         if self._consume_task is not None:
             self._consume_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -163,10 +164,16 @@ class VoiceService:
                 await asyncio.gather(*self._fire_tasks, return_exceptions=True)
             self._fire_tasks.clear()
         if self._pipeline is not None:
-            await self._pipeline.close()
+            try:
+                await self._pipeline.close()
+            except Exception:
+                logger.exception("Pipeline close failed")
             self._pipeline = None
         if self._recorder is not None:
-            await self._recorder.stop()
+            try:
+                await self._recorder.stop()
+            except Exception:
+                logger.exception("Recorder stop failed")
             self._recorder = None
 
     async def update_config(self, cfg: dict) -> dict:

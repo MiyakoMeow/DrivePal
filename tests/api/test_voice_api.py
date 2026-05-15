@@ -77,8 +77,7 @@ def test_voice_start_already_running_returns_409(app_client: TestClient) -> None
             "enabled": True,
             "running": True,
             "vad_status": "idle",
-            "device_index": 0,
-            "config": {},
+            "config": {"device_index": 0},
         }
         resp = app_client.post("/api/v1/voice/start")
         assert resp.status_code == 409
