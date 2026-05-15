@@ -10,6 +10,10 @@ from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.exceptions import AppError as BaseAppError
+from app.memory.exceptions import FatalError, TransientError
+from app.tools.executor import ToolExecutionError
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
@@ -35,11 +39,11 @@ _CODE_TO_HTTP: dict[AppErrorCode, int] = {
 }
 
 
-class AppError(HTTPException):
-    """统一应用异常，携带错误码与 HTTP 状态码.
+class AppError(BaseAppError, HTTPException):
+    """API 异常——同时是 BaseAppError 和 HTTPException.
 
-    响应体格式：{"error": {"code": ..., "message": ...}}
-    status_code 由 code 自动派生，无需调用者指定。
+    isinstance(err, BaseAppError) → True（safe_call 可 catch）
+    isinstance(err, HTTPException) → True（FastAPI exception handler 可 catch）
     """
 
     def __init__(
@@ -48,13 +52,14 @@ class AppError(HTTPException):
         message: str,
         status_code: int | None = None,
     ) -> None:
-        """初始化应用异常."""
-        self.code = code
         self.app_message = message
+        self.code = code.value
+        self.message = message
         resolved = (
             status_code if status_code is not None else _CODE_TO_HTTP.get(code, 500)
         )
-        super().__init__(status_code=resolved, detail=message)
+        Exception.__init__(self, message)
+        HTTPException.__init__(self, status_code=resolved, detail=message)
 
 
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
@@ -67,7 +72,7 @@ async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     )
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": exc.code.value, "message": exc.app_message}},
+        content={"error": {"code": exc.code, "message": exc.app_message}},
     )
 
 
@@ -84,36 +89,46 @@ async def validation_error_handler(
     )
 
 
-async def safe_memory_call[T](
+async def safe_call[T](
     coro: Awaitable[T],
     context_msg: str,
 ) -> T:
-    """执行记忆系统调用，异常统一转为 AppError.
+    """执行异步调用，异常统一转为 AppError（HTTP 子类）。
 
-    OSError → 503（存储服务不可用）
-    ValueError → 422（数据校验失败）
-    其余 → 500（内部错误）
+    BaseAppError 子类（含 API AppError）→ 直接 raise
+    TransientError → 503
+    FatalError → 500
+    ToolExecutionError → 500
+    ValueError → 422
+    OSError → 503
+    其余 → 500
     """
     try:
         return await coro
-    except AppError:
+    except BaseAppError:
         raise
-    except OSError as e:
-        logger.exception("%s failed", context_msg)
-        # 通用消息防内部细节泄露至客户端
+    except TransientError as e:
+        logger.exception("%s: transient error", context_msg)
         raise AppError(
-            AppErrorCode.STORAGE_ERROR,
-            "Internal storage error",
+            AppErrorCode.STORAGE_ERROR, "Service temporarily unavailable"
+        ) from e
+    except FatalError as e:
+        logger.exception("%s: fatal error", context_msg)
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Internal storage error") from e
+    except ToolExecutionError as e:
+        logger.exception("%s: tool error", context_msg)
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Tool execution failed") from e
+    except OSError as e:
+        logger.exception("%s: IO error", context_msg)
+        raise AppError(
+            AppErrorCode.STORAGE_ERROR, "Service temporarily unavailable"
         ) from e
     except ValueError as e:
-        logger.exception("%s failed", context_msg)
-        raise AppError(
-            AppErrorCode.INVALID_INPUT,
-            "Invalid request data",
-        ) from e
+        logger.exception("%s: validation error", context_msg)
+        raise AppError(AppErrorCode.INVALID_INPUT, "Invalid request data") from e
     except Exception as e:
-        logger.exception("%s failed", context_msg)
-        raise AppError(
-            AppErrorCode.INTERNAL_ERROR,
-            "Internal server error",
-        ) from e
+        logger.exception("%s: unexpected error", context_msg)
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Internal server error") from e
+
+
+safe_memory_call = safe_call
