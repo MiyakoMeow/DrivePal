@@ -31,7 +31,9 @@ flowchart LR
 | `tools/vehicle.py` | `set_climate` / `play_media` | 车控预留（返回"未接入"）|
 | `tools/memory_query.py` | `query_memory` | 记忆查询（使用单例 MemoryModule）|
 
-## ToolSpec
+## 关键类/接口
+
+### ToolSpec
 
 ```python
 @dataclass(frozen=True)
@@ -42,14 +44,14 @@ class ToolSpec:
     handler: ToolHandler           # async (dict) → str
 ```
 
-## ToolRegistry
+### ToolRegistry
 
 - `register(spec)` — 注册，重复名抛 `ValueError`
 - `get(name)` — 按名查找，返回 `ToolSpec | None`（调用方需处理 None）
 - `list_tools()` — 列出全部
 - `to_llm_description()` — 格式化工具清单供 LLM prompt
 
-## 内置工具
+### 内置工具
 
 | 工具 | 参数 | 返回 |
 |------|------|------|
@@ -131,7 +133,7 @@ max_results = 5
 |------|------|------|------|
 | `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
 
-catch 模式：`_handle_tool_calls()` 逐工具 `except ToolExecutionError` → 错误文本追加至 `tool_results`，**不抛**；`WorkflowError`/`AppError` 透传。配置由 `ToolsConfig.load()` → `ensure_config()` 处理——文件缺失/损坏时自动用 dataclass 默认值生成 `config/tools.toml`。注册表不会因配置缺失变空。
+catch 模式：`_handle_tool_calls()` 逐工具 `except ToolExecutionError` → 错误文本追加至 `tool_results`，**不抛**。
 
 ## 安全约束
 
