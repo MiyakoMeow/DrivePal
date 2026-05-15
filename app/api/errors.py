@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.agents.workflow import WorkflowError
+from app.agents.types import WorkflowError
 from app.exceptions import AppError as BaseAppError
 from app.memory.exceptions import FatalError, TransientError
 from app.tools.executor import ToolExecutionError

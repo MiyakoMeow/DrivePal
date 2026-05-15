@@ -41,14 +41,18 @@ flowchart LR
 
 | 文件 | 类/函数 | 职责 |
 |------|---------|------|
-| `workflow.py` | `AgentWorkflow` | 三阶段工作流编排，入口 `run_with_stages`/`run_stream`/`proactive_run` |
-| `workflow.py` | `ContextOutput`, `JointDecisionOutput`, `LLMJsonResponse`, `ReminderContent` | 输出 Pydantic 模型，支持别名兜底 |
+| `workflow.py` | `AgentWorkflow` | 薄编排器，实例化三 Agent 并提供 `run_with_stages`/`run_stream`/`proactive_run`/`execute_pending_reminder` 入口 |
+| `context_agent.py` | `ContextAgent` | Context 阶段：记忆检索 + 上下文构建 |
+| `joint_decision_agent.py` | `JointDecisionAgent` | JointDecision 阶段：Task 归因 + 策略决策（含 `_ablation_disable_feedback` ContextVar） |
+| `execution_agent.py` | `ExecutionAgent` | Execution 阶段：规则后处理 + 工具调用 + 提醒发送 |
+| `types.py` | `ContextOutput`, `JointDecisionOutput`, `LLMJsonResponse`, `ReminderContent`, `WorkflowError` | Pydantic 模型 + 异常 + 共享函数 |
+| `types.py` | `call_llm_json`, `format_time_for_display`, `map_pending_trigger`, `extract_location_target` | 三 Agent 共享的工具函数 |
 | `shortcuts.py` | `ShortcutResolver` | 从 TOML 加载快捷指令，匹配则跳过 LLM |
 | `conversation.py` | `ConversationManager` | 多轮对话 TTL 30min/10轮上限 |
 | `outputs.py` | `OutputRouter` | 输出路由 → `MultiFormatContent` |
 | `outputs.py` | `OutputChannel`, `InterruptLevel` | 输出通道/打断枚举 |
 | `pending.py` | `PendingReminderManager` | 5 种 trigger_type 待触发管理 |
-| `state.py` | `AgentState` | TypedDict，13字段含 `rules_result` |
+| `state.py` | `AgentState` | TypedDict，14字段含 `rules_result`、`tool_results` |
 | `state.py` | `WorkflowStages` | dataclass，4字段 |
 | `rules.py` | `apply_rules`, `postprocess_decision` | 规则引擎入口与后处理强制覆盖 |
 | `probabilistic.py` | `infer_intent`, `compute_interrupt_risk` | 意图推断 + 打断风险 |
@@ -62,6 +66,12 @@ flowchart LR
 `AgentWorkflow.run_stream(user_input, driving_context=None, session_id=None) → AsyncGenerator[dict]` — 逐阶段 yield SSE。
 
 `AgentWorkflow.proactive_run(context_override=None, memory_hints=None, trigger_source="scheduler") → tuple[str, str | None, WorkflowStages]` — 无 query 模式。
+
+`ContextAgent.run(state) → AgentState` — Context 阶段：检索记忆 + LLM 推断上下文。从 `types.py` 导入 `ContextOutput`/`call_llm_json`。
+
+`JointDecisionAgent.run(state) → AgentState` — JointDecision 阶段：概率推断 + LLM 决策 + 规则前处理。从 `types.py` 导入 `JointDecisionOutput`/`call_llm_json`。含 `_ablation_disable_feedback` ContextVar（消融实验）。
+
+`ExecutionAgent.run(state) → tuple[AgentState, WorkflowStages]` — Execution 阶段：规则后处理 + 工具调用 + 频次抑制 + 提醒发送。从 `types.py` 导入 `ReminderContent`/`WorkflowError`/`format_time_for_display`/`map_pending_trigger`。
 
 `WorkflowStages`(dataclass，4字段)：context / task / decision / execution。
 
@@ -134,15 +144,15 @@ flowchart LR
 | traffic_jam安抚 | scenario==traffic_jam | channels:[audio,visual]，freq:10min | 7 |
 | 乘客放宽 | has_passengers && !=highway | extra:[visual] | 3 |
 
-`FATIGUE_THRESHOLD` 默认 0.7，通过 `FATIGUE_THRESHOLD` 环境变量可配置。
+`FATIGUE_THRESHOLD` 默认 0.7，`DRIVEPAL_FATIGUE_THRESHOLD` 环境变量优先于 `FATIGUE_THRESHOLD`。
 
 合并：channels 交集（空集回退默认），extra 并集追加，freq 取最小，only_urgent/postpone 布尔或。
 
 ### 消融实验支持
 
-`_ablation_disable_rules`（`rules.py:76`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`workflow.py:44`，ContextVar）— 设 `true` 跳过记忆反馈读取。均通过对应 `set_*()` 函数设值，用于对比实验。
+`_ablation_disable_rules`（`rules.py`，ContextVar）— 设 `true` 跳过规则引擎。`_ablation_disable_feedback`（`joint_decision_agent.py`，ContextVar）— 设 `true` 跳过记忆反馈读取。均通过对应 `set_*()` 函数设值，用于对比实验。
 
-`AgentWorkflow._format_constraints_hint()` 约束格式化工具函数。`get_fatigue_threshold()`/`reset_fatigue_threshold_cache()` 疲劳阈值读取与缓存重置。
+`get_fatigue_threshold()`/`reset_fatigue_threshold_cache()` 疲劳阈值读取与缓存重置。`DRIVEPAL_FATIGUE_THRESHOLD` 环境变量优先于 `FATIGUE_THRESHOLD`。
 
 ## 概率推断
 
@@ -157,7 +167,7 @@ flowchart LR
 
 ## 输出鲁棒性
 
-`workflow.py`。`ContextOutput`/`JointDecisionOutput` 用 `Field(validation_alias=AliasChoices(...))` 兜底LLM字段名漂移。`extra="forbid"` 严格校验。校验失败时回退原始输出继续流程。
+`types.py`。`ContextOutput`/`JointDecisionOutput` 用 `Field(validation_alias=AliasChoices(...))` 兜底LLM字段名漂移。`extra="forbid"` 严格校验。校验失败时回退原始输出继续流程。
 
 | 模型 | 规范键 | 接受别名 |
 |------|--------|---------|
@@ -175,7 +185,7 @@ flowchart LR
 
 `decision` 还含 `_postprocessed` 布尔标志，标记已被 `postprocess_decision()` 处理过，防止重复执行。
 
-辅助类型（均在 `workflow.py`）：`LLMJsonResponse`(BaseModel，通用JSON响应)、`ReminderContent`(提醒内容，text/content)。
+辅助类型（均在 `types.py`）：`LLMJsonResponse`(BaseModel，通用JSON响应)、`ReminderContent`(提醒内容，text/content)。
 
 ## 提示词
 
@@ -191,7 +201,7 @@ Execution 写 memory 前调用 `sanitize_context()`（`app/memory/privacy.py`）
 
 | 异常 | 文件 | 继承 | 说明 |
 |------|------|------|------|
-| `WorkflowError` | `workflow.py:66` | `AppError` | 模型不可用等，code=WORKFLOW_ERROR |
+| `WorkflowError` | `types.py` | `AppError` | 模型不可用等，code=WORKFLOW_ERROR |
 
 catch 模式：
 - LLM JSON 解析：`except json.JSONDecodeError` → 回退原文本
@@ -214,6 +224,8 @@ catch 模式：
 
 ## 状态输出
 
+`AgentState`（`state.py`）14 字段。`tool_results: NotRequired[list[str] | None]` 由 `ExecutionAgent._handle_tool_calls()` 写入——工具调用结果以 `[tool_name] result` 格式追加到列表。
+
 `_build_done_data()` 三种状态：
 
 | 状态 | 条件 |
@@ -221,3 +233,5 @@ catch 模式：
 | pending | 含 pending_reminder_id |
 | suppressed | result 含"取消"/"抑制" |
 | delivered | 即时提醒已发送 |
+
+SSE done 事件 `payload` 含 `tool_results`（非空时），由 `_build_done_data()` 从 `state["tool_results"]` 读取。

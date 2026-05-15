@@ -239,7 +239,7 @@ git worktree add .worktrees/<名> -b <名>
 
 ### 架构待完善
 
-6. **工具安全约束细化** — 当前 `postprocess_decision` 统一管辖所有工具，但未按工具类型差异化约束
+6. ~~**工具安全约束细化**~~ — 已通过 `ToolSpec.require_confirmation_when` + `ToolConfirmationRequiredError` 实现，导航工具驾驶中需确认
 7. **scheduler per-user 实例** — lifespan 仅初始化 default 用户，`_schedulers` dict 支持多用户但未实际启用
 8. **集成测试** — scheduler/tools 集成测试覆盖不足；voice 模块已补（service test + API test + server test）
 
@@ -248,5 +248,5 @@ git worktree add .worktrees/<名> -b <名>
 | 阶段 | 内容 | 前置 |
 |------|------|------|
 | **短期** | TTS 引擎接入；集成测试补全；per-user scheduler 启用 | — |
-| **中期** | 真实 ASR 模型优化（SenseVoice int8 量化已可用）；Wake Word 检测；工具安全约束细化 | 短期 |
+| **中期** | 真实 ASR 模型优化（SenseVoice int8 量化已可用）；Wake Word 检测 | 短期 |
 | **长期** | 车辆 CAN 总线集成；OBD 数据接入；多模态（语音+视觉）输入 | 中期 |

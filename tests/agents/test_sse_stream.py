@@ -71,10 +71,13 @@ async def test_run_stream_shortcut_still_works(workflow):
 @pytest.mark.asyncio
 async def test_run_stream_error_yields_error_event(workflow):
     """LLM 调用失败时发出 error 事件。"""
-    workflow._call_llm_json = AsyncMock(side_effect=RuntimeError("LLM down"))
-    events = []
-    async for evt in workflow.run_stream("明天开会"):
-        events.append(evt)
+    with patch(
+        "app.agents.context_agent.call_llm_json",
+        side_effect=RuntimeError("LLM down"),
+    ):
+        events = []
+        async for evt in workflow.run_stream("明天开会"):
+            events.append(evt)
     assert events[-1]["event"] == "error"
 
 

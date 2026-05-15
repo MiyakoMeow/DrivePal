@@ -35,6 +35,11 @@ def register_builtin_tools(
                     "required": ["destination"],
                 },
                 handler=navigate_to,
+                require_confirmation_when=(
+                    "driving"
+                    if cfg.navigation.require_voice_confirmation_driving
+                    else None
+                ),
             )
         )
     if cfg.memory_query.enabled:

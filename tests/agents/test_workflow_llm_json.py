@@ -1,6 +1,6 @@
 """LLMJsonResponse 解析测试."""
 
-from app.agents.workflow import LLMJsonResponse
+from app.agents.types import LLMJsonResponse
 
 
 class TestLLMJsonResponseFromLlm:

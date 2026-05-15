@@ -21,10 +21,11 @@ flowchart LR
 | 文件 | 类/函数 | 职责 |
 |------|---------|------|
 | `registry.py` | `ToolRegistry` | 注册/发现/描述工具 |
-| `registry.py` | `ToolSpec` | 工具规范 dataclass（name/description/input_schema/handler） |
+| `registry.py` | `ToolSpec` | 工具规范 dataclass（name/description/input_schema/handler/require_confirmation_when） |
 | `registry.py` | `ToolHandler` | `Callable[[dict[str, Any]], Awaitable[str]]` 类型 |
 | `executor.py` | `ToolExecutor` | 参数校验 → handler 执行 → 结果文本 |
 | `executor.py` | `ToolExecutionError` | 执行异常 |
+| `executor.py` | `ToolConfirmationRequiredError` | 工具需用户确认（code=TOOL_CONFIRMATION_REQUIRED） |
 | `config.py` | `ToolsConfig` | 配置 dataclass，`load()` 类方法读取/生成 tools.toml |
 | `__init__.py` | `get_default_executor()`, `register_builtin_tools()` | 注册全部内置工具到 ToolRegistry；默认单例 executor |
 | `tools/navigation.py` | `navigate_to` | 导航目的地设置 |
@@ -39,10 +40,11 @@ flowchart LR
 ```python
 @dataclass(frozen=True)
 class ToolSpec:
-    name: str                      # 唯一工具名
-    description: str               # LLM 用描述
-    input_schema: dict[str, Any]   # JSON Schema
-    handler: ToolHandler           # async (dict) → str
+    name: str                              # 唯一工具名
+    description: str                       # LLM 用描述
+    input_schema: dict[str, Any]           # JSON Schema
+    handler: ToolHandler                   # async (dict) → str
+    require_confirmation_when: str | None  # 确认条件，如 "driving"
 ```
 
 ### ToolRegistry
@@ -52,7 +54,14 @@ class ToolSpec:
 - `list_tools()` — 列出全部
 - `to_llm_description()` — 格式化工具清单供 LLM prompt
 
-### 内置工具
+### ToolExecutor
+
+- `execute(tool_name, params, *, driving_context=None) → str` — 参数校验 → 确认检查（`require_confirmation_when`）→ handler 执行 → 结果文本。驾驶中执行需确认工具时抛 `ToolConfirmationRequiredError`
+- `get_spec(name) → ToolSpec | None` — 按名称获取工具规格
+
+### set_navigation 确认条件
+
+`set_navigation` 注册时从 `ToolsConfig`（`config/tools.toml`）读取 `require_voice_confirmation_driving`，为 `true` 时设 `require_confirmation_when="driving"`。其他工具默认 `None`（无确认条件）。
 
 | 工具 | 参数 | 返回 |
 |------|------|------|
@@ -70,7 +79,7 @@ class ToolSpec:
 
 ## 工具执行（`_handle_tool_calls`）
 
-工具调用执行已提取为独立方法 `_handle_tool_calls()`（`app/agents/workflow.py:581`）。`_execution_node` 内流程顺序：
+工具调用执行已从 `_execution_node` 提取至 `ExecutionAgent._handle_tool_calls()`（`app/agents/execution_agent.py`）。`ExecutionAgent.run()` 内流程顺序：
 
 1. 规则后处理 `postprocess_decision()` — 强制覆盖
 2. **工具调用执行** — `_handle_tool_calls()`
@@ -78,7 +87,7 @@ class ToolSpec:
 4. `_check_frequency_guard()` — 频次抑制
 
 ```python
-async def _handle_tool_calls(self, decision: dict) -> None:
+async def _handle_tool_calls(self, decision: dict, state: AgentState) -> None:
     tool_calls = decision.get("tool_calls", [])
     if not tool_calls or not isinstance(tool_calls, list):
         return
@@ -89,19 +98,24 @@ async def _handle_tool_calls(self, decision: dict) -> None:
             t_name = tc.get("tool", "")
             t_params = tc.get("params", {})
             try:
-                t_result = await executor.execute(t_name, t_params)
+                t_result = await executor.execute(
+                    t_name, t_params, driving_context=state.get("driving_context")
+                )
                 tool_results.append(f"[{t_name}] {t_result}")
             except WorkflowError:
                 raise
+            except ToolConfirmationRequiredError as e:
+                tool_results.append(f"[{t_name}] {e.message}")
             except ToolExecutionError as e:
                 tool_results.append(f"[{t_name}] 失败: {e}")
             except AppError:
                 raise
     if tool_results:
+        state["tool_results"] = tool_results
         logger.info("Tool call results: %s", "; ".join(tool_results))
 ```
 
-结果仅 log，不写回 state——工具调用的副作用（导航设置/消息发送等）已在 handler 内完成。
+结果写入 `state["tool_results"]`，由 `_build_done_data()` 纳入 SSE done 事件。
 
 ## 配置
 
@@ -132,13 +146,21 @@ max_results = 5
 
 | 异常 | 文件 | 继承 | 说明 |
 |------|------|------|------|
-| `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
+| `ToolExecutionError` | `executor.py` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
+| `ToolConfirmationRequiredError` | `executor.py` | `AppError` | 工具需用户确认，code=TOOL_CONFIRMATION_REQUIRED |
 
 catch 模式：`_handle_tool_calls()` 逐工具 `except ToolExecutionError` → 错误文本追加至 `tool_results`，**不抛**。
 
 ## 安全约束
 
-工具调用受规则引擎 `postprocess_decision()` 统一管辖（`proactive_run` 路径必走规则后处理）。当前规则引擎不区分工具类型——所有 `tool_calls` 在 LLM 输出中存在即被执行，工具级别约束待后续细化。
+工具调用受规则引擎 `postprocess_decision()` 统一管辖（`proactive_run` 路径必走规则后处理）。`ToolSpec.require_confirmation_when` 字段按工具类型声明确认条件：
+
+| 工具 | `require_confirmation_when` | 说明 |
+|------|---------------------------|------|
+| `set_navigation` | `"driving"` | 驾驶中需语音确认后执行 |
+| 其他 | `None` | 无额外确认 |
+
+`ToolConfirmationRequiredError`（code=TOOL_CONFIRMATION_REQUIRED）在确认条件满足但用户未确认时抛出。
 
 ## 测试
 

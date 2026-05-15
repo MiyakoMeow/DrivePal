@@ -4,7 +4,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.tools.executor import ToolExecutionError, ToolExecutor
+from app.tools.executor import (
+    ToolConfirmationRequiredError,
+    ToolExecutionError,
+    ToolExecutor,
+)
 from app.tools.registry import ToolRegistry, ToolSpec
 from app.tools.tools import register_builtin_tools
 
@@ -176,3 +180,87 @@ async def test_app_error_not_wrapped():
     executor = ToolExecutor(registry)
     with pytest.raises(CustomError):
         await executor.execute("fail_tool", {})
+
+
+async def _echo_handler(params: dict) -> str:
+    return f"echo: {params}"
+
+
+def test_tool_spec_require_confirmation_default():
+    """ToolSpec 默认 require_confirmation_when 为 None。"""
+    spec = ToolSpec(
+        name="test",
+        description="test",
+        input_schema={},
+        handler=_echo_handler,
+    )
+    assert spec.require_confirmation_when is None
+
+
+def test_tool_spec_require_confirmation_driving():
+    """ToolSpec 可设置 require_confirmation_when='driving'。"""
+    spec = ToolSpec(
+        name="test",
+        description="test",
+        input_schema={},
+        handler=_echo_handler,
+        require_confirmation_when="driving",
+    )
+    assert spec.require_confirmation_when == "driving"
+
+
+async def _noop_handler(params: dict) -> str:
+    return "ok"
+
+
+async def test_tool_confirmation_required_when_driving():
+    """驾驶中执行需确认的工具抛 ToolConfirmationRequiredError。"""
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="test_nav",
+            description="test",
+            input_schema={},
+            handler=_noop_handler,
+            require_confirmation_when="driving",
+        )
+    )
+    executor = ToolExecutor(registry)
+    driving = {"scenario": "highway"}
+    with pytest.raises(ToolConfirmationRequiredError):
+        await executor.execute("test_nav", {}, driving_context=driving)
+
+
+async def test_tool_confirmation_allowed_when_parked():
+    """停车时允许执行需确认的工具。"""
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="test_nav",
+            description="test",
+            input_schema={},
+            handler=_noop_handler,
+            require_confirmation_when="driving",
+        )
+    )
+    executor = ToolExecutor(registry)
+    parked = {"scenario": "parked"}
+    result = await executor.execute("test_nav", {}, driving_context=parked)
+    assert result == "ok"
+
+
+async def test_tool_confirmation_no_context():
+    """无驾驶上下文时允许执行。"""
+    registry = ToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="test_nav",
+            description="test",
+            input_schema={},
+            handler=_noop_handler,
+            require_confirmation_when="driving",
+        )
+    )
+    executor = ToolExecutor(registry)
+    result = await executor.execute("test_nav", {})
+    assert result == "ok"

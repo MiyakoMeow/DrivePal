@@ -1,16 +1,19 @@
 """测试 LLM JSON 输出结构化验证模型."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
+from app.agents.joint_decision_agent import JointDecisionAgent
 from app.agents.rules import apply_rules
-from app.agents.workflow import (
-    AgentWorkflow,
+from app.agents.types import (
     ContextOutput,
     JointDecisionOutput,
     LLMJsonResponse,
+)
+from app.agents.workflow import (
+    AgentWorkflow,
 )
 
 
@@ -130,51 +133,55 @@ class TestWorkflowValidationPath:
         mm.search = AsyncMock(return_value=[])
         mm.get_history = AsyncMock(return_value=[])
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=mm)
-        workflow._call_llm_json = AsyncMock(
-            return_value=LLMJsonResponse(
-                raw='{"scenario":"highway","driver_state":{},'
-                '"spatial":{},"traffic":{},'
-                '"current_datetime":"2026-01-01"}',
+        mock_response = LLMJsonResponse(
+            raw='{"scenario":"highway","driver_state":{},'
+            '"spatial":{},"traffic":{},'
+            '"current_datetime":"2026-01-01"}',
+        )
+        with patch(
+            "app.agents.context_agent.call_llm_json",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            result = await workflow._context_node(
+                {
+                    "original_query": "test",
+                    "context": {},
+                    "task": None,
+                    "decision": None,
+                    "result": None,
+                    "event_id": None,
+                    "driving_context": None,
+                    "stages": None,
+                    "session_id": None,
+                }
             )
-        )
-        result = await workflow._context_node(
-            {
-                "original_query": "test",
-                "context": {},
-                "task": None,
-                "decision": None,
-                "result": None,
-                "event_id": None,
-                "driving_context": None,
-                "stages": None,
-                "session_id": None,
-            }
-        )
         assert "context" in result
 
     @pytest.mark.asyncio
     async def test_joint_decision_node_validation_success(self, tmp_path):
         """JointDecision 节点 validate 分支不抛异常。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._call_llm_json = AsyncMock(
-            return_value=LLMJsonResponse.from_llm(
-                '{"task_type":"meeting","confidence":0.9,'
-                '"entities":[],'
-                '"decision":{"should_remind":true,"timing":"now"}}',
+        mock_response = LLMJsonResponse.from_llm(
+            '{"task_type":"meeting","confidence":0.9,'
+            '"entities":[],'
+            '"decision":{"should_remind":true,"timing":"now"}}',
+        )
+        with patch(
+            "app.agents.joint_decision_agent.call_llm_json",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            result = await workflow._joint_decision_node(
+                {
+                    "original_query": "test",
+                    "context": {"scenario": "city_driving"},
+                    "task": None,
+                    "decision": None,
+                    "result": None,
+                    "event_id": None,
+                    "driving_context": None,
+                    "stages": None,
+                }
             )
-        )
-        result = await workflow._joint_decision_node(
-            {
-                "original_query": "test",
-                "context": {"scenario": "city_driving"},
-                "task": None,
-                "decision": None,
-                "result": None,
-                "event_id": None,
-                "driving_context": None,
-                "stages": None,
-            }
-        )
         assert "task" in result
         assert "decision" in result
         assert result["task"]["type"] == "meeting"
@@ -183,77 +190,83 @@ class TestWorkflowValidationPath:
     async def test_joint_decision_node_fallback_on_bad_json(self, tmp_path):
         """LLM 返回非法 JSON → fallback 分支，不抛异常，返回默认值。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._call_llm_json = AsyncMock(
-            return_value=LLMJsonResponse(raw="not json"),
-        )
-        result = await workflow._joint_decision_node(
-            {
-                "original_query": "test",
-                "context": {},
-                "task": None,
-                "decision": None,
-                "result": None,
-                "event_id": None,
-                "driving_context": None,
-                "stages": None,
-            }
-        )
+        mock_response = LLMJsonResponse(raw="not json")
+        with patch(
+            "app.agents.joint_decision_agent.call_llm_json",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            result = await workflow._joint_decision_node(
+                {
+                    "original_query": "test",
+                    "context": {},
+                    "task": None,
+                    "decision": None,
+                    "result": None,
+                    "event_id": None,
+                    "driving_context": None,
+                    "stages": None,
+                }
+            )
         assert result["task"]["type"] == "general"
         assert result["task"]["confidence"] == 0.0
 
 
 class TestFormatConstraintsHint:
-    """_format_constraints_hint 纯单元测试。"""
+    """format_constraints_hint 纯单元测试。"""
 
     def test_none_rules_result(self):
-        assert AgentWorkflow._format_constraints_hint(None) == ""
+        assert JointDecisionAgent.format_constraints_hint(None) == ""
 
     def test_empty_rules_result(self):
-        assert AgentWorkflow._format_constraints_hint({}) == ""
+        assert JointDecisionAgent.format_constraints_hint({}) == ""
 
     def test_parked_allows_visual(self):
         """parked → allowed_channels 含 visual/audio/detailed。"""
         rules_result = apply_rules({"scenario": "parked"})
-        result = AgentWorkflow._format_constraints_hint(rules_result)
+        result = JointDecisionAgent.format_constraints_hint(rules_result)
         assert "通道" in result
 
 
 class TestFormatPreferenceHint:
-    """_format_preference_hint 纯单元测试。"""
+    """_format_preference_hint 纯单元测试——通过 AgentWorkflow 内部 agent 访问。"""
 
     @pytest.mark.asyncio
     async def test_ablation_disabled(self, tmp_path):
         from app.agents.workflow import set_ablation_disable_feedback
 
         set_ablation_disable_feedback(True)
-        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        result = await workflow._format_preference_hint()
-        assert result == ""
-        set_ablation_disable_feedback(False)
+        try:
+            workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+            result = await workflow._joint_decision_agent._format_preference_hint()
+            assert result == ""
+        finally:
+            set_ablation_disable_feedback(False)
 
     @pytest.mark.asyncio
     async def test_no_weights(self, tmp_path):
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(return_value={})
-        assert await workflow._format_preference_hint() == ""
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
+            return_value={}
+        )
+        assert await workflow._joint_decision_agent._format_preference_hint() == ""
 
     @pytest.mark.asyncio
     async def test_high_weight(self, tmp_path):
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
             return_value={"reminder_weights": {"meeting": 0.7}}
         )
-        result = await workflow._format_preference_hint()
+        result = await workflow._joint_decision_agent._format_preference_hint()
         assert "meeting" in result
         assert "优先处理" in result
 
     @pytest.mark.asyncio
     async def test_low_weight(self, tmp_path):
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
             return_value={"reminder_weights": {"travel": 0.55}}
         )
-        result = await workflow._format_preference_hint()
+        result = await workflow._joint_decision_agent._format_preference_hint()
         assert "travel" in result
         assert "略偏好" in result
 
@@ -261,20 +274,20 @@ class TestFormatPreferenceHint:
     async def test_all_below_05(self, tmp_path):
         """所有权重 < 0.5 → 空字符串。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
             return_value={"reminder_weights": {"meeting": 0.49, "travel": 0.49}}
         )
-        result = await workflow._format_preference_hint()
+        result = await workflow._joint_decision_agent._format_preference_hint()
         assert result == ""
 
     @pytest.mark.asyncio
     async def test_weight_exactly_05(self, tmp_path):
         """权重正好 = 0.5 → 弱引导（>= 阈值）。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
             return_value={"reminder_weights": {"travel": 0.5}}
         )
-        result = await workflow._format_preference_hint()
+        result = await workflow._joint_decision_agent._format_preference_hint()
         assert "travel" in result
         assert "略偏好" in result
 
@@ -282,26 +295,26 @@ class TestFormatPreferenceHint:
     async def test_weight_exactly_06(self, tmp_path):
         """权重正好 = 0.6 → 强引导（>= 阈值）。"""
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
             return_value={"reminder_weights": {"meeting": 0.6}}
         )
-        result = await workflow._format_preference_hint()
+        result = await workflow._joint_decision_agent._format_preference_hint()
         assert "meeting" in result
         assert "优先处理" in result
 
     @pytest.mark.asyncio
     async def test_non_dict_weights(self, tmp_path):
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
             return_value={"reminder_weights": "invalid"}
         )
-        assert await workflow._format_preference_hint() == ""
+        assert await workflow._joint_decision_agent._format_preference_hint() == ""
 
     @pytest.mark.asyncio
     async def test_mixed_numeric_types(self, tmp_path):
         workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        workflow._strategies_store.read = AsyncMock(
+        workflow._joint_decision_agent._strategies_store.read = AsyncMock(
             return_value={"reminder_weights": {"meeting": 0.7, "travel": 1}}
         )
-        result = await workflow._format_preference_hint()
+        result = await workflow._joint_decision_agent._format_preference_hint()
         assert "travel" in result

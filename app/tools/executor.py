@@ -20,6 +20,16 @@ class ToolExecutionError(AppError):
         super().__init__(code="TOOL_ERROR", message=message)
 
 
+class ToolConfirmationRequiredError(AppError):
+    """工具执行需要用户确认。"""
+
+    def __init__(self, tool_name: str) -> None:
+        super().__init__(
+            code="TOOL_CONFIRMATION_REQUIRED",
+            message=f"工具 {tool_name} 需要语音确认后执行",
+        )
+
+
 class ToolExecutor:
     """工具执行器，按名称分发调用已注册工具。"""
 
@@ -102,12 +112,26 @@ class ToolExecutor:
 
             self._validate_constraints(tool_name, key, value, prop)
 
-    async def execute(self, tool_name: str, params: dict[str, Any]) -> str:
+    def get_spec(self, name: str) -> ToolSpec | None:
+        """按名称获取工具规格。"""
+        return self._registry.get(name)
+
+    async def execute(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        *,
+        driving_context: dict | None = None,
+    ) -> str:
         """按名称执行工具，返回执行结果字符串。"""
         spec = self._registry.get(tool_name)
         if spec is None:
             msg = f"Unknown tool: {tool_name}"
             raise ToolExecutionError(msg)
+        if spec.require_confirmation_when == "driving" and driving_context:
+            scenario = driving_context.get("scenario", "parked")
+            if scenario != "parked":
+                raise ToolConfirmationRequiredError(tool_name)
         self._validate_params(tool_name, spec, params)
         try:
             result = await spec.handler(params)
