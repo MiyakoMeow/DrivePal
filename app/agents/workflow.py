@@ -933,14 +933,17 @@ class AgentWorkflow:
         driving_context: dict | None = None,
         trigger_source: str = "pending_reminder",
     ) -> tuple[str, str | None, WorkflowStages]:
-        """对已确定内容的 pending reminder 跳过 LLM，仅走 Execution。"""
+        """对已确定内容的 pending reminder 跳过 LLM，仅走 Execution。
+
+        poll() 仅返回已满足触发条件的提醒，此时 timing 已无意义，
+        直接以 immediate 发送。规则引擎通过 _ensure_postprocessed
+        仍可覆盖 should_remind/channel 等。
+        """
         stages = WorkflowStages()
         decision: dict = {
             "should_remind": True,
             "reminder_content": content,
             "action": "remind",
-            "timing": "immediate",
-            "channel": "audio",
         }
         state: AgentState = {
             "original_query": f"[proactive:{trigger_source}]",
@@ -956,6 +959,8 @@ class AgentWorkflow:
         try:
             exec_result = await self._execution_node(state)
             state.update(exec_result)
+        except AppError:
+            raise
         except Exception as e:
             logger.warning("execute_pending_reminder failed: %s", e)
             return "待触发提醒处理失败", None, stages

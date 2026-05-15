@@ -112,7 +112,7 @@ class ProactiveScheduler:
         pm = self._pending_manager
         triggered = await pm.poll(ctx)
         for tr in triggered:
-            content = tr.get("content", "")
+            content = (tr.get("content") or "").strip()
             logger.info("PendingReminder triggered: %s", tr.get("id"))
             try:
                 if content:
