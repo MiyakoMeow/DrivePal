@@ -420,8 +420,7 @@ setInterval(() => {
 }, 30000);
 
 // ===== 语音控制台 =====
-let _voicePollingTimer = null;
-let _voiceTranscriptionTimer = null;
+
 
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -532,7 +531,7 @@ async function changeVoiceDevice(index) {
 }
 
 async function applyVoiceConfig() {
-  const vadMode = parseInt(document.getElementById('voiceVadMode').value);
+  const vadMode = parseInt(document.getElementById('voiceVadMode').value, 10);
   const minConf = parseFloat(document.getElementById('voiceMinConfidence').value);
   try {
     await api('PUT', '/api/v1/voice/config', { vad_mode: vadMode, min_confidence: minConf });
