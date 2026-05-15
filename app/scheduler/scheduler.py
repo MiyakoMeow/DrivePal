@@ -89,6 +89,7 @@ class ProactiveScheduler:
         self._last_review_date: str | None = None
         self._enable_periodic_review: bool = _cfg.get("enable_periodic_review", True)
         self._review_time: str = _cfg.get("review_time", "08:00")
+        self._review_window_minutes: int = 5
         try:
             parts = self._review_time.split(":")
             self._review_hour = int(parts[0])
@@ -184,8 +185,8 @@ class ProactiveScheduler:
             now_local = datetime.now().astimezone()
             today_str = now_local.strftime("%Y-%m-%d")
             if (
-                now_local.hour == self._review_hour
-                and now_local.minute == self._review_minute
+                self._review_hour == now_local.hour
+                and now_local.minute < self._review_window_minutes
                 and self._last_review_date != today_str
             ):
                 self._last_review_date = today_str

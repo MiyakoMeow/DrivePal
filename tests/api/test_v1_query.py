@@ -78,7 +78,7 @@ def test_query_chat_model_unavailable(app_client: TestClient) -> None:
         )
         assert resp.status_code == 503
         body = resp.json()
-        assert body["error"]["code"] == "STORAGE_ERROR"
+        assert body["error"]["code"] == "SERVICE_UNAVAILABLE"
         assert body["error"]["message"] == "Service temporarily unavailable"
 
 

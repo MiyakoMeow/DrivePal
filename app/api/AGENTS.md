@@ -46,9 +46,10 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 | NOT_FOUND | 404 | 资源不存在 |
 | INVALID_INPUT | 422 | 请求参数不合法 |
 | STORAGE_ERROR | 503 | 存储不可用 |
+| SERVICE_UNAVAILABLE | 503 | 模型/工作流不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 
-`safe_memory_call` 包装多数存储/记忆调用。例外：`get_memory_module()` 在 `query.py`、`feedback.py`、`data.py` 中使用裸 try/except 而非 `safe_memory_call`。`ChatModelUnavailableError` → 500。
+`safe_call` 包装多数存储/记忆调用。例外：`get_memory_module()` 在 `query.py`、`feedback.py`、`data.py` 中使用裸 try/except 而非 `safe_call`。`ChatModelUnavailableError` → 500。
 
 ## 中间件
 

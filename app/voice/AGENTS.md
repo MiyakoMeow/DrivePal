@@ -24,7 +24,7 @@ flowchart LR
 | `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence` |
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
 | `asr.py` | `SherpaOnnxASREngine` | SenseVoice 离线 ASR。`_ensure_onnx_lib()` 自动创建 onnxruntime 符号链接 |
-| `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_FRAME_BYTES`、`_FRAMES_PER_CHUNK` 等常量定义 |
+| `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE`、`_FRAMES_PER_CHUNK`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
 
 ## VoicePipeline
 
@@ -37,7 +37,7 @@ feed_audio(chunk) → Queue → run() 循环:
     silence → discard
 ```
 
-- `_FRAME_BYTES`（960，16kHz 16bit 30ms）定义于 `constants.py`
+- 帧大小由 `VADEngine` 自行计算（`sample_rate * 2 * frame_ms / 1000`，默认 960），`VoicePipeline` 通过 `self._vad.frame_bytes` 获取
 - `min_confidence` 默认 0.5，< 此值丢弃
 - `on_transcription(text, confidence)` 可选回调（供 Scheduler 实时消费）
 - `close()` — 停止循环并释放 ASR 资源

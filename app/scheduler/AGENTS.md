@@ -70,7 +70,7 @@ stop() → cancel task
 | location | 位置变化 > proximity | 1 | 接近记忆中的地点时 |
 | pending_reminder | PendingReminder 满足 | N/A | 已在 poll 中处理 |
 | state | 两阶段：先检 `delta.fatigue_increased or delta.workload_changed`（增量变化，priority=2），再检绝对值 `fatigue > 0.7 / workload=overloaded`（priority=2） | 2 | 增量变化优先触发 |
-| periodic | 每日 08:00-08:04:59 窗口内，`_last_review_date` 天级防重 | 0 | 硬编码 `_REVIEW_HOUR=8`、`_REVIEW_WINDOW_MINUTES=5`；config 字段未接线 |
+| periodic | `review_time` 所在小时 + 前 5 分钟窗口内，`_last_review_date` 天级防重 | 0 | `_review_hour` 从 `config/scheduler.toml` 的 `review_time` 解析；窗口 `_review_window_minutes=5` |
 
 注：`TriggerSignal.source` 类型标注允许的取值包括 `"context_change"`、`"location"`、`"time"`、`"state"`、`"periodic"`、`"voice"`。其中 `"time"` 和 `"voice"` 当前未被任何发射路径使用。
 
@@ -122,7 +122,7 @@ location_proximity_meters = 500
 fatigue_delta_threshold = 0.1
 ```
 
-注意：`enable_periodic_review` 和 `review_time` 在配置文件中定义，但代码未读取。周期性回顾使用硬编码常量 `_REVIEW_HOUR = 8`、`_REVIEW_WINDOW_MINUTES = 5`。
+`enable_periodic_review`、`review_time` 从配置文件读取。`review_time` 解析为 `_review_hour`（小时），分钟部分忽略。窗口宽度 `_review_window_minutes=5`（硬编码）。
 
 ## 异常
 

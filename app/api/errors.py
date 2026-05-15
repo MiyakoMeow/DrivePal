@@ -29,6 +29,7 @@ class AppErrorCode(StrEnum):
     NOT_FOUND = "NOT_FOUND"
     INVALID_INPUT = "INVALID_INPUT"
     STORAGE_ERROR = "STORAGE_ERROR"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -36,6 +37,7 @@ _CODE_TO_HTTP: dict[AppErrorCode, int] = {
     AppErrorCode.NOT_FOUND: 404,
     AppErrorCode.INVALID_INPUT: 422,
     AppErrorCode.STORAGE_ERROR: 503,
+    AppErrorCode.SERVICE_UNAVAILABLE: 503,
     AppErrorCode.INTERNAL_ERROR: 500,
 }
 
@@ -121,7 +123,7 @@ async def safe_call[T](
     except WorkflowError as e:
         logger.exception("%s: workflow error", context_msg)
         raise AppError(
-            AppErrorCode.STORAGE_ERROR, "Service temporarily unavailable"
+            AppErrorCode.SERVICE_UNAVAILABLE, "Service temporarily unavailable"
         ) from e
     except BaseAppError as e:
         if isinstance(e, HTTPException):
@@ -138,6 +140,3 @@ async def safe_call[T](
     except Exception as e:
         logger.exception("%s: unexpected error", context_msg)
         raise AppError(AppErrorCode.INTERNAL_ERROR, "Internal server error") from e
-
-
-safe_memory_call = safe_call
