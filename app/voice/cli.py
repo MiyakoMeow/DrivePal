@@ -79,10 +79,10 @@ async def _run_cli(args: argparse.Namespace) -> None:
     ok = await svc.start(on_transcription=_print_transcription)
     if not ok:
         print(
-            "[WARN] Voice pipeline unavailable (ASR model/config disabled). "
-            "Pipeline will run without transcription output.",
+            "[WARN] Voice pipeline unavailable (ASR model/config disabled).",
             file=sys.stderr,
         )
+        return
 
     print("[INFO] Voice pipeline started. Press Ctrl+C to stop.")
     await _monitor_pipeline(svc)

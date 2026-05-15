@@ -88,7 +88,7 @@ async def voice_config_put(request: Request, body: dict) -> JSONResponse:
     try:
         result = await _get_svc(request).update_config(body)
         return JSONResponse(content=result)
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         return JSONResponse(
             status_code=400,
             content={"error": {"code": "INVALID_INPUT", "message": str(e)}},
@@ -98,6 +98,8 @@ async def voice_config_put(request: Request, body: dict) -> JSONResponse:
 @router.get("/transcriptions")
 async def voice_transcriptions(request: Request, limit: int = 50) -> list[dict]:
     """获取转录历史。"""
+    if limit < 1:
+        return []
     return await _get_svc(request).get_transcriptions(limit=limit)
 
 

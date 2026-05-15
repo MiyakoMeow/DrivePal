@@ -438,17 +438,15 @@ function switchTab(tab) {
 
 function startVoicePolling() {
   if (state.getVoicePollTimer()) return; // 已运行，防叠加
-  state.setVoicePollTimer(setInterval(pollVoiceStatus, 500));
-  state.setVoiceTranscriptionTimer(setInterval(pollVoiceTranscriptions, 1000));
+  state.setVoicePollTimer(true);
+  state.setVoiceTranscriptionTimer(true);
   pollVoiceStatus();
   pollVoiceTranscriptions();
 }
 
 function stopVoicePolling() {
-  const pt = state.getVoicePollTimer();
-  if (pt) { clearInterval(pt); state.setVoicePollTimer(null); }
-  const tt = state.getVoiceTranscriptionTimer();
-  if (tt) { clearInterval(tt); state.setVoiceTranscriptionTimer(null); }
+  state.setVoicePollTimer(false);
+  state.setVoiceTranscriptionTimer(false);
 }
 
 async function pollVoiceStatus() {
@@ -472,6 +470,7 @@ async function pollVoiceStatus() {
       if (minConfEl && data.config.min_confidence != null) minConfEl.value = data.config.min_confidence;
     }
   } catch (e) { console.warn('[Voice] status poll failed:', e.message); }
+  if (state.getVoicePollTimer()) setTimeout(pollVoiceStatus, 500);
 }
 
 async function pollVoiceTranscriptions() {
@@ -488,6 +487,7 @@ async function pollVoiceTranscriptions() {
     ).join('');
     area.scrollTop = area.scrollHeight;
   } catch (e) { console.warn('[Voice] transcriptions poll failed:', e.message); }
+  if (state.getVoiceTranscriptionTimer()) setTimeout(pollVoiceTranscriptions, 1000);
 }
 
 async function toggleVoiceRecording() {

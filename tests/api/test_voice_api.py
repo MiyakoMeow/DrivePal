@@ -3,10 +3,10 @@
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, PropertyMock, patch
 
+from app.voice.service import VoiceService
+
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
-
-from app.voice.service import VoiceService
 
 
 def test_voice_status(app_client: TestClient) -> None:
@@ -37,11 +37,18 @@ def test_voice_start_stop(app_client: TestClient) -> None:
 
 
 def test_voice_config_put(app_client: TestClient) -> None:
-    """PUT /api/v1/voice/config 返回已应用的键列表。"""
-    resp = app_client.put("/api/v1/voice/config", json={"device_index": 1})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "applied" in data
+    """PUT /api/v1/voice/config 返回已应用的键列表（mock update_config 防写真实文件）。"""
+    with patch.object(VoiceService, "update_config", new_callable=AsyncMock) as mock_uc:
+        mock_uc.return_value = {
+            "applied": ["device_index"],
+            "requires_restart": False,
+            "running": False,
+        }
+        resp = app_client.put("/api/v1/voice/config", json={"device_index": 1})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "applied" in data
+        mock_uc.assert_called_once_with({"device_index": 1})
 
 
 def test_voice_config_put_invalid_returns_400(app_client: TestClient) -> None:

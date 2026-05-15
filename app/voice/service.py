@@ -76,15 +76,17 @@ class VoiceService:
             logger.debug("Voice already running")
             return True
 
-        self._sched = sched
-        self._on_transcription_external = on_transcription
+        if sched is not None:
+            self._sched = sched
+        if on_transcription is not None:
+            self._on_transcription_external = on_transcription
 
         try:
             pipeline = VoicePipeline(
                 on_transcription=self._handle_transcription,
                 on_vad_status=lambda s: setattr(self, "_vad_status", s),
             )
-            recorder = VoiceRecorder()
+            recorder = VoiceRecorder(device_index=self._config.device_index)
             await recorder.start(pipeline)
         except Exception:
             logger.warning("Voice service start failed", exc_info=True)
@@ -157,8 +159,9 @@ class VoiceService:
             self._recorder = None
 
     async def update_config(self, cfg: dict) -> dict:
-        """热更新配置。无效配置抛 ValueError。修改持久化到 self._config。需重建的标记 requires_restart。"""
-        restart_needed = False
+        """热更新配置。无效配置抛 ValueError。先全体验证再统一应用。"""
+        # 第一阶段：全体验证
+        validated: list[tuple[str, object]] = []
         for key, val in cfg.items():
             if not hasattr(self._config, key):
                 msg = f"Unknown config key: {key}"
@@ -169,6 +172,10 @@ class VoiceService:
             if key == "min_confidence" and not (0.0 <= val <= 1.0):
                 msg = "min_confidence must be 0.0-1.0"
                 raise ValueError(msg)
+            validated.append((key, val))
+        # 第二阶段：统一应用
+        restart_needed = False
+        for key, val in validated:
             setattr(self._config, key, val)
             if key == "enabled":
                 self._enabled = bool(val)
