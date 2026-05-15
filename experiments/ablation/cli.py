@@ -330,10 +330,14 @@ def _prepare_group_scenarios(
     if "architecture" in groups_to_run:
         remaining = [s for s in all_scenarios if s.id not in used_ids]
         complex_scenarios = [
-            s for s in remaining if s.synthesis_dims and classify_complexity(s.synthesis_dims)
+            s
+            for s in remaining
+            if s.synthesis_dims and classify_complexity(s.synthesis_dims)
         ]
         simple_scenarios = [
-            s for s in remaining if not s.synthesis_dims or not classify_complexity(s.synthesis_dims)
+            s
+            for s in remaining
+            if not s.synthesis_dims or not classify_complexity(s.synthesis_dims)
         ]
 
         n_complex = min(25, len(complex_scenarios))
@@ -343,15 +347,21 @@ def _prepare_group_scenarios(
         if complex_scenarios and n_complex > 0:
             sampled.extend(
                 sample_scenarios(
-                    complex_scenarios, n_complex,
-                    stratify_key=arch_stratum, min_per_stratum=1, seed=seed + 1,
+                    complex_scenarios,
+                    n_complex,
+                    stratify_key=arch_stratum,
+                    min_per_stratum=1,
+                    seed=seed + 1,
                 )
             )
         if simple_scenarios and n_simple > 0:
             sampled.extend(
                 sample_scenarios(
-                    simple_scenarios, n_simple,
-                    stratify_key=arch_stratum, min_per_stratum=1, seed=seed + 2,
+                    simple_scenarios,
+                    n_simple,
+                    stratify_key=arch_stratum,
+                    min_per_stratum=1,
+                    seed=seed + 2,
                 )
             )
         if not sampled:
@@ -400,7 +410,8 @@ async def _run_architecture_experiment(
     judge = Judge()
     complexity_map = {
         s.id: classify_complexity(s.synthesis_dims)
-        for s in scenarios if s.synthesis_dims
+        for s in scenarios
+        if s.synthesis_dims
     }
     config = make_architecture_config(scenario_complexity_map=complexity_map)
     return await run_group(

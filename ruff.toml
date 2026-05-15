@@ -125,6 +125,7 @@ exclude = [".agents/**"]
 ]
 "experiments/ablation/ablation_runner.py" = [
     "C901",  # run_batch 含 checkpoint 加载/去重/semaphore/timeout/错误处理，复杂度可接受
+    "BLE001",  # memory search catch Exception 是故意——非致命回溯，不阻塞实验
 ]
 "experiments/ablation/judge.py" = [
     "S311",  # 确定性种子用于可复现实验（盲评 shuffle）
@@ -156,6 +157,9 @@ exclude = [".agents/**"]
 ]
 "experiments/ablation/feedback_simulator.py" = [
     "ANN401",  # _safe_read_weights 接受 Any 输入做运行时类型校验（TOML 输出无固定类型）
+    "PLR0913",  # simulate_feedback 6 参数（决策/阶段/rng/stages/scenario_id/driving_context），聚合合理
+    "ARG001",  # scenario_id 参数保留以符合调用方接口签名，当前实现未使用
+    "PLR2004",  # 对齐阈值 0.5 / 随机噪音平衡 0.5，语义自明无需抽常
 ]
 
 "app/memory/memory_bank/lifecycle.py" = [

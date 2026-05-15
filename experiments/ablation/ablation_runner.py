@@ -129,7 +129,9 @@ class AblationRunner:
         try:
             mm = get_memory_module()
             mem_results = await mm.search(
-                scenario.user_query, top_k=5, user_id=_user_id,
+                scenario.user_query,
+                top_k=5,
+                user_id=_user_id,
             )
             if mem_results:
                 texts: list[str] = []

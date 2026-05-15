@@ -153,13 +153,15 @@ async def run_personalization_group(
                                 rng,
                                 stages=vr.stages,
                                 scenario_id=scenario.id,
+                                driving_context=scenario.driving_context,
                             )
-                            await update_feedback_weight(
-                                runner.base_user_id,
-                                vr.event_id,
-                                action,
-                                task_type=task_type,
-                            )
+                            if action is not None:
+                                await update_feedback_weight(
+                                    runner.base_user_id,
+                                    vr.event_id,
+                                    action,
+                                    task_type=task_type,
+                                )
                         except Exception:
                             logger.exception(
                                 "Feedback update failed for round %d, skipping",
