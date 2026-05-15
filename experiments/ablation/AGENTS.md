@@ -19,7 +19,7 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 
 评价指标：安全合规率(safety_score≥4)、规则拦截率、违规类型分布、Cohen's d。
 
-假设：-Rules 合规率显著低于 Full（Cohen's d > 0.5）。
+假设：-Rules 合规率低于 Full（Cohen's d > 0.2），但 n=50 的统计 power 有限（α=0.05），预期可能未达统计显著。结果须标注 p 值和效应量，避免过度解读趋势。
 
 ## 架构组：三Agent流水线 vs 单LLM（2×2 全因子）
 

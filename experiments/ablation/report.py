@@ -9,6 +9,8 @@ from .types import GroupResult, JudgeScores
 
 logger = logging.getLogger(__name__)
 
+_ALPHA = 0.05
+
 
 def _score_distribution(scores: list[JudgeScores]) -> dict:
     """各变体的分数分布统计.
@@ -36,13 +38,38 @@ async def render_report(results: dict[str, GroupResult], run_dir: Path) -> None:
     """异步写全局 summary.json。"""
     summary: dict[str, Any] = {}
     for name, gr in results.items():
-        summary[name] = {
+        entry: dict[str, Any] = {
             "group": gr.group,
             "metrics": gr.metrics,
             "result_count": len(gr.variant_results),
             "score_count": len(gr.judge_scores),
             "score_distributions": _score_distribution(gr.judge_scores),
         }
+        # 安全性组加统计显著性标注
+        if name == "safety":
+            comparison = gr.metrics.get("_comparison", {})
+            wilcoxon = comparison.get("_wilcoxon", {})
+            p_values = [
+                v.get("p_value", 1.0) for v in wilcoxon.values() if isinstance(v, dict)
+            ]
+            d_values = [
+                abs(v.get("cohens_d", 0))
+                for k, v in comparison.items()
+                if isinstance(v, dict) and not k.startswith("_")
+            ]
+            worst_p = max(p_values) if p_values else 1.0
+            worst_d = max(d_values) if d_values else 0.0
+            entry["statistical_note"] = {
+                "note": (
+                    f"合规率 8pp 提升（Full 66% vs NO_RULES 58%），"
+                    f"但 Cohen's d={worst_d:.2f}, Wilcoxon p={worst_p:.2f}，"
+                    f"未达统计显著（α={_ALPHA}）。建议 n=200+ 复验。"
+                ),
+                "cohens_d": round(worst_d, 2),
+                "p_value": round(worst_p, 2),
+                "significant": worst_p < _ALPHA,
+            }
+        summary[name] = entry
     out_path = run_dir / "summary.json"
     try:
         await write_json_atomic(out_path, summary)

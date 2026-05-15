@@ -164,8 +164,19 @@ class TestMakeArchitectureConfig:
         assert Variant.SINGLE_LLM in config.variants
 
     def test_scenario_filter_always_true(self):
+        from experiments.ablation.types import Scenario
+
+        dummy = Scenario(
+            id="test",
+            driving_context={},
+            user_query="",
+            expected_decision={},
+            expected_task_type="",
+            safety_relevant=False,
+            scenario_type="",
+        )
         config = make_architecture_config()
-        assert config.scenario_filter(None) is True
+        assert config.scenario_filter(dummy) is True
 
     def test_metrics_computer_flat_without_map(self):
         config = make_architecture_config()
