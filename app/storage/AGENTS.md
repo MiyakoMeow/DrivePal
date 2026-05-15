@@ -2,7 +2,7 @@
 
 `app/storage/` — 持久化引擎。
 
-## 数据目录
+## 架构
 
 ```mermaid
 flowchart LR
@@ -28,11 +28,21 @@ flowchart LR
     D --> EB
 ```
 
-旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移。迁移范围：
+存储分两层：项目级（`data/experiment_benchmark.toml`）+ 用户级（`data/users/{user_id}/`）。旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移。迁移范围：
 - `data/*.jsonl`、`data/*.toml` → `data/users/default/`
 - `data/memorybank/` → `data/users/default/memorybank/`（整体目录）
 - `data/memorybank/user_{id}/` → `data/users/{id}/memorybank/`（按用户拆分）
 - `data/user_{id}/`（平铺目录）→ `data/users/{id}/`（按用户拆分）
+
+## 组件
+
+| 文件 | 类/函数 | 职责 |
+|------|---------|------|
+| toml_store.py | TOMLStore | 异步锁+文件级TOML读写 |
+| jsonl_store.py | JSONLinesStore | JSONL追加写入 |
+| init_data.py | init_storage / init_user_dir | 数据目录初始化 + 迁移 |
+| experiment_store.py | read_benchmark | 只读实验对比数据 |
+| feedback_log.py | append_feedback / aggregate_weights | 策略权重反馈记录 |
 
 ## TOMLStore (`toml_store.py`)
 
@@ -44,22 +54,13 @@ flowchart LR
 - **`default_factory`**：`__init__` 可选参数，控制文件不存在时写入的默认值。默认 `dict`，传 `list` 以支持列表模式
 - **API**：read/write/append(列表)/update(字典)/merge_dict_key(字典)
 
-### 异常（独立，不入 AppError 继承树）
-
-| 异常 | 父类 | 触发 |
-|------|------|------|
-| `AppendError` | `TypeError` | 非列表存储调 append |
-| `UpdateError` | `TypeError` | 非字典存储调 update/merge_dict_key |
-
-性质：结构误用（当前模式不支持 API），非域内业务错误。继承 `TypeError`，不经过 `safe_call()` 映射路径。
-
 ## JSONLinesStore (`jsonl_store.py`)
 
 JSONL追加写，用于高频写入数据(events/interactions/feedback)。
 
 - append(obj) / read_all() / count()
 
-## init_data (`init_data.py`)
+## 存储初始化 (`init_data.py`)
 
 `init_storage(data_dir)` 创建目录 + `_migrate_legacy()` + `init_user_dir("default")`。
 `init_user_dir(user_id)` 创建4个jsonl + 4个toml文件并写默认值。默认值：
@@ -78,3 +79,12 @@ JSONL追加写，用于高频写入数据(events/interactions/feedback)。
 
 - `append_feedback(user_dir, event_id, action, feedback_type)` — 追加原始记录
 - `aggregate_weights(user_dir)` — 按类型聚合（accept +0.1/ignore -0.1/modify +0.05/snooze 0.0，基值0.5，范围[0.1, 1.0]）
+
+## 自有异常
+
+存储层异常独立于 `AppError` 继承树，继承 `TypeError`（结构误用，非域内业务错误）。
+
+| 异常 | 父类 | 触发 |
+|------|------|------|
+| `AppendError` | `TypeError` | 非列表存储调 append |
+| `UpdateError` | `TypeError` | 非字典存储调 update/merge_dict_key |
