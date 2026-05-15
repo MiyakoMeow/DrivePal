@@ -120,10 +120,30 @@ class AblationRunner:
         chat = get_chat_model()
         now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
         prompt = SINGLE_LLM_SYSTEM_PROMPT.format(current_datetime=now)
-        user_msg = json.dumps(
-            {"query": scenario.user_query, "context": scenario.driving_context},
-            ensure_ascii=False,
-        )
+
+        user_msg_data: dict[str, object] = {
+            "query": scenario.user_query,
+            "context": scenario.driving_context,
+        }
+        # MemoryBank 只读检索——与 Full 变体对齐记忆上下文，解混"架构 vs 有无记忆"
+        try:
+            mm = get_memory_module()
+            mem_results = await mm.search(
+                scenario.user_query, top_k=5, user_id=_user_id,
+            )
+            if mem_results:
+                texts: list[str] = []
+                for r in mem_results:
+                    content = getattr(r, "content", None) or {}
+                    text = content.get("text", "") if isinstance(content, dict) else ""
+                    if text:
+                        texts.append(text)
+                if texts:
+                    user_msg_data["memory_context"] = "; ".join(texts)
+        except Exception:
+            logger.debug("Memory search non-fatal for %s", scenario.id)
+
+        user_msg = json.dumps(user_msg_data, ensure_ascii=False)
         try:
             response = await chat.generate(
                 system_prompt=prompt, prompt=user_msg, json_mode=True
