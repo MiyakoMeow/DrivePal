@@ -93,10 +93,8 @@ class ProactiveScheduler:
         try:
             parts = self._review_time.split(":")
             self._review_hour = int(parts[0])
-            self._review_minute = int(parts[1]) if len(parts) > 1 else 0
         except ValueError, IndexError:
             self._review_hour = 8
-            self._review_minute = 0
 
     async def push_voice_text(self, text: str) -> None:
         """推入一条被动语音文本到队列。"""

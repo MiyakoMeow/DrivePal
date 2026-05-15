@@ -106,7 +106,7 @@ def test_build_signals_periodic_trigger(scheduler):
     scheduler._last_review_date = None
     now = MagicMock()
     now.hour = scheduler._review_hour
-    now.minute = scheduler._review_minute
+    now.minute = 0  # 窗口内任意分钟即可触发
     now.strftime.return_value = "2026-05-15"
     now.astimezone.return_value = now
     with patch("app.scheduler.scheduler.datetime") as mock_dt:

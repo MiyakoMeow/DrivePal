@@ -49,7 +49,7 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 | SERVICE_UNAVAILABLE | 503 | 模型/工作流不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 
-`safe_call` 包装多数存储/记忆调用。例外：`get_memory_module()` 在 `query.py`、`feedback.py`、`data.py` 中使用裸 try/except 而非 `safe_call`。`ChatModelUnavailableError` → 500。
+`safe_call` 统一包装所有存储/记忆/工作流调用。`WorkflowError` → 503 (SERVICE_UNAVAILABLE)。
 
 ## 中间件
 
