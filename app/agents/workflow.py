@@ -39,6 +39,7 @@ from app.memory.types import MemoryMode
 from app.models.chat import get_chat_model
 from app.storage.toml_store import TOMLStore
 from app.tools import get_default_executor
+from app.tools.executor import ToolExecutionError
 
 _ablation_disable_feedback: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "_ablation_disable_feedback", default=False
@@ -577,10 +578,12 @@ class AgentWorkflow:
                 try:
                     t_result = await executor.execute(t_name, t_params)
                     tool_results.append(f"[{t_name}] {t_result}")
-                except WorkflowError, AppError:
+                except WorkflowError:
                     raise
-                except Exception as e:
+                except ToolExecutionError as e:
                     tool_results.append(f"[{t_name}] 失败: {e}")
+                except AppError:
+                    raise
         if tool_results:
             logger.info("Tool call results: %s", "; ".join(tool_results))
 
