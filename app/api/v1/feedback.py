@@ -35,7 +35,7 @@ async def _handle_memory_feedback(
     mode = MemoryMode.MEMORY_BANK
 
     actual_type = await safe_memory_call(
-        mm.get_event_type(req.event_id, mode=mode),
+        mm.get_event_type(req.event_id, mode=mode, user_id=user_id),
         "feedback(get_event_type)",
     )
     if actual_type is None:
@@ -88,7 +88,7 @@ async def _handle_snooze(req: FeedbackRequest, user_id: str) -> None:
         raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
     mode = MemoryMode.MEMORY_BANK
     actual_type = await safe_memory_call(
-        mm.get_event_type(req.event_id, mode=mode),
+        mm.get_event_type(req.event_id, mode=mode, user_id=user_id),
         "snooze(get_event_type)",
     )
     if actual_type is None:

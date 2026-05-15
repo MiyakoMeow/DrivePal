@@ -187,6 +187,7 @@ function handleWSMessage(type, data) {
             break;
         case 'done':
             setLoading(false);
+            loadHistory();
             if (data.event_id) {
                 state.setCurrentEventId(data.event_id);
                 document.getElementById('feedbackRow').style.display = 'flex';
@@ -314,6 +315,7 @@ function loadPreset(id) {
     const sel = document.getElementById('presetSelect');
     const opt = sel.selectedOptions[0];
     if (!opt || !opt.dataset.preset) return;
+    resetContext(document.querySelector('.panel-left'));
     fillContext(document.querySelector('.panel-left'), JSON.parse(opt.dataset.preset).context);
 }
 

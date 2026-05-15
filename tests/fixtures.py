@@ -12,6 +12,8 @@ MODULES_WITH_DATA_DIR = [
     "app.config",
     "app.api.main",
     "app.memory.singleton",
+    "app.api.v1.query",
+    "app.api.v1.ws",
 ]
 MODULES_WITH_DATA_ROOT = ["app.config"]
 

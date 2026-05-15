@@ -51,7 +51,19 @@ async def websocket_endpoint(ws: WebSocket) -> None:
                 await ws_manager.send_to(ws, {"type": "pong", "payload": {}})
 
             elif msg_type == "query":
-                payload = msg.get("payload", {})
+                payload = msg.get("payload")
+                if not isinstance(payload, dict):
+                    await ws_manager.send_to(
+                        ws,
+                        {
+                            "type": "error",
+                            "payload": {
+                                "code": "INVALID_PAYLOAD",
+                                "message": "Payload must be an object",
+                            },
+                        },
+                    )
+                    continue
                 await _handle_query(ws, user_id, payload)
 
             else:
