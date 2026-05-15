@@ -19,8 +19,7 @@ flowchart LR
 
 | 文件 | 类/函数 | 职责 |
 |------|---------|------|
-| `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。`__init__` 调用 `VoiceConfig.load()` 加载 voice.toml 配置。持有 `asyncio.Queue` 接收音频帧 |
-| `config.py` | `VoiceConfig` | voice.toml 配置 dataclass：VAD/ASR 参数。`load()` 类方法加载配置（文件缺失自动生成），`_toml_defaults()` 导出默认值 |
+| `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。`_load_voice_config()` 加载 voice.toml 配置。持有 `asyncio.Queue` 接收音频帧。通过 `on_transcription` 回调供 Scheduler 实时消费转录文本 |
 | `recorder.py` | `VoiceRecorder` | pyaudio 麦克风录音。`_CHANNELS=1`、`_FORMAT=8` 录音参数。`start(pipeline)` 在线程池运行阻塞录音循环，`run_coroutine_threadsafe` 喂帧 |
 | `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence` |
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
@@ -67,7 +66,9 @@ sherpa-onnx 依赖 `libonnxruntime.so`。`_ensure_onnx_lib()` 在模块首次使
 2. 在 sherpa-onnx 的 `lib/` 下创建符号链接
 3. 用 `ctypes.CDLL` 预加载（RTLD_GLOBAL）
 
-## 配置 (`config/voice.toml`)
+## 配置
+
+`config/voice.toml`：
 
 ```toml
 [voice]
@@ -85,7 +86,7 @@ language = "zh"
 use_itn = true
 ```
 
-## 模型下载
+### 模型下载
 
 ```bash
 mkdir -p data/models
