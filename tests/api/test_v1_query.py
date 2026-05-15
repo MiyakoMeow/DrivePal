@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 from app.agents.state import WorkflowStages
+from app.agents.workflow import ChatModelUnavailableError
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
@@ -60,8 +61,6 @@ def test_query_with_context(app_client: TestClient) -> None:
 
 def test_query_chat_model_unavailable(app_client: TestClient) -> None:
     """POST /api/v1/query LLM不可用时返回500."""
-    from app.agents.workflow import ChatModelUnavailableError
-
     with (
         patch("app.api.v1.query.get_memory_module"),
         patch("app.api.v1.query.AgentWorkflow") as mock_wf,

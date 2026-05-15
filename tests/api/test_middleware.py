@@ -1,5 +1,7 @@
 """用户身份中间件测试."""
 
+from __future__ import annotations
+
 from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING

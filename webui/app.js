@@ -23,6 +23,7 @@ class AppState {
     resetReconnectAttempts() { this.#reconnectAttempts = 0; }
     incrementReconnectAttempts() { this.#reconnectAttempts += 1; }
 
+    getWsReconnectTimer() { return this.#wsReconnectTimer; }
     setWsReconnectTimer(timer) { this.#wsReconnectTimer = timer; }
 
     getPendingQuery() { return this.#pendingQuery; }
@@ -221,6 +222,7 @@ async function sendQuery() {
     const context = buildContext(document.querySelector('.panel-left'));
     const ws = state.getWs();
     const payload = { type: 'query', payload: { query, context, session_id: 'webui-' + Date.now() } };
+    state.reset();
     if (!ws || ws.readyState !== WebSocket.OPEN) {
         showToast('WebSocket 未连接，正在重连...', 'error');
         state.setPendingQuery(payload);
@@ -228,7 +230,6 @@ async function sendQuery() {
         return;
     }
     setLoading(true);
-    state.reset();
     ws.send(JSON.stringify(payload));
 }
 

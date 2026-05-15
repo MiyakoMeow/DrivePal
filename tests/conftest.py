@@ -1,5 +1,7 @@
 """共享测试配置和 fixtures."""
 
+from __future__ import annotations
+
 from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
