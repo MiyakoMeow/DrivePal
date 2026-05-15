@@ -173,6 +173,10 @@ def map_pending_trigger(
         )
     if timing == "delay":
         seconds = decision.get("delay_seconds", 300)
+        try:
+            seconds = int(seconds)
+        except ValueError, TypeError:
+            seconds = 300
         target_dt = datetime.now(UTC) + timedelta(seconds=seconds)
         target_str = target_dt.isoformat()
         return "time", {"time": target_str}, f"延迟 {seconds} 秒后"

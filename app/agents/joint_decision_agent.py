@@ -160,7 +160,8 @@ class JointDecisionAgent:
         except ValidationError as e:
             logger.warning("JointDecisionOutput validation failed: %s", e)
             raw = parsed.data or {}
-            decision = raw.get("decision", {})
+            _decision = raw.get("decision", {})
+            decision = _decision if isinstance(_decision, dict) else {}
             task = {
                 "type": raw.get("task_type") or raw.get("type", "general"),
                 "confidence": raw.get("confidence", 0.0),
@@ -203,7 +204,8 @@ class JointDecisionAgent:
         except ValidationError as e:
             logger.warning("proactive JointDecision validation failed: %s", e)
             raw = parsed.data or {}
-            decision = raw.get("decision", {})
+            _decision = raw.get("decision", {})
+            decision = _decision if isinstance(_decision, dict) else {}
 
         task = {"type": "proactive", "confidence": 1.0, "entities": []}
 
