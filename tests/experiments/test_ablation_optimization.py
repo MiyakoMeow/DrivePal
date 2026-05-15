@@ -177,26 +177,18 @@ class TestStratumFunctions:
         )
         assert arch_stratum(s) == "parked:shopping"
 
-    def test_is_arch_scenario_excludes_highway(self):
-        from experiments.ablation.architecture_group import is_arch_scenario
+    def test_classify_complexity_highway_is_complex(self):
+        from experiments.ablation.architecture_group import classify_complexity
 
-        s = Scenario(
-            id="highway_0.1_low_meeting_true",
-            driving_context={},
-            user_query="",
-            expected_decision={},
-            expected_task_type="meeting",
-            safety_relevant=True,
-            scenario_type="highway",
-            synthesis_dims={
+        assert classify_complexity(
+            {
                 "scenario": "highway",
                 "fatigue_level": 0.1,
                 "workload": "low",
                 "task_type": "meeting",
                 "has_passengers": "true",
-            },
+            }
         )
-        assert not is_arch_scenario(s)
 
     def test_no_dims_fallback(self):
         from experiments.ablation.safety_group import safety_stratum

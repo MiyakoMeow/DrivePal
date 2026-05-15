@@ -24,8 +24,8 @@ from ._io import (
 from .ablation_runner import AblationRunner
 from .architecture_group import (
     arch_stratum,
+    classify_complexity,
     compute_quality_metrics,
-    is_arch_scenario,
     make_architecture_config,
 )
 from .judge import Judge
@@ -148,6 +148,13 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         for vr in variant_results:
             scenarios_for_results.setdefault(vr.scenario_id, []).append(vr)
 
+        # 先构建 score_scenarios 列表，确保架构组 complexity_map 不论走哪条路径都能引用
+        score_scenarios = [
+            scenario_by_id[sid]
+            for sid in scenarios_for_results
+            if sid in scenario_by_id
+        ]
+
         existing_scores = await _try_load_existing_scores(
             run_dir / group_name / "scores.json",
             variant_results,
@@ -156,11 +163,6 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
             scores = existing_scores
             print(f"{group_name} 组复用已有评分: {len(scores)} 条")
         else:
-            score_scenarios = [
-                scenario_by_id[sid]
-                for sid in scenarios_for_results
-                if sid in scenario_by_id
-            ]
             scores = await score_scenarios_concurrent(
                 judge, score_scenarios, variant_results
             )
@@ -169,7 +171,12 @@ async def _judge_only(run_dir: Path, data_dir: Path, *, groups: list[str]) -> No
         if group_name == "safety":
             metrics = compute_safety_metrics(scores, variant_results)
         elif group_name == "architecture":
-            metrics = compute_quality_metrics(scores, variant_results)
+            complexity_map = {
+                s.id: classify_complexity(s.synthesis_dims)
+                for s in score_scenarios
+                if s.synthesis_dims
+            }
+            metrics = compute_quality_metrics(scores, variant_results, complexity_map)
         elif group_name == "personalization":
             summary_path = run_dir / group_name / "results.summary.json"
             try:
@@ -328,27 +335,54 @@ def _prepare_group_scenarios(
         used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
-        arch_pool = [s for s in all_scenarios if is_arch_scenario(s)]
-        arch_available = [s for s in arch_pool if s.id not in used_ids]
-        target_n = min(50, len(arch_available))
-        if len(arch_available) < 50:
-            logger.warning(
-                "架构组可用场景仅 %d（不足 50），降级使用全部可用场景。",
-                len(arch_available),
+        remaining = [s for s in all_scenarios if s.id not in used_ids]
+        complex_scenarios = [
+            s
+            for s in remaining
+            if s.synthesis_dims and classify_complexity(s.synthesis_dims)
+        ]
+        simple_scenarios = [
+            s
+            for s in remaining
+            if not s.synthesis_dims or not classify_complexity(s.synthesis_dims)
+        ]
+
+        n_complex = min(25, len(complex_scenarios))
+        n_simple = min(50 - n_complex, len(simple_scenarios))
+
+        sampled: list[Scenario] = []
+        if complex_scenarios and n_complex > 0:
+            sampled.extend(
+                sample_scenarios(
+                    complex_scenarios,
+                    n_complex,
+                    stratify_key=arch_stratum,
+                    min_per_stratum=1,
+                    seed=seed + 1,
+                )
             )
-        if arch_available:
-            group_scenarios["architecture"] = sample_scenarios(
-                arch_available,
-                target_n,
-                safety_only=False,
-                stratify_key=arch_stratum,
-                min_per_stratum=1,
-                seed=seed + 1,
+        if simple_scenarios and n_simple > 0:
+            sampled.extend(
+                sample_scenarios(
+                    simple_scenarios,
+                    n_simple,
+                    stratify_key=arch_stratum,
+                    min_per_stratum=1,
+                    seed=seed + 3,
+                )
             )
-            used_ids |= {s.id for s in group_scenarios["architecture"]}
-        else:
-            logger.warning("架构组预过滤后无可用场景，跳过架构组实验。")
+        if not sampled:
+            logger.warning("架构组无可用场景，跳过架构组实验。")
             group_scenarios["architecture"] = []
+        else:
+            target_n = min(50, len(sampled))
+            if len(sampled) < 50:
+                logger.warning(
+                    "架构组可用场景仅 %d（不足 50），降级使用全部可用场景。",
+                    len(sampled),
+                )
+            group_scenarios["architecture"] = sampled[:target_n]
+            used_ids |= {s.id for s in group_scenarios["architecture"]}
 
     if "personalization" in groups_to_run:
         group_scenarios["personalization"] = sample_scenarios(
@@ -382,7 +416,12 @@ async def _run_architecture_experiment(
     """运行架构组实验。"""
     runner = AblationRunner(base_user_id="experiment-arch")
     judge = Judge()
-    config = make_architecture_config()
+    complexity_map = {
+        s.id: classify_complexity(s.synthesis_dims)
+        for s in scenarios
+        if s.synthesis_dims
+    }
+    config = make_architecture_config(scenario_complexity_map=complexity_map)
     return await run_group(
         runner, judge, scenarios, config, run_dir / "architecture" / "results.jsonl"
     )

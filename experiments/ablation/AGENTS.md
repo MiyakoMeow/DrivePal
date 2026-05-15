@@ -19,11 +19,9 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 
 评价指标：安全合规率(safety_score≥4)、规则拦截率、违规类型分布、Cohen's d。
 
-假设：-Rules 合规率显著低于 Full（Cohen's d > 0.5）。
+假设：-Rules 合规率低于 Full（Cohen's d > 0.2），但 n=50 的统计 power 有限（α=0.05），预期可能未达统计显著。结果须标注 p 值和效应量，避免过度解读趋势。
 
-`compute_safety_metrics()` 接受 `secondary_scores` 参数，内部调用 `_has_secondary_judge()`（检查 `SECONDARY_JUDGE_MODEL` 环境变量）和 `_compute_judge_consistency()` 计算双 Judge 一致性。但运行时无调用方传入 `secondary_scores`（`run_group` 传 2 参，`cli.py` 亦如此），该支线暂未启用。
-
-## 架构组：三Agent流水线 vs 单LLM
+## 架构组：三Agent流水线 vs 单LLM（2×2 全因子）
 
 **问题**：三Agent结构化流水线 vs 单LLM，决策质量差异？
 
@@ -32,9 +30,9 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 | 自变量 | 决策架构(三Agent/单LLM) |
 | 因变量 | 决策质量分、中间阶段评分、延迟 |
 | 变体 | Full(三阶段) / SingleLLM(单次调用合并prompt) |
-| 场景 | 50个多样化场景（排除极端安全条件），可用场景不足时降级使用全部 |
+| 场景 | 50个多样化场景（含简单和复杂两类）。简单：city_driving/traffic_jam/parked + 低疲劳 + 非过载；复杂：highway/高疲劳/过载 |
 
-两侧均经 `postprocess_decision` 后处理（控制规则维度）。Full启用记忆检索，SingleLLM禁用。
+两侧均经 `postprocess_decision` 后处理（控制规则维度）。两变体均启用 MemoryBank 检索（解混"架构 vs 有无记忆"）。指标按复杂度分层：`metrics["simple"]` 和 `metrics["complex"]` 各含 Full/SingleLLM 的聚合指标（均分、延迟等），对应统计比较（Cohen's d、Bootstrap CI、Wilcoxon）分别在 `comparison_simple` 和 `comparison_complex` 中。
 
 评价指标：Judge 1-5分、Context/Task/Decision各阶段评分、P50/P90延迟、Cohen's d + Bootstrap CI + Wilcoxon。
 

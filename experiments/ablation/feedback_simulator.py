@@ -14,9 +14,50 @@ from app.memory.singleton import get_memory_module
 from app.memory.types import MemoryMode
 from app.storage.toml_store import TOMLStore
 
+from ._io import get_fatigue_threshold
+
 logger = logging.getLogger(__name__)
 
-_SIMULATED_ACCEPT_PROB = 0.5
+
+def _get_fatigue(driving_context: dict | None) -> float:
+    if not isinstance(driving_context, dict):
+        return 0.5
+    driver = driving_context.get("driver", {})
+    if not isinstance(driver, dict):
+        return 0.5
+    fatigue = driver.get("fatigue_level", 0.5)
+    return float(fatigue) if isinstance(fatigue, (int, float)) else 0.5
+
+
+def _get_workload(driving_context: dict | None) -> str:
+    if not isinstance(driving_context, dict):
+        return "normal"
+    driver = driving_context.get("driver", {})
+    if not isinstance(driver, dict):
+        return "normal"
+    wl = driver.get("workload", "normal")
+    return str(wl) if isinstance(wl, str) else "normal"
+
+
+def _compute_alignment(decision: dict, stage: str, stages: dict | None = None) -> float:
+    """决策与阶段偏好的对齐度 [0,1]。
+
+    high-freq/visual-detail: 二值 1.0/0.0
+    silent: 二值 1.0/0.0（含 emergency 豁免）
+    mixed: 偏置 0.6/0.4——不再固定 0.5 使 mixed 也能 resolve 为 accept/reject
+    """
+    if stage == "mixed":
+        return 0.6 if decision.get("should_remind") else 0.4
+    if stage == "high-freq":
+        return 1.0 if decision.get("should_remind") else 0.0
+    if stage == "silent":
+        if not decision.get("should_remind"):
+            return 1.0
+        return 1.0 if decision.get("is_emergency") else 0.0
+    if stage == "visual-detail":
+        return 1.0 if has_visual_content(decision, stages=stages) else 0.0
+    return 0.5
+
 
 _KNOWN_TASK_TYPES: frozenset[str] = frozenset(
     {"meeting", "travel", "shopping", "contact", "other"}
@@ -29,53 +70,32 @@ def simulate_feedback(
     rng: random.Random,
     *,
     stages: dict | None = None,
-    scenario_id: str = "",
-) -> Literal["accept", "ignore"]:
-    """模拟用户反馈——根据阶段偏好决定 accept 或 ignore。
+    _scenario_id: str = "",
+    driving_context: dict | None = None,
+) -> Literal["accept", "ignore"] | None:
+    """模拟用户反馈——三要素模型。
 
-    设计动机：
-    - 直接操作 strategies.toml 的 reminder_weights 而非走正式 submitFeedback
-      mutation，因为反馈模拟需要同步、确定性的权重更新以复现实验；走全套
-      GraphQL API（写 feedback.jsonl + 更新 memory_strength）引入不必要的
-      异步依赖和竞态风险。
-    - visual-detail 阶段优先从 stages["decision"]（规则引擎前的 LLM 原始
-      输出）读取意图，因为规则引擎可能因安全约束修改 reminder_content，导致
-      has_visual_content 误判。stages["visual-detail"] 是 LLM 在未受硬约束
-      干扰下的真实意图。
-    - _KNOWN_TASK_TYPES 仅接受 meeting/travel/shopping/contact/other——
-      LLM 有时输出非标准 task_type（如 "navigation"/"reminder"），这些值
-      无法映射到权重维度，接受后将污染提醒策略。
-
-    Args:
-        decision: 最终决策 dict（可能已被规则引擎修改）。
-        stage: 当前实验阶段名。
-        rng: 随机数生成器。
-        stages: AgentWorkflow 各阶段原始输出。visual-detail 阶段优先从此读取
-            LLM 原始意图（规则引擎前的 reminder_content）。
-        scenario_id: 场景标识，用于诊断日志。
-
+    1. 对齐度 (alignment): 决策与阶段偏好的匹配度 [0,1]
+    2. 噪声 (noise): 用户偶发误反馈概率 = 0.1 + fatigue * 0.2, 范围 [0.1, 0.3]
+    3. 反馈概率 (fb_prob): 用户实际给出反馈的概率 = 0.8 - penalty(workload, fatigue), 范围 [0.3, 0.8]
     """
-    if stage == "high-freq":
-        return "accept" if decision.get("should_remind") else "ignore"
-    if stage == "silent":
-        return (
-            "accept"
-            if decision.get("should_remind") and decision.get("is_emergency")
-            else "ignore"
-        )
-    if stage == "visual-detail":
-        # 启发式近似：用 dict 等值比较判断规则引擎是否修改了 decision。
-        # 若 LLM 输出恰好与最终 decision 值相同但结构稍异（多 key），
-        # 此比较可能误判——仅用于 debug 日志，视觉内容检测仍走 has_visual_content。
-        if stages and stages.get("decision") == decision:
-            logger.debug(
-                "规则引擎未修改 decision，反馈基于原始 LLM 输出 (scenario: %s)",
-                scenario_id,
-            )
-        return "accept" if has_visual_content(decision, stages=stages) else "ignore"
-    if stage == "mixed":
-        return "accept" if rng.random() < _SIMULATED_ACCEPT_PROB else "ignore"
-    return "ignore"
+    alignment = _compute_alignment(decision, stage, stages)
+    fatigue = _get_fatigue(driving_context)
+    workload = _get_workload(driving_context)
+
+    noise = 0.1 + fatigue * 0.2
+    fb_prob = 0.8
+    if workload == "overloaded":
+        fb_prob -= 0.1
+    if fatigue > get_fatigue_threshold():
+        fb_prob -= 0.1
+    fb_prob = max(0.3, fb_prob)
+
+    if rng.random() > fb_prob:
+        return None
+    if rng.random() < noise:
+        return "accept" if rng.random() < 0.5 else "ignore"
+    return "accept" if alignment > 0.5 else "ignore"
 
 
 def has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
