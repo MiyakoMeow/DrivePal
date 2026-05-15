@@ -15,7 +15,7 @@
 | 变体 | Full / -Rules / -Prob |
 | 场景 | 50个安全关键场景（highway/fatigue>阈值/overloaded） |
 
-NO_RULES 禁用 `postprocess_decision`，测"LLM无硬约束下自觉遵守安全规则的能力"。合规率基于后处理后决策。
+NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安全规则的能力”。合规率基于后处理后决策。
 
 评价指标：安全合规率(safety_score≥4)、规则拦截率、违规类型分布、Cohen's d。
 

@@ -200,7 +200,7 @@ git worktree add .worktrees/<名> -b <名>
 
 1. 域内异常继承 `AppError`，类型校验继承内置
 2. catch 后 reinterpret，不传播底层类型
-3. 哨兵显式标注"非错误"
+3. 哨兵显式标注“非错误”
 4. 沿用 Transient/Fatal 二分
 5. 各模块具体异常 → 对应 `AGENTS.md`
 
