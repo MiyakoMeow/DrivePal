@@ -718,6 +718,16 @@ class AgentWorkflow:
             "output_content": output_content.model_dump(),
         }
 
+    async def _execute_tools(self, decision: dict) -> None:
+        await self._handle_tool_calls(decision)
+
+    def _resolve_rules(self, state: AgentState, driving_ctx: dict | None) -> dict:
+        if "rules_result" in state:
+            return state["rules_result"] or {}
+        rules_result = apply_rules(driving_ctx) if driving_ctx else {}
+        state["rules_result"] = rules_result
+        return rules_result
+
     async def _execution_node(self, state: AgentState) -> dict:
         decision = state.get("decision") or {}
         stages = state.get("stages")
@@ -749,14 +759,9 @@ class AgentWorkflow:
                 }
             return {"result": result, "event_id": None}
 
-        await self._handle_tool_calls(decision)
+        await self._execute_tools(decision)
 
-        if "rules_result" in state:
-            rules_result = state["rules_result"] or {}
-        else:
-            rules_result = apply_rules(driving_ctx) if driving_ctx else {}
-            state["rules_result"] = rules_result
-
+        rules_result = self._resolve_rules(state, driving_ctx)
         postpone = decision.get("postpone", False)
         timing = decision.get("timing", "")
 
