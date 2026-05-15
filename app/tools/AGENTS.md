@@ -25,7 +25,8 @@ flowchart LR
 | `registry.py` | `ToolHandler` | `Callable[[dict[str, Any]], Awaitable[str]]` 类型 |
 | `executor.py` | `ToolExecutor` | 参数校验 → handler 执行 → 结果文本 |
 | `executor.py` | `ToolExecutionError` | 执行异常 |
-| `__init__.py` | `get_default_executor()` | 默认单例 executor（注册全部内置工具） |
+| `config.py` | `ToolsConfig` | 配置 dataclass，`load()` 类方法读取/生成 tools.toml |
+| `__init__.py` | `get_default_executor()`, `register_builtin_tools()` | 注册全部内置工具到 ToolRegistry；默认单例 executor |
 | `tools/navigation.py` | `navigate_to` | 导航目的地设置 |
 | `tools/communication.py` | `send_message` | 消息发送 |
 | `tools/vehicle.py` | `set_climate` / `play_media` | 车控预留（返回"未接入"）|
@@ -57,7 +58,7 @@ class ToolSpec:
 |------|------|------|
 | `set_navigation` | `destination: str` | `"导航已设置：{dest}"` |
 | `send_message` | `recipient: str`, `message: str(max 200)` | `"消息已发送给 {recipient}"` |
-| `query_memory` | `query: str` | top-5 记忆内容 |
+| `query_memory` | `query: str` | 默认 5 条记忆内容（由 `tools.toml` memory_query.max_results 配置）|
 | `set_climate` | `temperature: number(16-32)` | `"车控功能尚未接入"` |
 | `play_media` | `name: str`, `type: music\|podcast` | `"媒体功能尚未接入"` |
 
@@ -125,7 +126,7 @@ enabled = true
 max_results = 5
 ```
 
-注册时按 `enabled` 标志过滤（`is_enabled()`），`enabled=false` 的工具不会被注册；已注册工具执行时不再检查。
+注册时直接检查各工具配置的 `enabled` 字段，`enabled=false` 的工具不会被注册；已注册工具执行时不再检查。
 
 ## 异常
 
