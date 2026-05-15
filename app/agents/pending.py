@@ -121,7 +121,9 @@ class PendingReminderManager:
                 except ValueError, TypeError:
                     interval = 0
                 ttl_seconds = (
-                    int(interval * 3600 * 2) if interval > 0 else _DEFAULT_TTL_SECONDS
+                    int(interval * 3600 * 2)
+                    if math.isfinite(interval) and interval > 0
+                    else _DEFAULT_TTL_SECONDS
                 )
             else:
                 ttl_seconds = _DEFAULT_TTL_SECONDS
