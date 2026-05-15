@@ -29,12 +29,10 @@ from app.api.v1.reminders import router as reminders_router
 from app.api.v1.sessions import router as sessions_router
 from app.api.v1.ws import router as ws_router
 from app.config import DATA_DIR
-from app.memory.singleton import _memory_module_state
 from app.models.chat import close_client_cache
 from app.storage.init_data import init_storage
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 _default_webui = Path(__file__).parent.parent.parent / "webui"
 WEBUI_DIR = Path(os.getenv("WEBUI_DIR", _default_webui)).resolve()
@@ -102,7 +100,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # 主动调度器
     from app.agents.workflow import AgentWorkflow
     from app.api.v1.ws_manager import ws_manager as ws_mgr
-    from app.memory.singleton import get_memory_module
+    from app.memory.singleton import close_memory_module, get_memory_module
     from app.scheduler import ProactiveScheduler
 
     _schedulers: dict[str, ProactiveScheduler] = {}
@@ -141,10 +139,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     for uid, sched in _schedulers.items():
         await sched.stop()
         logger.info("Scheduler stopped for %s", uid)
-    mm = _memory_module_state[0]
-    if mm is not None:
-        await mm.close()
-        logger.info("MemoryModule closed")
+    await close_memory_module()
+    logger.info("MemoryModule closed")
     await close_client_cache()
     logger.info("Chat client cache closed")
 
