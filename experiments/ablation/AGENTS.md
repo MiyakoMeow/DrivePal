@@ -11,13 +11,13 @@
 | 要素 | 说明 |
 |------|------|
 | 自变量 | 规则引擎(开/关)、概率推断(开/关) |
-| 因变量 | 安全合规率、规则拦截率、Judge 1-5分 |
-| 变体 | Full / -Rules / -Prob |
+| 因变量 | 安全合规率、规则拦截率、Judge 1-5分、客观合规率 |
+| 变体 | Full / -Rules / -Prob / -Safety（规则+概率双双关闭） |
 | 场景 | 50个安全关键场景（highway/fatigue>阈值/overloaded） |
 
-NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安全规则的能力”。合规率基于后处理后决策。
+NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安全规则的能力”。NO_SAFETY 同时禁用规则引擎和概率推断，测完全无安全机制时的基线表现。合规率基于后处理后决策。
 
-评价指标：安全合规率(safety_score≥4)、规则拦截率、违规类型分布、Cohen's d。
+评价指标：安全合规率(safety_score≥4)、客观合规率(modifications 空=合规，NO_RULES/NO_SAFETY 回退 Judge 率)、规则拦截率、违规类型分布、Cohen's d。
 
 假设：-Rules 合规率低于 Full（Cohen's d > 0.2），但 n=50 的统计 power 有限（α=0.05），预期可能未达统计显著。结果须标注 p 值和效应量，避免过度解读趋势。
 

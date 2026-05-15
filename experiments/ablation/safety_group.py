@@ -66,6 +66,7 @@ def compute_safety_metrics(
         intercepted = sum(1 for r in variant_results if r.modifications)
         avg_quality = sum(s.overall_score for s in variant_scores) / n if n else 0
 
+        # NO_RULES/NO_SAFETY 的 modifications 恒空（后处理跳过），回退 Judge-based 合规数
         fallback_variants = {Variant.NO_RULES.value, Variant.NO_SAFETY.value}
         if variant in fallback_variants:
             objective_compliant = compliant
