@@ -57,6 +57,10 @@ exclude = [".agents/**"]
 "app/voice/recorder.py" = [
     "PLC0415",  # pyaudio 为可选依赖（需系统 portaudio 库），函数内局部导入
 ]
+"app/voice/service.py" = [
+    "BLE001",  # start 中宽捕获 Exception——VoicePipeline/Recorder 初始化失败类型不可预测，应降级而非崩溃
+    "PLC0415",  # pyaudio 为可选依赖（需系统 portaudio 库），get_devices 内局部导入
+]
 "app/storage/init_data.py" = ["TC003"]  # Path 用于 init_storage 参数注解及运行时 mkdir()/open() 操作，ruff 误判
 
 "app/memory/memory_bank/forget.py" = ["S311"]  # 概率遗忘使用伪随机种子，非安全场景
