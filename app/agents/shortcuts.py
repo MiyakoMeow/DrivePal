@@ -62,11 +62,9 @@ class ShortcutResolver:
         self._load()
 
     def _load(self) -> None:
-        try:
-            data = ensure_config(_SHORTCUTS_PATH, _SHORTCUTS_TOML_DEFAULTS)
-            self._shortcuts = data.get("shortcuts", [])
-        except OSError:
-            self._shortcuts = []
+        """加载快捷键配置。ensure_config 内部全 catch，不抛 I/O 异常。"""
+        data = ensure_config(_SHORTCUTS_PATH, _SHORTCUTS_TOML_DEFAULTS)
+        self._shortcuts = data.get("shortcuts", [])
 
     def resolve(self, query: str) -> dict | None:
         """匹配查询返回预构建 decision dict，未命中返回 None."""

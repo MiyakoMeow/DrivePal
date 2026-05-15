@@ -115,6 +115,29 @@ _FALLBACK_RULES: list[Rule] = [
         constraint={"allowed_channels": ["visual", "audio", "detailed"]},
         priority=5,
     ),
+    Rule(
+        name="city_driving_limit",
+        condition=lambda ctx: ctx.get("scenario") == "city_driving",
+        constraint={"allowed_channels": ["audio"], "max_frequency_minutes": 15},
+        priority=8,
+    ),
+    Rule(
+        name="traffic_jam_calm",
+        condition=lambda ctx: ctx.get("scenario") == "traffic_jam",
+        constraint={
+            "allowed_channels": ["audio", "visual"],
+            "max_frequency_minutes": 10,
+        },
+        priority=7,
+    ),
+    Rule(
+        name="passenger_present_relax",
+        condition=lambda ctx: (
+            bool(ctx.get("passengers")) and ctx.get("scenario") != "highway"
+        ),
+        constraint={"extra_channels": ["visual"]},
+        priority=3,
+    ),
 ]
 
 
