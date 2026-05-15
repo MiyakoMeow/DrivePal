@@ -19,7 +19,7 @@ flowchart LR
 
 | 文件 | 类/函数 | 职责 |
 |------|---------|------|
-| `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。`_load_voice_config()` 加载 voice.toml 配置。持有 `asyncio.Queue` 接收音频帧 |
+| `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。`VoiceConfig.load()` 加载 voice.toml 配置。持有 `asyncio.Queue` 接收音频帧。通过 `on_transcription` 回调供 Scheduler 实时消费转录文本 |
 | `recorder.py` | `VoiceRecorder` | pyaudio 麦克风录音。`_CHANNELS=1`、`_FORMAT=8` 录音参数。`start(pipeline)` 在线程池运行阻塞录音循环，`run_coroutine_threadsafe` 喂帧 |
 | `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence` |
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
@@ -41,12 +41,12 @@ feed_audio(chunk) → Queue → run() 循环:
 - `min_confidence` 默认 0.5，< 此值丢弃
 - `on_transcription(text, confidence)` 可选回调（供 Scheduler 实时消费）
 - `close()` — 停止循环并释放 ASR 资源
-- `run()` 校验帧尺寸：`len(chunk) != _FRAME_BYTES` 时日志警告并跳过，防止尺寸异常导致 VAD 结果不可靠。`feed_audio(chunk)` 仅入队列，无校验
+- `run()` 校验帧尺寸：`len(chunk) != self._expected_frame_bytes` 时日志警告并跳过，防止尺寸异常导致 VAD 结果不可靠。`feed_audio(chunk)` 仅入队列，无校验
 
 ## VADEngine
 
 - 封装 `webrtcvad.Vad(mode)`，mode 0-3（默认 1）
-- 静音超时 17 帧（~510ms）触发 `speech_end`
+- 静音超时帧数：VADEngine 裸用默认 17 帧（~510ms），VoicePipeline 传 `500ms÷30ms≈16` 帧。均约 500ms
 - `is_speech(audio_chunk)` 底层调用
 - `reset()` 手动重置状态
 
@@ -66,7 +66,9 @@ sherpa-onnx 依赖 `libonnxruntime.so`。`_ensure_onnx_lib()` 在模块首次使
 2. 在 sherpa-onnx 的 `lib/` 下创建符号链接
 3. 用 `ctypes.CDLL` 预加载（RTLD_GLOBAL）
 
-## 配置 (`config/voice.toml`)
+## 配置
+
+`config/voice.toml`：
 
 ```toml
 [voice]
@@ -84,7 +86,7 @@ language = "zh"
 use_itn = true
 ```
 
-## 模型下载
+### 模型下载
 
 ```bash
 mkdir -p data/models

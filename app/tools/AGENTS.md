@@ -25,13 +25,16 @@ flowchart LR
 | `registry.py` | `ToolHandler` | `Callable[[dict[str, Any]], Awaitable[str]]` 类型 |
 | `executor.py` | `ToolExecutor` | 参数校验 → handler 执行 → 结果文本 |
 | `executor.py` | `ToolExecutionError` | 执行异常 |
-| `__init__.py` | `get_default_executor()` | 默认单例 executor（注册全部内置工具） |
+| `config.py` | `ToolsConfig` | 配置 dataclass，`load()` 类方法读取/生成 tools.toml |
+| `__init__.py` | `get_default_executor()`, `register_builtin_tools()` | 注册全部内置工具到 ToolRegistry；默认单例 executor |
 | `tools/navigation.py` | `navigate_to` | 导航目的地设置 |
 | `tools/communication.py` | `send_message` | 消息发送 |
 | `tools/vehicle.py` | `set_climate` / `play_media` | 车控预留（返回"未接入"）|
 | `tools/memory_query.py` | `query_memory` | 记忆查询（使用单例 MemoryModule）|
 
-## ToolSpec
+## 关键类/接口
+
+### ToolSpec
 
 ```python
 @dataclass(frozen=True)
@@ -42,20 +45,20 @@ class ToolSpec:
     handler: ToolHandler           # async (dict) → str
 ```
 
-## ToolRegistry
+### ToolRegistry
 
 - `register(spec)` — 注册，重复名抛 `ValueError`
 - `get(name)` — 按名查找，返回 `ToolSpec | None`（调用方需处理 None）
 - `list_tools()` — 列出全部
 - `to_llm_description()` — 格式化工具清单供 LLM prompt
 
-## 内置工具
+### 内置工具
 
 | 工具 | 参数 | 返回 |
 |------|------|------|
 | `set_navigation` | `destination: str` | `"导航已设置：{dest}"` |
 | `send_message` | `recipient: str`, `message: str(max 200)` | `"消息已发送给 {recipient}"` |
-| `query_memory` | `query: str` | top-5 记忆内容 |
+| `query_memory` | `query: str` | 默认 5 条记忆内容（由 `tools.toml` memory_query.max_results 配置）|
 | `set_climate` | `temperature: number(16-32)` | `"车控功能尚未接入"` |
 | `play_media` | `name: str`, `type: music\|podcast` | `"媒体功能尚未接入"` |
 
@@ -65,36 +68,44 @@ class ToolSpec:
 - 默认 top_k=5，读 `config/tools.toml` 的 `[tools.memory_query] max_results`
 - 失败返回 `"记忆查询失败"`（不抛异常）
 
-## Execution 节点（`_execution_node` 内流程）
+## 工具执行（`_handle_tool_calls`）
 
-执行节点在 `app/agents/workflow.py` 中的流程顺序：
+工具调用执行已提取为独立方法 `_handle_tool_calls()`（`app/agents/workflow.py:581`）。`_execution_node` 内流程顺序：
 
 1. 规则后处理 `postprocess_decision()` — 强制覆盖
-2. **工具调用执行** — 见下方代码
+2. **工具调用执行** — `_handle_tool_calls()`
 3. 待触发提醒创建 — `postpone`/`timing` 分支生成 PendingReminder
 4. `_check_frequency_guard()` — 频次抑制
 
 ```python
-tool_calls = decision.get("tool_calls", [])
-if tool_calls and isinstance(tool_calls, list):
+async def _handle_tool_calls(self, decision: dict) -> None:
+    tool_calls = decision.get("tool_calls", [])
+    if not tool_calls or not isinstance(tool_calls, list):
+        return
     executor = get_default_executor()
     tool_results: list[str] = []
     for tc in tool_calls:
-        if isinstance(tc, dict):               # 类型守卫
+        if isinstance(tc, dict):
             t_name = tc.get("tool", "")
             t_params = tc.get("params", {})
             try:
                 t_result = await executor.execute(t_name, t_params)
                 tool_results.append(f"[{t_name}] {t_result}")
-            except Exception as e:
-                tool_results.append(f"[{t_name}] 失败: {e}")  # 追加错误，不抛
+            except WorkflowError:
+                raise
+            except ToolExecutionError as e:
+                tool_results.append(f"[{t_name}] 失败: {e}")
+            except AppError:
+                raise
     if tool_results:
         logger.info("Tool call results: %s", "; ".join(tool_results))
 ```
 
 结果仅 log，不写回 state——工具调用的副作用（导航设置/消息发送等）已在 handler 内完成。
 
-## 配置 (`config/tools.toml`)
+## 配置
+
+值来源 `config/tools.toml`（不存在于源码——首次调用 `ToolsConfig.load()` 时由 `ensure_config()` 自动生成，内容为 dataclass 默认值）。
 
 ```toml
 [tools.navigation]
@@ -115,7 +126,7 @@ enabled = true
 max_results = 5
 ```
 
-注册时按 `enabled` 标志过滤（`is_enabled()`），`enabled=false` 的工具不会被注册；已注册工具执行时不再检查。
+注册时直接检查各工具配置的 `enabled` 字段，`enabled=false` 的工具不会被注册；已注册工具执行时不再检查。
 
 ## 异常
 
@@ -123,7 +134,7 @@ max_results = 5
 |------|------|------|------|
 | `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
 
-catch 模式：`_execution_node` 逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`register_builtin_tools()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → `_load_tools_config()` 返 `{}`，但仍以默认参数（`enabled=True`, `max_message_length=200`）注册全部工具。注册表不会因配置缺失变空。
+catch 模式：`_handle_tool_calls()` 逐工具 `except ToolExecutionError` → 错误文本追加至 `tool_results`，**不抛**。
 
 ## 安全约束
 

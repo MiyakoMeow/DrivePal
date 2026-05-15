@@ -21,7 +21,8 @@ flowchart TD
 
 | 文件 | 类 | 职责 |
 |------|-----|------|
-| `scheduler.py` | `ProactiveScheduler` | 主循环：start/stop/run/tick。`_load_config()` 静态方法加载 scheduler.toml。协调其余组件 |
+| `scheduler.py` | `ProactiveScheduler` | 主循环：start/stop/run/tick。`SchedulerConfig.load()` 在 `__init__` 中加载 scheduler.toml。协调其余组件 |
+| `config.py` | `SchedulerConfig` | 配置 dataclass，`load()` 类方法读取/生成 scheduler.toml，`_toml_defaults()` 从字段默认值生成 TOML 结构 |
 | `context_monitor.py` | `ContextMonitor` | 缓存上次 driving_context，检测增量变化 |
 | `context_monitor.py` | `ContextDelta` | 变化增量 dataclass（5 字段） |
 | `memory_scanner.py` | `MemoryScanner` | 按场景/位置变化检索 MemoryBank |
@@ -53,7 +54,7 @@ stop() → cancel task
 | `debounce_seconds` | `float \| None` | config 值 / 30s | 去抖间隔（秒） |
 | `ws_manager` | `WSManager \| None` | `None` | WebSocket 管理器，用于广播提醒 |
 
-`_FATIGUE_HIGH = 0.7` 模块级常量，`_build_signals()` 中 state 触发源以此判定疲劳高阈值。
+`_build_signals()` 中 state 触发源通过 `get_fatigue_threshold()`（`app/agents/rules.py:65`）获取疲劳高阈值，默认 0.7，可通过环境变量 `DRIVEPAL_FATIGUE_THRESHOLD` 配置。
 
 ### _tick() 顺序
 
@@ -71,8 +72,8 @@ stop() → cancel task
 | context_change | scenario 切换 | 1 | 切换后检索相关记忆 |
 | location | 位置变化 > proximity | 1 | 接近记忆中的地点时 |
 | pending_reminder | PendingReminder 满足 | N/A | 已在 poll 中处理 |
-| state | 两阶段：先检 `delta.fatigue_increased or delta.workload_changed`（增量变化，priority=2），再检绝对值 `fatigue > 0.7 / workload=overloaded`（priority=2） | 2 | 增量变化优先触发 |
-| periodic | `review_time` 所在小时 + 前 5 分钟窗口内，`_last_review_date` 天级防重 | 0 | `_review_hour` 从 `config/scheduler.toml` 的 `review_time` 解析；窗口 `_review_window_minutes=5` |
+| state | 两阶段：先检 `delta.fatigue_increased or delta.workload_changed`（增量变化，priority=2），再检绝对值 `fatigue > 0.7 / workload=overloaded`（priority=2） | 2 | 增量变化触发 |
+| periodic | `_review_hour` 前一小时最后5分钟（min≥55）+ 当前小时前5分钟（min<5），`_last_review_date` 天级防重，`_review_hour=0` 跨午夜时日期+1天 | 0 | `_review_hour` 从 `config/scheduler.toml` 的 `review_time` 解析；`_review_window_minutes=5`（半窗宽）|
 
 注：`TriggerSignal.source` 类型标注允许的取值包括 `"context_change"`、`"location"`、`"time"`、`"state"`、`"periodic"`、`"voice"`。其中 `"time"` 和 `"voice"` 当前未被任何发射路径使用。
 
@@ -125,17 +126,15 @@ location_proximity_meters = 500
 fatigue_delta_threshold = 0.1
 ```
 
-`enable_periodic_review`、`review_time` 从配置文件读取。`review_time` 解析为 `_review_hour`（小时），分钟部分忽略。窗口宽度 `_review_window_minutes=5`（硬编码）。
+`enable_periodic_review`、`review_time` 从配置文件读取。`review_time` 解析为 `_review_hour`（小时），分钟部分忽略。`_review_window_minutes=5`（硬编码半窗宽）：前一小时最后5分钟（min≥55）+ 当前小时前5分钟（min<5），合计10分钟窗口。`_review_hour=0` 时前一小时为 hour=23，日期+1天以正确去重。
 
 ## 异常
-
-Scheduler 为 **不跨层原则** 典型——tick 内不传播异常。
 
 - 各步骤独立 `try/except`，单步失败不影响后续
 - 主循环 `except Exception` 兜底防崩溃，log 后继续
 - `except AppError` 捕获工作流异常，log 后不中断
 - ASR 缺失时 `_drain_voice_queue` 静默消耗空字符串
-- 配置加载 `except OSError, tomllib.TOMLDecodeError` → 默认值
+- 配置加载由 `app/config.py` 的 `ensure_config()` 统一处理，`OSError`/`PermissionError`/`tomllib.TOMLDecodeError` 均日志警告并返回默认值
 
 ## 测试
 

@@ -1,10 +1,27 @@
 # API 层
 
-`app/api/` — FastAPI v1 REST + WebSocket。
+`app/api/` — FastAPI v1 REST + WebSocket。用户身份由 `X-User-Id` header 注入（默认 `default`）。
+
+## 组件
+
+| 文件 | 职责 |
+|------|------|
+| `main.py` | FastAPI 应用入口、lifespan、CORS、静态文件 |
+| `v1/query.py` | `POST /api/v1/query` 处理查询，返完整工作流结果 |
+| `v1/ws.py` | WebSocket 长连接（流式查询 + 心跳） |
+| `v1/ws_manager.py` | 按 `user_id` 管理 WS 连接，支持广播 |
+| `v1/feedback.py` | `POST /api/v1/feedback` 提交反馈 |
+| `v1/presets.py` | 场景预设增删查 |
+| `v1/data.py` | 历史查询、导出、数据删除、实验结果对比 |
+| `v1/reminders.py` | 提醒列表获取与取消 |
+| `v1/sessions.py` | 会话管理（关闭） |
+| `schemas.py` | Pydantic 请求/响应模型 |
+| `errors.py` | 异常体系边界、AppErrorCode→HTTP 映射 |
+| `middleware.py` | `UserIdentityMiddleware` |
 
 ## v1 端点
 
-所有端点前缀 `/api/v1`。用户身份由 `X-User-Id` header 注入（默认 `default`）。
+所有端点前缀 `/api/v1`。
 
 | 方法 | 路径 | 用途 |
 |------|------|------|
@@ -22,9 +39,9 @@
 | DELETE | `/api/v1/reminders/{id}` | 取消提醒 |
 | POST | `/api/v1/sessions/{id}/close` | 关闭会话（校验用户归属） |
 
-Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
+Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py`，字段说明见下方"数据模型"节。
 
-## WebSocket
+### WebSocket
 
 `WS /api/v1/ws?user_id=xxx`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。
 
@@ -37,19 +54,25 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 - 未知 type：返回 `{"type": "error", "payload": {"code": "INVALID_MESSAGE", "message": "Unknown type: ..."}}`
 - 查询初始化/处理失败：返回 `{"type": "error", "payload": {"code": "QUERY_FAILED", "message": "..."}}`
 
+## 数据模型
+
+### 驾驶上下文 (`app/schemas/context.py`)
+
+- **DriverState**: emotion(neutral/anxious/fatigued/calm/angry), workload(low/normal/high/overloaded), fatigue_level(0~1)
+- **GeoLocation**: latitude(ge=-90,le=90), longitude(ge=-180,le=180), address, speed_kmh(ge=0)
+- **SpatioTemporalContext**: current_location, destination, eta_minutes(ge=0, null允许), heading(0~360, null允许)
+- **TrafficCondition**: congestion_level(smooth/slow/congested/blocked), incidents(list[str]), estimated_delay_minutes(ge=0)
+- **DrivingContext**: driver + spatial + traffic + scenario(parked/city_driving/highway/traffic_jam) + passengers
+- **ScenarioPreset**: id(uuid hex[:12]), name, context, created_at
+
+### 查询Schema (`query.py`)
+
+- **ProcessQueryRequest**: query, context(DrivingContext|None), session_id
+- **ProcessQueryResult**: status(delivered/pending/suppressed), event_id, session_id, result, pending_reminder_id, trigger_text, reason, cancelled
+
 ## 异常处理
 
 `app/api/errors.py` — 异常体系之最终边界。
-
-### 多重继承桥接
-
-```python
-class AppError(BaseAppError, HTTPException):
-    # isinstance(e, BaseAppError) → True  域内 catch
-    # isinstance(e, HTTPException) → True FastAPI handler catch
-```
-
-`BaseAppError`（`app.exceptions.AppError`）+ `HTTPException`（FastAPI）。双重视角——业务流程见 `AppError`，HTTP 管道见 `HTTPException`。
 
 ### AppErrorCode → HTTP
 
@@ -98,7 +121,7 @@ Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 **Lifespan**：
 - 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户） + `_init_voice_if_available(sched)` 初始化 VoicePipeline + VoiceRecorder（失败静默降级）
 - 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoicePipeline 转录回调推送至 scheduler
-- 关闭：`_stop_voice()` 停止录音流水线 + `ProactiveScheduler.stop()` + `MemoryModule.close()` FAISS落盘 + `close_client_cache()`
+- 关闭：`_stop_voice()` 停止录音流水线 + `ProactiveScheduler.stop()` + `close_memory_module()` FAISS落盘 + `close_client_cache()`
 
 **CORS**：开发用 `allow_origins=["*"]`，部署前须收敛。
 

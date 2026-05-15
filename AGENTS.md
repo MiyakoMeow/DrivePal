@@ -125,7 +125,6 @@ flowchart LR
         A5["api/ → AGENTS.md"]
         A6["models/ → AGENTS.md"]
         A7["memory/ → AGENTS.md"]
-        A8["schemas/ → AGENTS.md"]
         A9["storage/ → AGENTS.md"]
         AC["config.py"]
     end
@@ -139,6 +138,23 @@ flowchart LR
     M --> App
     M --> Other
 ```
+
+> 注：A8 schemas/ 已合并入 api/AGENTS.md
+
+| 子目录 | 职责 | 详文 |
+|--------|------|------|
+| agents/ | 工作流编排、规则引擎、概率推断、提示词 | agents/AGENTS.md |
+| voice/ | 语音流水线（录音→VAD→ASR） | voice/AGENTS.md |
+| scheduler/ | 主动调度器（后台轮询触发） | scheduler/AGENTS.md |
+| tools/ | 工具调用框架 | tools/AGENTS.md |
+| api/ | REST路由、WebSocket流式、服务生命周期、数据模型 | api/AGENTS.md |
+| memory/ | MemoryBank(FAISS+Ebbinghaus)、隐私保护 | memory/AGENTS.md |
+| models/ | LLM多provider fallback、Embedding | models/AGENTS.md |
+| storage/ | TOML异步存储、JSONL追加写入 | storage/AGENTS.md |
+
+`config.py` — 应用级配置（数据目录路径等）
+`exceptions.py` — 全局异常基类 `AppError` 定义（`code + message`）
+`utils.py` — 共享工具函数，含 `haversine()`（两点间球面距离，米）
 
 ## 检查
 
@@ -154,11 +170,11 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 
 ### ruff
 
-`ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/COM812/E501/RUF001-003。`tests/**` 豁免24条。
+`ruff.toml`，extend-select=ALL，忽略 D203/D211/D213/D400/D415/D107/COM812/E501/RUF001-003 — D107: `__init__` 的 docstring 由类 docstring 覆盖。`tests/**` 豁免24条。
 
 ### ty
 
-`ty.toml`，rules all=error，faiss/docx → Any。
+`ty.toml`，rules all=error，faiss/docx/pyaudio/sherpa_onnx → Any。
 
 ## 代码规范
 
@@ -191,7 +207,7 @@ git worktree add .worktrees/<名> -b <名>
 | 模式 | 载体 | 说明 |
 |------|------|------|
 | **统一基类** | `AppError` | `code+message`，各模块继承 |
-| **可恢复二分** | `TransientError`/`FatalError` | 瞬态可重试 vs 永久不重试 |
+| **MemoryBank 可恢复二分** | `TransientError`/`FatalError` | TransientError 瞬态可重试 vs FatalError 永久不重试，仅 MemoryBank 实现，API 边界 `safe_call()` 统一处理 |
 | **多重继承桥接** | API 层 `AppError` 同时继承域内 `AppError` + `HTTPException` | `isinstance` 双视角：域内代码见 `AppError`，FastAPI 见 `HTTPException` |
 | **哨兵** | `SummarizationEmpty` | 非错误，控制流信号，调用方捕获返 None |
 | **独立异常** | `ValueError`/`TypeError` 子类 | 类型校验/结构误用，不入继承树 |
