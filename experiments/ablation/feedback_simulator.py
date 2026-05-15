@@ -63,6 +63,31 @@ _KNOWN_TASK_TYPES: frozenset[str] = frozenset(
     {"meeting", "travel", "shopping", "contact", "other"}
 )
 
+_current_delta: dict[str, float] = {}
+"""按 task_type 追踪当前步长。串行调用安全（personalization_group 串行运行）。"""
+
+_recent_feedback: dict[str, list[int]] = {}
+"""按 task_type 追踪最近 3 次反馈方向。+1=accept, -1=ignore。"""
+
+
+def _adaptive_delta(task_type: str, action: str) -> float:
+    """自适应步长。同向加速（×1.5），反向减速（×0.5），clamp [0.05, 0.3]。"""
+    delta = _current_delta.get(task_type, 0.1)
+    history = _recent_feedback.setdefault(task_type, [])
+    direction = 1 if action == "accept" else -1
+    history.append(direction)
+    if len(history) > 3:
+        history.pop(0)
+    if len(history) < 3:
+        _current_delta[task_type] = 0.1
+        return 0.1
+    if all(d == direction for d in history):
+        delta = min(0.3, delta * 1.5)
+    else:
+        delta = max(0.05, delta * 0.5)
+    _current_delta[task_type] = delta
+    return delta
+
 
 def simulate_feedback(
     decision: dict,
@@ -195,7 +220,12 @@ async def update_feedback_weight(
     )
     current = await strategy_store.read()
     weights = _safe_read_weights(current)
-    delta = 0.1 if action == "accept" else -0.1
+    if task_type:
+        delta = _adaptive_delta(task_type, action)
+        if action == "ignore":
+            delta = -delta
+    else:
+        delta = 0.1 if action == "accept" else -0.1
     weights[event_type] = max(0.1, min(1.0, weights.get(event_type, 0.5) + delta))
     await strategy_store.update("reminder_weights", weights)
 
