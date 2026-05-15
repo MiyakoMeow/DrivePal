@@ -152,7 +152,7 @@ async def run_personalization_group(
                                 stage_name,
                                 rng,
                                 stages=vr.stages,
-                                scenario_id=scenario.id,
+                                _scenario_id=scenario.id,
                                 driving_context=scenario.driving_context,
                             )
                             if action is not None:

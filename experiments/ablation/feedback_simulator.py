@@ -70,7 +70,7 @@ def simulate_feedback(
     rng: random.Random,
     *,
     stages: dict | None = None,
-    scenario_id: str = "",  # noqa: ARG001 — 保留以符合调用方接口签名，当前实现未使用
+    _scenario_id: str = "",
     driving_context: dict | None = None,
 ) -> Literal["accept", "ignore"] | None:
     """模拟用户反馈——三要素模型。
