@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import openai
 
+from app.exceptions import AppError
 from app.models._http import CLIENT_TIMEOUT as _CLIENT_TIMEOUT
 from app.models.exceptions import ModelGroupNotFoundError
 from app.models.settings import (
@@ -75,31 +76,30 @@ def clear_semaphore_cache() -> None:
     _get_client_cache_lock.cache_clear()
 
 
-class ChatError(RuntimeError):
+class ChatError(AppError):
     """Chat模型错误基类."""
 
-    def __init__(self, message: str) -> None:
-        """初始化错误."""
-        super().__init__(message)
+    def __init__(self, code: str = "MODEL_ERROR", message: str = "") -> None:
+        super().__init__(code=code, message=message)
 
 
 class NoProviderError(ChatError):
     """没有可用provider错误."""
 
     def __init__(self) -> None:
-        """初始化错误."""
-        super().__init__("No LLM providers configured")
+        super().__init__(
+            code="MODEL_NO_PROVIDER", message="No LLM providers configured"
+        )
 
 
 class AllProviderFailedError(ChatError):
     """所有provider都失败错误."""
 
     def __init__(self, details: str = "") -> None:
-        """初始化错误."""
         msg = "All LLM providers failed"
         if details:
             msg += f": {details}"
-        super().__init__(msg)
+        super().__init__(code="MODEL_ALL_FAILED", message=msg)
 
 
 @cache

@@ -7,41 +7,42 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+from app.exceptions import AppError
 from app.models.exceptions import ModelGroupNotFoundError, ProviderNotFoundError
 from app.models.model_string import resolve_model_string
 from app.models.types import ProviderConfig
 
 
-class NoLLMConfigurationError(RuntimeError):
+class NoLLMConfigurationError(AppError):
     """没有找到任何 LLM 配置时抛出."""
 
     def __init__(self) -> None:
-        """初始化错误."""
-        super().__init__("No LLM configuration found")
+        super().__init__(code="MODEL_NO_CONFIG", message="No LLM configuration found")
 
 
-class MissingModelFieldError(ValueError):
+class MissingModelFieldError(AppError):
     """缺少必需字段 'model' 时抛出."""
 
     def __init__(self) -> None:
-        """初始化错误."""
-        super().__init__("Missing required field 'model'")
+        super().__init__(
+            code="MODEL_MISSING_FIELD", message="Missing required field 'model'"
+        )
 
 
-class NoDefaultModelGroupError(RuntimeError):
+class NoDefaultModelGroupError(AppError):
     """没有默认模型组时抛出."""
 
     def __init__(self) -> None:
-        """初始化错误."""
-        super().__init__("No default model group configured")
+        super().__init__(
+            code="MODEL_NO_DEFAULT_GROUP", message="No default model group configured"
+        )
 
 
-class NoJudgeModelConfiguredError(RuntimeError):
+class NoJudgeModelConfiguredError(AppError):
     """没有配置 judge 模型时抛出."""
 
     def __init__(self) -> None:
-        """初始化错误."""
-        super().__init__("No judge model configured")
+        super().__init__(code="MODEL_NO_JUDGE", message="No judge model configured")
 
 
 @dataclass
