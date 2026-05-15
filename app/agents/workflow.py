@@ -183,8 +183,8 @@ def _format_time_for_display(time_str: str) -> str:
         return time_str
 
 
-def _extract_location_target(_decision: dict, driving_ctx: dict | None) -> dict:
-    """从 driving_context 中提取目标位置经纬度。_decision 参数预留，当前未使用。"""
+def _extract_location_target(driving_ctx: dict | None) -> dict:
+    """从 driving_context 中提取目标位置经纬度。"""
     if driving_ctx:
         spatial = driving_ctx.get("spatial", {}) or {}
         dest = spatial.get("destination", {}) or {}
@@ -201,14 +201,14 @@ def _map_pending_trigger(
     if timing == "location":
         return (
             "location",
-            _extract_location_target(decision, driving_ctx),
+            _extract_location_target(driving_ctx),
             "到达目的地时",
         )
     if timing == "location_time":
         return (
             "location_time",
             {
-                "location": _extract_location_target(decision, driving_ctx),
+                "location": _extract_location_target(driving_ctx),
                 "time": decision.get("target_time", ""),
             },
             "到达目的地或到时间时",
@@ -284,6 +284,17 @@ class AgentWorkflow:
         if rules_result.get("postpone"):
             hints.append("当前应延后非紧急提醒。")
         return " ".join(hints)
+
+    @staticmethod
+    def _ensure_postprocessed(
+        decision: dict, driving_ctx: dict | None
+    ) -> tuple[dict, list[str]]:
+        """统一入口：确保 decision 已过规则后处理。幂等。"""
+        if decision.get("_postprocessed") or not driving_ctx:
+            return decision, []
+        decision, modifications = postprocess_decision(decision, driving_ctx)
+        decision["_postprocessed"] = True
+        return decision, modifications
 
     async def _format_preference_hint(self) -> str:
         """从 strategies.toml 读 reminder_weights → 自然语言偏好提示."""
@@ -716,12 +727,9 @@ class AgentWorkflow:
             return await self._handle_cancel(state, stages)
 
         driving_ctx = state.get("driving_context")
-        modifications: list[str] = []
-        if driving_ctx:
-            if decision.get("_postprocessed"):
-                modifications = []
-            else:
-                decision, modifications = postprocess_decision(decision, driving_ctx)
+        decision, modifications = AgentWorkflow._ensure_postprocessed(
+            decision, driving_ctx
+        )
 
         # 同步 stages.decision 为 post-postprocess 版本——
         # 消融实验通过 stages.decision 读取最终决策送 Judge 评分，
@@ -796,11 +804,9 @@ class AgentWorkflow:
             # --- 快捷指令检查 ---
             shortcut_decision = self._shortcuts.resolve(user_input)
             if shortcut_decision:
-                if driving_context:
-                    shortcut_decision, _modifications = postprocess_decision(
-                        shortcut_decision, driving_context
-                    )
-                    shortcut_decision["_postprocessed"] = True
+                shortcut_decision, _modifications = AgentWorkflow._ensure_postprocessed(
+                    shortcut_decision, driving_context
+                )
                 state["decision"] = shortcut_decision
                 exec_result = await self._execution_node(state)
                 state.update(exec_result)
@@ -898,9 +904,9 @@ class AgentWorkflow:
             raw = parsed.data or {}
             decision = raw.get("decision", {})
 
-        if stages.context:
-            decision, _modifications = postprocess_decision(decision, stages.context)
-            decision["_postprocessed"] = True
+        decision, _modifications = AgentWorkflow._ensure_postprocessed(
+            decision, stages.context
+        )
 
         state["decision"] = decision
         state["task"] = {"type": "proactive", "confidence": 1.0, "entities": []}
@@ -974,11 +980,9 @@ class AgentWorkflow:
         # --- 快捷指令检查 ---
         shortcut_decision = self._shortcuts.resolve(user_input)
         if shortcut_decision:
-            if driving_context:
-                shortcut_decision, _modifications = postprocess_decision(
-                    shortcut_decision, driving_context
-                )
-                shortcut_decision["_postprocessed"] = True
+            shortcut_decision, _modifications = AgentWorkflow._ensure_postprocessed(
+                shortcut_decision, driving_context
+            )
             state["decision"] = shortcut_decision
             try:
                 exec_result = await self._execution_node(state)

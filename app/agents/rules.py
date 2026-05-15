@@ -240,24 +240,6 @@ def apply_rules(
     return result
 
 
-def format_constraints(constraints: dict[str, Any]) -> str:
-    """将约束字典格式化为中文提示文本."""
-    lines = ["【安全约束规则】", "你必须遵守以下约束（由系统规则引擎生成，不可违反）："]
-    ch = constraints.get("allowed_channels")
-    if ch:
-        lines.append(f"- 允许的提醒通道: {ch}")
-    if constraints.get("only_urgent"):
-        lines.append("- 仅允许紧急提醒: true")
-    freq = constraints.get("max_frequency_minutes")
-    if freq is not None:
-        lines.append(f"- 最大提醒频率: {freq}分钟")
-    if constraints.get("postpone"):
-        lines.append("- 当前状态需要延后提醒")
-    lines.append("")
-    lines.append("请在以上约束范围内做出决策。")
-    return "\n".join(lines)
-
-
 def postprocess_decision(
     decision: dict, driving_context: dict
 ) -> tuple[dict, list[str]]:
