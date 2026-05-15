@@ -14,8 +14,8 @@
 | GET | `/api/v1/presets` | 查询场景预设 |
 | POST | `/api/v1/presets` | 保存场景预设 |
 | DELETE | `/api/v1/presets/{id}` | 删除预设 |
-| GET | `/api/v1/history` | 查询历史记忆事件（`?limit=N`, 1–100） |
-| GET | `/api/v1/export` | 导出当前用户文本数据（`?export_type=events\|settings\|all`） |
+| GET | `/api/v1/history` | 查询历史记忆事件（`?limit=N`, 默认10, 1–100） |
+| GET | `/api/v1/export` | 导出当前用户文本数据（`?export_type=events\|settings\|all`，排除 `memorybank/` 目录） |
 | DELETE | `/api/v1/data` | 删除当前用户全量数据 |
 | GET | `/api/v1/experiments` | 查询实验结果对比（系统级，非 per-user） |
 | GET | `/api/v1/reminders` | 获取待触发提醒列表 |
@@ -31,8 +31,11 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 消息格式（统一用 `payload` 键）：
 - 客户端→服务端：`{"type": "query", "payload": {"query": "...", "context": {...}, "session_id": "..."}}`
 - 服务端→客户端：`{"type": "stage_start"|"context_done"|"decision"|"done"|"error"|"reminder", "payload": {...}}`
-- 心跳：客户端每30s发 `{"type": "ping"}`，服务端返 `{"type": "pong", "payload": {}}`
+- 心跳：客户端每30s发 `{"type": "ping"}`，服务端返 `{"type": "pong", "payload": {}}`；服务端 60s 读超时（`_HEARTBEAT_TIMEOUT = 60.0`），超时则断连
 - 非法 JSON：返回 `{"type": "error", "payload": {"code": "INVALID_JSON", "message": "Malformed JSON"}}`，不断连
+- payload 非 object：返回 `{"code": "INVALID_PAYLOAD", "message": "Payload must be an object"}`
+- 未知 type：返回 `{"code": "INVALID_MESSAGE", "message": "Unknown type: ..."}`
+- 查询初始化/处理失败：返回 `{"code": "QUERY_FAILED", "message": "..."}`
 
 ## 错误处理
 
@@ -45,7 +48,7 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 | STORAGE_ERROR | 503 | 存储不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 
-`safe_memory_call` 包装所有存储/记忆调用。`ChatModelUnavailableError` → 500。
+`safe_memory_call` 包装多数存储/记忆调用。例外：`get_memory_module()` 在 `query.py`、`feedback.py`、`data.py` 中使用裸 try/except 而非 `safe_memory_call`。`ChatModelUnavailableError` → 500。
 
 ## 中间件
 
@@ -56,11 +59,13 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 **启动**：`uv run uvicorn app.api.main:app`
 
 **Lifespan**：
-- 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户）
-- 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`
-- 关闭：`ProactiveScheduler.stop()` + `MemoryModule.close()` FAISS落盘 + `close_client_cache()`
+- 启动：`init_storage()` + 后台每300s清理过期会话 + `ProactiveScheduler` 初始化（默认用户） + `_init_voice_if_available(sched)` 初始化 VoicePipeline + VoiceRecorder（失败静默降级）
+- 运行：ProactiveScheduler 每15s轮询 ContextMonitor/MemoryScanner/TriggerEvaluator，触发 `AgentWorkflow.proactive_run()`；VoicePipeline 转录回调推送至 scheduler
+- 关闭：`_stop_voice()` 停止录音流水线 + `ProactiveScheduler.stop()` + `MemoryModule.close()` FAISS落盘 + `close_client_cache()`
 
-**静态文件**：`/static` → WebUI，`GET /` → index.html
+**CORS**：开发用 `allow_origins=["*"]`，部署前须收敛。
+
+**静态文件**：`/static` → WebUI，`GET /` → index.html。静态路径由 `WEBUI_DIR` 环境变量覆盖（默认 `webui/`）。
 
 ## 反馈学习
 

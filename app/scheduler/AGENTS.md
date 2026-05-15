@@ -42,10 +42,21 @@ run():
 stop() → cancel task
 ```
 
+### 构造函数参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `workflow` | `AgentWorkflow` | 必选 | 工作流引擎，驱动主动模式 |
+| `memory_module` | `MemoryModule` | 必选 | 记忆管理模块 |
+| `user_id` | `str` | `"default"` | 目标用户 ID |
+| `tick_interval` | `float \| None` | config 值 / 15s | 轮询间隔（秒） |
+| `debounce_seconds` | `float \| None` | config 值 / 30s | 去抖间隔（秒） |
+| `ws_manager` | `WSManager \| None` | `None` | WebSocket 管理器，用于广播提醒 |
+
 ### _tick() 顺序
 
 1. `_drain_voice_queue()` — ASR 文本写 Memory（passive_voice）
-2. `_poll_pending(ctx)` — PendingReminderManager.poll() + proactive_run
+2. `_poll_pending(ctx)` — PendingReminderManager.poll() + proactive_run（仅在 `ctx` 非空时执行）
 3. `ContextMonitor.update(ctx)` — 检测场景/位置/状态增量
 4. `_scan_context_changes(ctx, delta)` — 场景切换/位置变化时检索记忆
 5. `_build_signals(ctx, delta, hints)` — 构造 TriggerSignal 列表
@@ -58,8 +69,10 @@ stop() → cancel task
 | context_change | scenario 切换 | 1 | 切换后检索相关记忆 |
 | location | 位置变化 > proximity | 1 | 接近记忆中的地点时 |
 | pending_reminder | PendingReminder 满足 | N/A | 已在 poll 中处理 |
-| state | fatigue > 0.7 / workload=overloaded | 2 | 状态驱动 |
-| periodic | 每日 review_time（默认 08:00） | 0 | 周期性回顾 |
+| state | 两阶段：先检 `delta.fatigue_increased or delta.workload_changed`（增量变化，priority=2），再检绝对值 `fatigue > 0.7 / workload=overloaded`（priority=2） | 2 | 增量变化优先触发 |
+| periodic | 每日 08:00-08:04:59 窗口内，`_last_review_date` 天级防重 | 0 | 硬编码 `_REVIEW_HOUR=8`、`_REVIEW_WINDOW_MINUTES=5`；config 字段未接线 |
+
+注：`TriggerSignal.source` 类型标注允许的取值包括 `"context_change"`、`"location"`、`"time"`、`"state"`、`"periodic"`、`"voice"`。其中 `"time"` 和 `"voice"` 当前未被任何发射路径使用。
 
 ### 输入接口
 
@@ -81,7 +94,7 @@ class ContextDelta:
 ```
 
 - 首次 `update()` 仅缓存，返回空 delta
-- `_haversine()` 复用 `PendingReminderManager` 的球面距离计算
+- `_haversine()` 与 `app/agents/pending.py` 各自独立实现一份相同逻辑（代码重复）
 
 ## MemoryScanner
 
@@ -104,7 +117,12 @@ debounce_seconds = 30
 enable_periodic_review = true
 review_time = "08:00"
 location_proximity_meters = 500
+
+[scheduler.context_monitor]
+fatigue_delta_threshold = 0.1
 ```
+
+注意：`enable_periodic_review` 和 `review_time` 在配置文件中定义，但代码未读取。周期性回顾使用硬编码常量 `_REVIEW_HOUR = 8`、`_REVIEW_WINDOW_MINUTES = 5`。
 
 ## 异常
 
