@@ -252,7 +252,7 @@ def _cmd_memory_test(args: argparse.Namespace) -> None:
         memory_system="drivepal",
         reflect_num=args.reflect_num,
         file_range=args.file_range,
-        prefix="drivepal_bank",
+        prefix="drivepal_memory_eval",
         sample_size=args.sample_size,
         output_dir=args.output_dir,
         max_workers=args.max_workers,

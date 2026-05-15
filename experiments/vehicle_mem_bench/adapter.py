@@ -1,6 +1,6 @@
 """DrivePal MemoryBank 适配器，实现 VehicleMemBench memory-system 接口.
 
-接口契约（7 函数）：
+接口契约（8 函数）：
     validate_add_args / validate_test_args / run_add
     build_test_client / init_test_state / close_test_state
     is_test_sequential / format_search_results
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import pathlib
 import sys
 from datetime import UTC, datetime
@@ -40,6 +41,9 @@ _DEFAULT_DATA_DIR = (
 )
 
 _T = TypeVar("_T")
+
+# 每步 async 操作超时（秒），防止 Embedding API / FAISS 挂死线程
+_CORO_TIMEOUT: float = 120.0
 
 # VehicleMemBench 根目录可覆写（默认与 DrivePal 同级）
 # 使用 list 容器避免 PLW0603 global
@@ -105,13 +109,17 @@ class DrivePalMemClient:
         try:
             if self._store is not None:
                 self._run(self._store.close())
+        except Exception:
+            logger.warning("Store close failed", exc_info=True)
         finally:
             self._loop.close()
 
     # ── 内部 ──
 
     def _run(self, coro: Coroutine[Any, Any, _T]) -> _T:
-        return self._loop.run_until_complete(coro)
+        return self._loop.run_until_complete(
+            asyncio.wait_for(coro, timeout=_CORO_TIMEOUT)
+        )
 
     async def _ensure_store(self) -> None:
         if self._store is not None:
@@ -150,8 +158,8 @@ class DrivePalMemClient:
 
 def _resolve_data_dir(args: object) -> pathlib.Path:
     """解析 benchmark 数据目录。优先 args.memory_url → env → 默认。"""
-    raw = getattr(args, "memory_url", None) or _DEFAULT_DATA_DIR
-    if raw is not None and raw != _DEFAULT_DATA_DIR:
+    raw = getattr(args, "memory_url", None) or os.environ.get("VMB_DATA_DIR")
+    if raw:
         return pathlib.Path(raw).resolve()
     return _DEFAULT_DATA_DIR
 
@@ -207,14 +215,14 @@ def run_add(args: object) -> None:
         user_data_dir = data_dir / user_id
         user_data_dir.mkdir(parents=True, exist_ok=True)
         client = DrivePalMemClient(data_dir=user_data_dir, user_id=user_id)
+        message_count = 0
         try:
-            message_count = 0
             for bucket in load_hourly_history(history_path):
                 content = "\n".join(bucket.lines)
                 client.add(content=content)
                 message_count += 1
         except Exception as exc:
-            return idx, 0, str(exc)
+            return idx, message_count, str(exc)
         else:
             return idx, message_count, None
         finally:
@@ -230,7 +238,7 @@ def run_add(args: object) -> None:
 
 def init_test_state(
     args: object, _file_numbers: object, _user_id_prefix: object
-) -> dict:
+) -> dict[str, Any]:
     """初始化共享状态：创建数据目录 + 客户端注册表。"""
     data_dir = _resolve_data_dir(args)
     return {"data_dir": data_dir, "clients": []}
@@ -279,7 +287,7 @@ def format_search_results(search_result: object) -> tuple[str, int]:
     for r in search_result:
         ev = getattr(r, "event", None)
         if isinstance(ev, dict):
-            content: object = ev.get("content", "")
+            content = ev.get("content", "")
         elif isinstance(ev, str):
             content = ev
         else:

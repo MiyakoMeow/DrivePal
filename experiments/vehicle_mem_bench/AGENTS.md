@@ -54,7 +54,7 @@ python -m experiments.vehicle_mem_bench model --memory-type summary --model-grou
 
 ## 适配器接口
 
-`adapter.py` 实现 VehicleMemBench 的记忆系统合约（7 函数）：
+`adapter.py` 实现 VehicleMemBench 的记忆系统合约（8 函数）：
 
 | 函数 | 职责 |
 |------|------|
