@@ -34,17 +34,17 @@ def pipeline(mock_index, mock_embedding):
 async def test_empty_index_returns_empty(pipeline, mock_index):
     """total==0 时返回空列表。"""
     mock_index.total = 0
-    results, updated = await pipeline.search("query")
+    results, updates = await pipeline.search("query")
     assert results == []
-    assert not updated
+    assert len(updates) == 0
 
 
 @pytest.mark.asyncio
 async def test_top_k_zero_returns_empty(pipeline):
     """top_k<=0 直接返回空。"""
-    results, updated = await pipeline.search("query", top_k=0)
+    results, updates = await pipeline.search("query", top_k=0)
     assert results == []
-    assert not updated
+    assert len(updates) == 0
 
 
 @pytest.mark.asyncio
@@ -75,7 +75,7 @@ async def test_single_result_no_neighbors(pipeline, mock_index, mock_embedding):
             }
         ]
     )
-    results, updated = await pipeline.search("query")
+    results, updates = await pipeline.search("query")
     assert len(results) >= 1
     assert results[0].get("text", "")
 
@@ -111,7 +111,7 @@ async def test_merge_neighbors_same_source(pipeline, mock_index, mock_embedding)
             }
         ]
     )
-    results, updated = await pipeline.search("query")
+    results, updates = await pipeline.search("query")
     assert len(results) >= 1
     # 验证邻接条目正确合并：键值分割符剥离后相邻文本以分号连接
     assert "; " in results[0].get("text", "")
@@ -166,7 +166,7 @@ async def test_speaker_filter_downweights_positive(
             },
         ]
     )
-    results, updated = await pipeline.search("Alice's setting")
+    results, updates = await pipeline.search("Alice's setting")
     assert len(results) >= 2
     # Bob 的 score 应被降权，低于 Alice
     alice_result = next((r for r in results if "Alice" in r.get("text", "")), None)
@@ -177,10 +177,10 @@ async def test_speaker_filter_downweights_positive(
 
 
 @pytest.mark.asyncio
-async def test_updated_flag_on_memory_strength_change(
+async def test_updates_nonempty_on_memory_strength_change(
     pipeline, mock_index, mock_embedding
 ):
-    """检索命中应触发 memory_strength 更新 → updated=True。"""
+    """检索命中应触发 memory_strength 更新 → updates 非空。"""
     meta = [
         {
             "faiss_id": 0,
@@ -207,9 +207,10 @@ async def test_updated_flag_on_memory_strength_change(
             }
         ]
     )
-    results, updated = await pipeline.search("query")
-    assert updated
-    assert meta[0]["memory_strength"] == 2
+    results, updates = await pipeline.search("query")
+    assert len(updates) > 0
+    assert 0 in updates
+    assert updates[0]["memory_strength"] == 2
 
 
 @pytest.mark.asyncio
@@ -242,8 +243,9 @@ async def test_strength_capped_at_max(mock_index, mock_embedding):
             }
         ]
     )
-    _, updated = await pipeline.search("query")
-    assert metadata[0]["memory_strength"] == 5  # 已达上限，不增长
+    _, updates = await pipeline.search("query")
+    assert 0 in updates
+    assert updates[0]["memory_strength"] == 5  # 已达上限，不增长
 
 
 @pytest.mark.asyncio

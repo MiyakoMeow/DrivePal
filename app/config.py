@@ -1,5 +1,6 @@
 """应用配置模块."""
 
+import logging
 import os
 from pathlib import Path
 
@@ -14,3 +15,8 @@ def user_data_dir(user_id: str = "default") -> Path:
         msg = f"Invalid user ID: {user_id!r}"
         raise ValueError(msg)
     return DATA_DIR / "users" / user_id
+
+
+def setup_logging() -> None:
+    """配置应用级日志。仅在进程入口调用一次。"""
+    logging.basicConfig(level=logging.INFO)

@@ -153,3 +153,24 @@ async def test_send_message_max_length_rejected(builtin_executor):
         await builtin_executor.execute(
             "send_message", {"recipient": "张三", "message": "a" * 201}
         )
+
+
+async def test_app_error_not_wrapped():
+    """handler 抛 AppError 子类时应原样传播，不包装为 ToolExecutionError。"""
+    from app.exceptions import AppError
+
+    class CustomError(AppError):
+        def __init__(self) -> None:
+            super().__init__(code="CUSTOM", message="custom error")
+
+    registry = ToolRegistry()
+    spec = ToolSpec(
+        name="fail_tool",
+        description="test",
+        input_schema={},
+        handler=AsyncMock(side_effect=CustomError()),
+    )
+    registry.register(spec)
+    executor = ToolExecutor(registry)
+    with pytest.raises(CustomError):
+        await executor.execute("fail_tool", {})

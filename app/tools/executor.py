@@ -111,6 +111,11 @@ class ToolExecutor:
         self._validate_params(tool_name, spec, params)
         try:
             result = await spec.handler(params)
+        except AppError:
+            raise
+        except (ValueError, TypeError) as e:
+            msg = f"Tool {tool_name}: invalid params: {e}"
+            raise ToolExecutionError(msg) from e
         except Exception as e:
             logger.warning("Tool %s failed: %s", tool_name, e)
             raise ToolExecutionError(str(e)) from e

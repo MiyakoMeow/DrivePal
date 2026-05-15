@@ -9,7 +9,6 @@ from app.agents.rules import (
     SAFETY_RULES,
     Rule,
     apply_rules,
-    format_constraints,
     load_rules,
     postprocess_decision,
 )
@@ -157,30 +156,6 @@ def test_empty_intersection_fallback() -> None:
         rules,
     )
     assert set(result["allowed_channels"]) == {"audio", "detailed", "visual"}
-
-
-def test_format_constraints() -> None:
-    """验证格式化约束输出."""
-    ctx: dict[str, Any] = {
-        "scenario": "highway",
-        "driver": {"fatigue_level": 0.8, "workload": "normal"},
-    }
-    result = apply_rules(ctx, SAFETY_RULES)
-    text = format_constraints(result)
-    assert "audio" in text
-    assert "紧急" in text
-
-
-def test_format_empty_constraints() -> None:
-    """验证格式化空约束输出."""
-    text = format_constraints(
-        {
-            "only_urgent": False,
-            "postpone": False,
-            "allowed_channels": ["visual", "audio", "detailed"],
-        },
-    )
-    assert "audio" in text
 
 
 def test_empty_driver_dict() -> None:

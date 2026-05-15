@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.agents.pending import PendingReminderManager
+from app.agents.rules import get_fatigue_threshold
 from app.config import user_data_dir
 from app.exceptions import AppError
 from app.memory.schemas import EVENT_TYPE_PASSIVE_VOICE, MemoryEvent
@@ -25,8 +26,6 @@ if TYPE_CHECKING:
     from app.memory.memory import MemoryModule
 
 logger = logging.getLogger(__name__)
-
-_FATIGUE_HIGH = 0.7
 
 
 class ProactiveScheduler:
@@ -113,12 +112,30 @@ class ProactiveScheduler:
         pm = self._pending_manager
         triggered = await pm.poll(ctx)
         for tr in triggered:
+            raw_content = tr.get("content")
+            if isinstance(raw_content, dict):
+                content = ""
+                for key in ("speakable_text", "text", "content", "body"):
+                    val = raw_content.get(key)
+                    if val and isinstance(val, str):
+                        content = val.strip()
+                        break
+            elif isinstance(raw_content, str):
+                content = raw_content.strip()
+            else:
+                content = ""
             logger.info("PendingReminder triggered: %s", tr.get("id"))
             try:
-                result, event_id, _ = await self._workflow.proactive_run(
-                    context_override=ctx,
-                    trigger_source="pending_reminder",
-                )
+                if content:
+                    result, event_id, _ = await self._workflow.execute_pending_reminder(
+                        content=content,
+                        driving_context=ctx,
+                    )
+                else:
+                    result, event_id, _ = await self._workflow.proactive_run(
+                        context_override=ctx,
+                        trigger_source="pending_reminder",
+                    )
                 if event_id:
                     logger.info(
                         "PendingReminder executed: %s → %s",
@@ -206,7 +223,7 @@ class ProactiveScheduler:
 
         fatigue = ctx.get("driver", {}).get("fatigue_level", 0)
         workload = ctx.get("driver", {}).get("workload", "")
-        if fatigue > _FATIGUE_HIGH or workload == "overloaded":
+        if fatigue > get_fatigue_threshold() or workload == "overloaded":
             signals.append(
                 TriggerSignal(
                     source="state",
