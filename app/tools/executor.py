@@ -116,12 +116,22 @@ class ToolExecutor:
         """按名称获取工具规格。"""
         return self._registry.get(name)
 
-    async def execute(self, tool_name: str, params: dict[str, Any]) -> str:
+    async def execute(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        *,
+        driving_context: dict | None = None,
+    ) -> str:
         """按名称执行工具，返回执行结果字符串。"""
         spec = self._registry.get(tool_name)
         if spec is None:
             msg = f"Unknown tool: {tool_name}"
             raise ToolExecutionError(msg)
+        if spec.require_confirmation_when == "driving" and driving_context:
+            scenario = driving_context.get("scenario", "parked")
+            if scenario != "parked":
+                raise ToolConfirmationRequiredError(tool_name)
         self._validate_params(tool_name, spec, params)
         try:
             result = await spec.handler(params)

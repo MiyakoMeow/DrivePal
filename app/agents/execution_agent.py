@@ -20,7 +20,7 @@ from app.memory.memory import MemoryModule
 from app.memory.privacy import sanitize_context
 from app.memory.types import MemoryMode
 from app.tools import get_default_executor
-from app.tools.executor import ToolExecutionError
+from app.tools.executor import ToolConfirmationRequiredError, ToolExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -141,18 +141,15 @@ class ExecutionAgent:
             if isinstance(tc, dict):
                 t_name = tc.get("tool", "")
                 t_params = tc.get("params", {})
-                spec = executor.get_spec(t_name)
-                if spec and spec.require_confirmation_when == "driving":
-                    driving_ctx = state.get("driving_context")
-                    scenario = (driving_ctx or {}).get("scenario", "parked")
-                    if scenario != "parked":
-                        tool_results.append(f"[{t_name}] 需要语音确认后执行")
-                        continue
                 try:
-                    t_result = await executor.execute(t_name, t_params)
+                    t_result = await executor.execute(
+                        t_name, t_params, driving_context=state.get("driving_context")
+                    )
                     tool_results.append(f"[{t_name}] {t_result}")
                 except WorkflowError:
                     raise
+                except ToolConfirmationRequiredError as e:
+                    tool_results.append(f"[{t_name}] {e.message}")
                 except ToolExecutionError as e:
                     tool_results.append(f"[{t_name}] 失败: {e}")
                 except AppError:

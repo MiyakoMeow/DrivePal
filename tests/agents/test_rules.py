@@ -415,3 +415,19 @@ def test_fatigue_threshold_cached(monkeypatch):
     second = _get_fatigue_threshold()
     assert first == second == 0.85
     reset_fatigue_threshold_cache()
+
+
+def test_ensure_postprocessed_idempotent():
+    """调用 ensure_postprocessed 两次仅处理一次。"""
+    from app.agents.execution_agent import ExecutionAgent
+
+    decision = {"should_remind": True, "reminder_content": "测试"}
+    driving_ctx = {"scenario": "highway"}
+
+    result1, mods1 = ExecutionAgent.ensure_postprocessed(decision, driving_ctx)
+    assert "_postprocessed" in result1
+    assert result1["_postprocessed"] is True
+
+    result2, mods2 = ExecutionAgent.ensure_postprocessed(result1, driving_ctx)
+    assert mods2 == []
+    assert result2 is result1

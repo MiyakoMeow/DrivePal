@@ -155,3 +155,16 @@ def test_process_query_with_context(app_client: TestClient) -> None:
     data = resp.json()
     assert data["result"] is not None
     assert data["stages"] is not None
+
+
+def test_cors_wildcard_disables_credentials(app_client: TestClient) -> None:
+    """通配符 origin 时响应不含 Access-Control-Allow-Credentials: true。"""
+    resp = app_client.options(
+        "/api/v1/query",
+        headers={
+            "Origin": "http://evil.example.com",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert resp.status_code in (200, 204)
+    assert resp.headers.get("access-control-allow-credentials", "").lower() != "true"

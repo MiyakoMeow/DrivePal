@@ -200,7 +200,7 @@ class JointDecisionAgent:
         try:
             validated = JointDecisionOutput.model_validate(parsed.data or {})
             decision = validated.decision
-        except Exception as e:
+        except ValidationError as e:
             logger.warning("proactive JointDecision validation failed: %s", e)
             raw = parsed.data or {}
             decision = raw.get("decision", {})
