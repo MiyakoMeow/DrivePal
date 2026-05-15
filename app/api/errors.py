@@ -95,18 +95,17 @@ async def safe_call[T](
 ) -> T:
     """执行异步调用，异常统一转为 AppError（HTTP 子类）。
 
-    BaseAppError 子类（含 API AppError）→ 直接 raise
     TransientError → 503
     FatalError → 500
     ToolExecutionError → 500
+    BaseAppError（非 HTTP） → 500
+    BaseAppError（含 API AppError） → 直接 raise
     ValueError → 422
     OSError → 503
     其余 → 500
     """
     try:
         return await coro
-    except BaseAppError:
-        raise
     except TransientError as e:
         logger.exception("%s: transient error", context_msg)
         raise AppError(
@@ -118,6 +117,10 @@ async def safe_call[T](
     except ToolExecutionError as e:
         logger.exception("%s: tool error", context_msg)
         raise AppError(AppErrorCode.INTERNAL_ERROR, "Tool execution failed") from e
+    except BaseAppError as e:
+        if isinstance(e, HTTPException):
+            raise
+        raise AppError(AppErrorCode.INTERNAL_ERROR, e.message) from e
     except OSError as e:
         logger.exception("%s: IO error", context_msg)
         raise AppError(

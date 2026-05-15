@@ -79,7 +79,7 @@ def test_query_chat_model_unavailable(app_client: TestClient) -> None:
         assert resp.status_code == 500
         body = resp.json()
         assert body["error"]["code"] == "INTERNAL_ERROR"
-        assert body["error"]["message"] == "AI model unavailable"
+        assert body["error"]["message"] == "ChatModel not available"
 
 
 def test_query_internal_error(app_client: TestClient) -> None:
