@@ -506,7 +506,7 @@ class AgentWorkflow:
         except ValidationError as e:
             logger.warning("JointDecisionOutput validation failed: %s", e)
             raw = parsed.data or {}
-            decision = raw.get("decision", {})
+            decision = raw.get("decision") or {}
             task = {
                 "type": raw.get("task_type") or raw.get("type", "general"),
                 "confidence": raw.get("confidence", 0.0),
@@ -909,7 +909,7 @@ class AgentWorkflow:
         except Exception as e:
             logger.warning("proactive_run JointDecision validation failed: %s", e)
             raw = parsed.data or {}
-            decision = raw.get("decision", {})
+            decision = raw.get("decision") or {}
 
         decision, _modifications = AgentWorkflow._ensure_postprocessed(
             decision, stages.context
