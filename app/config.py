@@ -56,6 +56,9 @@ def ensure_config(path: Path, default_dict: dict) -> dict:
 
     所有 I/O 异常均日志警告并返回默认 dict，不传播。
     mkdir/PermissionError/读失败均不会影响调用方正常运行。
+
+    写入使用原子操作（tmp 文件 + rename），防止 xdist 多 worker
+    同时访问时读到空文件导致配置丢失。
     """
     if not path.exists():
         try:
@@ -64,8 +67,10 @@ def ensure_config(path: Path, default_dict: dict) -> dict:
             logger.warning("Cannot create config dir %s: %s", path.parent, e)
             return dict(default_dict)
         try:
-            with path.open("wb") as f:
+            tmp = path.with_suffix(".tmp")
+            with tmp.open("wb") as f:
                 tomli_w.dump(default_dict, f)
+            tmp.rename(path)
         except (OSError, PermissionError) as e:
             logger.warning("Cannot write %s: %s, using defaults", path, e)
             return dict(default_dict)
