@@ -171,6 +171,7 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 - **不可变**：const/final 优先
 - **结构图**：mermaid 优先，禁 ASCII art 手绘结构图
 - **测试**：一事一测。Given→When→Then。名含场景+期望
+- **文档同步**：改实现时同步更新相关 `AGENTS.md`，旧内容对应淘汰，勿留过期文档
 
 ## 工作树
 
