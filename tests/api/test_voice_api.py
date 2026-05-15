@@ -1,7 +1,7 @@
 """v1 Voice API 测试."""
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, PropertyMock, patch
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
@@ -50,6 +50,42 @@ def test_voice_config_put_invalid_returns_400(app_client: TestClient) -> None:
     assert resp.status_code == 400
     data = resp.json()
     assert data["error"]["code"] == "INVALID_INPUT"
+
+
+def test_voice_transcriptions(app_client: TestClient) -> None:
+    """GET /api/v1/voice/transcriptions 返回列表。"""
+    resp = app_client.get("/api/v1/voice/transcriptions?limit=5")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+
+
+def test_voice_start_already_running_returns_409(app_client: TestClient) -> None:
+    """POST /api/v1/voice/start 已运行时返 409。"""
+    with (
+        patch.object(VoiceService, "status", new_callable=PropertyMock) as mock_status,
+    ):
+        mock_status.return_value = {
+            "enabled": True, "running": True, "vad_status": "idle",
+            "device_index": 0, "config": {},
+        }
+        resp = app_client.post("/api/v1/voice/start")
+        assert resp.status_code == 409
+        data = resp.json()
+        assert data["error"]["code"] == "ALREADY_RUNNING"
+
+
+def test_voice_start_disabled_returns_400(app_client: TestClient) -> None:
+    """POST /api/v1/voice/start 禁用时返 400。"""
+    with (
+        patch.object(VoiceService, "status", new_callable=PropertyMock) as mock_status,
+        patch.object(VoiceService, "start", new=AsyncMock(return_value=False)),
+    ):
+        mock_status.return_value = {"enabled": True, "running": False, "vad_status": "idle"}
+        resp = app_client.post("/api/v1/voice/start")
+        assert resp.status_code == 400
+        data = resp.json()
+        assert data["error"]["code"] == "VOICE_DISABLED"
 
 
 def test_voice_devices(app_client: TestClient) -> None:
