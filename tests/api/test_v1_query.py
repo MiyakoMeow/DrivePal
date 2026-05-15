@@ -14,7 +14,10 @@ if TYPE_CHECKING:
 def test_query_without_context(app_client: TestClient) -> None:
     """POST /api/v1/query 无上下文基础请求正常返回."""
     stages = WorkflowStages()
-    with patch("app.api.v1.query.AgentWorkflow") as mock_wf:
+    with (
+        patch("app.api.v1.query.get_memory_module"),
+        patch("app.api.v1.query.AgentWorkflow") as mock_wf,
+    ):
         mock_instance = mock_wf.return_value
         mock_instance.run_with_stages = AsyncMock(
             return_value=("处理完成", "evt_001", stages),
@@ -33,7 +36,10 @@ def test_query_without_context(app_client: TestClient) -> None:
 def test_query_with_context(app_client: TestClient) -> None:
     """POST /api/v1/query 携带驾驶上下文."""
     stages = WorkflowStages(context={"scenario": "highway"})
-    with patch("app.api.v1.query.AgentWorkflow") as mock_wf:
+    with (
+        patch("app.api.v1.query.get_memory_module"),
+        patch("app.api.v1.query.AgentWorkflow") as mock_wf,
+    ):
         mock_instance = mock_wf.return_value
         mock_instance.run_with_stages = AsyncMock(
             return_value=("高速提醒", None, stages),
@@ -56,7 +62,10 @@ def test_query_chat_model_unavailable(app_client: TestClient) -> None:
     """POST /api/v1/query LLM不可用时返回503."""
     from app.agents.workflow import ChatModelUnavailableError
 
-    with patch("app.api.v1.query.AgentWorkflow") as mock_wf:
+    with (
+        patch("app.api.v1.query.get_memory_module"),
+        patch("app.api.v1.query.AgentWorkflow") as mock_wf,
+    ):
         mock_instance = mock_wf.return_value
         mock_instance.run_with_stages = AsyncMock(
             side_effect=ChatModelUnavailableError,
@@ -74,7 +83,10 @@ def test_query_chat_model_unavailable(app_client: TestClient) -> None:
 
 def test_query_internal_error(app_client: TestClient) -> None:
     """POST /api/v1/query 工作流内部异常返回500."""
-    with patch("app.api.v1.query.AgentWorkflow") as mock_wf:
+    with (
+        patch("app.api.v1.query.get_memory_module"),
+        patch("app.api.v1.query.AgentWorkflow") as mock_wf,
+    ):
         mock_instance = mock_wf.return_value
         mock_instance.run_with_stages = AsyncMock(
             side_effect=RuntimeError("boom"),
@@ -93,7 +105,10 @@ def test_query_internal_error(app_client: TestClient) -> None:
 def test_query_user_id_from_middleware(app_client: TestClient) -> None:
     """POST /api/v1/query 中间件注入 user_id 传入工作流."""
     stages = WorkflowStages()
-    with patch("app.api.v1.query.AgentWorkflow") as mock_wf:
+    with (
+        patch("app.api.v1.query.get_memory_module"),
+        patch("app.api.v1.query.AgentWorkflow") as mock_wf,
+    ):
         mock_instance = mock_wf.return_value
         mock_instance.run_with_stages = AsyncMock(
             return_value=("ok", None, stages),

@@ -34,8 +34,11 @@ async def _mock_run_stream(*args, **kwargs):
 
 
 def test_ws_query_flow(app_client: TestClient) -> None:
-    """WS 查询应流式返回各阶段事件。"""
-    with patch("app.api.v1.ws.AgentWorkflow") as mock_wf:
+    """WS 查询应流式返回各阶段事件."""
+    with (
+        patch("app.api.v1.ws.get_memory_module"),
+        patch("app.api.v1.ws.AgentWorkflow") as mock_wf,
+    ):
         mock_instance = mock_wf.return_value
         mock_instance.run_stream = _mock_run_stream
         with app_client.websocket_connect(
