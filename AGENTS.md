@@ -191,7 +191,7 @@ git worktree add .worktrees/<名> -b <名>
 |------|------|------|
 | **统一基类** | `AppError` | `code+message`，各模块继承 |
 | **可恢复二分** | `TransientError`/`FatalError` | 瞬态可重试 vs 永久不重试 |
-| **多重继承桥接** | `AppError(BaseAppError, HTTPException)` | 域内 catch + FastAPI handler 双视角 |
+| **多重继承桥接** | API 层 `AppError` 同时继承域内 `AppError` + `HTTPException` | `isinstance` 双视角：域内代码见 `AppError`，FastAPI 见 `HTTPException` |
 | **哨兵** | `SummarizationEmpty` | 非错误，控制流信号，调用方捕获返 None |
 | **独立异常** | `ValueError`/`TypeError` 子类 | 类型校验/结构误用，不入继承树 |
 | **不跨层** | 下层抛→上层 reinterpret | 各层包装本层类型再上抛 |

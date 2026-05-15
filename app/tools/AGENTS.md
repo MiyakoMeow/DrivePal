@@ -123,7 +123,7 @@ max_results = 5
 |------|------|------|------|
 | `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
 
-catch 模式：`_execution_node` 逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`get_default_executor()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → 空注册表。
+catch 模式：`_execution_node` 逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`register_builtin_tools()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → `_load_tools_config()` 返 `{}`，但仍以默认参数（`enabled=True`, `max_message_length=200`）注册全部工具。注册表不会因配置缺失变空。
 
 ## 安全约束
 
