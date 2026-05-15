@@ -17,71 +17,82 @@ conftest.py 注册 integration/llm/embedding 三个 marker，未提供对应选�
 
 ## 目录
 
-```
-tests/
-├── conftest.py              # 配置、marker、fixture
-├── _helpers.py              # 辅助
-├── fixtures.py              # fixture与清理
-├── agents/
-│   ├── test_conversation.py
-│   ├── test_outputs.py
-│   ├── test_pending.py
-│   ├── test_probabilistic.py
-│   ├── test_rules.py
-│   ├── test_shortcuts.py
-│   ├── test_llm_json_validation.py
-│   ├── test_sse_stream.py
-│   └── test_workflow_llm_json.py
-├── voice/
-│   └── test_vad.py
-├── scheduler/
-│   └── test_scheduler.py
-├── tools/
-│   └── test_registry.py
-├── api/
-│   └── test_rest.py
-├── memory/
-│   ├── test_forgetting.py
-│   ├── test_retrieval_pipeline.py
-│   ├── test_index_recovery.py
-│   ├── test_memory_bank.py
-│   ├── test_memory_module_facade.py
-│   ├── test_memory_store_contract.py
-│   ├── test_multi_user.py
-│   ├── test_schemas.py
-│   ├── test_privacy.py
-│   ├── test_cosine_similarity.py
-│   ├── test_embedding.py         # 需 --test-embedding
-│   ├── test_embedding_client.py
-│   └── stores/
-│       ├── test_bg_tasks.py
-│       ├── test_faiss_index.py
-│       ├── test_forget.py
-│       ├── test_lifecycle_inflight.py
-│       ├── test_llm.py
-│       ├── test_memory_bank_store.py
-│       ├── test_retrieval.py
-│       └── test_summarizer.py
-├── models/
-│   ├── test_chat.py
-│   └── test_settings.py
-├── schemas/
-│   └── test_context_schemas.py
-├── storage/
-│   ├── test_jsonl_store.py
-│   ├── test_storage.py            # 需 --test-embedding
-│   ├── test_experiment_results.py
-│   └── test_feedback_log.py
-└── experiments/
-    ├── test_ablation_optimization.py
-    ├── test_io.py
-    ├── test_metrics.py
-    ├── test_personalization.py
-    ├── test_protocol.py
-    ├── test_scenario_synthesizer.py
-    ├── test_types.py
-    ├── test_ablation_runner.py
-    └── test_report.py
+```mermaid
+flowchart RL
+    CF["conftest.py"]
+    HP["_helpers.py"]
+    FX["fixtures.py"]
+    subgraph Agents["tests/agents/"]
+        AG1["test_conversation.py"]
+        AG2["test_outputs.py"]
+        AG3["test_pending.py"]
+        AG4["test_probabilistic.py"]
+        AG5["test_rules.py"]
+        AG6["test_shortcuts.py"]
+        AG7["test_llm_json_validation.py"]
+        AG8["test_sse_stream.py"]
+        AG9["test_workflow_llm_json.py"]
+    end
+    subgraph Voice["tests/voice/"]
+        VO["test_vad.py"]
+    end
+    subgraph Sched["tests/scheduler/"]
+        SC["test_scheduler.py"]
+    end
+    subgraph Tools["tests/tools/"]
+        TL["test_registry.py"]
+    end
+    subgraph API["tests/api/"]
+        AP["test_rest.py"]
+    end
+    subgraph Mem["tests/memory/"]
+        M1["test_forgetting.py"]
+        M2["test_retrieval_pipeline.py"]
+        M3["test_index_recovery.py"]
+        M4["test_memory_bank.py"]
+        M5["test_memory_module_facade.py"]
+        M6["test_memory_store_contract.py"]
+        M7["test_multi_user.py"]
+        M8["test_schemas.py"]
+        M9["test_privacy.py"]
+        M10["test_cosine_similarity.py"]
+        M11["test_embedding.py*"]
+        M12["test_embedding_client.py"]
+        subgraph Stores["memory/stores/"]
+            S1["test_bg_tasks.py"]
+            S2["test_faiss_index.py"]
+            S3["test_forget.py"]
+            S4["test_lifecycle_inflight.py"]
+            S5["test_llm.py"]
+            S6["test_memory_bank_store.py"]
+            S7["test_retrieval.py"]
+            S8["test_summarizer.py"]
+        end
+    end
+    subgraph Models["tests/models/"]
+        MD1["test_chat.py"]
+        MD2["test_settings.py"]
+    end
+    subgraph Schemas["tests/schemas/"]
+        SH["test_context_schemas.py"]
+    end
+    subgraph Storage["tests/storage/"]
+        ST1["test_jsonl_store.py"]
+        ST2["test_storage.py*"]
+        ST3["test_experiment_results.py"]
+        ST4["test_feedback_log.py"]
+    end
+    subgraph Exp["tests/experiments/"]
+        E1["test_ablation_optimization.py"]
+        E2["test_io.py"]
+        E3["test_metrics.py"]
+        E4["test_personalization.py"]
+        E5["test_protocol.py"]
+        E6["test_scenario_synthesizer.py"]
+        E7["test_types.py"]
+        E8["test_ablation_runner.py"]
+        E9["test_report.py"]
+    end
 ```
 
 ## CI

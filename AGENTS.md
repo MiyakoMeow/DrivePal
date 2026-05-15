@@ -23,25 +23,33 @@ Python 3.14 + `uv`。
 
 ## 结构
 
-```
-main.py                # Uvicorn 入口
-app/
-├── agents/            → agents/AGENTS.md
-├── voice/             # 语音流水线（录音/VAD/ASR）
-├── scheduler/         # 主动调度器（后台轮询触发）
-├── tools/             # 工具调用框架
-├── api/               → api/AGENTS.md
-├── models/            → models/AGENTS.md
-├── memory/            → memory/AGENTS.md
-├── schemas/           → schemas/AGENTS.md
-├── storage/           → storage/AGENTS.md
-├── config.py
-tests/                 → tests/AGENTS.md
-config/                → config/AGENTS.md (含 voice/scheduler/tools TOML)
-data/                  # init_storage() 运行时创建
-data/models/           # ASR 模型（需手动下载）
-archive/               → archive/AGENTS.md
-experiments/           → experiments/ablation/AGENTS.md
+```mermaid
+flowchart LR
+    subgraph Root["项目根"]
+        M["main.py"]
+    end
+    subgraph App["app/"]
+        A1["agents/ → AGENTS.md"]
+        A2["voice/ （语音流水线）"]
+        A3["scheduler/ （主动调度器）"]
+        A4["tools/ （工具框架）"]
+        A5["api/ → AGENTS.md"]
+        A6["models/ → AGENTS.md"]
+        A7["memory/ → AGENTS.md"]
+        A8["schemas/ → AGENTS.md"]
+        A9["storage/ → AGENTS.md"]
+        AC["config.py"]
+    end
+    subgraph Other["其他"]
+        T["tests/ → AGENTS.md"]
+        C["config/ （TOML配置）"]
+        D["data/ （运行时数据）"]
+        DM["data/models/ （ASR模型）"]
+        AR["archive/ → AGENTS.md"]
+        E["experiments/ → AGENTS.md"]
+    end
+    M --> App
+    M --> Other
 ```
 
 ## 检查

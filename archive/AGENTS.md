@@ -4,16 +4,23 @@
 
 ## 目录
 
-```
-archive/
-├── figs/                  # 论文图表 fig4-1~fig4-7
-├── ref/                   # 中期检查参考
-├── legacy/                # 旧版存档
-├── 开题报告.md
-├── 中期检查表.md
-├── 初稿-20260430.md
-├── 初稿-20260511.md
-└── 初稿意见-20260430.md
+```mermaid
+flowchart LR
+    A["archive/"]
+    subgraph Dir["子目录"]
+        FIGS["figs/<br/>论文图表"]
+        REF["ref/<br/>中期检查参考"]
+        LEG["legacy/<br/>旧版存档"]
+    end
+    subgraph Docs["文档"]
+        KT["开题报告.md"]
+        ZQ["中期检查表.md"]
+        CG1["初稿-20260430.md"]
+        CG2["初稿-20260511.md"]
+        YJ["初稿意见-20260430.md"]
+    end
+    A --> Dir
+    A --> Docs
 ```
 
 ## 写作规范

@@ -6,9 +6,13 @@
 
 ShortcutResolver 匹配快捷指令 → 命中则跳至 Execution，否则走三阶段：
 
-```
-输入 → [ShortcutResolver] ─命中→ Execution
-                         └否→ Context → JointDecision → Execution
+```mermaid
+flowchart LR
+    Input["输入"] --> SR{ShortcutResolver}
+    SR -->|命中| Exec[Execution]
+    SR -->|否| Ctx[Context]
+    Ctx --> JD[JointDecision]
+    JD --> Exec
 ```
 
 | Agent | 入→出 | 要点 |

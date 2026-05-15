@@ -4,22 +4,28 @@
 
 ## 数据目录
 
-```
-data/
-├── users/{user_id}/
-│   ├── events.jsonl           # 事件历史
-│   ├── interactions.jsonl     # 交互记录
-│   ├── feedback.jsonl         # MemoryBank记忆强度反馈
-│   ├── feedback_log.jsonl     # 策略权重聚合源
-│   ├── contexts.toml          # 上下文缓存
-│   ├── preferences.toml       # 用户偏好
-│   ├── strategies.toml        # 个性化策略 + reminder_weights
-│   ├── scenario_presets.toml  # 场景预设
-│   └── memorybank/            # MemoryBank持久化
-│       ├── index.faiss
-│       ├── metadata.json
-│       └── extra_metadata.json
-└── experiment_benchmark.toml  # 实验对比（全局共享）
+```mermaid
+flowchart LR
+    D["data/"]
+    subgraph User["users/{user_id}/"]
+        direction LR
+        E["events.jsonl<br/>事件历史"]
+        I["interactions.jsonl<br/>交互记录"]
+        F["feedback.jsonl<br/>记忆强度反馈"]
+        FL["feedback_log.jsonl<br/>权重聚合源"]
+        CT["contexts.toml<br/>上下文缓存"]
+        PR["preferences.toml<br/>用户偏好"]
+        ST["strategies.toml<br/>个性化策略"]
+        SP["scenario_presets.toml<br/>场景预设"]
+        subgraph MB["memorybank/"]
+            FA["index.faiss"]
+            MD["metadata.json"]
+            EM["extra_metadata.json"]
+        end
+    end
+    EB["experiment_benchmark.toml<br/>实验对比"]
+    D --> User
+    D --> EB
 ```
 
 旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移至 `data/users/default/`。
