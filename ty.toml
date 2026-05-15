@@ -24,6 +24,10 @@ include = ["tests/models/test_chat.py"]
 rules = { "invalid-assignment" = "ignore", "unresolved-attribute" = "ignore" }  # mock 替换 generate 时类型不匹配
 
 [[overrides]]
+include = ["tests/voice/test_pipeline.py"]
+rules = { "invalid-assignment" = "ignore", "unresolved-attribute" = "ignore" }  # mock 替换 transcribe/process_frame 时类型不匹配
+
+[[overrides]]
 include = ["app/voice/asr.py"]
 rules = { "unresolved-attribute" = "ignore" }  # sherpa_onnx.OfflineRecognizer 为 C 扩展无类型桩
 
