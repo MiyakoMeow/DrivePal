@@ -24,6 +24,10 @@ include = ["tests/models/test_chat.py"]
 rules = { "invalid-assignment" = "ignore", "unresolved-attribute" = "ignore" }  # mock 替换 generate 时类型不匹配
 
 [[overrides]]
+include = ["tests/experiments/test_ablation_runner.py"]
+rules = { "invalid-assignment" = "ignore" }  # 因 spy 替换 _run_agent_workflow 时签名不含 self
+
+[[overrides]]
 include = ["tests/agents/test_workflow_tool.py"]
 rules = { "unresolved-attribute" = "ignore" }  # mock 替换 ToolSpec.handler 时类型不匹配
 

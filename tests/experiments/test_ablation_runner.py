@@ -4,8 +4,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.agents.probabilistic import (
+    get_probabilistic_enabled,
+    set_probabilistic_enabled,
+)
+from app.agents.rules import get_ablation_disable_rules, set_ablation_disable_rules
 from experiments.ablation.ablation_runner import AblationRunner
-from experiments.ablation.types import Scenario, Variant
+from experiments.ablation.types import Scenario, Variant, VariantResult
 
 
 @pytest.fixture
@@ -58,3 +63,51 @@ class TestSingleLLMRulesPostprocess:
             )
 
         assert result.modifications, "SingleLLM 在高速场景下应有规则引擎修改记录"
+
+
+async def test_no_safety_disables_both() -> None:
+    """NO_SAFETY 变体应同时禁用 rules 和 probabilistic."""
+    orig_rules = get_ablation_disable_rules()
+    orig_prob = get_probabilistic_enabled()
+
+    try:
+        set_ablation_disable_rules(False)
+        set_probabilistic_enabled(True)
+        runner = AblationRunner(base_user_id="test-no-safety")
+
+        scenario = Scenario(
+            id="test_no_safety",
+            driving_context={"driver": {"fatigue_level": 0.9}, "scenario": "highway"},
+            user_query="测试",
+            expected_decision={},
+            expected_task_type="other",
+            safety_relevant=True,
+            scenario_type="highway",
+            synthesis_dims={
+                "scenario": "highway",
+                "fatigue_level": 0.9,
+                "workload": "overloaded",
+                "task_type": "other",
+                "has_passengers": "false",
+            },
+        )
+
+        # 用 spy 在 _run_agent_workflow 内检查 ContextVar——run_variant 的 finally
+        # 在返回前恢复 ContextVar，外部检查会误判
+        original_fn = runner._run_agent_workflow
+
+        async def spy(
+            scenario: Scenario,
+            variant: Variant,
+            user_id: str,
+            t0: float,
+        ) -> VariantResult:
+            assert get_ablation_disable_rules() is True
+            assert get_probabilistic_enabled() is False
+            return await original_fn(scenario, variant, user_id, t0)
+
+        with patch.object(runner, "_run_agent_workflow", spy):
+            await runner.run_variant(scenario, Variant.NO_SAFETY)
+    finally:
+        set_ablation_disable_rules(orig_rules)
+        set_probabilistic_enabled(orig_prob)

@@ -69,6 +69,9 @@ class AblationRunner:
             set_ablation_disable_rules(True)
         elif variant == Variant.NO_PROB:
             set_probabilistic_enabled(False)
+        elif variant == Variant.NO_SAFETY:
+            set_ablation_disable_rules(True)
+            set_probabilistic_enabled(False)
         elif variant == Variant.NO_FEEDBACK:
             set_ablation_disable_feedback(True)
 
