@@ -41,7 +41,7 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 | AppErrorCode | HTTP | 场景 |
 |---|---|---|
 | NOT_FOUND | 404 | 资源不存在 |
-| VALIDATION_ERROR | 422 | 请求参数不合法 |
+| INVALID_INPUT | 422 | 请求参数不合法 |
 | STORAGE_ERROR | 503 | 存储不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 

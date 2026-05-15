@@ -118,6 +118,7 @@ function connectWS() {
     };
     ws.onclose = () => {
         state.setWs(null);
+        setLoading(false);
         scheduleReconnect();
     };
     ws.onerror = () => { ws.close(); };

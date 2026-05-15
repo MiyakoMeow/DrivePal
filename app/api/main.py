@@ -11,12 +11,13 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.agents.conversation import _conversation_manager
-from app.api.errors import AppError, app_error_handler
+from app.api.errors import AppError, app_error_handler, validation_error_handler
 from app.api.middleware import UserIdentityMiddleware
 from app.api.v1.data import router as data_router
 from app.api.v1.feedback import router as feedback_router
@@ -78,6 +79,7 @@ app.add_middleware(
 )
 app.add_middleware(UserIdentityMiddleware)
 app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
 

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Request
 
 from app.agents.pending import PendingReminderManager
+from app.api.errors import safe_memory_call
 from app.api.schemas import PendingReminderResponse
 from app.config import user_data_dir
 
@@ -13,7 +14,7 @@ router = APIRouter()
 async def get_pending_reminders(request: Request) -> list[PendingReminderResponse]:
     """获取当前用户所有待触发提醒列表."""
     pm = PendingReminderManager(user_data_dir(request.state.user_id))
-    pending = await pm.list_pending()
+    pending = await safe_memory_call(pm.list_pending(), "reminders(list)")
     return [
         PendingReminderResponse(
             id=r["id"],
@@ -33,5 +34,5 @@ async def cancel_pending_reminder(
 ) -> dict[str, bool]:
     """取消指定 ID 的待触发提醒."""
     pm = PendingReminderManager(user_data_dir(request.state.user_id))
-    await pm.cancel(reminder_id)
+    await safe_memory_call(pm.cancel(reminder_id), "reminders(cancel)")
     return {"success": True}

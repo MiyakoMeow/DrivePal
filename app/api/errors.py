@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 if TYPE_CHECKING:
@@ -56,6 +57,17 @@ async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": {"code": exc.code.value, "message": exc.app_message}},
+    )
+
+
+async def validation_error_handler(
+    _request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Pydantic 校验失败 → 统一信封."""
+    details = "; ".join(str(e) for e in exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={"error": {"code": "INVALID_INPUT", "message": details}},
     )
 
 
