@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.voice.asr import ASREngine, SherpaOnnxASREngine
-from app.voice.constants import _FRAME_BYTES, VADStatus
+from app.voice.constants import VADStatus
 from app.voice.vad import VADEngine
 
 if TYPE_CHECKING:
@@ -20,24 +20,14 @@ logger = logging.getLogger(__name__)
 _CONFIG_PATH = Path("config/voice.toml")
 
 
-def _load_asr_config() -> dict:
-    """从 voice.toml 读取 ASR 配置。"""
-    try:
-        with _CONFIG_PATH.open("rb") as f:
-            data = tomllib.load(f)
-        return data.get("voice", {}).get("asr", {})
-    except OSError, tomllib.TOMLDecodeError:
-        logger.warning("Failed to read %s, using defaults", _CONFIG_PATH)
-        return {}
-
-
 def _load_voice_config() -> dict:
-    """从 voice.toml 读取顶层语音配置。"""
+    """从 voice.toml 读取完整语音配置。"""
     try:
         with _CONFIG_PATH.open("rb") as f:
             data = tomllib.load(f)
         return data.get("voice", {})
     except OSError, tomllib.TOMLDecodeError:
+        logger.warning("Failed to read %s, using defaults", _CONFIG_PATH)
         return {}
 
 
@@ -68,23 +58,10 @@ class VoicePipeline:
             sample_rate=sample_rate,
             silence_timeout_frames=silence_frames,
         )
+        self._expected_frame_bytes = self._vad.frame_bytes
         if asr_engine is None:
-            asr_cfg = _load_asr_config()
-            model_path = asr_cfg.get("model", "data/models/sense_voice/model.int8.onnx")
-            tokens_path = asr_cfg.get("tokens", "data/models/sense_voice/tokens.txt")
-            num_threads = asr_cfg.get("num_threads", 2)
-            language = asr_cfg.get("language", "zh")
-            use_itn = asr_cfg.get("use_itn", True)
-            if Path(model_path).exists() and Path(tokens_path).exists():
-                asr_engine = SherpaOnnxASREngine(
-                    model_path,
-                    tokens_path,
-                    num_threads=num_threads,
-                    language=language,
-                    use_itn=use_itn,
-                )
-            else:
-                asr_engine = SherpaOnnxASREngine("", "")
+            asr_cfg = cfg.get("asr", {})
+            asr_engine = SherpaOnnxASREngine(config=asr_cfg)
         self._asr = asr_engine
         self._min_confidence = min_confidence
         self._on_transcription = on_transcription
@@ -99,13 +76,14 @@ class VoicePipeline:
         """主循环：读取音频 → VAD 切分 → ASR 转录。yield 高置信度文本。"""
         self._running = True
         buffer = bytearray()
+        expected = self._expected_frame_bytes
 
         while self._running:
             chunk = await self._audio_queue.get()
-            if len(chunk) != _FRAME_BYTES:
+            if len(chunk) != expected:
                 logger.warning(
                     "Dropping audio chunk: expected %d bytes, got %d",
-                    _FRAME_BYTES,
+                    expected,
                     len(chunk),
                 )
                 continue
@@ -116,7 +94,7 @@ class VoicePipeline:
             elif status is VADStatus.SPEECH:
                 buffer.extend(chunk)
             elif status is VADStatus.SPEECH_END:
-                if len(buffer) > _FRAME_BYTES:
+                if len(buffer) > expected:
                     result = await self._asr.transcribe(bytes(buffer))
                     if result.text and result.confidence >= self._min_confidence:
                         if self._on_transcription:

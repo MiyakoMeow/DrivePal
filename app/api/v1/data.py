@@ -119,7 +119,7 @@ async def get_experiment_results() -> ExperimentResultsResponse:
     实验数据为系统级（VehicleMemBench 全局 benchmark），非 per-user，故无需用户上下文。
     """
     try:
-        data = read_benchmark()
+        data = await read_benchmark()
     except (OSError, ValueError) as e:
         logger.warning("Failed to read experiment benchmark: %s", e)
         data = {}

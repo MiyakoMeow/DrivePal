@@ -98,11 +98,19 @@ def test_export_settings_only(app_client: TestClient, tmp_path: Path) -> None:
 def test_experiments(app_client: TestClient) -> None:
     """GET /api/v1/experiments 返回实验结果."""
     with patch("app.api.v1.data.read_benchmark") as mock_read:
-        mock_read.return_value = {
-            "strategies": {
-                "memory_bank": {"exact_match": 0.8, "field_f1": 0.9, "value_f1": 0.85},
-            },
-        }
+
+        async def _fake_read():
+            return {
+                "strategies": {
+                    "memory_bank": {
+                        "exact_match": 0.8,
+                        "field_f1": 0.9,
+                        "value_f1": 0.85,
+                    },
+                },
+            }
+
+        mock_read.side_effect = _fake_read
         resp = app_client.get("/api/v1/experiments", headers={"X-User-Id": "alice"})
         assert resp.status_code == 200
         body = resp.json()

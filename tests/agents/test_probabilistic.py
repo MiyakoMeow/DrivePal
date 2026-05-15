@@ -59,7 +59,7 @@ async def test_cold_start_uniform():
 def test_interrupt_risk_calculation():
     """打断风险加权公式——验证数值计算。"""
     ctx = {
-        "driver": {"fatigue_level": 0.7, "workload": "normal"},
+        "driver_state": {"fatigue_level": 0.7, "workload": "normal"},
         "scenario": "city_driving",
         "spatial": {"current_location": {"speed_kmh": 50}},
     }
@@ -70,7 +70,7 @@ def test_interrupt_risk_calculation():
 
 def test_interrupt_risk_scenario_none_fallback():
     """scenario 缺失时 scenario_risk 取 0.5。"""
-    ctx = {"driver": {"fatigue_level": 0.5, "workload": "low"}}
+    ctx = {"driver_state": {"fatigue_level": 0.5, "workload": "low"}}
     risk = compute_interrupt_risk(ctx)
     # 0.4*0.5 + 0.3*0.1 + 0.2*0.5 + 0.1*0.0 = 0.20+0.03+0.10 = 0.33
     assert risk == pytest.approx(0.33, abs=0.01)
@@ -82,7 +82,7 @@ def test_interrupt_risk_overloaded_warning(caplog):
 
     caplog.set_level(logging.INFO)
     ctx = {
-        "driver": {"fatigue_level": 0.9, "workload": "overloaded"},
+        "driver_state": {"fatigue_level": 0.9, "workload": "overloaded"},
         "scenario": "highway",
         "spatial": {"current_location": {"speed_kmh": 100}},
     }
@@ -96,7 +96,7 @@ def test_interrupt_risk_bounds():
     # 空 context：0.4*0 + 0.3*0.3 + 0.2*0.5 + 0.1*0 = 0.19
     assert compute_interrupt_risk({}) == pytest.approx(0.19, abs=0.01)
     ctx_max = {
-        "driver": {"fatigue_level": 1.0, "workload": "overloaded"},
+        "driver_state": {"fatigue_level": 1.0, "workload": "overloaded"},
         "scenario": "highway",
         "spatial": {"current_location": {"speed_kmh": 120}},
     }

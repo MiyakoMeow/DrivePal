@@ -3,23 +3,11 @@
 from __future__ import annotations
 
 import copy
-import math
 from dataclasses import dataclass
 
+from app.utils import haversine
+
 _DEFAULT_FATIGUE_DELTA = 0.1
-
-
-def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """返回两点间距离（米）。"""
-    earth_radius_m = 6371000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlam = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dphi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
-    )
-    return earth_radius_m * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 @dataclass
@@ -69,7 +57,7 @@ class ContextMonitor:
                 lon1 = float(old_loc.get("longitude", 0))
                 lat2 = float(new_loc.get("latitude", 0))
                 lon2 = float(new_loc.get("longitude", 0))
-                dist = _haversine(lat1, lon1, lat2, lon2)
+                dist = haversine(lat1, lon1, lat2, lon2)
                 delta.location_changed = dist > self._proximity_meters
                 delta.location_proximity = dist
             except ValueError, TypeError:

@@ -23,22 +23,26 @@ class TestParseDuration:
 
 class TestParseTime:
     def test_basic(self):
-        from datetime import UTC, datetime
+        from datetime import datetime
 
-        today = datetime.now(UTC).date().isoformat()
-        assert parse_time("3点") == f"{today}T15:00:00"
+        result = parse_time("3点")
+        assert result is not None
+        assert result.hour == 15
+        assert result.tzinfo is not None
 
     def test_afternoon(self):
-        from datetime import UTC, datetime
+        from datetime import datetime
 
-        today = datetime.now(UTC).date().isoformat()
-        assert parse_time("下午3点") == f"{today}T15:00:00"
+        result = parse_time("下午3点")
+        assert result is not None
+        assert result.hour == 15
+        assert result.tzinfo is not None
 
     def test_morning(self):
-        from datetime import UTC, datetime
-
-        today = datetime.now(UTC).date().isoformat()
-        assert parse_time("上午9点") == f"{today}T09:00:00"
+        result = parse_time("上午9点")
+        assert result is not None
+        assert result.hour == 9
+        assert result.tzinfo is not None
 
     def test_invalid(self):
         assert parse_time("abc") is None

@@ -25,8 +25,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_REVIEW_HOUR = 8
-_REVIEW_WINDOW_MINUTES = 5
 _FATIGUE_HIGH = 0.7
 
 
@@ -88,6 +86,15 @@ class ProactiveScheduler:
         self._current_context: dict = {}
         self._pending_manager: PendingReminderManager | None = None
         self._last_review_date: str | None = None
+        self._enable_periodic_review: bool = _cfg.get("enable_periodic_review", True)
+        self._review_time: str = _cfg.get("review_time", "08:00")
+        try:
+            parts = self._review_time.split(":")
+            self._review_hour = int(parts[0])
+            self._review_minute = int(parts[1]) if len(parts) > 1 else 0
+        except ValueError, IndexError:
+            self._review_hour = 8
+            self._review_minute = 0
 
     async def push_voice_text(self, text: str) -> None:
         """推入一条被动语音文本到队列。"""
@@ -172,17 +179,18 @@ class ProactiveScheduler:
                 )
             )
 
-        today = datetime.now(UTC)
-        today_str = today.strftime("%Y-%m-%d")
-        if (
-            today.hour == _REVIEW_HOUR
-            and today.minute < _REVIEW_WINDOW_MINUTES
-            and self._last_review_date != today_str
-        ):
-            self._last_review_date = today_str
-            signals.append(
-                TriggerSignal(source="periodic", priority=0, context=ctx_copy)
-            )
+        if self._enable_periodic_review:
+            now_local = datetime.now().astimezone()
+            today_str = now_local.strftime("%Y-%m-%d")
+            if (
+                now_local.hour == self._review_hour
+                and now_local.minute == self._review_minute
+                and self._last_review_date != today_str
+            ):
+                self._last_review_date = today_str
+                signals.append(
+                    TriggerSignal(source="periodic", priority=0, context=ctx_copy)
+                )
 
         fatigue = ctx.get("driver_state", {}).get("fatigue_level", 0)
         workload = ctx.get("driver_state", {}).get("workload", "")
