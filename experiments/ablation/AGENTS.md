@@ -32,7 +32,7 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 | 自变量 | 决策架构(三Agent/单LLM) |
 | 因变量 | 决策质量分、中间阶段评分、延迟 |
 | 变体 | Full(三阶段) / SingleLLM(单次调用合并prompt) |
-| 场景 | 50个多样化场景（排除极端安全条件） |
+| 场景 | 50个多样化场景（排除极端安全条件），可用场景不足时降级使用全部 |
 
 两侧均经 `postprocess_decision` 后处理（控制规则维度）。Full启用记忆检索，SingleLLM禁用。
 
@@ -95,5 +95,5 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 - 盲评：不看expected_decision，依据规则表+场景条件评分
 - 中位数：每场景评3次取中位数
 - 容错：ChatError/JSONDecodeError等 → 默认分3
-- 退化检测：默认分3占比>50% 标记 degraded
+- 退化检测：默认分3占比>50% 标记 degraded；任意单一分数值占比>80%（如全5分）亦触发
 - 统计：Bootstrap CI(n=10000, α=0.05) + Wilcoxon signed-rank
