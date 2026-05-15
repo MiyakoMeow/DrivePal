@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import copy
 import logging
+import tomllib
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.agents.pending import PendingReminderManager
@@ -31,6 +32,18 @@ _FATIGUE_HIGH = 0.7
 class ProactiveScheduler:
     """主动调度器：后台轮询上下文+记忆，触发 AgentWorkflow 主动模式。"""
 
+    @staticmethod
+    def _load_config() -> dict:
+        """从 config/scheduler.toml 读取调度器配置。"""
+        path = Path("config/scheduler.toml")
+        try:
+            with path.open("rb") as f:
+                data = tomllib.load(f)
+            return data.get("scheduler", {})
+        except OSError, tomllib.TOMLDecodeError:
+            logger.warning("Failed to read %s, using defaults", path)
+            return {}
+
     def __init__(
         self,
         workflow: AgentWorkflow,
@@ -53,7 +66,12 @@ class ProactiveScheduler:
         """
         self._workflow = workflow
         self._memory_scanner = MemoryScanner(memory_module, user_id)
-        self._context_monitor = ContextMonitor()
+        # 从 config/scheduler.toml 读取配置，参数可覆盖
+        _cfg = self._load_config()
+        tick_interval = tick_interval or _cfg.get("tick_interval_seconds", 15)
+        debounce_seconds = debounce_seconds or _cfg.get("debounce_seconds", 30)
+        proximity = _cfg.get("location_proximity_meters", 500)
+        self._context_monitor = ContextMonitor(proximity_meters=proximity)
         self._trigger_evaluator = TriggerEvaluator(debounce_seconds)
         self._tick_interval = tick_interval
         self._ws_manager = ws_manager
