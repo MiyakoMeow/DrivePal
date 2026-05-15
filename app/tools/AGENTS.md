@@ -117,6 +117,14 @@ max_results = 5
 
 当前 `enabled` 标志为预留字段，未在代码中强制执行。
 
+## 异常
+
+| 异常 | 文件 | 继承 | 说明 |
+|------|------|------|------|
+| `ToolExecutionError` | `executor.py:16` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
+
+catch 模式：`_execution_node` 逐工具 `except Exception` → 错误文本追加至 `tool_results`，**不抛**。`register_builtin_tools()` 配置加载：`except OSError, tomllib.TOMLDecodeError` → `_load_tools_config()` 返 `{}`，但仍以默认参数（`enabled=True`, `max_message_length=200`）注册全部工具。注册表不会因配置缺失变空。
+
 ## 安全约束
 
 工具调用受规则引擎 `postprocess_decision()` 统一管辖（`proactive_run` 路径必走规则后处理）。当前规则引擎不区分工具类型——所有 `tool_calls` 在 LLM 输出中存在即被执行，工具级别约束待后续细化。

@@ -149,7 +149,21 @@ TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:85-112`，4条硬编码
 3. **高风险阈值**：`OVERLOADED_WARNING_THRESHOLD=0.36`，≥ 此值追加警告
 4. **开关**：`PROBABILISTIC_INFERENCE_ENABLED`（默认 `1` 启用，设 `0` 关闭）
 
-## 状态输出
+## 异常
+
+| 异常 | 文件 | 继承 | 说明 |
+|------|------|------|------|
+| `WorkflowError` | `workflow.py:65` | `AppError` | 模型不可用等，code=WORKFLOW_ERROR |
+| `AppError`(catch) | 各工作流方法 | — | **不 catch 具体子类型**，统一 except→log→回退 |
+
+catch 模式：
+- LLM JSON 解析：`except json.JSONDecodeError` → 回退原文本
+- Pydantic：`except ValidationError` → 回退原始 output
+- 工作流步骤：`except AppError` → log→raise 或 yield error
+- 数据校验：`except ValueError, TypeError:` → log→安全回退
+- 配置加载：`except OSError, tomllib.TOMLDecodeError, ValueError` → fallback 规则
+
+### 状态输出
 
 `_build_done_data()` 三种状态：
 

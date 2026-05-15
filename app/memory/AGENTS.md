@@ -86,16 +86,34 @@ flowchart LR
 
 ## 异常
 
-`MemoryBankError` 基类，分三层：
+`MemoryBankError(AppError)` 为基类。按可恢复性二分，模式全项目通用。
 
-| 异常 | 性质 |
+### 可恢复二分
+
+| 类 | 性质 | 重试 | 场景 |
+|----|------|------|------|
+| `TransientError` | 瞬态 | 可重试 | 网络/超时/限速 |
+| `FatalError` | 永久 | 不重试 | 配置错/数据损坏 |
+
+### 继承树
+
+```mermaid
+graph TD
+    AppError[AppError] --> MemoryBankError[MemoryBankError]
+    MemoryBankError --> TransientError[TransientError]
+    MemoryBankError --> FatalError[FatalError]
+    MemoryBankError --> SummarizationEmpty[SummarizationEmpty<br/>哨兵/非错误]
+    TransientError --> LLMCallFailedError[LLMCallFailedError]
+    FatalError --> ConfigError[ConfigError]
+    FatalError --> IndexIntegrityError[IndexIntegrityError]
+```
+
+| 异常 | 说明 |
 |------|------|
-| TransientError / FatalError | 基类 |
-| LLMCallFailedError | 瞬态可重试 |
-| SummarizationEmpty | 哨兵非错误 |
-| ConfigError | 永久 |
-| IndexIntegrityError | 永久 |
-| InvalidActionError | 独立于MemoryBankError体系（`schemas.py`） |
+| `SummarizationEmpty` | 哨兵，LLM返空。调用方捕获返 None，不上报 |
+| `InvalidActionError` | 独立异常（`schemas.py`），继承 `ValueError`，不入继承树 |
+
+catch 模式：`except ValueError, TypeError:` 包裹内部数据校验。存储读写 `except (json.JSONDecodeError, OSError, TypeError, ValueError)` 自动恢复。FAISS 逐类损坏恢复。`except LLMCallFailedError` 在 summarizer 内独立处理。
 
 ## 阈值
 

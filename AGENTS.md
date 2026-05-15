@@ -65,26 +65,32 @@ flowchart LR
 
 ## 关键抽象关系
 
-```
-AgentWorkflow (决策核心)
-  ├── 接收: user_query (响应流) | context_override (主动流) | ShortcutResolver (快捷指令)
-  ├── 产出: MultiFormatContent + PendingReminder + tool_calls
-  └── 依赖: MemoryModule / ChatModel / RuleEngine / ToolExecutor
-
-ProactiveScheduler (主动调度)
-  ├── 输入: VoicePipeline (语音队列) / update_context() (驾驶上下文)
-  ├── 引擎: ContextMonitor → MemoryScanner → TriggerEvaluator
-  └── 输出: AgentWorkflow.proactive_run() + WS broadcast
-
-VoicePipeline (语音感知)
-  ├── 输入: VoiceRecorder (麦克风) / 外部 audio frames
-  ├── 处理: VADEngine → SherpaOnnxASREngine
-  └── 输出: on_transcription 回调 → Scheduler.push_voice_text()
-
-MemoryModule (记忆管理)
-  ├── 写入: MemoryEvent (reminder/passive_voice/tool_call)
-  ├── 读取: search(query) → SearchResult
-  └── 后台: finalize() → 分层摘要 + Ebbinghaus 遗忘
+```mermaid
+flowchart LR
+    subgraph AW[AgentWorkflow 决策核心]
+        direction TB
+        AWI[接收: user_query / context_override / ShortcutResolver]
+        AWO[产出: MultiFormatContent + PendingReminder + tool_calls]
+        AWD[依赖: MemoryModule / ChatModel / RuleEngine / ToolExecutor]
+    end
+    subgraph PS[ProactiveScheduler 主动调度]
+        direction TB
+        PSI[输入: VoicePipeline / update_context]
+        PSE[引擎: ContextMonitor → MemoryScanner → TriggerEvaluator]
+        PSO[输出: proactive_run + WS broadcast]
+    end
+    subgraph VP[VoicePipeline 语音感知]
+        direction TB
+        VPI[输入: VoiceRecorder / audio frames]
+        VPP[处理: VADEngine → SherpaOnnxASREngine]
+        VPO[输出: on_transcription → Scheduler.push_voice_text]
+    end
+    subgraph MM[MemoryModule 记忆管理]
+        direction TB
+        MMW[写入: MemoryEvent]
+        MMR[读取: search → SearchResult]
+        MMB[后台: finalize → 分层摘要 + Ebbinghaus]
+    end
 ```
 
 ## 环境
@@ -163,6 +169,7 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 - **嵌套**：小分支提前 return/continue/break
 - **导入**：标准库→三方→内部→相对，空行分隔。禁通配
 - **不可变**：const/final 优先
+- **结构图**：mermaid 优先，禁 ASCII art 手绘结构图
 - **测试**：一事一测。Given→When→Then。名含场景+期望
 
 ## 工作树
@@ -171,15 +178,31 @@ Python 3.14：`except ValueError, TypeError:` 乃 PEP-758 新语法。
 git worktree add .worktrees/<名> -b <名>
 ```
 
-## 异常与阈值
+## 异常处理范式
 
-- API层异常 → `app/api/AGENTS.md`
-- MemoryBank异常与阈值 → `app/memory/AGENTS.md`
-- 存储异常 → `app/storage/AGENTS.md`
-- 模型异常与阈值 → `app/models/AGENTS.md`
-- 环境变量全表 → `config/AGENTS.md`
+`AppError(Exception)` 为全系统基类，统一 `code+message`。
+各模块继承之，API 层多重继承桥接 FastAPI。
 
-原则：异常由上层处理，不跨层泄露。
+> 各模块异常详情 → `app/*/AGENTS.md`。
+
+### 核心模式
+
+| 模式 | 载体 | 说明 |
+|------|------|------|
+| **统一基类** | `AppError` | `code+message`，各模块继承 |
+| **可恢复二分** | `TransientError`/`FatalError` | 瞬态可重试 vs 永久不重试 |
+| **多重继承桥接** | API 层 `AppError` 同时继承域内 `AppError` + `HTTPException` | `isinstance` 双视角：域内代码见 `AppError`，FastAPI 见 `HTTPException` |
+| **哨兵** | `SummarizationEmpty` | 非错误，控制流信号，调用方捕获返 None |
+| **独立异常** | `ValueError`/`TypeError` 子类 | 类型校验/结构误用，不入继承树 |
+| **不跨层** | 下层抛→上层 reinterpret | 各层包装本层类型再上抛 |
+
+### 原则
+
+1. 域内异常继承 `AppError`，类型校验继承内置
+2. catch 后 reinterpret，不传播底层类型
+3. 哨兵显式标注"非错误"
+4. 沿用 Transient/Fatal 二分
+5. 各模块具体异常 → 对应 `AGENTS.md`
 
 ## Benchmark
 

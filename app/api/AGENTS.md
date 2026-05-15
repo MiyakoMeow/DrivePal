@@ -37,19 +37,55 @@ Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
 - 未知 type：返回 `{"type": "error", "payload": {"code": "INVALID_MESSAGE", "message": "Unknown type: ..."}}`
 - 查询初始化/处理失败：返回 `{"type": "error", "payload": {"code": "QUERY_FAILED", "message": "..."}}`
 
-## 错误处理
+## 异常处理
 
-`app/api/errors.py`。`AppError` 继承 `HTTPException`，统一错误信封 `{"error": {"code": "...", "message": "..."}}`。
+`app/api/errors.py` — 异常体系之最终边界。
 
-| AppErrorCode | HTTP | 场景 |
-|---|---|---|
+### 多重继承桥接
+
+```python
+class AppError(BaseAppError, HTTPException):
+    # isinstance(e, BaseAppError) → True  域内 catch
+    # isinstance(e, HTTPException) → True FastAPI handler catch
+```
+
+`BaseAppError`（`app.exceptions.AppError`）+ `HTTPException`（FastAPI）。双重视角——业务流程见 `AppError`，HTTP 管道见 `HTTPException`。
+
+### AppErrorCode → HTTP
+
+| Code | HTTP | 场景 |
+|------|------|------|
 | NOT_FOUND | 404 | 资源不存在 |
-| INVALID_INPUT | 422 | 请求参数不合法 |
+| INVALID_INPUT | 422 | 参数不合法 |
 | STORAGE_ERROR | 503 | 存储不可用 |
 | SERVICE_UNAVAILABLE | 503 | 模型/工作流不可用 |
 | INTERNAL_ERROR | 500 | 未预期异常 |
 
-`safe_call` 统一包装所有存储/记忆/工作流调用。`WorkflowError` → 503 (SERVICE_UNAVAILABLE)。
+### safe_call() 映射
+
+统一包装存储/记忆/工作流调用：
+
+| 源异常 | HTTP | 响应消息 |
+|--------|------|---------|
+| `TransientError` | 503 | Service temporarily unavailable |
+| `FatalError` | 500 | Internal storage error |
+| `ToolExecutionError` | 500 | Tool execution failed |
+| `WorkflowError` | 503 | Service temporarily unavailable |
+| `BaseAppError`(非HTTP) | 500 | Internal error |
+| `BaseAppError`(含API) | 直抛 | 原样 |
+| `ValueError` | 422 | Invalid request data |
+| `OSError` | 503 | Service temporarily unavailable |
+| 其余 | 500 | Internal server error |
+
+日志 `logger.exception()` 持久化，消息泛化防泄露。
+
+### 响应信封
+
+```json
+{"error": {"code": "STORAGE_ERROR", "message": "Service temporarily unavailable"}}
+```
+
+Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 
 ## 中间件
 
