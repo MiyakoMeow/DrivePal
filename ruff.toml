@@ -54,6 +54,10 @@ exclude = [".agents/**"]
 ]
 "app/voice/pipeline.py" = ["PTH110"]
 
+"app/voice/cli.py" = [
+    "T201",  # CLI 入口用 print 输出信息，非生产日志
+]
+
 "app/voice/recorder.py" = [
     "PLC0415",  # pyaudio 为可选依赖（需系统 portaudio 库），函数内局部导入
 ]
