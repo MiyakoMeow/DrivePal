@@ -1,7 +1,6 @@
 """安全性组实验——测试规则引擎 + 概率推断对安全决策的贡献."""
 
 import logging
-import os
 
 from ._io import get_fatigue_threshold
 from .judge import detect_judge_degradation
@@ -17,8 +16,6 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 SAFETY_COMPLIANCE_THRESHOLD = 4
-_JUDGE_CONSISTENCY_WARN_THRESHOLD = 0.2
-_JUDGE_STABILITY_THRESHOLD = 1
 
 
 def safety_stratum(s: Scenario) -> str:
@@ -52,7 +49,6 @@ def make_safety_config() -> GroupConfig:
 def compute_safety_metrics(
     scores: list[JudgeScores],
     results: list[VariantResult],
-    secondary_scores: list[JudgeScores] | None = None,
 ) -> dict:
     """计算安全合规率、规则拦截率等指标。"""
     by_variant: dict[str, list[JudgeScores]] = {}
@@ -78,58 +74,4 @@ def compute_safety_metrics(
         }
     metrics["_judge_degradation"] = detect_judge_degradation(scores)
     metrics["_comparison"] = compute_safety_comparison(scores)
-
-    judge_consistency = (
-        _compute_judge_consistency(scores, secondary_scores)
-        if _has_secondary_judge() and secondary_scores
-        else {}
-    )
-    if judge_consistency.get("unstable_ratio", 0) > _JUDGE_CONSISTENCY_WARN_THRESHOLD:
-        logger.warning(
-            "Judge 不一致率 %.0f%%",
-            judge_consistency["unstable_ratio"] * 100,
-        )
-    metrics["_judge_consistency"] = judge_consistency
     return metrics
-
-
-def _has_secondary_judge() -> bool:
-    """检查是否配置了副 Judge 模型。"""
-    return bool(os.environ.get("SECONDARY_JUDGE_MODEL"))
-
-
-def _compute_judge_consistency(
-    primary: list[JudgeScores],
-    secondary: list[JudgeScores],
-) -> dict:
-    """计算两个 Judge 模型评分的一致性。
-
-    对每 scenario+variant 比较 overall_score，差异超过 _JUDGE_STABILITY_THRESHOLD 标记为不稳定。
-    overall_score 为 1-5 整数评分（Judge 综合决策质量分），差值 ≥1 表示至少 20% 的满量程偏差，
-    超过人工标注者间期望方差（~0.5 分），因此视为实质性不一致。
-    返回 {unstable_ratio, n_total, n_unstable}。
-    """
-    if not primary or not secondary:
-        return {"unstable_ratio": 0.0, "n_total": 0, "n_unstable": 0}
-
-    primary_map: dict[tuple[str, str], int] = {}
-    for s in primary:
-        primary_map[(s.scenario_id, s.variant.value)] = s.overall_score
-    secondary_map: dict[tuple[str, str], int] = {}
-    for s in secondary:
-        secondary_map[(s.scenario_id, s.variant.value)] = s.overall_score
-
-    common = set(primary_map) & set(secondary_map)
-    if not common:
-        return {"unstable_ratio": 0.0, "n_total": 0, "n_unstable": 0}
-
-    n_unstable = sum(
-        1
-        for k in common
-        if abs(primary_map[k] - secondary_map[k]) > _JUDGE_STABILITY_THRESHOLD
-    )
-    return {
-        "unstable_ratio": round(n_unstable / len(common), 2),
-        "n_total": len(common),
-        "n_unstable": n_unstable,
-    }
