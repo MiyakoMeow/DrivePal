@@ -235,10 +235,12 @@ class TestFormatPreferenceHint:
         from app.agents.workflow import set_ablation_disable_feedback
 
         set_ablation_disable_feedback(True)
-        workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
-        result = await workflow._joint_decision_agent._format_preference_hint()
-        assert result == ""
-        set_ablation_disable_feedback(False)
+        try:
+            workflow = AgentWorkflow(data_dir=tmp_path, memory_module=MagicMock())
+            result = await workflow._joint_decision_agent._format_preference_hint()
+            assert result == ""
+        finally:
+            set_ablation_disable_feedback(False)
 
     @pytest.mark.asyncio
     async def test_no_weights(self, tmp_path):

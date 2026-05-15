@@ -52,7 +52,7 @@ flowchart LR
 | `outputs.py` | `OutputRouter` | 输出路由 → `MultiFormatContent` |
 | `outputs.py` | `OutputChannel`, `InterruptLevel` | 输出通道/打断枚举 |
 | `pending.py` | `PendingReminderManager` | 5 种 trigger_type 待触发管理 |
-| `state.py` | `AgentState` | TypedDict，13字段含 `rules_result` |
+| `state.py` | `AgentState` | TypedDict，14字段含 `rules_result`、`tool_results` |
 | `state.py` | `WorkflowStages` | dataclass，4字段 |
 | `rules.py` | `apply_rules`, `postprocess_decision` | 规则引擎入口与后处理强制覆盖 |
 | `probabilistic.py` | `infer_intent`, `compute_interrupt_risk` | 意图推断 + 打断风险 |
@@ -224,6 +224,8 @@ catch 模式：
 
 ## 状态输出
 
+`AgentState`（`state.py`）14 字段。`tool_results: NotRequired[list[str] | None]` 由 `ExecutionAgent._handle_tool_calls()` 写入——工具调用结果以 `[tool_name] result` 格式追加到列表。
+
 `_build_done_data()` 三种状态：
 
 | 状态 | 条件 |
@@ -231,3 +233,5 @@ catch 模式：
 | pending | 含 pending_reminder_id |
 | suppressed | result 含"取消"/"抑制" |
 | delivered | 即时提醒已发送 |
+
+SSE done 事件 `payload` 含 `tool_results`（非空时），由 `_build_done_data()` 从 `state["tool_results"]` 读取。

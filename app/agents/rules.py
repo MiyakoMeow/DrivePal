@@ -47,7 +47,10 @@ def _get_fatigue_threshold() -> float:
     try:
         value = float(raw)
     except ValueError:
-        logger.warning("Invalid FATIGUE_THRESHOLD=%r, using default 0.7", raw)
+        logger.warning(
+            "Invalid DRIVEPAL_FATIGUE_THRESHOLD/FATIGUE_THRESHOLD=%r, using default 0.7",
+            raw,
+        )
         _cached_fatigue_threshold = 0.7
         return 0.7
     if not math.isfinite(value):

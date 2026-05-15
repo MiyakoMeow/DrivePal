@@ -56,10 +56,12 @@ class ToolSpec:
 
 ### ToolExecutor
 
-- `execute(tool_name, params) → str` — 参数校验 → handler 执行 → 结果文本
+- `execute(tool_name, params, *, driving_context=None) → str` — 参数校验 → 确认检查（`require_confirmation_when`）→ handler 执行 → 结果文本。驾驶中执行需确认工具时抛 `ToolConfirmationRequiredError`
 - `get_spec(name) → ToolSpec | None` — 按名称获取工具规格
 
-### 内置工具
+### set_navigation 确认条件
+
+`set_navigation` 注册时从 `ToolsConfig`（`config/tools.toml`）读取 `require_voice_confirmation_driving`，为 `true` 时设 `require_confirmation_when="driving"`。其他工具默认 `None`（无确认条件）。
 
 | 工具 | 参数 | 返回 |
 |------|------|------|
@@ -85,7 +87,7 @@ class ToolSpec:
 4. `_check_frequency_guard()` — 频次抑制
 
 ```python
-async def _handle_tool_calls(self, decision: dict) -> None:
+async def _handle_tool_calls(self, decision: dict, state: AgentState) -> None:
     tool_calls = decision.get("tool_calls", [])
     if not tool_calls or not isinstance(tool_calls, list):
         return
@@ -96,19 +98,24 @@ async def _handle_tool_calls(self, decision: dict) -> None:
             t_name = tc.get("tool", "")
             t_params = tc.get("params", {})
             try:
-                t_result = await executor.execute(t_name, t_params)
+                t_result = await executor.execute(
+                    t_name, t_params, driving_context=state.get("driving_context")
+                )
                 tool_results.append(f"[{t_name}] {t_result}")
             except WorkflowError:
                 raise
+            except ToolConfirmationRequiredError as e:
+                tool_results.append(f"[{t_name}] {e.message}")
             except ToolExecutionError as e:
                 tool_results.append(f"[{t_name}] 失败: {e}")
             except AppError:
                 raise
     if tool_results:
+        state["tool_results"] = tool_results
         logger.info("Tool call results: %s", "; ".join(tool_results))
 ```
 
-结果仅 log，不写回 state——工具调用的副作用（导航设置/消息发送等）已在 handler 内完成。
+结果写入 `state["tool_results"]`，由 `_build_done_data()` 纳入 SSE done 事件。
 
 ## 配置
 

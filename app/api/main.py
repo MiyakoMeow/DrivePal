@@ -112,9 +112,14 @@ app = FastAPI(title="知行车秘 - 车载AI智能体", lifespan=_lifespan)
 
 
 def _build_cors_config() -> dict:
+    # 从环境变量动态配置 CORS origins，不同部署环境可调整而无需改代码
     origins_str = os.getenv("DRIVEPAL_CORS_ORIGINS", "*")
     origins = [o.strip() for o in origins_str.split(",") if o.strip()]
+    # 空值回退通配符，避免 allow_origins=[] 阻断所有跨域请求
+    if not origins:
+        origins = ["*"]
     is_wildcard = origins == ["*"]
+    # CORS 规范：通配符 origin 不应携带 credentials，浏览器会拒绝
     return {
         "allow_origins": origins,
         "allow_credentials": not is_wildcard,
