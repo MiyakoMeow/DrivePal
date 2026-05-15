@@ -51,6 +51,7 @@ class ProactiveScheduler:
 
         """
         self._workflow = workflow
+        self._user_id = user_id
         self._memory_scanner = MemoryScanner(memory_module, user_id)
         # 从 scheduler.toml 读取配置，参数可覆盖
         _cfg = SchedulerConfig.load()
@@ -91,9 +92,7 @@ class ProactiveScheduler:
     async def _poll_pending(self, ctx: dict) -> None:
         """轮询 PendingReminder 触发条件。"""
         if self._pending_manager is None:
-            self._pending_manager = PendingReminderManager(
-                user_data_dir(self._workflow.current_user)
-            )
+            self._pending_manager = PendingReminderManager(user_data_dir(self._user_id))
         pm = self._pending_manager
         triggered = await pm.poll(ctx)
         for tr in triggered:

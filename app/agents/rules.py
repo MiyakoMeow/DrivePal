@@ -110,10 +110,14 @@ _FALLBACK_RULES: list[Rule] = [
         priority=15,
     ),
     Rule(
-        name="parked_all_channels",
-        condition=lambda ctx: ctx.get("scenario") == "parked",
-        constraint={"allowed_channels": ["visual", "audio", "detailed"]},
-        priority=5,
+        name="passenger_present_relax",
+        condition=lambda ctx: (
+            bool(ctx.get("passengers"))
+            and bool(ctx.get("scenario"))
+            and ctx.get("scenario") != "highway"
+        ),
+        constraint={"extra_channels": ["visual"]},
+        priority=3,
     ),
     Rule(
         name="city_driving_limit",
@@ -271,12 +275,16 @@ _RULES_TOML_DEFAULTS: dict = {
 
 
 _RULES_PATH: Path = get_config_root() / "rules.toml"
-# 首次导入时确保配置文件存在。加载失败由 load_rules 内 _FALLBACK_RULES 兜底。
 try:
     ensure_config(_RULES_PATH, _RULES_TOML_DEFAULTS)
-except (OSError, PermissionError) as e:
-    logger.warning("Cannot ensure rules config at import time: %s", e)
-SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
+    SAFETY_RULES: list[Rule] = load_rules(_RULES_PATH)
+except (OSError, PermissionError, tomllib.TOMLDecodeError, ValueError, TypeError) as e:
+    logger.warning(
+        "Cannot load rules config, using %d fallback rules: %s",
+        len(_FALLBACK_RULES),
+        e,
+    )
+    SAFETY_RULES = list(_FALLBACK_RULES)
 
 
 def apply_rules(
