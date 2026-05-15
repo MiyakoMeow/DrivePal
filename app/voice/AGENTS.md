@@ -11,20 +11,25 @@ flowchart LR
     subgraph PL["VoicePipeline"]
         VAD[VADEngine] -->|speech_end| ASR["SherpaOnnxASREngine<br/>SenseVoice"]
     end
-    ASR -->|文本+置信度| CB[on_transcription 回调]
-    ASR -->|yield| Out["> 转录文本"]
+    ASR -->|文本+置信度| VS[VoiceService]
+    VS -->|status/config| API["REST /api/v1/voice/*"]
+    VS -->|CLI 输出| CLI["voice-cli"]
+    VS -->|回调| Sched["ProactiveScheduler"]
 ```
 
 ## 组件
 
 | 文件 | 类/函数 | 职责 |
 |------|---------|------|
+| `service.py` | `VoiceService` | 封装 VoicePipeline + VoiceRecorder 生命周期。统一 start/stop/status/config 接口。热更新配置。转录历史环形缓冲。设备枚举。供 lifespan/CLI/独立服务使用 |
 | `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。`VoiceConfig.load()` 加载 voice.toml 配置。持有 `asyncio.Queue` 接收音频帧。通过 `on_transcription` 回调供 Scheduler 实时消费转录文本 |
 | `recorder.py` | `VoiceRecorder` | pyaudio 麦克风录音。`_CHANNELS=1`、`_FORMAT=8` 录音参数。`start(pipeline)` 在线程池运行阻塞录音循环，`run_coroutine_threadsafe` 喂帧 |
 | `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence` |
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
 | `asr.py` | `SherpaOnnxASREngine` | SenseVoice 离线 ASR。`_ensure_onnx_lib()` 自动创建 onnxruntime 符号链接。`_UNAVAILABLE` 哨兵对象 |
 | `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE=16000`、`_FRAMES_PER_CHUNK=480`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
+| `cli.py` | `main`, `_parse_args` | 命令行入口。`--list-devices` 列设备，`--device INDEX` 选设备。实时转录输出 |
+| `server.py` | `app` | 独立 FastAPI 服务。自管 VoiceService 生命周期，挂 /api/v1/voice 路由 + WebUI 静态文件。`python -m app.voice.server` 启动 |
 
 ## VoicePipeline
 
@@ -104,3 +109,8 @@ mv data/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17 data/models/se
 ## 测试
 
 `tests/voice/test_vad.py` — VAD 单元测试（静音帧 + 错误尺寸帧）。
+`tests/voice/test_pipeline.py` — VoicePipeline 编排测试（VAD→ASR yield、置信度、帧尺寸）。
+`tests/voice/test_service.py` — VoiceService 生命周期测试（enabled/noop、stop 幂等、status、热更新、设备枚举）。
+`tests/voice/test_cli.py` — CLI 参数解析测试。
+`tests/api/test_voice_api.py` — REST API 端到端测试（status/config/start/stop/devices/transcriptions）。
+`tests/voice/test_server.py` — 独立服务 app 路由注册测试。

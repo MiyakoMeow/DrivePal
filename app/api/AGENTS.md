@@ -15,6 +15,7 @@
 | `v1/data.py` | 历史查询、导出、数据删除、实验结果对比 |
 | `v1/reminders.py` | 提醒列表获取与取消 |
 | `v1/sessions.py` | 会话管理（关闭） |
+| `v1/voice.py` | `GET /api/v1/voice/status`、`POST /start|stop`、`GET|PUT /config`、`GET /transcriptions|devices` |
 | `schemas.py` | Pydantic 请求/响应模型 |
 | `errors.py` | 异常体系边界、AppErrorCode→HTTP 映射 |
 | `middleware.py` | `UserIdentityMiddleware` |
@@ -38,6 +39,13 @@
 | GET | `/api/v1/reminders` | 获取待触发提醒列表 |
 | DELETE | `/api/v1/reminders/{id}` | 取消提醒 |
 | POST | `/api/v1/sessions/{id}/close` | 关闭会话（校验用户归属） |
+| GET | `/api/v1/voice/status` | 语音流水线运行状态（enabled/running/vad_status/config） |
+| POST | `/api/v1/voice/start` | 开启录音（已运行返 409，禁用返 400） |
+| POST | `/api/v1/voice/stop` | 停止录音 |
+| GET | `/api/v1/voice/config` | 当前配置（device_index/vad_mode 等） |
+| PUT | `/api/v1/voice/config` | 热更新配置（无效值返 400） |
+| GET | `/api/v1/voice/transcriptions` | 转录历史（`?limit=N`，默认 50，最大 200） |
+| GET | `/api/v1/voice/devices` | 可用麦克风设备列表 |
 
 Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py`，字段说明见下方"数据模型"节。
 

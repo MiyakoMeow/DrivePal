@@ -241,7 +241,7 @@ git worktree add .worktrees/<名> -b <名>
 
 6. **工具安全约束细化** — 当前 `postprocess_decision` 统一管辖所有工具，但未按工具类型差异化约束
 7. **scheduler per-user 实例** — lifespan 仅初始化 default 用户，`_schedulers` dict 支持多用户但未实际启用
-8. **集成测试** — voice/scheduler/tools 三模块单元测试覆盖不足，缺少集成测试
+8. **集成测试** — scheduler/tools 集成测试覆盖不足；voice 模块已补（service test + API test + server test）
 
 ## 开发路线（建议）
 

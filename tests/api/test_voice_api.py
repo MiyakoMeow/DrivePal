@@ -66,8 +66,11 @@ def test_voice_start_already_running_returns_409(app_client: TestClient) -> None
         patch.object(VoiceService, "status", new_callable=PropertyMock) as mock_status,
     ):
         mock_status.return_value = {
-            "enabled": True, "running": True, "vad_status": "idle",
-            "device_index": 0, "config": {},
+            "enabled": True,
+            "running": True,
+            "vad_status": "idle",
+            "device_index": 0,
+            "config": {},
         }
         resp = app_client.post("/api/v1/voice/start")
         assert resp.status_code == 409
@@ -81,7 +84,11 @@ def test_voice_start_disabled_returns_400(app_client: TestClient) -> None:
         patch.object(VoiceService, "status", new_callable=PropertyMock) as mock_status,
         patch.object(VoiceService, "start", new=AsyncMock(return_value=False)),
     ):
-        mock_status.return_value = {"enabled": True, "running": False, "vad_status": "idle"}
+        mock_status.return_value = {
+            "enabled": True,
+            "running": False,
+            "vad_status": "idle",
+        }
         resp = app_client.post("/api/v1/voice/start")
         assert resp.status_code == 400
         data = resp.json()
