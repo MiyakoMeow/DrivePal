@@ -22,7 +22,7 @@
 | DELETE | `/api/v1/reminders/{id}` | 取消提醒 |
 | POST | `/api/v1/sessions/{id}/close` | 关闭会话（校验用户归属） |
 
-Schema 定义于 `app/api/schemas.py` + `app/schemas/query.py`。
+Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py`，字段说明见下方"数据模型"节。
 
 ## WebSocket
 
@@ -115,5 +115,21 @@ Pydantic 校验失败 → `validation_error_handler` → `422 INVALID_INPUT`。
 | snooze | 创建5分钟延迟提醒（验证事件存在） |
 | modify | +0.05（用户微调偏好） |
 
-权重注入：`_format_preference_hint()` → system prompt + 用户 prompt → JointDecision。
+ 权重注入：`_format_preference_hint()` → system prompt + 用户 prompt → JointDecision。
 ≥0.6 强引导，≥0.5 弱引导，<0.5 不提示。
+
+## 数据模型
+
+### 驾驶上下文 (`context.py`)
+
+- **DriverState**: emotion(neutral/anxious/fatigued/calm/angry), workload(low/normal/high/overloaded), fatigue_level(0~1)
+- **GeoLocation**: latitude(ge=-90,le=90), longitude(ge=-180,le=180), address, speed_kmh(ge=0)
+- **SpatioTemporalContext**: current_location, destination, eta_minutes(ge=0), heading(0~360)
+- **TrafficCondition**: congestion_level(smooth/slow/congested/blocked), incidents(list[str]), estimated_delay_minutes(ge=0)
+- **DrivingContext**: driver + spatial + traffic + scenario(parked/city_driving/highway/traffic_jam) + passengers
+- **ScenarioPreset**: id(uuid hex[:12]), name, context, created_at
+
+### 查询Schema (`query.py`)
+
+- **ProcessQueryRequest**: query, context(DrivingContext|None), session_id
+- **ProcessQueryResult**: status(delivered/pending/suppressed), event_id, session_id, result, pending_reminder_id, trigger_text, reason, cancelled

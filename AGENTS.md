@@ -125,7 +125,6 @@ flowchart LR
         A5["api/ → AGENTS.md"]
         A6["models/ → AGENTS.md"]
         A7["memory/ → AGENTS.md"]
-        A8["schemas/ → AGENTS.md"]
         A9["storage/ → AGENTS.md"]
         AC["config.py"]
     end
@@ -146,10 +145,9 @@ flowchart LR
 | voice/ | 语音流水线（录音→VAD→ASR） | voice/AGENTS.md |
 | scheduler/ | 主动调度器（后台轮询触发） | scheduler/AGENTS.md |
 | tools/ | 工具调用框架 | tools/AGENTS.md |
-| api/ | REST路由、WebSocket流式、服务生命周期 | api/AGENTS.md |
+| api/ | REST路由、WebSocket流式、服务生命周期、数据模型 | api/AGENTS.md |
 | memory/ | MemoryBank(FAISS+Ebbinghaus)、隐私保护 | memory/AGENTS.md |
 | models/ | LLM多provider fallback、Embedding | models/AGENTS.md |
-| schemas/ | 驾驶上下文Pydantic模型、查询Schema | schemas/AGENTS.md |
 | storage/ | TOML异步存储、JSONL追加写入 | storage/AGENTS.md |
 
 `config.py` — 应用级配置（数据目录路径等）
