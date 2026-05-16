@@ -3,9 +3,8 @@
 import httpx
 
 # 单次 LLM/Embedding API 调用通常在 2-30s 内完成，
-# 120s 足够容纳异常慢响应（provider 排队、冷启动等），
-# 调用方如需更精细超时管控，用 asyncio.wait_for / asyncio.timeout 在调用端施加。
-READ_TIMEOUT_SECONDS = 120
+# 30s 足够容纳正常慢响应；调用方如需更长，用 asyncio.wait_for / asyncio.timeout 在调用端施加。
+READ_TIMEOUT_SECONDS = 30
 
 CLIENT_TIMEOUT = httpx.Timeout(
     connect=10.0,  # 快速发现连接问题
