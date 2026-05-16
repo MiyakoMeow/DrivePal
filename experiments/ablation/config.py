@@ -57,7 +57,15 @@ def load_stage_timeouts() -> dict[str, float]:
         val = os.environ.get(env_overrides[key])
         if val is not None:
             try:
-                timeouts[key] = float(val)
+                parsed = float(val)
+                if parsed <= 0:
+                    logger.warning(
+                        "Invalid %s=%r (non-positive), falling back to config default",
+                        env_overrides[key],
+                        val,
+                    )
+                    parsed = default
+                timeouts[key] = parsed
                 continue
             except ValueError:
                 logger.warning(
@@ -66,7 +74,16 @@ def load_stage_timeouts() -> dict[str, float]:
                     val,
                 )
         raw_val = raw.get(key, default)
-        timeouts[key] = float(raw_val) if isinstance(raw_val, (int, float)) else default
+        parsed = float(raw_val) if isinstance(raw_val, (int, float)) else default
+        if parsed <= 0:
+            logger.warning(
+                "TOML timeouts.%s=%r is non-positive, using default %s",
+                key,
+                raw_val,
+                default,
+            )
+            parsed = default
+        timeouts[key] = parsed
     return timeouts
 
 

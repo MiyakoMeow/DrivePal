@@ -102,14 +102,18 @@ class AblationRunner:
                 driving_context=deepcopy(scenario.driving_context),
                 stage_timeout=STAGE_TIMEOUT,
             )
-        except WorkflowError:
+        except WorkflowError as wfe:
             logger.exception(
-                "[%s] variant=%s WorkflowError", scenario.id, variant.value
+                "[%s] variant=%s WorkflowError(code=%s)",
+                scenario.id,
+                variant.value,
+                wfe.code,
             )
             raise AblationError(
-                code="STAGE_TIMEOUT",
+                code=wfe.code,
                 message=(
-                    f"scenario={scenario.id} variant={variant.value} stage timed out"
+                    f"scenario={scenario.id} variant={variant.value} "
+                    f"WorkflowError(code={wfe.code}): {wfe.message}"
                 ),
             ) from None
         latency_ms = (time.perf_counter() - t0) * 1000
