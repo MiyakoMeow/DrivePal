@@ -146,10 +146,15 @@ def _seed_demo_presets(user_id: str) -> None:
 
     # 文件存在且有预设则跳过
     if sp_fp.exists():
-        with sp_fp.open("rb") as f:
-            raw = tomllib.loads(f.read().decode("utf-8"))
-        if raw.get("_list", []):
-            return
+        try:
+            with sp_fp.open("rb") as f:
+                raw = tomllib.loads(f.read().decode("utf-8"))
+            if raw.get("_list", []):
+                return
+        except OSError, ValueError:
+            logger.warning(
+                "Corrupted scenario_presets.toml for %s, re-seeding", user_id
+            )
 
     presets = [
         ScenarioPreset(

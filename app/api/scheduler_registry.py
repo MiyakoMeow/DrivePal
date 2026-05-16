@@ -20,32 +20,36 @@ async def is_scheduler_running(user_id: str) -> bool:
 
 
 async def get_or_create_scheduler(user_id: str) -> ProactiveScheduler | None:
-    """获取已有调度器，不存在则创建。双检锁防竞态。"""
-    if user_id in _SCHEDULERS:
-        return _SCHEDULERS[user_id]
-
+    """获取已有调度器，不存在则创建。创建在锁外，防长时间持锁。"""
     async with _lock:
         if user_id in _SCHEDULERS:
             return _SCHEDULERS[user_id]
 
-        try:
-            from app.agents.workflow import AgentWorkflow
-            from app.api.v1.ws_manager import ws_manager as ws_mgr
-            from app.memory.singleton import get_memory_module
+    try:
+        from app.agents.workflow import AgentWorkflow
+        from app.api.v1.ws_manager import ws_manager as ws_mgr
+        from app.memory.singleton import get_memory_module
 
-            wf = AgentWorkflow(current_user=user_id)
-            mm = get_memory_module()
-            sched = ProactiveScheduler(
-                workflow=wf,
-                memory_module=mm,
-                user_id=user_id,
-                ws_manager=ws_mgr,
-            )
-            await sched.start()
-        except Exception as e:
-            logger.warning("Failed to start scheduler for %s: %s", user_id, e)
-            return None
+        wf = AgentWorkflow(current_user=user_id)
+        mm = get_memory_module()
+        sched = ProactiveScheduler(
+            workflow=wf,
+            memory_module=mm,
+            user_id=user_id,
+            ws_manager=ws_mgr,
+        )
+        await sched.start()
+    except Exception as e:
+        logger.warning("Failed to start scheduler for %s: %s", user_id, e)
+        return None
 
+    async with _lock:
+        if user_id in _SCHEDULERS:
+            try:
+                await sched.stop()
+            except Exception:
+                logger.warning("Failed to stop duplicate scheduler for %s", user_id)
+            return _SCHEDULERS[user_id]
         _SCHEDULERS[user_id] = sched
 
     logger.info("ProactiveScheduler started for user: %s", user_id)

@@ -307,6 +307,9 @@ GET    /api/v1/voice/config         # 语音当前配置
 PUT    /api/v1/voice/config         # 语音热更新配置
 GET    /api/v1/voice/transcriptions # 转录历史（?limit=N）
 GET    /api/v1/voice/devices        # 可用麦克风设备
+POST   /api/v1/scheduler/start        # 创建并启动指定用户调度器
+POST   /api/v1/scheduler/stop         # 停止指定用户调度器
+GET    /api/v1/scheduler/status       # 查询调度器运行状态
 ```
 
 ---

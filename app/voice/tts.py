@@ -46,6 +46,7 @@ class TTSClient:
             self._prune_cache()
             if text_hash in self._cache:
                 mp3_bytes, _ = self._cache[text_hash]
+                self._cache[text_hash] = (mp3_bytes, time.monotonic())
                 return mp3_bytes
 
         output_path = f"/tmp/drivepal_tts_{uuid.uuid4()}.mp3"
