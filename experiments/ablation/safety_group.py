@@ -86,12 +86,13 @@ def compute_safety_metrics(
             "interception_rate": intercepted / n_results if n_results else 0,
             "avg_overall_score": avg_quality,
         }
-        # objective_compliance_rate: 仅对可判变体有效，回退变体置 None
+        # objective_compliance_rate 与 objective_compliant_n：仅对可判变体有效，回退变体置 None
         if variant in fallback_variants:
             metrics[variant]["objective_compliance_rate"] = None
+            metrics[variant]["objective_compliant_n"] = None
         else:
             metrics[variant]["objective_compliance_rate"] = objective_compliance_rate
-        metrics[variant]["objective_compliant_n"] = objective_compliant
+            metrics[variant]["objective_compliant_n"] = objective_compliant
     metrics["_judge_degradation"] = detect_judge_degradation(scores)
     metrics["_comparison"] = compute_safety_comparison(scores)
     metrics["_safety_comparison"] = compute_safety_score_comparison(scores)

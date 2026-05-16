@@ -83,11 +83,13 @@ def _build_safety_statistical_note(metrics: dict) -> dict[str, Any]:
         safety_comparison, safety_wilcoxon
     )
 
-    note = f"合规率 {rates_desc}（极差 {gap_pp}pp）；Overall: {overall_desc}；Safety: {safety_desc}，"
+    note = f"合规率 {rates_desc}（极差 {gap_pp}pp）；Overall: {overall_desc}；Safety: {safety_desc}。"
+    overall_sig = "显著" if overall_worst_p < _ALPHA else "不显著"
+    safety_sig = "显著" if safety_worst_p < _ALPHA else "不显著"
     note += (
-        f"未达统计显著（α={_ALPHA}）。建议 n=200+ 复验。"
-        if overall_worst_p >= _ALPHA
-        else f"达统计显著（α={_ALPHA}）。"
+        f"Overall {overall_sig}，Safety {safety_sig}（α={_ALPHA}）。建议 n=200+ 复验。"
+        if overall_worst_p >= _ALPHA and safety_worst_p >= _ALPHA
+        else ""
     )
     return {
         "note": note,
