@@ -393,13 +393,17 @@ def main() -> None:
     parser = _build_cli()
     args = parser.parse_args()
 
+    # 无子命令时重解析为 run，否则 run 子解析器的默认值不在 namespace 中
+    if args.command is None:
+        args = parser.parse_args(["run", *sys.argv[1:]])
+
     dispatch: dict[str, Any] = {
         "model": _cmd_model,
         "memory-add": _cmd_memory_add,
         "memory-test": _cmd_memory_test,
         "run": _cmd_run,
     }
-    handler = dispatch.get(args.command, _cmd_run)
+    handler = dispatch[args.command]
     handler(args)
 
 
