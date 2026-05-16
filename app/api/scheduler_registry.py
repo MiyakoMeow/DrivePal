@@ -20,7 +20,12 @@ async def is_scheduler_running(user_id: str) -> bool:
 
 
 async def get_or_create_scheduler(user_id: str) -> ProactiveScheduler | None:
-    """获取已有调度器，不存在则创建。创建在锁外，防长时间持锁。"""
+    """获取已有调度器，不存在则创建。
+
+    创建置于锁外以释放注册表并发——sched.start() 可能耗时数秒，
+    若在锁内将阻塞所有其他用户的 get_or_create / stop / status 操作。
+    双重检查锁（line 46）处理竞态：若两请求同时创建，落败方停止重复实例。
+    """
     async with _lock:
         if user_id in _SCHEDULERS:
             return _SCHEDULERS[user_id]
@@ -45,12 +50,18 @@ async def get_or_create_scheduler(user_id: str) -> ProactiveScheduler | None:
 
     async with _lock:
         if user_id in _SCHEDULERS:
-            try:
-                await sched.stop()
-            except Exception:
-                logger.warning("Failed to stop duplicate scheduler for %s", user_id)
-            return _SCHEDULERS[user_id]
-        _SCHEDULERS[user_id] = sched
+            existing = _SCHEDULERS[user_id]
+        else:
+            existing = None
+            _SCHEDULERS[user_id] = sched
+
+    # 竞态落败时停止重复实例，stop 在锁外避免阻塞注册表
+    if existing is not None:
+        try:
+            await sched.stop()
+        except Exception:
+            logger.warning("Failed to stop duplicate scheduler for %s", user_id)
+        return existing
 
     logger.info("ProactiveScheduler started for user: %s", user_id)
     return sched
