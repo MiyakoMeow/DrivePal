@@ -80,7 +80,7 @@ catch 模式：provider 调用 `except (openai.APIError, OSError, ValueError, Ty
 
 | 阈值 | 值 | 位置 |
 |------|----|------|
-| HTTP read timeout | 12h | _http.py |
+| HTTP read timeout | 30s | _http.py |
 | Embedding batch(入口) | 100 | get_cached_embedding_model |
 | Embedding batch(类) | 32 | `EmbeddingModel.__init__` |
 | Embedding retry | 3次指数退避 | embedding.py |

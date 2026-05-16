@@ -2,9 +2,9 @@
 
 import httpx
 
-# LLM 流式响应可能持续数小时（如长文档生成），设为 12 小时避免中途断开
-# 消融实验等需要短超时场景应在调用端用 asyncio.wait_for / httpx timeout 参数单独管控
-READ_TIMEOUT_SECONDS = 12 * 3600
+# 单次 LLM/Embedding API 调用通常在 2-30s 内完成，
+# 30s 足够容纳正常慢响应；调用方如需更长，用 asyncio.wait_for / asyncio.timeout 在调用端施加。
+READ_TIMEOUT_SECONDS = 30
 
 CLIENT_TIMEOUT = httpx.Timeout(
     connect=10.0,  # 快速发现连接问题
