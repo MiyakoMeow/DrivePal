@@ -204,6 +204,7 @@ exclude = [".agents/**"]
     "ANN401",   # format_search_results 接受外部队列异构结果
     "S101",     # assert 缩小 _store 类型联合，ty checker 要求 Narrowing
     "PLW0603",  # list 容器模拟 mutable global，替代 global 语句
+    "ARG001",   # build_test_client args 参数由 VehicleMemBench 接口合约要求
 ]
 
 "app/memory/memory_bank/lifecycle.py" = [

@@ -334,7 +334,7 @@ def init_test_state(
 
 
 def build_test_client(
-    _args: object,
+    args: object,
     file_num: int,
     user_id_prefix: str,
     shared_state: dict,
