@@ -60,7 +60,7 @@ python -m experiments.vehicle_mem_bench model --memory-type summary --model-grou
 |------|------|
 | `validate_add_args` | 校验 history_dir 存在 |
 | `validate_test_args` | 校验 benchmark_dir 存在 |
-| `run_add` | history → MemoryBankStore（含显式偏好关键词自动设 memory_strength=5，其余=3） |
+| `run_add` | history → MemoryBankStore（含中英文偏好关键词自动设 memory_strength=5，其余=3。从 bucket.dt 提取原始时间戳注入 created_at，保留遗忘曲线时间结构。） |
 | `build_test_client` | 每文件创建 DrivePalMemClient |
 | `init_test_state` | 创建数据目录 |
 | `close_test_state` | 关闭所有客户端 |

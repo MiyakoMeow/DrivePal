@@ -58,3 +58,7 @@ rules = { "unresolved-import" = "ignore" }  # VehicleMemBench 跨项目模块，
 [[overrides]]
 include = ["experiments/vehicle_mem_bench/adapter.py"]
 rules = { "unresolved-import" = "ignore" }  # VehicleMemBench 跨项目模块，运行时加入 sys.path
+
+[[overrides]]
+include = ["tests/experiments/test_adapter_correctness.py"]
+rules = { "unresolved-import" = "ignore" }  # VehicleMemBench 跨项目模块，运行时加入 sys.path

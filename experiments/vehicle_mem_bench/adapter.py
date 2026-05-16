@@ -9,6 +9,9 @@
     - 每 thread 持独立 asyncio 事件循环 + MemoryBankStore
     - 每 benchmark file → 独立 user_id（drivepal_{n}）
     - EmbeddingModel 按需创建（避免共享 AsyncOpenAI client）
+
+偏好检测：中文关键词（设置/偏好/...）+ 英文关键词（prefer/change/set/...），两套并查。
+记忆时间戳：从 HistoryBucket.dt 提取原始时间注入 created_at，保留 Ebbinghaus 遗忘曲线的时间结构。
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ import asyncio
 import logging
 import os
 import pathlib
+import re
 import sys
 import threading
 from collections import defaultdict
@@ -46,8 +50,7 @@ _T = TypeVar("_T")
 # 每步 async 操作超时（秒），防止 Embedding API / FAISS 挂死线程
 _CORO_TIMEOUT: float = 120.0
 
-# 显式偏好关键词——含词则 memory_strength=5，否则=3
-_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
+_CN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
     {
         "设置",
         "改成",
@@ -64,6 +67,49 @@ _PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
         "调成",
     }
 )
+
+_EN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "prefer",
+        "prefers",
+        "change",
+        "set",
+        "switch",
+        "turn on",
+        "turn off",
+        "adjust",
+        "want",
+        "like",
+        "would rather",
+        "choose",
+        "make it",
+    }
+)
+
+# 英文关键词词边界正则——避免 "set" 匹配 "sunset" 等假阳性
+_EN_PATTERNS: frozenset[re.Pattern[str]] = frozenset(
+    re.compile(rf"\b{re.escape(kw)}\b") for kw in _EN_PREFERENCE_KEYWORDS
+)
+
+# 向后兼容别名——外部模块可能引用旧名，不可删除
+_PREFERENCE_KEYWORDS = _CN_PREFERENCE_KEYWORDS
+
+
+def _resolve_strength(content: str) -> int:
+    """判断内容是否含偏好表达，返回 memory_strength.
+
+    英文关键词（like/want/set 等）在日常对话中可能误匹配。
+    此处仅作 heuristic：run_add 阶段给历史对话打标签，
+    不直接影响 Judge 评分，误匹配代价可接受。
+    英文用词边界正则避免子串假阳性，中文无需词边界。
+    """
+    content_lower = content.lower()
+    if any(kw in content_lower for kw in _CN_PREFERENCE_KEYWORDS):
+        return 5
+    if any(p.search(content_lower) for p in _EN_PATTERNS):
+        return 5
+    return 3
+
 
 # VehicleMemBench 根目录可覆写（默认与 DrivePal 同级）
 # 使用 list 容器避免 PLW0603 global
@@ -112,10 +158,19 @@ class DrivePalMemClient:
 
     # ── 公开接口（同步） ──
 
-    def add(self, content: str, strength: int = 3, **kwargs: object) -> str:
+    def add(
+        self,
+        content: str,
+        strength: int = 3,
+        *,
+        created_at: str | None = None,
+        **kwargs: object,
+    ) -> str:
         """写入一条记忆事件."""
         del kwargs
-        return self._run(self._async_add(content, strength=strength))
+        return self._run(
+            self._async_add(content, strength=strength, created_at=created_at)
+        )
 
     def search(self, query: str, **kwargs: object) -> list[Any]:
         """搜索记忆，返回 SearchResult 列表.
@@ -160,13 +215,16 @@ class DrivePalMemClient:
             user_id=self._user_id,
         )
 
-    async def _async_add(self, content: str, strength: int = 3) -> str:
+    async def _async_add(
+        self, content: str, strength: int = 3, *, created_at: str | None = None
+    ) -> str:
         await self._ensure_store()
         assert self._store is not None
+        ts = created_at or datetime.now(UTC).isoformat()
         event = MemoryEvent(
             content=content,
             type="passive_voice",
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=ts,
             memory_strength=strength,
         )
         return await self._store.write(event)
@@ -243,8 +301,9 @@ def run_add(args: object) -> None:
         try:
             for bucket in load_hourly_history(history_path):
                 content = "\n".join(bucket.lines)
-                strength = 5 if any(kw in content for kw in _PREFERENCE_KEYWORDS) else 3
-                client.add(content=content, strength=strength)
+                strength = _resolve_strength(content)
+                created_at = bucket.dt.isoformat() if bucket.dt else None
+                client.add(content=content, strength=strength, created_at=created_at)
                 message_count += 1
         except Exception as exc:
             return idx, message_count, str(exc)
