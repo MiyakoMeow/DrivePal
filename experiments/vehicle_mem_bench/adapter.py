@@ -20,6 +20,7 @@ import asyncio
 import logging
 import os
 import pathlib
+import re
 import sys
 import threading
 from collections import defaultdict
@@ -70,6 +71,7 @@ _CN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
 _EN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
     {
         "prefer",
+        "prefers",
         "change",
         "set",
         "switch",
@@ -84,8 +86,10 @@ _EN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
     }
 )
 
-# 合集中英文，供 _resolve_strength 单次遍历
-_ALL_PREFERENCE_KEYWORDS = _CN_PREFERENCE_KEYWORDS | _EN_PREFERENCE_KEYWORDS
+# 英文关键词词边界正则——避免 "set" 匹配 "sunset" 等假阳性
+_EN_PATTERNS: frozenset[re.Pattern[str]] = frozenset(
+    re.compile(rf"\b{re.escape(kw)}\b") for kw in _EN_PREFERENCE_KEYWORDS
+)
 
 # 向后兼容别名——外部模块可能引用旧名，不可删除
 _PREFERENCE_KEYWORDS = _CN_PREFERENCE_KEYWORDS
@@ -97,9 +101,14 @@ def _resolve_strength(content: str) -> int:
     英文关键词（like/want/set 等）在日常对话中可能误匹配。
     此处仅作 heuristic：run_add 阶段给历史对话打标签，
     不直接影响 Judge 评分，误匹配代价可接受。
+    英文用词边界正则避免子串假阳性，中文无需词边界。
     """
     content_lower = content.lower()
-    return 5 if any(kw in content_lower for kw in _ALL_PREFERENCE_KEYWORDS) else 3
+    if any(kw in content_lower for kw in _CN_PREFERENCE_KEYWORDS):
+        return 5
+    if any(p.search(content_lower) for p in _EN_PATTERNS):
+        return 5
+    return 3
 
 
 # VehicleMemBench 根目录可覆写（默认与 DrivePal 同级）

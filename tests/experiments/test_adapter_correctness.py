@@ -53,6 +53,16 @@ class TestPreferenceKeywords:
         content = "I want cooler temperature"
         assert _resolve_strength(content) == 5
 
+    def test_en_turn_on_detected(self):
+        content = "Turn on the air conditioner"
+        assert _resolve_strength(content) == 5
+
+    def test_en_substring_no_false_positive(self):
+        """英文词边界阻止子串误匹配。"""
+        assert _resolve_strength("The sunset is beautiful") == 3
+        assert _resolve_strength("Exchange the gift") == 3
+        assert _resolve_strength("Unlikely to happen") == 3
+
 
 class TestMemoryCreatedAt:
     """记忆创建时间从 bucket.dt 注入."""
