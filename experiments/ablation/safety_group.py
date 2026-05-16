@@ -81,7 +81,6 @@ def compute_safety_metrics(
 
         metrics[variant] = {
             "n": n,
-            "compliance_rate": compliant / n if n else 0,
             "judge_compliance_rate": compliant / n if n else 0,
             "interception_rate": intercepted / n_results if n_results else 0,
             "avg_overall_score": avg_quality,
