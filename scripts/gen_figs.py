@@ -1,10 +1,12 @@
-"""生成论文实验对比图表 → archive/figs/*.png
+"""生成论文实验对比图表 → *.png
 
 用法: uv run python scripts/gen_figs.py
+      uv run python scripts/gen_figs.py -o archive/初稿-20260511
 """
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import matplotlib
@@ -27,9 +29,6 @@ _available = {f.name for f in matplotlib.font_manager.fontManager.ttflist}
 _font = next((f for f in _FONT_CANDIDATES if f in _available), "sans-serif")
 plt.rcParams["font.sans-serif"] = [_font, "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
-
-OUT = Path("archive/figs")
-OUT.mkdir(parents=True, exist_ok=True)
 
 # ── 常量 ──────────────────────────────────────────
 LABELS = ["无记忆", "标准答案", "递归摘要", "键值存储", "MemoryBank"]
@@ -67,8 +66,8 @@ CALLS_MATRIX = [
 ]
 
 
-def _save(fig, name: str) -> None:
-    path = OUT / name
+def _save(fig, name: str, out_dir: Path) -> None:
+    path = out_dir / name
     fig.tight_layout()
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -96,7 +95,7 @@ def _grouped_bars(ax, matrix, x_labels) -> None:
 
 
 # ── 图4-1: 总体精确匹配率 ─────────────────────────
-def fig_overall_match() -> None:
+def fig_overall_match(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
     bars = ax.bar(LABELS, EXACT_MATCH, color=COLORS, edgecolor="white", linewidth=0.5)
     for bar, val in zip(bars, EXACT_MATCH, strict=True):
@@ -112,34 +111,34 @@ def fig_overall_match() -> None:
     ax.set_ylim(0, 100)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
     _setup_ax(ax)
-    _save(fig, "fig4-1_exact_match_overall.png")
+    _save(fig, "fig4-1_exact_match_overall.png", out_dir)
 
 
 # ── 图4-2: 各推理类型精确匹配率 ───────────────────
-def fig_reasoning_em() -> None:
+def fig_reasoning_em(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(11, 5.5))
     _grouped_bars(ax, EM_MATRIX, REASONING_TYPES)
     ax.set_ylabel("精确匹配率 (%)", fontsize=12)
     _setup_ax(ax)
-    _save(fig, "fig4-2_exact_match_by_type.png")
+    _save(fig, "fig4-2_exact_match_by_type.png", out_dir)
 
 
 # ── 图4-3: 各推理类型值级F1 ───────────────────────
-def fig_reasoning_value_f1() -> None:
+def fig_reasoning_value_f1(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(11, 5.5))
     _grouped_bars(ax, VALUE_F1_MATRIX, REASONING_TYPES)
     ax.set_ylabel("值级F1 (%)", fontsize=12)
     _setup_ax(ax)
-    _save(fig, "fig4-3_value_f1_by_type.png")
+    _save(fig, "fig4-3_value_f1_by_type.png", out_dir)
 
 
 # ── 图4-4: 各推理类型工具调用数 ───────────────────
-def fig_reasoning_calls() -> None:
+def fig_reasoning_calls(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(11, 5.5))
     _grouped_bars(ax, CALLS_MATRIX, REASONING_TYPES)
     ax.set_ylabel("平均工具调用次数", fontsize=12)
     _setup_ax(ax)
-    _save(fig, "fig4-4_tool_calls_by_type.png")
+    _save(fig, "fig4-4_tool_calls_by_type.png", out_dir)
 
 
 # ── 消融实验数据 (§4.7) ──────────────────────────
@@ -170,7 +169,7 @@ PERSON_STABILITY = 0.0163
 PERSON_DIVERGENCE = 0.25
 
 
-def fig_ablation_safety() -> None:
+def fig_ablation_safety(out_dir: Path) -> None:
     """图4-5: 安全性消融——合规率与评分分布."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -224,10 +223,10 @@ def fig_ablation_safety() -> None:
     ax2_twin.set_xticklabels(intercept_labels, fontsize=9)
     ax2_twin.spines["top"].set_visible(False)
 
-    _save(fig, "fig4-5_ablation_safety.png")
+    _save(fig, "fig4-5_ablation_safety.png", out_dir)
 
 
-def fig_ablation_architecture() -> None:
+def fig_ablation_architecture(out_dir: Path) -> None:
     """图4-6: 架构消融——决策质量与延迟对比."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -321,10 +320,10 @@ def fig_ablation_architecture() -> None:
     ax2.set_title("执行效率（相近）", fontsize=12)
     _setup_ax(ax2)
 
-    _save(fig, "fig4-6_ablation_architecture.png")
+    _save(fig, "fig4-6_ablation_architecture.png", out_dir)
 
 
-def fig_ablation_personalization() -> None:
+def fig_ablation_personalization(out_dir: Path) -> None:
     """图4-7: 个性化消融——偏好匹配率与收敛."""
     fig, ax = plt.subplots(figsize=(9, 5.5))
 
@@ -368,19 +367,36 @@ def fig_ablation_personalization() -> None:
         bbox={"boxstyle": "round", "fc": "#f5f5f5"},
     )
 
-    _save(fig, "fig4-7_ablation_personalization.png")
+    _save(fig, "fig4-7_ablation_personalization.png", out_dir)
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="生成论文实验对比图表")
+    parser.add_argument(
+        "--out-dir",
+        "-o",
+        type=Path,
+        default=Path("archive/定稿-20260516"),
+        help="输出目录 (default: archive/定稿-20260516)",
+    )
+    return parser.parse_args()
 
 
 def main() -> None:
+    args = _parse_args()
+    out_dir = args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     print(f"使用字体: {_font}")
+    print(f"输出目录: {out_dir}")
     print("生成图表...")
-    fig_overall_match()
-    fig_reasoning_em()
-    fig_reasoning_value_f1()
-    fig_reasoning_calls()
-    fig_ablation_safety()
-    fig_ablation_architecture()
-    fig_ablation_personalization()
+    fig_overall_match(out_dir)
+    fig_reasoning_em(out_dir)
+    fig_reasoning_value_f1(out_dir)
+    fig_reasoning_calls(out_dir)
+    fig_ablation_safety(out_dir)
+    fig_ablation_architecture(out_dir)
+    fig_ablation_personalization(out_dir)
     print("完成。")
 
 
