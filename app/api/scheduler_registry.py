@@ -57,10 +57,11 @@ async def get_or_create_scheduler(user_id: str) -> ProactiveScheduler | None:
 
 
 async def stop_scheduler(user_id: str) -> bool:
-    """停止并移除用户调度器。先停后移，防 stop() 抛异常致丢失。"""
-    sched = _SCHEDULERS.get(user_id)
-    if sched is None:
-        return False
+    """停止并移除用户调度器。锁内读取 + 身份校验，防替换竞态。"""
+    async with _lock:
+        sched = _SCHEDULERS.get(user_id)
+        if sched is None:
+            return False
 
     try:
         await sched.stop()
@@ -69,7 +70,8 @@ async def stop_scheduler(user_id: str) -> bool:
         return False
 
     async with _lock:
-        _SCHEDULERS.pop(user_id, None)
+        if _SCHEDULERS.get(user_id) is sched:
+            _SCHEDULERS.pop(user_id, None)
 
     logger.info("ProactiveScheduler stopped for user: %s", user_id)
     return True
