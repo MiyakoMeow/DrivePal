@@ -31,6 +31,7 @@ from app.api.v1.voice import router as voice_router
 from app.api.v1.ws import router as ws_router
 from app.config import DATA_DIR
 from app.models.chat import close_client_cache
+from app.models.embedding import aclose_embedding_model_cache
 from app.storage.init_data import init_storage
 from app.voice import VoiceService
 
@@ -104,6 +105,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.info("Scheduler stopped for %s", uid)
     await close_memory_module()
     logger.info("MemoryModule closed")
+    await aclose_embedding_model_cache()
+    logger.info("Embedding model cache cleared")
     await close_client_cache()
     logger.info("Chat client cache closed")
 
