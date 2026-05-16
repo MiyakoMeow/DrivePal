@@ -81,11 +81,17 @@ _EN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
     }
 )
 
+# 向后兼容别名——外部模块可能引用旧名，不可删除
 _PREFERENCE_KEYWORDS = _CN_PREFERENCE_KEYWORDS
 
 
 def _resolve_strength(content: str) -> int:
-    """判断内容是否含偏好表达，返回 memory_strength。"""
+    """判断内容是否含偏好表达，返回 memory_strength.
+
+    英文关键词（like/want/set 等）在日常对话中可能误匹配。
+    此处仅作 heuristic：run_add 阶段给历史对话打标签，
+    不直接影响 Judge 评分，误匹配代价可接受。
+    """
     content_lower = content.lower()
     if any(kw in content_lower for kw in _CN_PREFERENCE_KEYWORDS):
         return 5

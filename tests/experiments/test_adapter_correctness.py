@@ -1,10 +1,6 @@
 """VehicleMemBench 适配器正确性测试."""
 
-from experiments.vehicle_mem_bench.adapter import (
-    _EN_PREFERENCE_KEYWORDS,
-    _PREFERENCE_KEYWORDS,
-    _resolve_strength,
-)
+from experiments.vehicle_mem_bench.adapter import _resolve_strength
 
 
 class TestPreferenceKeywords:
