@@ -326,6 +326,11 @@ class ProactiveScheduler:
             await asyncio.sleep(self._tick_interval)
         logger.info("ProactiveScheduler stopped")
 
+    async def trigger_immediate_tick(self) -> None:
+        """手动触发一次即时 _tick()（演示/调试用）。"""
+        logger.info("Manual trigger: immediate tick for user %s", self._user_id)
+        await self._tick()
+
     async def start(self) -> None:
         """启动调度器（幂等）。"""
         if self._task is not None:

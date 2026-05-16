@@ -195,12 +195,22 @@
                         <button class="btn btn-secondary btn-sm" onclick="submitFeedback('snooze')">延后5分钟</button>
                         <button class="btn btn-secondary btn-sm" onclick="submitFeedback('modify')">修改</button>
                     </div>
+                    <div class="feedback-row" id="schedulerRow" style="padding: 0 14px 12px; border-top: 1px solid #eee; margin-top: 4px; padding-top: 8px;">
+                        <span style="font-size:12px;color:#888;margin-right:8px;">调度器:</span>
+                        <span id="schedulerStatus" style="font-size:12px;color:#888;">查询中...</span>
+                        <button class="btn btn-secondary btn-sm" onclick="manualTriggerScheduler()" style="margin-left:8px;">手动触发</button>
+                    </div>
                 </details>
 
                 <div class="card history-section">
                     <div class="section-title">历史记录</div>
                     <div id="historyList"><span class="empty-hint">暂无历史记录</span></div>
                 </div>
+
+                <details class="stage" id="stage-metrics" style="margin-top:8px;">
+                    <summary>MemoryBank 指标</summary>
+                    <div class="stage-body"><pre id="stage-metrics-body"><span class="empty-hint">等待查询...</span></pre></div>
+                </details>
             </div>
 
             <div id="panel-voice-right" class="tab-panel">

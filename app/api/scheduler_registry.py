@@ -88,6 +88,20 @@ async def stop_scheduler(user_id: str) -> bool:
     return True
 
 
+async def trigger_scheduler(user_id: str) -> bool:
+    """手动触发指定用户的调度器执行一次 _tick()。"""
+    async with _lock:
+        sched = _SCHEDULERS.get(user_id)
+    if sched is None:
+        return False
+    try:
+        await sched.trigger_immediate_tick()
+    except Exception:
+        logger.exception("Error triggering scheduler for user %s", user_id)
+        return False
+    return True
+
+
 async def stop_all_schedulers() -> None:
     """停止所有调度器（lifespan 关闭时调用）。单失败不阻塞其余。"""
     async with _lock:

@@ -10,6 +10,7 @@ from app.api.scheduler_registry import (
     get_or_create_scheduler,
     is_scheduler_running,
     stop_scheduler,
+    trigger_scheduler,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,13 @@ class SchedulerStartResponse(BaseModel):
 
 class SchedulerStopResponse(BaseModel):
     """调度器停止响应."""
+
+    status: str
+    user_id: str
+
+
+class SchedulerTriggerResponse(BaseModel):
+    """调度器手动触发响应."""
 
     status: str
     user_id: str
@@ -58,6 +66,19 @@ async def stop_scheduler_route(request: Request) -> SchedulerStopResponse:
     return SchedulerStopResponse(
         status="stopped" if ok else "not_found", user_id=user_id
     )
+
+
+@router.post("/trigger", response_model=SchedulerTriggerResponse)
+async def trigger_scheduler_route(request: Request) -> SchedulerTriggerResponse:
+    """手动触发当前用户的调度器立即执行一次 tick。"""
+    user_id: str = request.state.user_id
+    ok = await trigger_scheduler(user_id)
+    if not ok:
+        raise AppError(
+            code=AppErrorCode.NOT_FOUND,
+            message="Scheduler not running for user",
+        )
+    return SchedulerTriggerResponse(status="triggered", user_id=user_id)
 
 
 @router.get("/status", response_model=SchedulerStatusResponse)

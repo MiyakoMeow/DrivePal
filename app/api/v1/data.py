@@ -12,6 +12,7 @@ from app.api.schemas import (
     ExperimentResultsResponse,
     ExportDataResponse,
     MemoryEventResponse,
+    MetricsResponse,
 )
 from app.config import user_data_dir
 from app.memory.singleton import get_memory_module
@@ -110,6 +111,20 @@ def _allowed_suffixes(export_type: str) -> tuple[str, ...]:
     if export_type == "settings":
         return (".toml",)
     return (".jsonl", ".toml", ".json")
+
+
+@router.get("/metrics", response_model=MetricsResponse)
+async def get_metrics(request: Request) -> MetricsResponse:
+    """查询当前用户的 MemoryBank 指标快照."""
+    user_id: str = request.state.user_id
+    mm = get_memory_module()
+    raw = mm.get_metrics(user_id)
+    if raw is None:
+        return MetricsResponse()
+    # raw 为 dict，转 pydantic 模型
+    return MetricsResponse(
+        **{k: v for k, v in raw.items() if k in MetricsResponse.model_fields}
+    )
 
 
 @router.get("/experiments", response_model=ExperimentResultsResponse)

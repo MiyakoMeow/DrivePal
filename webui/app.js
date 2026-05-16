@@ -202,14 +202,20 @@ function handleWSMessage(type, data) {
                 state.setCurrentEventId(data.event_id);
                 document.getElementById('feedbackRow').style.display = 'flex';
             }
+            let execHtml = '';
             if (data.status === 'pending') {
-                document.getElementById('stage-execution-body').textContent =
-                    '提醒已延迟: ' + (data.pending_reminder_id ? 'ID ' + data.pending_reminder_id : data.status);
+                execHtml = '提醒已延迟: ' + (data.pending_reminder_id ? 'ID ' + data.pending_reminder_id : data.status);
             } else if (data.result) {
-                document.getElementById('stage-execution-body').textContent = formatJson(data.result);
+                execHtml = formatJson(data.result);
             } else if (data.reason) {
-                document.getElementById('stage-execution-body').textContent = data.reason;
+                execHtml = data.reason;
             }
+            // 展示规则引擎修改记录（演示 Act 4 通道约束可见性）
+            if (data.modifications && data.modifications.length > 0) {
+                execHtml += '\n\n=== 规则引擎修改 ===\n' +
+                    data.modifications.map(m => '• ' + m).join('\n');
+            }
+            document.getElementById('stage-execution-body').textContent = execHtml || '';
             if (data.audio_base64) {
                 const audio = new Audio('data:audio/mp3;base64,' + data.audio_base64);
                 audio.play().catch(() => { showToast('点击页面任意位置启用语音播报', 'info'); });
@@ -226,7 +232,7 @@ function handleWSMessage(type, data) {
             });
             break;
         case 'reminder':
-            showToast('收到提醒: ' + (data.message || '请查看执行结果'), 'info');
+            showToast('收到提醒: ' + (data.content?.speakable_text || '请查看执行结果'), 'info');
             break;
     }
 }
@@ -282,6 +288,42 @@ async function submitFeedback(action) {
         document.getElementById('feedbackRow').style.display = 'none';
     } catch (e) {
         showToast('反馈提交失败: ' + e.message, 'error');
+    }
+}
+
+async function manualTriggerScheduler() {
+    try {
+        const res = await api('POST', '/api/v1/scheduler/trigger');
+        showToast('调度器已触发 (' + res.status + ')', 'success');
+    } catch (e) {
+        showToast('触发失败: ' + e.message, 'error');
+    }
+}
+
+async function loadSchedulerStatus() {
+    try {
+        const res = await api('GET', '/api/v1/scheduler/status');
+        const el = document.getElementById('schedulerStatus');
+        if (el) {
+            el.textContent = res.running ? '运行中' : '已停止';
+            el.style.color = res.running ? '#28a745' : '#dc3545';
+        }
+    } catch (e) {
+        const el = document.getElementById('schedulerStatus');
+        if (el) el.textContent = '查询失败';
+    }
+}
+
+async function loadMetrics() {
+    try {
+        const res = await api('GET', '/api/v1/metrics');
+        const el = document.getElementById('stage-metrics-body');
+        if (el) {
+            el.textContent = formatJson(res);
+        }
+    } catch (e) {
+        const el = document.getElementById('stage-metrics-body');
+        if (el) el.textContent = '加载失败: ' + e.message;
     }
 }
 
@@ -410,6 +452,8 @@ async function loadHistory() {
 
 loadPresets();
 loadHistory();
+loadSchedulerStatus();
+loadMetrics();
 loadExperimentData();
 connectWS();
 
