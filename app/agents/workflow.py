@@ -38,6 +38,9 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+# 阶段超时容忍倍数：实际耗时超过 timeout×此倍数时判定为外层超时误捕
+_STAGE_OVERAGE_FACTOR: float = 1.5
+
 
 class AgentWorkflow:
     """多Agent协作工作流——薄编排器."""
@@ -144,6 +147,17 @@ class AgentWorkflow:
                             updates = await node_fn(state)
                     except TimeoutError:
                         elapsed = (time.perf_counter() - t0) * 1000
+                        # 若实际耗时远超阶段超时阈值，可能是外层 variant 超时
+                        # (300s) 在此被内层捕获。重抛 TimeoutError 让外层处理。
+                        if elapsed > timeout * 1000 * _STAGE_OVERAGE_FACTOR:
+                            logger.warning(
+                                "stage=%s elapsed=%.1fms exceeds stage timeout by %.1fx, "
+                                "likely outer variant timeout — re-raising",
+                                stage_name,
+                                elapsed,
+                                elapsed / (timeout * 1000),
+                            )
+                            raise
                         logger.warning(
                             "stage=%s timeout after %.1fms (limit=%.1fs)",
                             stage_name,

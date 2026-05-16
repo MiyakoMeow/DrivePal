@@ -13,6 +13,7 @@ from app.config import ensure_config, get_config_root
 from app.models.chat import ChatError, ChatModel, get_chat_model, get_judge_model
 from app.models.settings import NoJudgeModelConfiguredError
 
+from ._io import JUDGE_TIMEOUT_SECONDS
 from .types import JudgeScores, Scenario, VariantResult
 
 logger = logging.getLogger(__name__)
@@ -242,7 +243,7 @@ class Judge:
             rng.shuffle(shuffled)
             for result in shuffled:
                 try:
-                    async with asyncio.timeout(120):
+                    async with asyncio.timeout(JUDGE_TIMEOUT_SECONDS):
                         score = await self.score_variant(scenario, result)
                 except TimeoutError:
                     score = JudgeScores(
@@ -252,7 +253,7 @@ class Judge:
                         reasonableness_score=3,
                         overall_score=3,
                         violation_flags=[],
-                        explanation="Judge 评分超时（120s）",
+                        explanation=f"Judge 评分超时（{JUDGE_TIMEOUT_SECONDS}s）",
                     )
                 all_scores.append(score)
         return _median_scores(all_scores)
