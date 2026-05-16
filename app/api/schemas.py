@@ -107,3 +107,22 @@ class PendingReminderResponse(BaseModel):
     trigger_text: str
     status: str
     created_at: str
+
+
+# --- Metrics ---
+
+
+class MetricsResponse(BaseModel):
+    """GET /api/v1/metrics 响应."""
+
+    search_count: int = 0
+    search_latency_ms: float = 0.0
+    search_empty_index_count: int = 0
+    search_empty_count: int = 0
+    forget_count: int = 0
+    forget_removed_count: int = 0
+    write_count: int = 0
+    write_latency_ms: float = 0.0
+    embedding_latency_ms: float = 0.0
+    background_task_failures: int = 0
+    index_load_warnings: int = 0

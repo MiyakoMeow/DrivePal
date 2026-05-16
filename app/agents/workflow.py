@@ -324,6 +324,13 @@ class AgentWorkflow:
             done_data["result"] = state.get("output_content")
         if state.get("tool_results"):
             done_data["tool_results"] = state["tool_results"]
+        # 附加规则引擎修改记录供前端展示
+        stages = state.get("stages")
+        if stages is not None:
+            exec_stage = getattr(stages, "execution", None)
+            mods = exec_stage.get("modifications") if exec_stage else None
+            if mods:
+                done_data["modifications"] = mods
         return done_data
 
     def _log_conversation_turn(
