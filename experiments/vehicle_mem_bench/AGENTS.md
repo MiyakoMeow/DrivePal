@@ -147,6 +147,15 @@ python -m experiments.vehicle_mem_bench model --memory-type none --vmb-root /cus
 - `app.memory.memory_bank.store.MemoryBankStore` — DrivePal 记忆存储
 - `VehicleMemBench/evaluation/` — 跨项目评测框架（运行时加入 sys.path）
 
+## 已知外部限制
+
+VehicleMemBench 的 `evaluation/model_evaluation.py` 用 flat import
+`from agent_client import AgentClient`，但 `agent_client.py` 在
+`evaluation/` 子目录下。`_ensure_vmb_on_path` 修复方案：额外将
+`evaluation/` 追加至 `sys.path`（`append` 而非 `insert`，避免与
+VMB root 的 `evaluation` 包冲突）。对应修复见 `__main__.py` 和
+`adapter.py` 的 `_ensure_vmb_on_path` 函数。
+
 ## 文件
 
 | 文件 | 职责 |

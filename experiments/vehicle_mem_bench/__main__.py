@@ -48,6 +48,11 @@ def _resolve_vmb_root(args: argparse.Namespace) -> Path:
 def _ensure_vmb_on_path(vmb_root: Path) -> None:
     if str(vmb_root) not in sys.path:
         sys.path.insert(0, str(vmb_root))
+    # model_evaluation.py 用 flat import "from agent_client import AgentClient"
+    # 但 agent_client.py 在 evaluation/ 子目录下，故追加之
+    eval_dir = str(vmb_root / "evaluation")
+    if eval_dir not in sys.path:
+        sys.path.append(eval_dir)
 
 
 def _sync_adapter_vmb_root(vmb_root: Path) -> None:

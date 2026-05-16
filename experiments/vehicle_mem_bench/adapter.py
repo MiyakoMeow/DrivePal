@@ -139,6 +139,11 @@ def _ensure_vmb_on_path() -> None:
     root = _get_vmb_root()
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
+    # model_evaluation.py 用 flat import "from agent_client import AgentClient"
+    # 但 agent_client.py 在 evaluation/ 子目录下，故追加之
+    eval_dir = str(root / "evaluation")
+    if eval_dir not in sys.path:
+        sys.path.append(eval_dir)
 
 
 # ── MemoryClient ──
