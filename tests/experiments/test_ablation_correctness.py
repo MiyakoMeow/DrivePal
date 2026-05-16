@@ -201,6 +201,96 @@ async def test_personalization_resume_no_duplicate_weight_history(tmp_path):
     )
 
 
+async def test_personalization_resume_recovers_missing_last_round(tmp_path):
+    """最后一轮变体完成但 weight_history 未持久化时，续跑应补录。
+
+    场景：3 轮全部完成（6 条 checkpoint），但 last_extra.weight_history 仅含 2 条
+    （第 3 轮的 append 发生在 checkpoint 写入之后，中断导致未持久化）。
+    round_done=True 跳过执行，但应检测并补录缺失的第 3 轮。
+    """
+    from experiments.ablation.personalization_group import (
+        run_personalization_group,
+    )
+
+    scenarios = [_make_scenario(f"s{i}") for i in range(4)]
+
+    # 3 轮全部完成，但 weight_history 仅含 2 条——模拟第 3 轮 append 后中断
+    ckpt_path = tmp_path / "results.checkpoint.jsonl"
+    weight_history_stale = [
+        {"round": 1, "stage": "high-freq", "weights": {"meeting": 0.6}},
+        {"round": 2, "stage": "high-freq", "weights": {"meeting": 0.7}},
+    ]
+    for i in range(3):
+        for variant_val in ("full", "no-feedback"):
+            record = {
+                "scenario_id": f"s{i}",
+                "variant": variant_val,
+                "decision": {"should_remind": True},
+                "stages": {},
+                "latency_ms": 0,
+                "round_index": i + 1,
+                "result_text": "",
+                "event_id": None,
+            }
+            if i == 2 and variant_val == "no-feedback":
+                record["extra"] = {
+                    "_current_delta": [],
+                    "_recent_feedback": [],
+                    "weight_history": weight_history_stale,
+                }
+            ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+            with ckpt_path.open("a") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    mock_runner = MagicMock()
+    mock_runner.base_user_id = "test-recover"
+    mock_runner.run_variant = AsyncMock(
+        return_value=VariantResult(
+            scenario_id="s3",
+            variant=Variant.FULL,
+            decision={"should_remind": True},
+            result_text="",
+            event_id=None,
+            stages={"task": {"type": "other"}},
+            latency_ms=10,
+        )
+    )
+
+    mock_judge = MagicMock()
+    mock_judge.score_batch = AsyncMock(return_value=[])
+
+    with (
+        patch("experiments.ablation.personalization_group.read_weights") as mock_rw,
+        patch(
+            "experiments.ablation.personalization_group.simulate_feedback",
+            return_value=None,
+        ),
+        patch(
+            "experiments.ablation.personalization_group.export_state",
+            return_value={"_current_delta": [], "_recent_feedback": []},
+        ),
+        patch(
+            "experiments.ablation.personalization_group.append_checkpoint",
+            new_callable=AsyncMock,
+        ),
+    ):
+        mock_rw.return_value = {"meeting": 0.8}
+
+        result = await run_personalization_group(
+            runner=mock_runner,
+            scenarios=scenarios,
+            output_path=tmp_path / "results.jsonl",
+            seed=42,
+            judge=mock_judge,
+        )
+
+    wh = result.metrics.get("weight_history", [])
+    rounds_in_wh = [entry["round"] for entry in wh]
+    assert rounds_in_wh == [1, 2, 3, 4], (
+        f"round 序列应为 [1,2,3,4]（第 3 轮补录 + 第 4 轮新跑），实际 {rounds_in_wh}"
+    )
+
+
 def test_judge_seed_zero_reproducible():
     """Judge.score_batch 在 seed=0 时应可复现（修复 seed or None 问题）。"""
     # 此测试验证 seed=0 不会导致 Random(None) 行为。
