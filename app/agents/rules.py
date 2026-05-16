@@ -288,17 +288,12 @@ def apply_rules(
 ) -> dict[str, Any]:
     """对驾驶上下文应用规则，返回合并后的约束.
 
-    消融实验：_ablation_disable_rules=True 时跳过全部规则（含软提示），
-    返回无约束默认值——通道全开、不抑制、不延后。
-    与 postprocess_decision(L342) 共同保证 NO_RULES/NO_SAFETY
-    变体下 LLM 不接受任何规则信息。
+    消融实验：_ablation_disable_rules=True 时返回空 dict，
+    使 format_constraints_hint 不注入任何约束提示，
+    postprocess_decision 跳过强制覆盖。
     """
     if _ablation_disable_rules.get():
-        return {
-            "allowed_channels": sorted(["visual", "audio", "detailed"]),
-            "only_urgent": False,
-            "postpone": False,
-        }
+        return {}
 
     matched = [r for r in (rules or SAFETY_RULES) if r.condition(driving_context)]
     matched.sort(key=lambda r: r.priority, reverse=True)
