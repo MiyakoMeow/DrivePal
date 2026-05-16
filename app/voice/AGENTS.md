@@ -30,6 +30,7 @@ flowchart LR
 | `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE=16000`、`_FRAMES_PER_CHUNK=480`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
 | `config.py` | `VoiceConfig` | 语音流水线配置加载 + 默认值生成 + TOML 自动创建 |
 | `cli.py` | `main`, `_parse_args` | 命令行入口。`--list-devices` 列设备，`--device INDEX` 选设备。实时转录输出 |
+| `__main__.py` | — | `python -m app.voice` CLI 入口，调用 `cli.main()` |
 | `server.py` | `app` | 独立 FastAPI 服务。自管 VoiceService 生命周期，挂 /api/v1/voice 路由 + WebUI 静态文件。`python -m app.voice.server` 启动 |
 
 ## VoicePipeline
@@ -55,7 +56,7 @@ feed_audio(chunk) → Queue → run() 循环:
 - 封装 `webrtcvad.Vad(mode)`，mode 0-3（默认 1）
 - 静音超时帧数：VADEngine 裸用默认 17 帧（~510ms），VoicePipeline 传 `500ms÷30ms≈16` 帧。均约 500ms
 - `is_speech(audio_chunk)` 底层调用
-- `reset()` 手动重置状态
+- `reset()` — 语音结束时自动重置状态
 
 ## SherpaOnnxASREngine
 

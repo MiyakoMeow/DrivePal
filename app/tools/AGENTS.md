@@ -27,7 +27,7 @@ flowchart LR
 | `executor.py` | `ToolExecutionError` | 执行异常 |
 | `executor.py` | `ToolConfirmationRequiredError` | 工具需用户确认（code=TOOL_CONFIRMATION_REQUIRED） |
 | `config.py` | `ToolsConfig` | 配置 dataclass，`load()` 类方法读取/生成 tools.toml |
-| `__init__.py` | `get_default_executor()`, `register_builtin_tools()` | 注册全部内置工具到 ToolRegistry；默认单例 executor |
+| `tools/__init__.py` | `get_default_executor()`, `register_builtin_tools()` | 注册全部内置工具到 ToolRegistry；默认单例 executor |
 | `tools/navigation.py` | `navigate_to` | 导航目的地设置 |
 | `tools/communication.py` | `send_message` | 消息发送 |
 | `tools/vehicle.py` | `set_climate` / `play_media` | 车控预留（返回"未接入"）|
@@ -66,7 +66,7 @@ class ToolSpec:
 | 工具 | 参数 | 返回 |
 |------|------|------|
 | `set_navigation` | `destination: str` | `"导航已设置：{dest}"` |
-| `send_message` | `recipient: str`, `message: str(max 200)` | `"消息已发送给 {recipient}"` |
+| `send_message` | `recipient: str`, `message: str(max max_message_length)` | `"消息已发送给 {recipient}"` |
 | `query_memory` | `query: str` | 默认 5 条记忆内容（由 `tools.toml` memory_query.max_results 配置）|
 | `set_climate` | `temperature: number(16-32)` | `"车控功能尚未接入"` |
 | `play_media` | `name: str`, `type: music\|podcast` | `"媒体功能尚未接入"` |

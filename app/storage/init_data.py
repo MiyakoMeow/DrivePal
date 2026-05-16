@@ -77,7 +77,7 @@ def _migrate_memorybank(default_dir: Path, old_root: Path) -> None:
 
 
 def _migrate_legacy() -> bool:
-    """将平铺 data/*.jsonl 结构迁移至 data/users/default/。幂等。"""
+    """将平铺 data/ 下文件与目录迁移至 data/users/default/。幂等。"""
     default_dir = user_data_dir("default")
     if default_dir.exists():
         return False

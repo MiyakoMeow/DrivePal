@@ -28,7 +28,7 @@ flowchart LR
     D --> EB
 ```
 
-存储分两层：项目级（`data/experiment_benchmark.toml`）+ 用户级（`data/users/{user_id}/`）。旧平铺结构由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移。迁移范围：
+存储分两层：项目级（`data/experiment_benchmark.toml`）+ 用户级（`data/users/{user_id}/`）。平铺 data/ 下特定文件与目录（3 jsonl + 4 toml + memorybank/ + user_{id}/）由 `init_storage()` 调用 `_migrate_legacy()` 幂等迁移。迁移范围：
 - jsonl: `events.jsonl`、`interactions.jsonl`、`feedback.jsonl` → `data/users/default/`（`feedback_log.jsonl` 不在迁移范围）
 - toml: `contexts.toml`、`preferences.toml`、`strategies.toml`、`scenario_presets.toml` → `data/users/default/`（`experiment_benchmark.toml` 不在迁移范围）
 - `data/memorybank/` → `data/users/default/memorybank/`（整体目录）

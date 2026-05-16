@@ -76,11 +76,13 @@ python -m experiments.vehicle_mem_bench model --memory-type summary --model-grou
 ### 数据隔离
 
 - 每 benchmark file → `drivepal_{n}` → `data/vehicle_mem_bench/drivepal_{n}/`
-- 可 `VMB_DATA_DIR` 环境变量覆盖
+- CLI `--memory-url` / 环境变量 `VMB_DATA_DIR` 覆盖（优先级: `--memory-url` > `VMB_DATA_DIR` > 默认）
 
 ## 结果目录结构
 
 命名与原项目一致：`{prefix}_{model}_{timestamp}/` 和 `{prefix}_{system}_{model}_{timestamp}/`。
+
+> **注意**：单 `model` 子命令默认 prefix 为 `drivepal_model_eval`（不含记忆类型后缀），结果目录为 `drivepal_model_eval_{model}_{timestamp}/`。`run-all` 自动追加记忆类型后缀（如下示例），使各组目录不冲突。
 
 ```text
 data/vehicle_mem_bench/
@@ -147,6 +149,6 @@ python -m experiments.vehicle_mem_bench model --memory-type none --vmb-root /cus
 | 文件 | 职责 |
 |------|------|
 | `__init__.py` | 包文档 |
-| `__main__.py` | CLI 入口（model / memory-add / memory-test） |
+| `__main__.py` | CLI 入口（model / memory-add / memory-test / run-all） |
 | `adapter.py` | DrivePalBank 适配器实现 |
 | `AGENTS.md` | 本文档 |

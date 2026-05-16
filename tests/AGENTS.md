@@ -38,6 +38,9 @@ flowchart RL
     subgraph Voice["tests/voice/"]
         VO["test_vad.py"]
         VO2["test_pipeline.py"]
+        VO3["test_cli.py"]
+        VO4["test_server.py"]
+        VO5["test_service.py"]
     end
     subgraph Sched["tests/scheduler/"]
         SC["test_scheduler.py"]
@@ -58,6 +61,7 @@ flowchart RL
         A08["test_ws_manager.py"]
         A09["test_v1_sessions.py"]
         A10["test_v1_data.py"]
+        A11["test_voice_api.py"]
     end
     subgraph Mem["tests/memory/"]
         M1["test_forgetting.py"]
@@ -106,6 +110,7 @@ flowchart RL
         E7["test_types.py"]
         E8["test_ablation_runner.py"]
         E9["test_report.py"]
+        E10["test_architecture_group.py"]
     end
 ```
 

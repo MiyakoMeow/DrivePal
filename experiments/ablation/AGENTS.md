@@ -46,8 +46,8 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 |------|------|
 | 自变量 | 反馈学习(开/关) |
 | 因变量 | 偏好匹配率、权重收敛速度、收敛稳定性 |
-| 变体 | Full(动态权重±0.1) / -Feedback(固定0.5) |
-| 设计 | 32轮(4阶段×8轮) |
+| 变体 | Full(动态权重自适应步长 0.05-0.3，起始 0.1) / -Feedback(固定0.5) |
+| 设计 | 32轮(4阶段×8轮)，场景不足 32 时按比例缩小 |
 
 评价指标：偏好匹配率、权重收敛速度、收敛稳定性、决策分歧度。
 
@@ -62,8 +62,8 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 - `load_checkpoint(path)` 读取已有结果，返回 `(已完成的(scenario_id,variant)集合, VariantResult列表)`
 - `append_checkpoint(path, vr)` 每变体完成后追加写入
 - 运行时跳过 `existing_ids` 中已完成的组合，仅跑未完成的变体
-- checkpoint 路径即 `results.jsonl`（`protocol.py:66`），续跑不停写同一文件
-- 场景/变体范围变更时自动过滤旧 checkpoint 数据（`ablation_runner.py:193-199`）
+- checkpoint 路径即 `results.jsonl`，续跑不停写同一文件
+- 场景/变体范围变更时自动过滤旧 checkpoint 数据
 
 ## CLI
 
@@ -76,7 +76,7 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 | `--judge-only` | 仅重新评分（复用已有 results.jsonl） |
 | `--data-dir` | 数据目录，默认 `data/experiments` |
 | `--seed` | 随机种子（覆写 `ABLATION_SEED`），默认 42 |
-| `--run-id` | 运行标识符，缺省自动生成 `{timestamp}_{seed}` |
+| `--run-id` | 运行标识符，缺省自动生成 `%Y%m%d_%H%M%S_%f_{seed}`（含微秒） |
 
 `--group personalization` 串行执行（依赖 MemoryBank 权重状态顺序累积）；其他组并发。`--judge-only` 缺省复用最新运行目录。
 
