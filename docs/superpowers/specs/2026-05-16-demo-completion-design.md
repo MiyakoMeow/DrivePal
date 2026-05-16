@@ -4,7 +4,18 @@
 
 ## 目标
 
-补全知行车秘项目所有已知功能缺口，优先保障论文答辩演示体验，按 A→B→C→D 顺序推进。
+补全知行车秘项目所有已知功能缺口，优先保障论文答辩演示体验。
+
+**执行策略**：四子项目各独立计划，按 A→B→C→D 顺序逐次执行。本文档为统一设计规格，各子项目实现时拆分独立 implementation plan。
+
+**优先级分级**：
+
+| 等级 | 子项目 | 时限 |
+|------|--------|------|
+| **P0 答辩前必须** | A（演示体验） | 答辩前完成 |
+| **P1 答辩前加分** | C（生产化） | 答辩前完成 |
+| **P2 答辩后补充** | B（语音补全） | 答辩后完成 |
+| **P3 未来工作** | D（车辆集成） | 无硬性时限 |
 
 ---
 
@@ -107,7 +118,7 @@ voice = "zh-CN-XiaoxiaoNeural"
 
 ---
 
-## 子项目 B：语音补全
+## 子项目 B：语音补全（P2，答辩后）
 
 ### B1. 唤醒词检测
 
@@ -134,7 +145,7 @@ timeout_seconds = 10  # 唤醒后无语音超时
 
 **模型**：sherpa-onnx 关键词识别模型（约 5MB），需单独下载。未下载时静默降级。
 
-**约束**：默认关闭。论文答辩场景不必须，作为"未来工作"提及即可。
+**约束**：答辩前不实现。默认关闭。答辩时可提及为"未来工作"。
 
 ### B2. Speaker ID
 
@@ -189,18 +200,19 @@ threshold = 0.7
 
 ### C2. 集成测试补全
 
-**scheduler 集成测试**：
-- Mock `AgentWorkflow.proactive_run` → 调用 scheduler tick → 验证被调用
-- Mock `ContextMonitor` 返回变化 → 验证触发 `trigger_evaluator`
+**scheduler 集成测试**（3 个场景）：
+1. **位置触发**：`ContextMonitor` 检测到位置变化 ≥ 500m → `TriggerEvaluator` 判定触发 → `proactive_run` 被调用
+2. **场景触发**：`ContextMonitor` 检测到 scenario 从 `city_driving` → `parked` → 触发"停车时回顾提醒"
+3. **去抖**：30s 内连续变化 → 仅触发一次
 
-**tools 集成测试**：
-- Mock LLM 返 `tool_calls` → 验证 `ToolExecutor` 执行 → 验证结果注入
-- 测试导航工具 `require_confirmation_when` 驾驶中需确认
+**tools 集成测试**（2 个场景）：
+1. **导航工具确认**：`scenario=highway` 时 LLM 返 `tool_calls=[navigation]` → `ToolExecutor` 抛 `ToolConfirmationRequiredError` → 规则引擎验证
+2. **工具结果注入**：Mock 工具返成功 → 验证结果注入 JointDecision 输出
 
-**voice + memory 联调测试**：
-- 模拟 VAD+ASR 产出文本 → 验证 `MemoryBank.search` 能检索到
+**voice + memory 联调测试**（1 个场景）：
+1. VAD → ASR 产出文本"明天下午3点加油" → `MemoryBank.add()` → 30s 后 `MemoryBank.search("加油")` 能检索到
 
-**实现位置**：`tests/scheduler/`、`tests/tools/`、`tests/voice/` 中补充。
+**实现位置**：`tests/scheduler/test_integration.py`、`tests/tools/test_integration.py`、`tests/voice/test_memory_integration.py`。
 
 ### C3. 突发事件模块（不需实现）
 
@@ -254,7 +266,14 @@ timestamp,speed_kmh,rpm,coolant_temp,fuel_level
 
 ```
 A（演示体验）── 无前置，可独立启动
-B（语音补全）── 依赖 A4（TTS 共用 voice.toml 配置段）
+  ├── A1 无依赖
+  ├── A2 无依赖
+  ├── A3#1（实验图表）无依赖
+  ├── A3#2（TTS 播放控件）依赖 A4（TTSClient）—— 但 A3#2 可先实现 UI，A4 完成后串联
+  ├── A3#3（设备静默）无依赖
+  ├── A4 无依赖（edge-tts 独立库）
+  └── A5 无依赖
+B（语音补全）── 依赖 A4（共用 voice.toml 配置段）
 C（生产化）  ── 无前置，可独立启动
 D（车辆集成）── 依赖 C1（scheduler 需支持 per-user）
 ```
@@ -281,3 +300,37 @@ D（车辆集成）── 依赖 C1（scheduler 需支持 per-user）
 - **真实 CAN 总线集成**：需 OBD-II 硬件 + python-OBD，不在本次范围。标注为长期未来工作。
 - **ASR 模型优化**：SenseVoice int8 量化已可用，不进一步优化。
 - **容器化/Docker**：论文答辩不需要，不在此次范围。
+
+## 验收标准
+
+### 子项目 A
+
+| 项 | 通过标准 |
+|----|----------|
+| A1 | 清空 `presets.toml` 后重启服务，WebUI 预设下拉菜单显示 5 个 seed presets |
+| A2 | `docs/demo-script.md` 存在，含 6 幕操作步骤 + 串词，按此脚本可完成全程演示 |
+| A3 | 实验图表区域在无数据时不显示错误；TTS 按钮在 A4 启用后可见；语音设备加载失败不阻塞 UI |
+| A4 | 设 `DRIVEPAL_TTS_ENABLED=1` 后，查询返回 `speakable_text` 时 WebUI 自动播放语音；edge-tts 不可用时静默降级 |
+| A5 | `README.md` 中所有 API 路径与 `app/api/v1/` 实际路由一致 |
+
+### 子项目 B
+
+| 项 | 通过标准 |
+|----|----------|
+| B1 | 唤醒词模型存在时，说"知行车秘"后 VAD 开始检测；无模型时静默降级 |
+| B2 | Speaker embedding 可用时，连续两段语音归为同一 speaker；无模型时静默降级 |
+| B3 | WebUI 语音 tab 可选用户；转录 API 返回含 `speaker` 字段 |
+
+### 子项目 C
+
+| 项 | 通过标准 |
+|----|----------|
+| C1 | `POST /api/v1/scheduler/start {"user_id":"test"}` 创建并启动新 scheduler；WS 连接新用户时自动创建 |
+| C2 | 新增 6 个集成测试全部通过 |
+
+### 子项目 D
+
+| 项 | 通过标准 |
+|----|----------|
+| D1 | `ContextProvider` Protocol 定义存在；`ProactiveScheduler` 可接受 `ContextProvider` 实例 |
+| D2 | 给定 `data/obd_trace.csv`，`OBDSimulator.play()` 按时间顺序 yield `DrivingContext` |
