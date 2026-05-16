@@ -27,7 +27,7 @@ flowchart LR
 | `executor.py` | `ToolExecutionError` | 执行异常 |
 | `executor.py` | `ToolConfirmationRequiredError` | 工具需用户确认（code=TOOL_CONFIRMATION_REQUIRED） |
 | `config.py` | `ToolsConfig` | 配置 dataclass，`load()` 类方法读取/生成 tools.toml |
-| `tools/__init__.py` | `get_default_executor()`, `register_builtin_tools()` | 注册全部内置工具到 ToolRegistry；默认单例 executor |
+| `tools/__init__.py` | `get_default_executor()`, `register_builtin_tools(registry, cfg=ToolsConfig\|None)` | 注册全部内置工具到 ToolRegistry；cfg 未传时自动加载；默认单例 executor |
 | `tools/navigation.py` | `navigate_to` | 导航目的地设置 |
 | `tools/communication.py` | `send_message` | 消息发送 |
 | `tools/vehicle.py` | `set_climate` / `play_media` | 车控预留（返回"未接入"）|
@@ -64,7 +64,7 @@ flowchart LR
 | 工具 | 参数 | 返回 |
 |------|------|------|
 | `set_navigation` | `destination: str` | `"导航已设置：{dest}"` |
-| `send_message` | `recipient: str`, `message: str(max max_message_length)` | `"消息已发送给 {recipient}"` |
+| `send_message` | `recipient: str`, `message: str(maxLength=message_max_length)` | `"消息已发送给 {recipient}"` |
 | `query_memory` | `query: str` | 默认 5 条记忆内容（由 `tools.toml` memory_query.max_results 配置）|
 | `set_climate` | `temperature: number(16-32)` | `"车控功能尚未接入"` |
 | `play_media` | `name: str`, `type: music\|podcast` | `"媒体功能尚未接入"` |
@@ -80,9 +80,12 @@ flowchart LR
 工具调用执行已从 `_execution_node` 提取至 `ExecutionAgent._handle_tool_calls()`（`app/agents/execution_agent.py`）。`ExecutionAgent.run()` 内流程顺序：
 
 1. 规则后处理 `postprocess_decision()` — 强制覆盖
-2. **工具调用执行** — `_handle_tool_calls()`
-3. 待触发提醒创建 — `postpone`/`timing` 分支生成 PendingReminder
-4. `_check_frequency_guard()` — 频次抑制
+2. `should_remind==false` 提前返回（安全规则禁止时）
+3. **工具调用执行** — `_handle_tool_calls()`
+4. 规则结果合并 `_resolve_rules()` — 合并约束至 rules_result
+5. 待触发提醒创建 — `postpone`/`timing` 分支生成 PendingReminder
+6. `_check_frequency_guard()` — 频次抑制
+7. 即时发送 `_handle_immediate_send()` — 非 postpone 且未抑制时
 
 1. 读 `decision["tool_calls"]`（列表），空或非列表则直接返回 `[]`
 2. 逐工具遍历：
@@ -129,7 +132,7 @@ max_results = 5
 | `ToolExecutionError` | `executor.py` | `AppError` | 参数校验/handler异常，code=TOOL_ERROR |
 | `ToolConfirmationRequiredError` | `executor.py` | `AppError` | 工具需用户确认，code=TOOL_CONFIRMATION_REQUIRED |
 
-catch 模式：`_handle_tool_calls()` 逐工具 `except ToolExecutionError` → 错误文本追加至 `tool_results`，**不抛**。
+catch 模式：`_handle_tool_calls()` 逐工具 4 个 except 子句按优先级——`WorkflowError`/`AppError` → 原样上抛（raise）；`ToolConfirmationRequiredError` → 追加 `e.message`（不抛）；`ToolExecutionError` → 追加 `"[{tool_name}] 失败: {e}"`（不抛）。
 
 ## 安全约束
 

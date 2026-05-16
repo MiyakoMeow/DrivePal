@@ -23,7 +23,7 @@ flowchart LR
 
 `run_with_stages()` 返回各阶段输出（可解释性）。`run_stream()` 逐阶段 yield SSE事件。
 
-`proactive_run()` — 无用户 query 模式，由 scheduler/context 变化触发。接收 `context_override`/`memory_hints`/`trigger_source`，跳过快捷指令检查，直接 JointDecision + Execution。使用 `prompts_proactive.py` 中 `PROACTIVE_JOINT_DECISION_PROMPT`（非 `prompts.py`）。仍走规则后处理强制覆盖。
+`proactive_run()` — 无用户 query 模式，由 scheduler/context 变化触发。接收 `context_override`/`memory_hints`/`trigger_source`，跳过快捷指令检查。`context_override=None` 时先走 Context 阶段再 JD+Exec；`context_override` 提供时直接 JD+Exec。使用 `prompts_proactive.py` 中 `PROACTIVE_JOINT_DECISION_PROMPT`（非 `prompts.py`）。仍走规则后处理强制覆盖。
 
 ### SSE事件
 
@@ -83,7 +83,7 @@ flowchart LR
 
 `PendingReminderManager` — 5 trigger_type (time/location/context/state/periodic)，`poll(driving_context)`，`postpone`，`cancel_last()`。
 
-`OutputRouter.route() → MultiFormatContent` — speakable_text(≤15) / display_text(≤20) / detailed / channel / interrupt_level。
+`OutputRouter.route(decision, rules_result) → MultiFormatContent` — speakable_text(≤15) / display_text(≤20) / detailed / channel / interrupt_level。`decision: dict`, `rules_result: dict`。
 
 `AgentWorkflow.execute_pending_reminder(content, driving_context=None, trigger_source="pending_reminder") → tuple[str, str | None, WorkflowStages]` — 待触发提醒对接入口，跳过 LLM 仅走 Execution。
 
@@ -104,7 +104,7 @@ flowchart LR
 
 ## 输出路由
 
-`outputs.py`。`OutputRouter.route()` → `MultiFormatContent`：
+`outputs.py`。`OutputRouter.route(decision, rules_result)` → `MultiFormatContent`：`decision: dict`, `rules_result: dict`。
 
 | 字段 | 说明 | 长度 |
 |------|------|------|

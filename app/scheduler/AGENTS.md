@@ -72,10 +72,10 @@ stop() → cancel task
 | context_change | scenario 切换 | 1 | 切换后检索相关记忆 |
 | location | 位置变化 > proximity | 1 | 接近记忆中的地点时 |
 | pending_reminder | PendingReminder 满足 | N/A | 已在 poll 中处理 |
-| state | 两阶段：先检 `delta.fatigue_increased or delta.workload_changed`（增量变化，priority=2），再检绝对值 `fatigue > 0.7 / workload=overloaded`（priority=2） | 2 | 增量变化触发 |
+| state | 两阶段：先检 `delta.fatigue_increased or delta.workload_changed`（增量变化，priority=2），再检绝对值 `fatigue > threshold / workload=overloaded`（priority=2）。`threshold` 通过 `get_fatigue_threshold()` 获取，默认 0.7，`DRIVEPAL_FATIGUE_THRESHOLD` 环境变量覆盖 | 2 | 增量变化触发 |
 | periodic | `_review_hour` 前一小时最后5分钟（min≥55）+ 当前小时前5分钟（min<5），`_last_review_date` 天级防重，`_review_hour=0` 跨午夜时日期+1天 | 0 | `_review_hour` 从 `config/scheduler.toml` 的 `review_time` 解析；`_review_window_minutes=5`（半窗宽）|
 
-注：`TriggerSignal.source` 类型标注允许的取值包括 `"context_change"`、`"location"`、`"time"`、`"state"`、`"periodic"`、`"voice"`。其中 `"time"` 和 `"voice"` 当前未被任何发射路径使用。
+注：`TriggerSignal.source` 类型为 `str`，注释中枚举允许值包括 `"context_change"`、`"location"`、`"time"`、`"state"`、`"periodic"`、`"voice"`，但类型系统未使用 `Literal` 约束。其中 `"time"` 和 `"voice"` 当前未被任何发射路径使用。
 
 ### 输入接口
 
