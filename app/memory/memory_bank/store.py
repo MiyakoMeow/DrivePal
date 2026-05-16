@@ -90,6 +90,7 @@ class MemoryBankStore:
         llm = LlmClient(chat_model, self._config) if chat_model else None
         summarizer = Summarizer(llm, self._index, self._config) if llm else None
 
+        self._embed_client = embed_client
         self._lifecycle = MemoryLifecycle(
             self._index,
             embed_client,
@@ -343,7 +344,7 @@ class MemoryBankStore:
         return self._metrics
 
     async def close(self) -> None:
-        """持久化后关闭索引。"""
+        """持久化索引并关闭嵌入模型客户端。"""
         try:
             await self.finalize_ingestion()
         except Exception:
@@ -352,3 +353,8 @@ class MemoryBankStore:
                 await self._index.save()
             except Exception:
                 logger.warning("Fallback save also failed during close", exc_info=True)
+        try:
+            if self._embed_client is not None:
+                await self._embed_client.close()
+        except Exception:
+            logger.warning("Failed to close embedding client", exc_info=True)
