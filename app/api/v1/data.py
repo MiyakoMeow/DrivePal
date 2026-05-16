@@ -117,11 +117,18 @@ def _allowed_suffixes(export_type: str) -> tuple[str, ...]:
 async def get_metrics(request: Request) -> MetricsResponse:
     """查询当前用户的 MemoryBank 指标快照."""
     user_id: str = request.state.user_id
-    mm = get_memory_module()
-    raw = mm.get_metrics(user_id)
+    try:
+        mm = get_memory_module()
+    except Exception as e:
+        logger.exception("get_memory_module failed in get_metrics")
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Memory module unavailable") from e
+    try:
+        raw = mm.get_metrics(user_id)
+    except Exception as e:
+        logger.exception("get_metrics failed for user %s", user_id)
+        raise AppError(AppErrorCode.INTERNAL_ERROR, "Failed to read metrics") from e
     if raw is None:
         return MetricsResponse()
-    # raw 为 dict，转 pydantic 模型
     return MetricsResponse(
         **{k: v for k, v in raw.items() if k in MetricsResponse.model_fields}
     )

@@ -70,6 +70,7 @@ class ProactiveScheduler:
         self._running = False
         self._voice_queue: asyncio.Queue[str] = asyncio.Queue()
         self._current_context: dict = {}
+        self._tick_lock: asyncio.Lock = asyncio.Lock()
         self._pending_manager: PendingReminderManager | None = None
         self._last_review_date: str | None = None
         self._enable_periodic_review: bool = _cfg.enable_periodic_review
@@ -270,7 +271,15 @@ class ProactiveScheduler:
                 logger.warning("Failed to write passive voice: %s", e)
 
     async def _tick(self) -> None:
-        """单次 tick：语音消费、PendingReminder 轮询、上下文变化检测、触发执行。"""
+        """单次 tick：重入守卫 + 委托 _do_tick。"""
+        if self._tick_lock.locked():
+            logger.debug("_tick already in progress, skipping concurrent call")
+            return
+        async with self._tick_lock:
+            await self._do_tick()
+
+    async def _do_tick(self) -> None:
+        """_tick 实际体：语音消费、PendingReminder 轮询、上下文变化检测、触发执行。"""
         try:
             await self._drain_voice_queue()
         except Exception as e:
