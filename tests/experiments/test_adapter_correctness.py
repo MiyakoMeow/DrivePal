@@ -125,8 +125,14 @@ class TestMemoryCreatedAt:
             )
 
         with patch.object(DrivePalMemClient, "add", capturing_add):
-            vmb_root = pathlib.Path(__file__).resolve().parents[5] / "VehicleMemBench"
-            if not vmb_root.is_dir():
+            # 向上遍历父目录查找 VehicleMemBench，避免 parents[N] 硬编码层级
+            vmb_root: pathlib.Path | None = None
+            for parent in pathlib.Path(__file__).resolve().parents:
+                candidate = parent / "VehicleMemBench"
+                if candidate.is_dir():
+                    vmb_root = candidate
+                    break
+            if vmb_root is None:
                 pytest.skip("VehicleMemBench not found")
             if str(vmb_root) not in sys.path:
                 sys.path.insert(0, str(vmb_root))
