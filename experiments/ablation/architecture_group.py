@@ -34,6 +34,7 @@ def classify_complexity(dims: dict) -> bool:
 
     阈值与 _io.get_fatigue_threshold() 对齐。
     用于架构组 2x2 的指标分层。
+    缺失 fatigue 数据时默认 0——保守假设无疲劳，避免误归为复杂场景扭曲统计。
     """
     fatigue = dims.get("fatigue_level", 0)
     try:

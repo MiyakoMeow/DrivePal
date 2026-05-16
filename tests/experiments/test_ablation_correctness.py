@@ -24,8 +24,15 @@ def test_export_restore_feedback_state_roundtrip():
     _recent_feedback[("test_user", "meeting")] = [1, -1, 1]
 
     state = export_state()
-    assert state["_current_delta"]["test_user::meeting"] == 0.25
-    assert state["_recent_feedback"]["test_user::meeting"] == [1, -1, 1]
+    delta_items = {
+        f"{d['user_id']}::{d['task_type']}": d["value"] for d in state["_current_delta"]
+    }
+    fb_items = {
+        f"{d['user_id']}::{d['task_type']}": d["value"]
+        for d in state["_recent_feedback"]
+    }
+    assert delta_items["test_user::meeting"] == 0.25
+    assert fb_items["test_user::meeting"] == [1, -1, 1]
 
     _current_delta.clear()
     _recent_feedback.clear()

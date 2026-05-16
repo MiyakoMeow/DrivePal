@@ -239,17 +239,19 @@ def export_state() -> dict:
     """导出当前反馈状态以备持久化。
 
     Returns:
-        {"_current_delta": {...}, "_recent_feedback": {...}}
-        键为 "user_id::task_type" 格式的字符串（dict key 可序列化）。
+        {"_current_delta": [...], "_recent_feedback": [...]}
+        每项为 {"user_id": ..., "task_type": ..., "value": ...} 列表，避免分隔符注入。
 
     """
     return {
-        "_current_delta": {
-            f"{uid}::{tt}": v for (uid, tt), v in _current_delta.items()
-        },
-        "_recent_feedback": {
-            f"{uid}::{tt}": list(v) for (uid, tt), v in _recent_feedback.items()
-        },
+        "_current_delta": [
+            {"user_id": uid, "task_type": tt, "value": v}
+            for (uid, tt), v in _current_delta.items()
+        ],
+        "_recent_feedback": [
+            {"user_id": uid, "task_type": tt, "value": list(v)}
+            for (uid, tt), v in _recent_feedback.items()
+        ],
     }
 
 
@@ -257,13 +259,17 @@ def restore_state(state: dict) -> None:
     """从持久化状态恢复反馈状态。幂等——清空后写入。"""
     _current_delta.clear()
     _recent_feedback.clear()
-    for key_str, val in state.get("_current_delta", {}).items():
-        if "::" in key_str:
-            uid, tt = key_str.split("::", 1)
+    for item in state.get("_current_delta", []):
+        uid = item.get("user_id")
+        tt = item.get("task_type")
+        val = item.get("value")
+        if uid and tt and isinstance(val, (int, float)):
             _current_delta[(uid, tt)] = float(val)
-    for key_str, val in state.get("_recent_feedback", {}).items():
-        if "::" in key_str:
-            uid, tt = key_str.split("::", 1)
+    for item in state.get("_recent_feedback", []):
+        uid = item.get("user_id")
+        tt = item.get("task_type")
+        val = item.get("value")
+        if uid and tt and isinstance(val, list):
             _recent_feedback[(uid, tt)] = [
                 int(v) for v in val if isinstance(v, (int, float))
             ]
