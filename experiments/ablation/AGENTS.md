@@ -77,7 +77,7 @@ NO_RULES 禁用 `apply_rules`（软提示）+ `postprocess_decision`（硬后处
 | `--group {safety,architecture,personalization,all}` | 实验组，默认 all |
 | `--synthesize-only` | 仅合成场景，不运行实验 |
 | `--judge-only` | 仅重新评分（复用已有 results.jsonl） |
-| `--data-dir` | 数据目录，默认 `data/experiments` |
+| `--data-dir` | 数据目录，默认 `data/ablation` |
 | `--seed` | 随机种子（覆写 `ABLATION_SEED`），默认 42 |
 | `--run-id` | 运行标识符，缺省自动生成 `%Y%m%d_%H%M%S_%f_{seed}`（含微秒） |
 
