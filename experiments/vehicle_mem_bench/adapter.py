@@ -19,6 +19,7 @@ import os
 import pathlib
 import sys
 import threading
+from collections import defaultdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -296,28 +297,67 @@ def is_test_sequential() -> bool:
     return False
 
 
+def _get_memory_strength(r: object, default: int = 1) -> int:
+    ev = getattr(r, "event", None)
+    if isinstance(ev, dict):
+        return ev.get("memory_strength", default)
+    return default
+
+
+def _get_event_content(r: object) -> str:
+    ev = getattr(r, "event", None)
+    if isinstance(ev, dict):
+        return ev.get("content", "")
+    return str(r)
+
+
+def _build_group_parts(
+    groups: dict[str, list], group_order: list[str], start_idx: int
+) -> tuple[list[str], int]:
+    parts: list[str] = []
+    idx = start_idx
+    for gk in group_order:
+        items = groups[gk]
+        items.sort(key=_get_memory_strength, reverse=True)
+        max_strength = max(_get_memory_strength(r) for r in items)
+        combined = "; ".join(t for r in items if (t := _get_event_content(r)))
+        if combined:
+            parts.append(f"{idx}. [memory_strength={max_strength}] {combined}")
+            idx += 1
+    return parts, idx
+
+
 def format_search_results(search_result: object) -> tuple[str, int]:
-    """将 SearchResult 列表格式化为文本。
-
-    Returns:
-        (格式化文本, 条目数)
-
-    """
+    """格式化為分組記憶文本，與 MemoryBankStore.format_search_results 風格對齊。"""
     if not isinstance(search_result, list):
         return "", 0
-    texts: list[str] = []
+
+    overall: list[object] = []
+    regular: list[object] = []
     for r in search_result:
         ev = getattr(r, "event", None)
-        if isinstance(ev, dict):
-            content = ev.get("content", "")
-        elif isinstance(ev, str):
-            content = ev
-        else:
-            content = str(r)
-        if not content:
+        if not isinstance(ev, dict):
             continue
-        score = getattr(r, "score", 0.0)
-        texts.append(f"[score={score:.3f}] {content}")
-    if not texts:
-        return "", 0
-    return "\n\n".join(texts), len(texts)
+        if getattr(r, "source", "") == "overall":
+            overall.append(r)
+        else:
+            regular.append(r)
+
+    groups: dict[str, list] = defaultdict(list)
+    group_order: list[str] = []
+    for r in regular:
+        src = getattr(r, "source", "event") or "event"
+        if src not in groups:
+            group_order.append(src)
+        groups[src].append(r)
+
+    parts: list[str] = []
+    for r in overall:
+        content = _get_event_content(r)
+        if content:
+            parts.append(content)
+
+    parts, _ = _build_group_parts(groups, group_order, len(parts) + 1)
+
+    valid = sum(1 for r in search_result if isinstance(getattr(r, "event", None), dict))
+    return "\n\n".join(parts), valid
