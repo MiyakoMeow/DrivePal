@@ -233,8 +233,8 @@ class Judge:
         results: list[VariantResult],
     ) -> list[JudgeScores]:
         """盲评多个变体——shuffle 顺序后逐个评分。每场景评 3 次取中位数。"""
-        seed = int(os.environ.get("ABLATION_SEED", "0"))
-        rng = random.Random(seed or None)
+        seed = int(os.environ.get("ABLATION_SEED", "42"))
+        rng = random.Random(seed)
         all_scores: list[JudgeScores] = []
         for _ in range(3):
             shuffled = list(results)
