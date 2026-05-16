@@ -65,7 +65,7 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 - 运行时跳过 `existing_ids` 中已完成的组合，仅跑未完成的变体
 - checkpoint 路径即 `results.jsonl`，续跑不停写同一文件
 - 场景/变体范围变更时自动过滤旧 checkpoint 数据
-- 个性化组 checkpoint 额外记录反馈自适应步长状态（`_current_delta` / `_recent_feedback`），续跑时自动恢复，保证中断后权重更新一致
+- 个性化组 checkpoint 额外记录反馈自适应步长状态（`export_state()` + `weight_history`），续跑时自动恢复反馈状态并跳过已完成变体，避免重复应用反馈导致权重偏离。注意：若在 FULL 变体后、NO_FEEDBACK 变体前中断，恢复的反馈状态可能滞后一回合（FULL 变体反馈更新未持久化），该偏差于 32 回合实验中可忽略
 
 ## CLI
 

@@ -85,13 +85,24 @@ async def run_personalization_group(
 
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []
+    existing_ids: set[tuple[str, str]] = set()
 
-    # 续跑：从 checkpoint 恢复反馈状态（自适应步长 + 近期方向）
+    # 续跑：从 checkpoint 恢复反馈状态 + weight_history + 跳过已完成变体
     ckpt_path = output_path.with_suffix(".checkpoint.jsonl")
     if ckpt_path.exists():
-        _, _, last_extra = await load_checkpoint(ckpt_path)
+        ckpt_ids, ckpt_results, last_extra = await load_checkpoint(ckpt_path)
         if last_extra:
             restore_state(last_extra)
+            if "weight_history" in last_extra:
+                weight_history = last_extra["weight_history"]
+        existing_ids = ckpt_ids
+        # 按 (scenario_id, variant) 去重后恢复已完成结果
+        seen: set[tuple[str, str]] = set()
+        for r in ckpt_results:
+            pair = (r.scenario_id, r.variant.value)
+            if pair not in seen:
+                seen.add(pair)
+                all_results.append(r)
 
     for stage_name, start, end in stages:
         for i in range(start, end):
@@ -105,6 +116,11 @@ async def run_personalization_group(
             scenario = personalization_scenarios[i]
 
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
+                # 续跑：跳过已完成的变体
+                if (scenario.id, variant.value) in existing_ids:
+                    # 跳过时仍需保证 weight_history 有对应条目
+                    # ——若 checkpoint 中该轮 weight_history 已记录则无需追加
+                    continue
                 # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
                 # NO_FEEDBACK 用独立 uid —— MemoryBank 隔离，不受 FULL 写入事件干扰
                 uid = (
@@ -157,7 +173,10 @@ async def run_personalization_group(
                     output_path.with_suffix(".checkpoint.jsonl"),
                     vr,
                     include_modifications=True,
-                    extra=export_state(),
+                    extra={
+                        **export_state(),
+                        "weight_history": weight_history,
+                    },
                 )
 
                 if variant == Variant.FULL:
