@@ -203,6 +203,7 @@ exclude = [".agents/**"]
     "C901",  # run_personalization_group 含 4 阶段 × 20 轮 × 2 变体编排，复杂度可接受
     "PLR0912",  # run_personalization_group 分支多（超时/异常/反馈/快照），平铺直叙
     "PLR0915",  # run_personalization_group 语句多（编排+评分+持久化），逻辑清晰
+    "T201",  # CLI 进度用 print 输出到 stderr，非生产日志
 ]
 "experiments/ablation/feedback_simulator.py" = [
     "ANN401",  # _safe_read_weights 接受 Any 输入做运行时类型校验（TOML 输出无固定类型）
