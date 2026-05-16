@@ -319,22 +319,22 @@ def _prepare_group_scenarios(
     *,
     seed: int,
 ) -> dict[str, list[Scenario]]:
-    """预采样：组间互斥 + 分层。安全组和架构组从 complex 池按比例分配。"""
+    """预采样：组间分层抽样。安全组从 complex 池抽取，架构组独立从全量分层。
+
+    安全组仍排除已用 ID（避免与个性化组重叠）。
+    架构组从全量 all_scenarios 独立分层抽样，不受安全组消耗影响——
+    两组通过 user_id 隔离（experiment-safety vs experiment-arch），
+    同一场景出现在两组不污染实验数据。
+    """
     used_ids: set[str] = set()
     group_scenarios: dict[str, list[Scenario]] = {}
 
-    complex_pool = [
-        s
-        for s in all_scenarios
-        if s.synthesis_dims and classify_complexity(s.synthesis_dims)
-    ]
-    simple_pool = [
-        s
-        for s in all_scenarios
-        if not (s.synthesis_dims and classify_complexity(s.synthesis_dims))
-    ]
-
     if "safety" in groups_to_run:
+        complex_pool = [
+            s
+            for s in all_scenarios
+            if s.synthesis_dims and classify_complexity(s.synthesis_dims)
+        ]
         safety_candidates = [s for s in complex_pool if s.safety_relevant]
         n_safety = min(50, len(safety_candidates))
         group_scenarios["safety"] = sample_scenarios(
@@ -344,39 +344,44 @@ def _prepare_group_scenarios(
             min_per_stratum=1,
             seed=seed,
         )
-        chosen_ids = {s.id for s in group_scenarios["safety"]}
-        complex_pool = [s for s in complex_pool if s.id not in chosen_ids]
-        simple_pool = [s for s in simple_pool if s.id not in chosen_ids]
-        used_ids |= chosen_ids
+        used_ids |= {s.id for s in group_scenarios["safety"]}
 
     if "architecture" in groups_to_run:
-        n_arch_complex = min(25, len(complex_pool))
-        n_arch_simple = min(50 - n_arch_complex, len(simple_pool))
+        # 独立从全量池分层抽样，不受安全组消耗影响
+        all_complex = [
+            s
+            for s in all_scenarios
+            if s.synthesis_dims and classify_complexity(s.synthesis_dims)
+        ]
+        all_simple = [
+            s
+            for s in all_scenarios
+            if not (s.synthesis_dims and classify_complexity(s.synthesis_dims))
+        ]
+        n_arch_complex = min(25, len(all_complex))
+        n_arch_simple = min(50 - n_arch_complex, len(all_simple))
 
         arch_sampled: list[Scenario] = []
-        if complex_pool and n_arch_complex > 0:
+        if all_complex and n_arch_complex > 0:
             arch_sampled.extend(
                 sample_scenarios(
-                    complex_pool,
+                    all_complex,
                     n_arch_complex,
                     stratify_key=arch_stratum,
                     min_per_stratum=1,
                     seed=seed + 1,
                 )
             )
-        if simple_pool and n_arch_simple > 0:
+        if all_simple and n_arch_simple > 0:
             arch_sampled.extend(
                 sample_scenarios(
-                    simple_pool,
+                    all_simple,
                     n_arch_simple,
                     stratify_key=arch_stratum,
                     min_per_stratum=1,
                     seed=seed + 3,
                 )
             )
-        chosen_ids = {s.id for s in arch_sampled}
-        complex_pool = [s for s in complex_pool if s.id not in chosen_ids]
-        simple_pool = [s for s in simple_pool if s.id not in chosen_ids]
         if not arch_sampled:
             logger.warning("架构组无可用场景，跳过架构组实验。")
             group_scenarios["architecture"] = []
@@ -391,7 +396,7 @@ def _prepare_group_scenarios(
             used_ids |= {s.id for s in group_scenarios["architecture"]}
 
     if "personalization" in groups_to_run:
-        remaining = complex_pool + simple_pool
+        remaining = [s for s in all_scenarios if s.id not in used_ids]
         if not remaining:
             logger.warning("无剩余场景，跳过个性化组实验。")
             group_scenarios["personalization"] = []

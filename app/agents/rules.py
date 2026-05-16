@@ -286,7 +286,15 @@ def apply_rules(
     driving_context: dict,
     rules: list[Rule] | None = None,
 ) -> dict[str, Any]:
-    """对驾驶上下文应用规则，返回合并后的约束."""
+    """对驾驶上下文应用规则，返回合并后的约束.
+
+    消融实验：_ablation_disable_rules=True 时返回空 dict，
+    使 format_constraints_hint 不注入任何约束提示，
+    postprocess_decision 跳过强制覆盖。
+    """
+    if _ablation_disable_rules.get():
+        return {}
+
     matched = [r for r in (rules or SAFETY_RULES) if r.condition(driving_context)]
     matched.sort(key=lambda r: r.priority, reverse=True)
 

@@ -643,7 +643,7 @@ class TestObjectiveComplianceRate:
 
 
 class TestPrepareGroupScenariosComplexity:
-    """预分配法应保证架构组含 complex 场景，且组间互斥。"""
+    """预分配法应保证架构组含 complex 场景，安全/架构可重叠（user_id 隔离）。"""
 
     def test_prepare_group_scenarios_complexity(self):
         from experiments.ablation.architecture_group import classify_complexity
@@ -663,10 +663,12 @@ class TestPrepareGroupScenariosComplexity:
         assert arch_has_complex, "架构组应至少含 1 个 complex 场景"
         assert len(result.get("architecture", [])) <= 50
 
+        # 安全组与架构组可重叠——两组通过 user_id 隔离，
+        # 同一场景出现在两组不污染实验数据
         safety_ids = {s.id for s in result.get("safety", [])}
         arch_ids = {s.id for s in result.get("architecture", [])}
         pers_ids = {s.id for s in result.get("personalization", [])}
-        assert safety_ids.isdisjoint(arch_ids), "安全组和架构组场景重叠"
+        # 个性化组仍排除安全+架构已用 ID
         assert safety_ids.isdisjoint(pers_ids), "安全组和个性化组场景重叠"
         assert arch_ids.isdisjoint(pers_ids), "架构组和个性化组场景重叠"
 
