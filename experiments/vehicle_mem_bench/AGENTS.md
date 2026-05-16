@@ -60,7 +60,7 @@ python -m experiments.vehicle_mem_bench model --memory-type summary --model-grou
 |------|------|
 | `validate_add_args` | 校验 history_dir 存在 |
 | `validate_test_args` | 校验 benchmark_dir 存在 |
-| `run_add` | history → MemoryBankStore |
+| `run_add` | history → MemoryBankStore（含显式偏好关键词自动设 memory_strength=5，其余=3） |
 | `build_test_client` | 每文件创建 DrivePalMemClient |
 | `init_test_state` | 创建数据目录 |
 | `close_test_state` | 关闭所有客户端 |
@@ -122,6 +122,9 @@ python -m experiments.vehicle_mem_bench memory-test \
 # ── 自定 VehicleMemBench 路径 ──
 python -m experiments.vehicle_mem_bench run-all --vmb-root /path/to/vmb
 export VMB_ROOT=/path/to/vmb && python -m experiments.vehicle_mem_bench run-all
+
+# ── 指定 benchmark 目录 ──
+python -m experiments.vehicle_mem_bench run-all --benchmark-dir /custom/qa_data
 ```
 
 ## VehicleMemBench 代码来源

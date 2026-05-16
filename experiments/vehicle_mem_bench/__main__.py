@@ -190,6 +190,7 @@ def _build_cli() -> argparse.ArgumentParser:
     all_p.add_argument("--reflect-num", "--reflect_num", type=int, default=10)
     all_p.add_argument("--max-workers", "--max_workers", type=int, default=6)
     all_p.add_argument("--sample-size", "--sample_size", type=int, default=None)
+    all_p.add_argument("--benchmark-dir", "--benchmark_dir", type=str, default=None)
 
     return parser
 
@@ -293,7 +294,7 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
     )
     base_out.mkdir(parents=True, exist_ok=True)
 
-    benchmark_dir = str(vmb_root / "benchmark" / "qa_data")
+    benchmark_dir = args.benchmark_dir or str(vmb_root / "benchmark" / "qa_data")
     history_dir = str(vmb_root / "benchmark" / "history")
 
     reflect_num = args.reflect_num

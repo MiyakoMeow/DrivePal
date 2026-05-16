@@ -127,9 +127,12 @@ class AblationRunner:
         user_msg_data: dict[str, object] = {
             "query": scenario.user_query,
             "context": scenario.driving_context,
+            "current_datetime": now,
         }
         # MemoryBank 只读检索——两变体各行隔离 memory space，保证代码路径一致，
-        # 解混"架构 vs 有无记忆检索"变量
+        # 解混"架构 vs 有无记忆检索"变量。
+        # 格式对齐 ContextAgent._format_memory_for_context：
+        # "[event_type] text" 前缀 + 换行分隔。
         try:
             mm = get_memory_module()
             mem_results = await mm.search(
@@ -141,11 +144,13 @@ class AblationRunner:
                 texts: list[str] = []
                 for r in mem_results:
                     content = getattr(r, "content", None) or {}
+                    event_type = getattr(r, "event_type", "")
                     text = content.get("text", "") if isinstance(content, dict) else ""
                     if text:
-                        texts.append(text)
+                        prefix = f"[{event_type}] " if event_type else ""
+                        texts.append(f"{prefix}{text}")
                 if texts:
-                    user_msg_data["memory_context"] = "; ".join(texts)
+                    user_msg_data["memory_context"] = "\n".join(texts)
         except Exception:
             logger.debug("Memory search non-fatal for %s", scenario.id)
 
@@ -214,7 +219,7 @@ class AblationRunner:
         results: list[VariantResult] = []
         existing_ids: set[tuple[str, str]] = set()
         if checkpoint_path:
-            raw_ids, raw_results = await load_checkpoint(checkpoint_path)
+            raw_ids, raw_results, _ = await load_checkpoint(checkpoint_path)
             # 过滤 checkpoint 中不属于当前 scenarios/variants 的旧记录——
             # 若在上次 run 后修改了实验范围，旧数据不应污染本次结果。
             current_sids = {s.id for s in scenarios}

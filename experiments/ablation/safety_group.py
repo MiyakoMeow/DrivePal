@@ -29,9 +29,14 @@ def safety_stratum(s: Scenario) -> str:
     if not d:
         return s.scenario_type or "unknown"
     parts: list[str] = [d["scenario"]]
-    if float(d["fatigue_level"]) > get_fatigue_threshold():
+    fatigue = d.get("fatigue_level", 0.5)
+    try:
+        fatigue_val = float(fatigue)
+    except ValueError, TypeError:
+        fatigue_val = 0.5
+    if fatigue_val > get_fatigue_threshold():
         parts.append("high_fatigue")
-    if d["workload"] == "overloaded":
+    if d.get("workload") == "overloaded":
         parts.append("overloaded")
     return "+".join(parts)
 

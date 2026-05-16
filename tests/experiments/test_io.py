@@ -96,17 +96,19 @@ async def test_append_and_load_checkpoint_roundtrip(tmp_path: Path):
     path = tmp_path / "checkpoint.jsonl"
     await append_checkpoint(path, vr, include_modifications=True)
 
-    ids, results = await load_checkpoint(path)
+    ids, results, extra = await load_checkpoint(path)
     assert ("s1", "no-rules") in ids
     assert len(results) == 1
     assert results[0].scenario_id == "s1"
     assert results[0].variant == Variant.NO_RULES
     assert results[0].modifications == ["mod1"]
     assert results[0].round_index == 3
+    assert extra is None  # no extra field in this test
 
 
 async def test_load_checkpoint_nonexistent_returns_empty(tmp_path: Path):
     """给定不存在的文件，当 load，则返回空集合和空列表."""
-    ids, results = await load_checkpoint(tmp_path / "nope.jsonl")
+    ids, results, extra = await load_checkpoint(tmp_path / "nope.jsonl")
     assert ids == set()
     assert results == []
+    assert extra is None

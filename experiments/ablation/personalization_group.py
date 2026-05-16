@@ -10,12 +10,15 @@ from ._io import (
     VARIANT_TIMEOUT_SECONDS,
     append_checkpoint,
     dump_variant_results_jsonl,
+    load_checkpoint,
     write_json_atomic,
 )
 from .ablation_runner import AblationRunner
 from .feedback_simulator import (
+    export_state,
     extract_task_type,
     read_weights,
+    restore_state,
     simulate_feedback,
     update_feedback_weight,
 )
@@ -53,8 +56,14 @@ def _build_stages(
 
 
 def pers_stratum(s: Scenario) -> str:
-    """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
-    return s.expected_task_type or "unknown"
+    """个性化组分层键——按合成维度任务类型分组，确保确定性。
+
+    与 safety_stratum / arch_stratum 一致，使用合成维度而非 LLM 输出。
+    """
+    dims = s.synthesis_dims
+    if dims:
+        return dims.get("task_type", "unknown")
+    return "unknown"
 
 
 async def run_personalization_group(
@@ -76,6 +85,24 @@ async def run_personalization_group(
 
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []
+    existing_ids: set[tuple[str, str]] = set()
+
+    # 续跑：从 checkpoint 恢复反馈状态 + weight_history + 跳过已完成变体
+    ckpt_path = output_path.with_suffix(".checkpoint.jsonl")
+    if ckpt_path.exists():
+        ckpt_ids, ckpt_results, last_extra = await load_checkpoint(ckpt_path)
+        if last_extra:
+            restore_state(last_extra)
+            if "weight_history" in last_extra:
+                weight_history = last_extra["weight_history"]
+        existing_ids = ckpt_ids
+        # 按 (scenario_id, variant) 去重后恢复已完成结果
+        seen: set[tuple[str, str]] = set()
+        for r in ckpt_results:
+            pair = (r.scenario_id, r.variant.value)
+            if pair not in seen:
+                seen.add(pair)
+                all_results.append(r)
 
     for stage_name, start, end in stages:
         for i in range(start, end):
@@ -89,6 +116,11 @@ async def run_personalization_group(
             scenario = personalization_scenarios[i]
 
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
+                # 续跑：跳过已完成的变体
+                if (scenario.id, variant.value) in existing_ids:
+                    # 跳过时仍需保证 weight_history 有对应条目
+                    # ——若 checkpoint 中该轮 weight_history 已记录则无需追加
+                    continue
                 # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
                 # NO_FEEDBACK 用独立 uid —— MemoryBank 隔离，不受 FULL 写入事件干扰
                 uid = (
@@ -141,6 +173,10 @@ async def run_personalization_group(
                     output_path.with_suffix(".checkpoint.jsonl"),
                     vr,
                     include_modifications=True,
+                    extra={
+                        **export_state(),
+                        "weight_history": weight_history,
+                    },
                 )
 
                 if variant == Variant.FULL:
@@ -151,7 +187,6 @@ async def run_personalization_group(
                                 vr.decision,
                                 stage_name,
                                 rng,
-                                stages=vr.stages,
                                 _scenario_id=scenario.id,
                                 driving_context=scenario.driving_context,
                             )

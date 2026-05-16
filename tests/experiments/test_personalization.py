@@ -112,24 +112,8 @@ def test_decision_divergence_different_decisions_returns_positive():
     assert result > 0.0
 
 
-def test_has_visual_content_prefers_stages_over_decision():
-    """给定 stages 中有视觉内容但 decision 中被清除，当检测视觉内容，则应返回 True。"""
-    from experiments.ablation.feedback_simulator import has_visual_content
-
-    decision = {"should_remind": False, "reminder_content": ""}
-    stages = {
-        "decision": {
-            "reminder_content": {
-                "display_text": "会议 · 15:00",
-                "detailed": "下午3点在公司3楼会议室",
-            }
-        }
-    }
-    assert has_visual_content(decision, stages=stages)
-
-
-def test_has_visual_content_falls_back_to_decision():
-    """给定 stages 为空，当检测视觉内容，则应回退到 decision 检查。"""
+def test_has_visual_content_detects_display_text():
+    """给定 decision 仅含 display_text，当检测视觉内容，则应返回 True。"""
     from experiments.ablation.feedback_simulator import has_visual_content
 
     decision = {
@@ -137,14 +121,26 @@ def test_has_visual_content_falls_back_to_decision():
             "display_text": "会议 · 15:00",
         }
     }
-    assert has_visual_content(decision, stages={})
+    assert has_visual_content(decision)
+
+
+def test_has_visual_content_detects_detailed_only():
+    """给定 decision 仅含 detailed（无 display_text），当检测视觉内容，则应返回 True。"""
+    from experiments.ablation.feedback_simulator import has_visual_content
+
+    decision = {
+        "reminder_content": {
+            "detailed": "下午3点在公司3楼会议室",
+        }
+    }
+    assert has_visual_content(decision)
 
 
 def test_has_visual_content_no_visual_returns_false():
-    """给定 stages 和 decision 均无视觉内容，当检测视觉内容，则应返回 False。"""
+    """给定 decision 无任何视觉内容，当检测视觉内容，则应返回 False。"""
     from experiments.ablation.feedback_simulator import has_visual_content
 
-    assert not has_visual_content({}, stages={})
+    assert not has_visual_content({})
 
 
 # ── _compute_matching_rate ──

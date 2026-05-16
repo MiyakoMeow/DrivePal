@@ -45,6 +45,25 @@ _T = TypeVar("_T")
 # 每步 async 操作超时（秒），防止 Embedding API / FAISS 挂死线程
 _CORO_TIMEOUT: float = 120.0
 
+# 显式偏好关键词——含词则 memory_strength=5，否则=3
+_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "设置",
+        "改成",
+        "偏好",
+        "喜欢",
+        "换成",
+        "切换",
+        "设定",
+        "调整",
+        "改为",
+        "选择",
+        "想要",
+        "调到",
+        "调成",
+    }
+)
+
 # VehicleMemBench 根目录可覆写（默认与 DrivePal 同级）
 # 使用 list 容器避免 PLW0603 global
 _VMB_ROOT_OVERRIDE: list[pathlib.Path | None] = [None]
@@ -93,10 +112,10 @@ class DrivePalMemClient:
 
     # ── 公开接口（同步） ──
 
-    def add(self, content: str, **kwargs: object) -> str:
+    def add(self, content: str, strength: int = 3, **kwargs: object) -> str:
         """写入一条记忆事件."""
         del kwargs
-        return self._run(self._async_add(content))
+        return self._run(self._async_add(content, strength=strength))
 
     def search(self, query: str, **kwargs: object) -> list[Any]:
         """搜索记忆，返回 SearchResult 列表."""
@@ -136,14 +155,14 @@ class DrivePalMemClient:
             user_id=self._user_id,
         )
 
-    async def _async_add(self, content: str) -> str:
+    async def _async_add(self, content: str, strength: int = 3) -> str:
         await self._ensure_store()
         assert self._store is not None
         event = MemoryEvent(
             content=content,
             type="passive_voice",
             created_at=datetime.now(UTC).isoformat(),
-            memory_strength=3,
+            memory_strength=strength,
         )
         return await self._store.write(event)
 
@@ -219,7 +238,8 @@ def run_add(args: object) -> None:
         try:
             for bucket in load_hourly_history(history_path):
                 content = "\n".join(bucket.lines)
-                client.add(content=content)
+                strength = 5 if any(kw in content for kw in _PREFERENCE_KEYWORDS) else 3
+                client.add(content=content, strength=strength)
                 message_count += 1
         except Exception as exc:
             return idx, message_count, str(exc)

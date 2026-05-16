@@ -39,7 +39,7 @@ def _get_workload(driving_context: dict | None) -> str:
     return str(wl) if isinstance(wl, str) else "normal"
 
 
-def _compute_alignment(decision: dict, stage: str, stages: dict | None = None) -> float:
+def _compute_alignment(decision: dict, stage: str) -> float:
     """决策与阶段偏好的对齐度 [0,1]。
 
     high-freq/visual-detail: 二值 1.0/0.0
@@ -55,7 +55,7 @@ def _compute_alignment(decision: dict, stage: str, stages: dict | None = None) -
             return 1.0
         return 1.0 if decision.get("is_emergency") else 0.0
     if stage == "visual-detail":
-        return 1.0 if has_visual_content(decision, stages=stages) else 0.0
+        return 1.0 if has_visual_content(decision) else 0.0
     return 0.5
 
 
@@ -98,7 +98,6 @@ def simulate_feedback(
     stage: str,
     rng: random.Random,
     *,
-    stages: dict | None = None,
     _scenario_id: str = "",
     driving_context: dict | None = None,
 ) -> Literal["accept", "ignore"] | None:
@@ -108,7 +107,7 @@ def simulate_feedback(
     2. 噪声 (noise): 用户偶发误反馈概率 = 0.1 + fatigue * 0.2, 范围 [0.1, 0.3]
     3. 反馈概率 (fb_prob): 用户实际给出反馈的概率 = 0.8 - penalty(workload, fatigue), 范围 [0.3, 0.8]
     """
-    alignment = _compute_alignment(decision, stage, stages)
+    alignment = _compute_alignment(decision, stage)
     fatigue = _get_fatigue(driving_context)
     workload = _get_workload(driving_context)
 
@@ -127,20 +126,14 @@ def simulate_feedback(
     return "accept" if alignment > 0.5 else "ignore"
 
 
-def has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
+def has_visual_content(decision: dict) -> bool:
     """判断 LLM 是否意图生成视觉内容。
 
-    优先从 stages["decision"]（规则引擎前的 LLM 原始输出）读取，
-    stages 无数据时 fallback 到 decision（可能已被规则引擎修改）。
+    postprocess_decision 仅修改 should_remind/allowed_channels/清空 reminder_content，
+    不修改 reminder_content 子字段（display_text / detailed）。
+    stages 优先逻辑已移除——execution_agent 同步 stages.decision 后两者恒等同。
     """
-    source = decision
-    if stages:
-        stage_decision = stages.get("decision")
-        if isinstance(stage_decision, dict) and isinstance(
-            stage_decision.get("reminder_content"), dict
-        ):
-            source = stage_decision
-    rc = source.get("reminder_content")
+    rc = decision.get("reminder_content")
     if not isinstance(rc, dict):
         return False
     display = rc.get("display_text")
@@ -240,3 +233,43 @@ async def read_weights(user_id: str) -> dict[str, float]:
     store = TOMLStore(user_dir=ud, filename="strategies.toml", default_factory=dict)
     current = await store.read()
     return _safe_read_weights(current)
+
+
+def export_state() -> dict:
+    """导出当前反馈状态以备持久化。
+
+    Returns:
+        {"_current_delta": [...], "_recent_feedback": [...]}
+        每项为 {"user_id": ..., "task_type": ..., "value": ...} 列表，避免分隔符注入。
+
+    """
+    return {
+        "_current_delta": [
+            {"user_id": uid, "task_type": tt, "value": v}
+            for (uid, tt), v in _current_delta.items()
+        ],
+        "_recent_feedback": [
+            {"user_id": uid, "task_type": tt, "value": list(v)}
+            for (uid, tt), v in _recent_feedback.items()
+        ],
+    }
+
+
+def restore_state(state: dict) -> None:
+    """从持久化状态恢复反馈状态。幂等——清空后写入。"""
+    _current_delta.clear()
+    _recent_feedback.clear()
+    for item in state.get("_current_delta", []):
+        uid = item.get("user_id")
+        tt = item.get("task_type")
+        val = item.get("value")
+        if uid and tt and isinstance(val, (int, float)):
+            _current_delta[(uid, tt)] = float(val)
+    for item in state.get("_recent_feedback", []):
+        uid = item.get("user_id")
+        tt = item.get("task_type")
+        val = item.get("value")
+        if uid and tt and isinstance(val, list):
+            _recent_feedback[(uid, tt)] = [
+                int(v) for v in val if isinstance(v, (int, float))
+            ]

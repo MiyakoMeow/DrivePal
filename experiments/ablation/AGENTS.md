@@ -54,16 +54,18 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 假设：Full在偏好切换后3-5轮内权重收敛；-Feedback匹配率接近随机。
 
 `extract_task_type()` 按 type/task_type/task_attribution 三级fallback兜底LLM字段名不一致。
+`pers_stratum()` 使用合成维度 `task_type`（非 LLM 输出 `expected_task_type`），与 `safety_stratum`/`arch_stratum` 一致，保证分层确定性。
 
 ## Checkpoint 续跑
 
 `run_batch()` 利用 JSONL checklist 支持中断续跑：
 
-- `load_checkpoint(path)` 读取已有结果，返回 `(已完成的(scenario_id,variant)集合, VariantResult列表)`
-- `append_checkpoint(path, vr)` 每变体完成后追加写入
+- `load_checkpoint(path)` 读取已有结果，返回 `(已完成的(scenario_id,variant)集合, VariantResult列表, 最后一条 extra 状态 | None)`
+- `append_checkpoint(path, vr, extra=None)` 每变体完成后追加写入。`extra` 字段用于持久化模块级可变状态（如反馈自适应步长）
 - 运行时跳过 `existing_ids` 中已完成的组合，仅跑未完成的变体
 - checkpoint 路径即 `results.jsonl`，续跑不停写同一文件
 - 场景/变体范围变更时自动过滤旧 checkpoint 数据
+- 个性化组 checkpoint 额外记录反馈自适应步长状态（`export_state()` + `weight_history`），续跑时自动恢复反馈状态并跳过已完成变体，避免重复应用反馈导致权重偏离。注意：若在 FULL 变体后、NO_FEEDBACK 变体前中断，恢复的反馈状态可能滞后一回合（FULL 变体反馈更新未持久化），该偏差于 32 回合实验中可忽略
 
 ## CLI
 
