@@ -134,6 +134,8 @@ flowchart LR
 
 `rules.py`。`apply_rules()` 共4条调用路径：JD.run（joint_decision_agent.py:109）、JD.run_proactive（:185）、Exec._resolve_rules（execution_agent.py:323）、postprocess_decision 内部（rules.py:350）。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
 
+`apply_rules()` 与 `postprocess_decision()` 均检查 `_ablation_disable_rules` ContextVar——设 `true` 时，前者返回无约束默认值（通道全开、不抑制、不延后），后者跳过强制覆盖。保证 NO_RULES/NO_SAFETY 变体下规则引擎完全静默。
+
 | 规则 | 条件 | 约束 | 优先级 |
 |------|------|------|--------|
 | 高速仅音频 | scenario==highway | channels:[audio]，freq:30min | 10 |

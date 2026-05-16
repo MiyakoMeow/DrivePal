@@ -168,7 +168,6 @@ class Judge:
                 },
                 "variant_output": {
                     "decision": result.decision,
-                    "modifications": result.modifications,
                 },
             },
             ensure_ascii=False,
