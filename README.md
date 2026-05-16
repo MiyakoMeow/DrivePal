@@ -193,7 +193,7 @@ app/api/main.py  (生命周期管理)
 | **主动提醒** | 后台调度器轮询 5 种触发源（场景变化/位置接近/定时/状态/周期性） |
 | **工具调用** | 导航/通信/车控/记忆查询等内置工具，JointDecision 决策时触发 |
 | **多格式输出** | visual（屏幕文字）、audio（语音播报）、detailed（详细图文） |
-| **SSE 流式** | 按 Agent 阶段推送进度事件 |
+| **WebSocket 流式** | 实时双向通信，支持流式查询与提醒推送 |
 | **多轮对话** | session-based 连续对话 |
 | **快捷指令** | 预定义高频场景，跳过 LLM 流水线 |
 | **反馈学习** | accept/ignore 反馈自动调整事件类型偏好权重 |
@@ -230,7 +230,7 @@ app/
 │   ├── executor.py    #   工具执行器
 │   └── tools/         #   内置工具（导航/通信/车控/记忆查询）
 ├── api/               # REST API (FastAPI)
-│   ├── main.py        #   应用入口 + SSE 端点
+│   ├── main.py        #   应用入口 + WebSocket 端点
 │   └── v1/            #   API v1 路由（query/feedback/presets/data/reminders/sessions/voice/ws）
 ├── models/            # LLM/Embedding 封装（多provider fallback）
 ├── memory/            # MemoryBank 记忆系统
@@ -262,11 +262,11 @@ experiments/           # 消融实验
 ### 核心端点
 
 ```
-POST /api/v1/query       # 处理用户查询（支持 SSE 流式）
-POST /api/v1/feedback    # 提交用户反馈
-GET  /api/v1/history     # 查询历史记忆事件
-GET  /api/v1/presets     # 查询场景预设
-POST /api/v1/presets     # 保存场景预设
+POST   /api/v1/query       # 处理用户查询
+WS     /api/v1/ws          # WebSocket 长连接（流式查询 + 提醒推送）
+GET    /api/v1/history     # 查询历史记忆事件（?limit=N）
+GET    /api/v1/reminders   # 获取待触发提醒列表
+POST   /api/v1/feedback    # 提交反馈（accept/ignore/snooze/modify）
 ```
 
 ### 请求示例
@@ -292,11 +292,20 @@ POST /api/v1/query
 ### 其他操作
 
 ```
-POST   /api/v1/feedback              # 反馈学习（accept/ignore）
-POST   /api/v1/reminders             # 车机端轮询待触发提醒
-POST   /api/v1/presets               # 保存场景预设
-GET    /api/v1/export?current_user=default  # 导出数据
-DELETE /api/v1/data?current_user=default    # 删除数据
+GET    /api/v1/presets              # 查询场景预设
+POST   /api/v1/presets              # 保存场景预设
+DELETE /api/v1/presets/{id}         # 删除场景预设
+DELETE /api/v1/reminders/{id}       # 取消提醒
+GET    /api/v1/export?export_type=events|settings|all  # 导出数据
+DELETE /api/v1/data                 # 删除当前用户全量数据
+GET    /api/v1/experiments          # 查询实验结果对比
+POST   /api/v1/sessions/{id}/close  # 关闭会话
+GET    /api/v1/voice/status         # 语音流水线状态
+POST   /api/v1/voice/start|stop     # 控制录音
+GET    /api/v1/voice/config         # 语音当前配置
+PUT    /api/v1/voice/config         # 语音热更新配置
+GET    /api/v1/voice/transcriptions # 转录历史（?limit=N）
+GET    /api/v1/voice/devices        # 可用麦克风设备
 ```
 
 ---
