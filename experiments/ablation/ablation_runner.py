@@ -214,7 +214,7 @@ class AblationRunner:
         results: list[VariantResult] = []
         existing_ids: set[tuple[str, str]] = set()
         if checkpoint_path:
-            raw_ids, raw_results = await load_checkpoint(checkpoint_path)
+            raw_ids, raw_results, _ = await load_checkpoint(checkpoint_path)
             # 过滤 checkpoint 中不属于当前 scenarios/variants 的旧记录——
             # 若在上次 run 后修改了实验范围，旧数据不应污染本次结果。
             current_sids = {s.id for s in scenarios}

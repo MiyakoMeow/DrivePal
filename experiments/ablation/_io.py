@@ -166,13 +166,17 @@ async def write_scores_json(path: Path, scores: list[JudgeScores]) -> None:
 
 async def load_checkpoint(
     path: Path,
-) -> tuple[set[tuple[str, str]], list[VariantResult]]:
-    """读取 JSONL checkpoint，返回 (已完成的(scenario_id,variant)集合, VariantResult 列表).
+) -> tuple[set[tuple[str, str]], list[VariantResult], dict | None]:
+    """读取 JSONL checkpoint。
 
-    用于续跑：将已有结果加载回内存，避免 `dump_variant_results_jsonl` 覆盖丢失。
+    Returns:
+        (已完成的(scenario_id,variant)集合, VariantResult 列表, 最后一条 extra 状态 | None)
+        extra 为 feedback_simulator.export_state() 序列化结果，无时返回 None。
+
     """
     ids: set[tuple[str, str]] = set()
     results: list[VariantResult] = []
+    last_extra: dict | None = None
     try:
         async with aiofiles.open(path, encoding="utf-8") as f:
             async for line in f:
@@ -183,23 +187,29 @@ async def load_checkpoint(
                     d = json.loads(stripped)
                     ids.add((d["scenario_id"], d["variant"]))
                     results.append(variant_result_from_dict(d))
+                    if "extra" in d and isinstance(d["extra"], dict):
+                        last_extra = d["extra"]
                 except json.JSONDecodeError, KeyError, ValueError:
                     logger.warning("跳过无效 checkpoint 行: %s", stripped[:80])
                     continue
     except FileNotFoundError:
         logger.warning("Checkpoint 文件不存在（%s），从零开始运行", path)
-        return ids, results
+        return ids, results, None
     except OSError:
         logger.warning("Checkpoint 读取失败（%s），从零开始运行", path)
         # 中途 I/O 错误——丢弃部分数据，避免不一致结果混入续跑
-        return set(), []
-    return ids, results
+        return set(), [], None
+    return ids, results, last_extra
 
 
 async def append_checkpoint(
-    path: Path, vr: VariantResult, *, include_modifications: bool = False
+    path: Path,
+    vr: VariantResult,
+    *,
+    include_modifications: bool = False,
+    extra: dict | None = None,
 ) -> None:
-    """追加写单条 VariantResult 到 checkpoint JSONL。"""
+    """追加写单条 VariantResult 到 checkpoint JSONL。extra 为可选的附加状态 dict。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     record: dict[str, object] = {
         "scenario_id": vr.scenario_id,
@@ -213,6 +223,8 @@ async def append_checkpoint(
     }
     if include_modifications:
         record["modifications"] = vr.modifications
+    if extra:
+        record["extra"] = extra
     async with aiofiles.open(path, "a", encoding="utf-8") as f:
         await f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 
