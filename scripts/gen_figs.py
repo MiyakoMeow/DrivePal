@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict, cast
 
 import matplotlib
 import matplotlib.font_manager
@@ -63,6 +63,7 @@ REASONING_TYPES = ["偏好冲突", "条件约束", "错误纠正", "共指消解
 #   em_by_type        — 各推理类型精确匹配率 (%)，表4-3，顺序同 REASONING_TYPES
 #   value_f1_by_type  — 各推理类型值级 F1 (%)，表4-4
 #   calls_by_type     — 各推理类型平均工具调用次数，表4-5
+
 
 class _ExperimentGroup(TypedDict):
     exact_match: float
@@ -127,6 +128,9 @@ EXPERIMENTS: dict[str, _ExperimentGroup] = {
     },
 }
 
+# cast → dict[str, Any] 避免动态 key 访问 TypedDict 触 ty invalid-key
+_EXP: dict[str, dict[str, Any]] = cast("dict[str, dict[str, Any]]", EXPERIMENTS)
+
 
 def _save(fig, name: str, out_dir: Path) -> None:
     path = out_dir / name
@@ -141,13 +145,13 @@ def _setup_ax(ax) -> None:
 
 
 def _grouped_bars(ax, data_key: str, x_labels: list[str]) -> None:
-    """通用分组柱状图：从 EXPERIMENTS[策略][data_key] 提取各推理类型的值。"""
+    """通用分组柱状图：从 _EXP[策略][data_key] 提取各推理类型的值。"""
     n_groups = len(x_labels)
     n_bars = len(LABELS)
     w = 0.8 / n_bars
     x = range(n_groups)
     for i, (label, color) in enumerate(zip(LABELS, COLORS, strict=True)):
-        vals = EXPERIMENTS[label][data_key]
+        vals = _EXP[label][data_key]
         offset = (i - (n_bars - 1) / 2) * w
         ax.bar([xi + offset for xi in x], vals, w, label=label, color=color)
     ax.set_xticks(x)
@@ -158,7 +162,7 @@ def _grouped_bars(ax, data_key: str, x_labels: list[str]) -> None:
 # ── 图4-1: 总体精确匹配率 ─────────────────────────
 def fig_overall_match(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
-    values = [EXPERIMENTS[label]["exact_match"] for label in LABELS]
+    values = [_EXP[label]["exact_match"] for label in LABELS]
     bars = ax.bar(LABELS, values, color=COLORS, edgecolor="white", linewidth=0.5)
     for bar, val in zip(bars, values, strict=True):
         ax.text(
@@ -317,10 +321,7 @@ def fig_ablation_safety(out_dir: Path) -> None:
     ax2_twin = ax2.twiny()
     ax2_twin.set_xlim(ax2.get_xlim())
     ax2_twin.set_xticks(range(3))
-    intercept_labels = [
-        f"拦截率\n{SAFETY[v]['intercept_rate']:.0%}"
-        for v in variants
-    ]
+    intercept_labels = [f"拦截率\n{SAFETY[v]['intercept_rate']:.0%}" for v in variants]
     ax2_twin.set_xticklabels(intercept_labels, fontsize=9)
     ax2_twin.spines["top"].set_visible(False)
 
@@ -474,7 +475,8 @@ def fig_ablation_personalization(out_dir: Path) -> None:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="生成论文实验对比图表")
     parser.add_argument(
-        "--out-dir", "-o",
+        "--out-dir",
+        "-o",
         type=Path,
         default=Path("archive/定稿-20260516"),
         help="输出目录 (default: archive/定稿-20260516)",
