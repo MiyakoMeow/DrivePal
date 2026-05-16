@@ -10,16 +10,22 @@ from app.agents.workflow import AgentWorkflow
 
 def _mk_state(**kw: object) -> AgentState:
     """构造 AgentState，dict 构造避免 TypedDict 全字段约束。"""
-    return cast(AgentState, kw)
+    return cast("AgentState", kw)
 
 
 def test_build_done_data_no_modifications() -> None:
     """无规则引擎修改时 done_data 不含 modifications 字段。"""
     stages = WorkflowStages()
     state = _mk_state(
-        original_query="", context={}, task=None, decision=None,
-        result="已发送提醒", event_id="evt_001", driving_context=None,
-        stages=stages, output_content="已发送提醒",
+        original_query="",
+        context={},
+        task=None,
+        decision=None,
+        result="已发送提醒",
+        event_id="evt_001",
+        driving_context=None,
+        stages=stages,
+        output_content="已发送提醒",
     )
     done = AgentWorkflow._build_done_data(state, "session_1")
     assert done["status"] == "delivered"
@@ -31,9 +37,15 @@ def test_build_done_data_with_modifications() -> None:
     stages = WorkflowStages()
     stages.execution = {"modifications": ["通道: visual→audio", "频率: 30min"]}
     state = _mk_state(
-        original_query="", context={}, task=None, decision=None,
-        result="已发送提醒", event_id="evt_002", driving_context=None,
-        stages=stages, output_content="已发送提醒",
+        original_query="",
+        context={},
+        task=None,
+        decision=None,
+        result="已发送提醒",
+        event_id="evt_002",
+        driving_context=None,
+        stages=stages,
+        output_content="已发送提醒",
     )
     done = AgentWorkflow._build_done_data(state, "session_1")
     assert "modifications" in done
@@ -46,9 +58,15 @@ def test_build_done_data_pending_with_modifications() -> None:
     stages = WorkflowStages()
     stages.execution = {"modifications": ["通道: visual→audio"]}
     state = _mk_state(
-        original_query="", context={}, task=None, decision=None,
-        result=None, event_id="evt_003", driving_context=None,
-        stages=stages, pending_reminder_id="pr_001",
+        original_query="",
+        context={},
+        task=None,
+        decision=None,
+        result=None,
+        event_id="evt_003",
+        driving_context=None,
+        stages=stages,
+        pending_reminder_id="pr_001",
     )
     done = AgentWorkflow._build_done_data(state, "session_1")
     assert done["status"] == "pending"
@@ -60,9 +78,15 @@ def test_build_done_data_pending_with_modifications() -> None:
 def test_build_done_data_stages_none() -> None:
     """stages 为 None 时 modifications 安全处理。"""
     state = _mk_state(
-        original_query="", context={}, task=None, decision=None,
-        result="已发送提醒", event_id="evt_004", driving_context=None,
-        stages=None, output_content="已发送提醒",
+        original_query="",
+        context={},
+        task=None,
+        decision=None,
+        result="已发送提醒",
+        event_id="evt_004",
+        driving_context=None,
+        stages=None,
+        output_content="已发送提醒",
     )
     done = AgentWorkflow._build_done_data(state, "session_1")
     assert "modifications" not in done

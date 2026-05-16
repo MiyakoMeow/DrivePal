@@ -12,8 +12,7 @@ if TYPE_CHECKING:
 def test_get_metrics(app_client: TestClient) -> None:
     """GET /api/v1/metrics 返回 MemoryBank 指标。"""
     with patch("app.api.v1.data.get_memory_module") as mock_mm:
-        mm = mock_mm.return_value
-        mm.get_metrics.return_value = {
+        mock_mm.return_value.get_metrics.return_value = {
             "search_count": 5,
             "search_latency_ms": 12.3,
             "search_empty_index_count": 1,
@@ -26,7 +25,6 @@ def test_get_metrics(app_client: TestClient) -> None:
             "background_task_failures": 0,
             "index_load_warnings": 0,
         }
-        mock_mm.return_value = mm
         resp = app_client.get("/api/v1/metrics", headers={"X-User-Id": "alice"})
         assert resp.status_code == 200
         body = resp.json()
@@ -37,8 +35,7 @@ def test_get_metrics(app_client: TestClient) -> None:
 def test_get_metrics_uninitialized(app_client: TestClient) -> None:
     """GET /api/v1/metrics store 未初始化时返全零。"""
     with patch("app.api.v1.data.get_memory_module") as mock_mm:
-        mm = mock_mm.return_value
-        mm.get_metrics.return_value = None
+        mock_mm.return_value.get_metrics.return_value = None
         resp = app_client.get("/api/v1/metrics", headers={"X-User-Id": "bob"})
         assert resp.status_code == 200
         body = resp.json()
