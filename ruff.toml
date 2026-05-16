@@ -35,6 +35,10 @@ exclude = [".agents/**"]
     "BLE001",  # 调度器主循环需宽捕获 Exception 防止循环意外终止
 ]
 
+"app/api/v1/ws.py" = [
+    "RUF006",  # WebSocket 中 lazy scheduler 创建为 fire-and-forget 模式
+]
+
 "app/api/v1/ws_manager.py" = [
     "SIM105",  # broadcast 中 suppress 不适用于 for 循环体内局部吞异常
     "S110",  # WebSocket 广播单连接失败不中断其余，吞异常合理

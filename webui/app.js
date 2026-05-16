@@ -212,7 +212,7 @@ function handleWSMessage(type, data) {
             }
             if (data.audio_base64) {
                 const audio = new Audio('data:audio/mp3;base64,' + data.audio_base64);
-                audio.play().catch(() => {});
+                audio.play().catch(() => { showToast('点击页面任意位置启用语音播报', 'info'); });
             }
             break;
         case 'error':

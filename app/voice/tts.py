@@ -19,6 +19,7 @@ class TTSClient:
 
     def __init__(self) -> None:
         self._cache: dict[str, tuple[bytes, float]] = {}
+        self._cache_lock = asyncio.Lock()
         self._voice = "zh-CN-XiaoxiaoNeural"
 
     def _prune_cache(self) -> None:
@@ -40,10 +41,12 @@ class TTSClient:
             return None
 
         text_hash = hashlib.sha256(text.encode()).hexdigest()
-        self._prune_cache()
-        if text_hash in self._cache:
-            mp3_bytes, _ = self._cache[text_hash]
-            return mp3_bytes
+
+        async with self._cache_lock:
+            self._prune_cache()
+            if text_hash in self._cache:
+                mp3_bytes, _ = self._cache[text_hash]
+                return mp3_bytes
 
         output_path = f"/tmp/drivepal_tts_{uuid.uuid4()}.mp3"
         try:
@@ -67,8 +70,9 @@ class TTSClient:
                 mp3_bytes = f.read()
 
             if mp3_bytes:
-                self._cache[text_hash] = (mp3_bytes, time.monotonic())
-                self._evict_lru()
+                async with self._cache_lock:
+                    self._cache[text_hash] = (mp3_bytes, time.monotonic())
+                    self._evict_lru()
 
             return mp3_bytes or None
         except FileNotFoundError:
