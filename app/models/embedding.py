@@ -60,8 +60,28 @@ def get_cached_embedding_model(embedding_batch_size: int = 100) -> EmbeddingMode
     return _EMBEDDING_MODEL_CACHE[cache_key]
 
 
+async def aclose_embedding_model_cache() -> None:
+    """异步关闭所有缓存的嵌入模型客户端（lifespan 关闭时调用）。
+
+    与 clear_embedding_model_cache() 不同，此函数直接 await 每个 close，
+    确保在 lifespan 退出前所有 httpx 连接已完全关闭，避免 event loop 已闭
+    后触发 RuntimeError('Event loop is closed')。
+    """
+    if not _EMBEDDING_MODEL_CACHE:
+        return
+    models = list(_EMBEDDING_MODEL_CACHE.values())
+    _EMBEDDING_MODEL_CACHE.clear()
+    for model in models:
+        with contextlib.suppress(Exception):
+            await model.aclose()
+
+
 def clear_embedding_model_cache() -> None:
-    """关闭所有缓存的客户端并清除缓存。"""
+    """关闭所有缓存的客户端并清除缓存。
+
+    注意：当有运行中 event loop 时，关闭操作为后台 task，不阻塞调用方。
+    若需同步等待关闭，请在 async 上下文中使用 aclose_embedding_model_cache()。
+    """
     if not _EMBEDDING_MODEL_CACHE:
         return
     models = list(_EMBEDDING_MODEL_CACHE.values())
