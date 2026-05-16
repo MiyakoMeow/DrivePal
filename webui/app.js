@@ -195,7 +195,7 @@ function handleWSMessage(type, data) {
             document.getElementById('stage-task-body').textContent = formatJson({ task_type: data.task_type });
             document.getElementById('stage-decision-body').textContent = formatJson(data);
             break;
-        case 'done':
+        case 'done': {
             setLoading(false);
             loadHistory();
             if (data.event_id) {
@@ -221,6 +221,7 @@ function handleWSMessage(type, data) {
                 audio.play().catch(() => { showToast('点击页面任意位置启用语音播报', 'info'); });
             }
             break;
+        }
         case 'error':
             setLoading(false);
             showToast(data.message ?? '未知错误', 'error');

@@ -13,8 +13,8 @@ def _mk_state(**kw: object) -> AgentState:
     return cast("AgentState", kw)
 
 
-def test_build_done_data_no_modifications() -> None:
-    """无规则引擎修改时 done_data 不含 modifications 字段。"""
+def test_build_done_data_no_modifications_returns_no_modifications() -> None:
+    """Given 无规则引擎修改, When _build_done_data, Then done_data 不含 modifications。"""
     stages = WorkflowStages()
     state = _mk_state(
         original_query="",
@@ -32,8 +32,8 @@ def test_build_done_data_no_modifications() -> None:
     assert "modifications" not in done
 
 
-def test_build_done_data_with_modifications() -> None:
-    """含规则引擎修改时 done_data 含 modifications 列表。"""
+def test_build_done_data_with_modifications_includes_modifications_list() -> None:
+    """Given 含规则引擎修改, When _build_done_data, Then done_data 含 modifications 列表。"""
     stages = WorkflowStages()
     stages.execution = {"modifications": ["通道: visual→audio", "频率: 30min"]}
     state = _mk_state(
@@ -53,8 +53,8 @@ def test_build_done_data_with_modifications() -> None:
     assert done["modifications"][0] == "通道: visual→audio"
 
 
-def test_build_done_data_pending_with_modifications() -> None:
-    """pending 状态时 modifications 正常附加。"""
+def test_build_done_data_pending_with_modifications_includes_pending_and_mods() -> None:
+    """Given pending 含 modifications, When _build_done_data, Then 含 pending 状态 + modifications。"""
     stages = WorkflowStages()
     stages.execution = {"modifications": ["通道: visual→audio"]}
     state = _mk_state(
@@ -75,8 +75,8 @@ def test_build_done_data_pending_with_modifications() -> None:
     assert len(done["modifications"]) == 1
 
 
-def test_build_done_data_stages_none() -> None:
-    """stages 为 None 时 modifications 安全处理。"""
+def test_build_done_data_stages_none_handles_none_without_modifications() -> None:
+    """Given stages 为 None, When _build_done_data, Then 安全返回无 modifications。"""
     state = _mk_state(
         original_query="",
         context={},

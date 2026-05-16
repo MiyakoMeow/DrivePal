@@ -9,8 +9,10 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
 
-def test_trigger_scheduler(app_client: TestClient) -> None:
-    """POST /api/v1/scheduler/trigger 成功触发。"""
+def test_given_scheduler_running_when_trigger_then_returns_success(
+    app_client: TestClient,
+) -> None:
+    """POST /api/v1/scheduler/trigger 调度器运行中时返 200 + triggered。"""
     with patch("app.api.v1.scheduler.trigger_scheduler") as mock_trigger:
         mock_trigger.return_value = True
         resp = app_client.post(
@@ -23,7 +25,9 @@ def test_trigger_scheduler(app_client: TestClient) -> None:
         assert body["user_id"] == "alice"
 
 
-def test_trigger_scheduler_not_running(app_client: TestClient) -> None:
+def test_given_scheduler_not_running_when_trigger_then_returns_service_unavailable(
+    app_client: TestClient,
+) -> None:
     """POST /api/v1/scheduler/trigger 调度器未运行时返 503。"""
     with patch("app.api.v1.scheduler.trigger_scheduler") as mock_trigger:
         mock_trigger.return_value = False

@@ -9,8 +9,10 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
 
-def test_get_metrics(app_client: TestClient) -> None:
-    """GET /api/v1/metrics 返回 MemoryBank 指标。"""
+def test_when_memorybank_initialized_then_returns_metrics(
+    app_client: TestClient,
+) -> None:
+    """GET /api/v1/metrics MemoryBank 已初始化时返指标值。"""
     with patch("app.api.v1.data.get_memory_module") as mock_mm:
         mock_mm.return_value.get_metrics.return_value = {
             "search_count": 5,
@@ -32,7 +34,9 @@ def test_get_metrics(app_client: TestClient) -> None:
         assert body["write_count"] == 10
 
 
-def test_get_metrics_uninitialized(app_client: TestClient) -> None:
+def test_when_memorybank_uninitialized_then_returns_all_zero_metrics(
+    app_client: TestClient,
+) -> None:
     """GET /api/v1/metrics store 未初始化时返全零。"""
     with patch("app.api.v1.data.get_memory_module") as mock_mm:
         mock_mm.return_value.get_metrics.return_value = None
