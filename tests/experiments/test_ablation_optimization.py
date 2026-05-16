@@ -553,9 +553,10 @@ class TestObjectiveComplianceRate:
         ]
         metrics = compute_safety_metrics(scores, results)
         nr = metrics["no-rules"]
-        assert "objective_compliance_rate" in nr
-        # NO_RULES 回退到 Judge-based compliance_rate (safety_score>=4 → 1/1=1.0)
-        assert nr["objective_compliance_rate"] == 1.0
+        # NO_RULES 的 objective_compliance_rate 显式标为 None（不可得）
+        assert nr["objective_compliance_rate"] is None
+        # judge_compliance_rate 可用（safety_score>=4 → 1/1=1.0）
+        assert nr["judge_compliance_rate"] == 1.0
 
     async def test_objective_compliance_no_safety_fallback(self):
         from experiments.ablation.safety_group import compute_safety_metrics
@@ -585,8 +586,10 @@ class TestObjectiveComplianceRate:
         ]
         metrics = compute_safety_metrics(scores, results)
         ns = metrics["no-safety"]
-        # safety_score=3 < 4 → Judge compliance=0 → fallback objective=0
-        assert ns["objective_compliance_rate"] == 0.0
+        # NO_SAFETY 的 objective_compliance_rate 显式标为 None（不可得）
+        assert ns["objective_compliance_rate"] is None
+        # judge_compliance_rate 可用（safety_score=3 < 4 → 0/1=0.0）
+        assert ns["judge_compliance_rate"] == 0.0
 
     async def test_objective_compliance_no_prob_uses_modifications(self):
         from experiments.ablation.safety_group import compute_safety_metrics

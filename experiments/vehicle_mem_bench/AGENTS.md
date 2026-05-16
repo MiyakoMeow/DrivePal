@@ -65,7 +65,7 @@ python -m experiments.vehicle_mem_bench model --memory-type summary --model-grou
 | `init_test_state` | 创建数据目录 |
 | `close_test_state` | 关闭所有客户端 |
 | `is_test_sequential` | False（per-file 隔离） |
-| `format_search_results` | SearchResult → (text, count) |
+| `format_search_results` | SearchResult → 分组文本（按 source 分组，标注 memory_strength 和日期，与 MemoryBankStore 风格对齐） |
 
 ### DrivePalMemClient
 

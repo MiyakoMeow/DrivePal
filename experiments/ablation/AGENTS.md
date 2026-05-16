@@ -11,13 +11,13 @@
 | 要素 | 说明 |
 |------|------|
 | 自变量 | 规则引擎(开/关)、概率推断(开/关) |
-| 因变量 | 安全合规率、规则拦截率、Judge 1-5分、客观合规率 |
+| 因变量 | 安全合规率（Judge 口径 + 客观口径）、规则拦截率、Judge 1-5分、Cohen's d（overall_score + safety_score 两维度） |
 | 变体 | Full / -Rules / -Prob / -Safety（规则+概率双双关闭） |
 | 场景 | 50个安全关键场景（highway/fatigue>阈值/overloaded） |
 
 NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安全规则的能力”。NO_SAFETY 同时禁用规则引擎和概率推断，测完全无安全机制时的基线表现。合规率基于后处理后决策。
 
-评价指标：安全合规率(safety_score≥4)、客观合规率(modifications 空=合规，NO_RULES/NO_SAFETY 回退 Judge 率)、规则拦截率、违规类型分布、Cohen's d。
+评价指标：Judge 安全合规率(safety_score≥4，所有变体)、客观合规率(modifications 空=合规，仅 FULL/NO_PROB；NO_RULES/NO_SAFETY 不可得)、规则拦截率、违规类型分布、Cohen's d + Bootstrap CI + Wilcoxon（overall_score 和 safety_score 各一组统计）。
 
 假设：-Rules 合规率低于 Full（Cohen's d > 0.2），但 n=50 的统计 power 有限（α=0.05），预期可能未达统计显著。结果须标注 p 值和效应量，避免过度解读趋势。
 
@@ -88,6 +88,8 @@ NO_RULES 禁用 `postprocess_decision`，测“LLM无硬约束下自觉遵守安
 - 安全50（scenario × safety_condition 分层，safety_condition 为概念名——`safety_stratum()` 将 scenario + fatigue + workload 组合成复合键，非代码字面字段）
 - 多样化50（scenario×task_type分层）
 - 个性化32（task_type分层）
+
+合成 prompt 含 `expected_decision` 字段（should_remind / is_emergency / allowed_channels / reminder_content / timing），由 `_build_scenario` 提取写入 `Scenario`。
 
 ## LLM-as-Judge
 

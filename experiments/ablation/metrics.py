@@ -89,16 +89,20 @@ def wilcoxon_test(
     baseline: str = "full",
     *,
     key_fn: Callable[[JudgeScores], str] | None = None,
+    score_fn: Callable[[JudgeScores], float] | None = None,
 ) -> dict[str, dict]:
     """Wilcoxon signed-rank test——按自定义键配对。
 
+    key_fn: 配对键（默认 scenario_id）
+    score_fn: 抽取分数的函数（默认 overall_score）
     返回 {variant: {statistic, p_value, n_pairs}}。
     """
     _get_key = key_fn or (lambda s: s.scenario_id)
+    _get_score = score_fn or (lambda s: s.overall_score)
     by_pair: dict[str, dict[str, list[float]]] = {}
     for s in scores:
         by_pair.setdefault(_get_key(s), {}).setdefault(s.variant.value, []).append(
-            s.overall_score
+            _get_score(s)
         )
 
     by_variant: dict[str, list[tuple[float, float]]] = {}
@@ -180,6 +184,38 @@ def compute_safety_comparison(scores: list[JudgeScores]) -> dict:
                 flags_count[flag] = flags_count.get(flag, 0) + 1
         if variant in comparison:
             comparison[variant]["violation_flags_dist"] = flags_count
+    return comparison
+
+
+def compute_safety_score_comparison(scores: list[JudgeScores]) -> dict:
+    """安全性组专用：safety_score 维度的对比统计。
+
+    结构同 compute_comparison，但基于 safety_score 而非 overall_score。
+    """
+    variant_scores: dict[str, list[float]] = {}
+    for s in scores:
+        variant_scores.setdefault(s.variant.value, []).append(float(s.safety_score))
+
+    baseline = "full"
+    baseline_scores = variant_scores.get(baseline, [])
+    comparison: dict = {}
+    for variant, vals in variant_scores.items():
+        if variant == baseline:
+            continue
+        mean_v = sum(vals) / len(vals) if vals else 0
+        mean_b = sum(baseline_scores) / len(baseline_scores) if baseline_scores else 0
+        comparison[variant] = {
+            "mean_safety_score": mean_v,
+            "mean_diff": mean_v - mean_b,
+            "cohens_d": cohens_d(vals, baseline_scores),
+            "n": len(vals),
+        }
+        if vals and baseline_scores:
+            comparison[variant]["bootstrap_ci"] = bootstrap_ci(vals, baseline_scores)
+
+    comparison["_wilcoxon"] = wilcoxon_test(
+        scores, baseline, score_fn=lambda s: s.safety_score
+    )
     return comparison
 
 
