@@ -231,8 +231,7 @@ app/
 │   └── tools/         #   内置工具（导航/通信/车控/记忆查询）
 ├── api/               # REST API (FastAPI)
 │   ├── main.py        #   应用入口 + SSE 端点
-│   ├── stream.py      #   流式响应
-│   └── routes/        #   路由定义（query/feedback/presets/data/reminders/sessions）
+│   └── v1/            #   API v1 路由（query/feedback/presets/data/reminders/sessions/voice/ws）
 ├── models/            # LLM/Embedding 封装（多provider fallback）
 ├── memory/            # MemoryBank 记忆系统
 │   ├── memory_bank/   #   FAISS 索引 + 遗忘曲线 + 摘要
@@ -258,23 +257,22 @@ experiments/           # 消融实验
 
 基于 FastAPI 的 REST API。
 
-**端点：** `/api` 前缀，详见 [app/api/AGENTS.md](app/api/AGENTS.md)
+**端点：** `/api/v1` 前缀，详见 [app/api/AGENTS.md](app/api/AGENTS.md)
 
 ### 核心端点
 
 ```
-POST /api/query          # 处理用户查询
-POST /api/query/stream   # SSE 流式返回各阶段结果
-POST /api/feedback       # 提交用户反馈
-GET  /api/history        # 查询历史记忆事件
-GET  /api/presets         # 查询场景预设
-POST /api/presets         # 保存场景预设
+POST /api/v1/query       # 处理用户查询（支持 SSE 流式）
+POST /api/v1/feedback    # 提交用户反馈
+GET  /api/v1/history     # 查询历史记忆事件
+GET  /api/v1/presets     # 查询场景预设
+POST /api/v1/presets     # 保存场景预设
 ```
 
 ### 请求示例
 
 ```json
-POST /api/query/stream
+POST /api/v1/query
 {
   "query": "明天上午9点有个会议",
   "current_user": "default",
@@ -294,11 +292,11 @@ POST /api/query/stream
 ### 其他操作
 
 ```
-POST   /api/feedback              # 反馈学习（accept/ignore）
-POST   /api/reminders/poll        # 车机端轮询待触发提醒
-POST   /api/presets               # 保存场景预设
-GET    /api/export?current_user=default  # 导出数据
-DELETE /api/data?current_user=default    # 删除数据
+POST   /api/v1/feedback              # 反馈学习（accept/ignore）
+POST   /api/v1/reminders             # 车机端轮询待触发提醒
+POST   /api/v1/presets               # 保存场景预设
+GET    /api/v1/export?current_user=default  # 导出数据
+DELETE /api/v1/data?current_user=default    # 删除数据
 ```
 
 ---
