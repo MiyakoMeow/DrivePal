@@ -21,7 +21,7 @@ NO_RULES 禁用 `apply_rules`（软提示）+ `postprocess_decision`（硬后处
 
 假设：-Rules 合规率低于 Full（Cohen's d > 0.2），但 n=50 的统计 power 有限（α=0.05），预期可能未达统计显著。结果须标注 p 值和效应量，避免过度解读趋势。
 
-## 架构组：三Agent流水线 vs 单LLM（2×2 全因子）
+## 架构组：三Agent流水线 vs 单LLM
 
 **问题**：三Agent结构化流水线 vs 单LLM，决策质量差异？
 
@@ -63,7 +63,7 @@ NO_RULES 禁用 `apply_rules`（软提示）+ `postprocess_decision`（硬后处
 - `load_checkpoint(path)` 读取已有结果，返回 `(已完成的(scenario_id,variant)集合, VariantResult列表, 最后一条 extra 状态 | None)`
 - `append_checkpoint(path, vr, extra=None)` 每变体完成后追加写入。`extra` 字段用于持久化模块级可变状态（如反馈自适应步长）
 - 运行时跳过 `existing_ids` 中已完成的组合，仅跑未完成的变体
-- checkpoint 路径即 `results.jsonl`，续跑不停写同一文件
+- 安全组/架构组 checkpoint 路径即 `results.jsonl`；个性化组使用 `.checkpoint.jsonl`（独立存储反馈自适应状态），续跑不停写同一文件
 - 场景/变体范围变更时自动过滤旧 checkpoint 数据
 - 个性化组 checkpoint 额外记录反馈自适应步长状态（`export_state()` + `weight_history`），续跑时自动恢复反馈状态并跳过已完成变体，避免重复应用反馈导致权重偏离。注意：若在 FULL 变体后、NO_FEEDBACK 变体前中断，恢复的反馈状态可能滞后一回合（FULL 变体反馈更新未持久化），该偏差于 32 回合实验中可忽略
 

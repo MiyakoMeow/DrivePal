@@ -111,6 +111,7 @@ flowchart RL
         E8["test_ablation_runner.py"]
         E9["test_report.py"]
         E10["test_architecture_group.py"]
+        E11["test_ablation_correctness.py"]
     end
 ```
 

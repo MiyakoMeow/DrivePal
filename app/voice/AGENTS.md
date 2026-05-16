@@ -24,7 +24,7 @@ flowchart LR
 | `service.py` | `VoiceService` | 封装 VoicePipeline + VoiceRecorder 生命周期。统一 start/stop/status/config 接口。热更新配置。转录历史环形缓冲。设备枚举。供 lifespan/CLI/独立服务使用 |
 | `pipeline.py` | `VoicePipeline` | 编排：VAD 状态机 → ASR 转录 → yield 结果。`VoiceConfig.load()` 加载 voice.toml 配置。持有 `asyncio.Queue` 接收音频帧。通过 `on_transcription` 回调供 Scheduler 实时消费转录文本 |
 | `recorder.py` | `VoiceRecorder` | pyaudio 麦克风录音。`_CHANNELS=1`、`_FORMAT=8` 录音参数。`start(pipeline)` 在线程池运行阻塞录音循环，`run_coroutine_threadsafe` 喂帧 |
-| `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence` |
+| `vad.py` | `VADEngine` | webrtcvad 封装。`process_frame(bytes)` 返回 `speech_start`/`speech`/`speech_end`/`silence`（类型标注 `VADStatus | None`，但运行时永不返 None） |
 | `asr.py` | `ASREngine` | ASR 抽象基类，`transcribe(audio_bytes) → ASRResult` |
 | `asr.py` | `SherpaOnnxASREngine` | SenseVoice 离线 ASR。`_ensure_onnx_lib()` 自动创建 onnxruntime 符号链接。`_UNAVAILABLE` 哨兵对象 |
 | `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE=16000`、`_FRAMES_PER_CHUNK=480`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
@@ -40,7 +40,7 @@ feed_audio(chunk) → Queue → run() 循环:
   VAD.process_frame(chunk)
     speech_start → buffer = chunk
     speech → buffer += chunk
-    speech_end → ASR.transcribe(buffer) → yield text (if confidence >= min_confidence)
+    speech_end → len(buffer) >= min_samples → ASR.transcribe(buffer) → yield text (if confidence >= min_confidence); 不足则丢弃
     silence → discard
 ```
 

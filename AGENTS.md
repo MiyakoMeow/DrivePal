@@ -103,7 +103,7 @@ Python 3.14 + `uv`。
 |----|----|
 | Web | FastAPI + Uvicorn |
 | AI流水线 | 三阶段工作流（Context → JointDecision → Execution）+ 规则引擎 |
-| LLM | DeepSeek |
+| LLM | DeepSeek（多 provider fallback） |
 | Embedding | BGE-M3 (OpenRouter, 远程) |
 | 记忆 | MemoryBank (FAISS + Ebbinghaus) |
 | 语音 | sherpa-onnx (SenseVoice) + webrtcvad |
@@ -125,6 +125,7 @@ flowchart LR
         A5["api/ → AGENTS.md"]
         A6["models/ → AGENTS.md"]
         A7["memory/ → AGENTS.md"]
+        A8["schemas/ （数据模型）"]
         A9["storage/ → AGENTS.md"]
         AC["config.py"]
     end
@@ -139,8 +140,6 @@ flowchart LR
     M --> Other
 ```
 
-> 注：A8 schemas/ 已合并入 api/AGENTS.md
-
 | 子目录 | 职责 | 详文 |
 |--------|------|------|
 | agents/ | 工作流编排、规则引擎、概率推断、提示词 | agents/AGENTS.md |
@@ -150,6 +149,7 @@ flowchart LR
 | api/ | REST路由、WebSocket流式、服务生命周期、数据模型 | api/AGENTS.md |
 | memory/ | MemoryBank(FAISS+Ebbinghaus)、隐私保护 | memory/AGENTS.md |
 | models/ | LLM多provider fallback、Embedding | models/AGENTS.md |
+| schemas/ | 数据模型（DrivingContext/Query 等） | — |
 | storage/ | TOML异步存储、JSONL追加写入 | storage/AGENTS.md |
 
 `config.py` — 应用级配置（数据目录路径等）
@@ -225,7 +225,6 @@ git worktree add .worktrees/<名> -b <名>
 
 外部项目 MiyakoMeow/VehicleMemBench。50组数据集、23模块模拟器、五类记忆策略、A/B两组评测。本系统MemoryBank已与 VehicleMemBench 对齐。
 
-参考文献 → `archive/AGENTS.md`。
 
 ## 未解决
 
