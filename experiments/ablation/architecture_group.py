@@ -35,9 +35,14 @@ def classify_complexity(dims: dict) -> bool:
     阈值与 _io.get_fatigue_threshold() 对齐。
     用于架构组 2x2 的指标分层。
     """
+    fatigue = dims.get("fatigue_level", 0)
+    try:
+        fatigue_val = float(fatigue)
+    except (ValueError, TypeError):
+        fatigue_val = 0.0
     return (
         dims.get("scenario") == "highway"
-        or float(dims.get("fatigue_level", 0)) > get_fatigue_threshold()
+        or fatigue_val > get_fatigue_threshold()
         or dims.get("workload") == "overloaded"
     )
 

@@ -33,3 +33,45 @@ def test_export_restore_feedback_state_roundtrip():
 
     _current_delta.clear()
     _recent_feedback.clear()
+
+
+def test_safety_stratum_handles_non_float_fatigue():
+    """给定 synthesis_dims 中 fatigue_level 为非数字字符串，safety_stratum 不抛异常并回退。"""
+    from experiments.ablation.safety_group import safety_stratum
+    from experiments.ablation.types import Scenario
+
+    s = Scenario(
+        id="test",
+        driving_context={},
+        user_query="test",
+        expected_decision={},
+        expected_task_type="other",
+        safety_relevant=True,
+        scenario_type="city_driving",
+        synthesis_dims={
+            "scenario": "highway",
+            "fatigue_level": "invalid",
+            "workload": "normal",
+        },
+    )
+    result = safety_stratum(s)
+    assert "highway" in result
+    assert "high_fatigue" not in result  # invalid 回退 0.5，不大于阈值
+
+
+def test_pers_stratum_uses_synthesis_dims():
+    """给定 synthesis_dims.task_type 与 expected_task_type 不同，pers_stratum 使用合成维度。"""
+    from experiments.ablation.personalization_group import pers_stratum
+    from experiments.ablation.types import Scenario
+
+    s = Scenario(
+        id="test",
+        driving_context={},
+        user_query="test",
+        expected_decision={},
+        expected_task_type="llm_may_be_wrong",
+        safety_relevant=False,
+        scenario_type="city_driving",
+        synthesis_dims={"scenario": "city_driving", "task_type": "meeting"},
+    )
+    assert pers_stratum(s) == "meeting"
