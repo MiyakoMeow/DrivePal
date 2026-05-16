@@ -23,6 +23,7 @@ from app.agents.rules import (
     postprocess_decision,
     set_ablation_disable_rules,
 )
+from app.agents.types import WorkflowError
 from app.agents.workflow import (
     AgentWorkflow,
     get_ablation_disable_feedback,
@@ -36,6 +37,15 @@ from ._io import VARIANT_TIMEOUT_SECONDS, append_checkpoint, load_checkpoint
 from .types import BatchResult, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
+
+
+# 阶段超时：细粒度防单阶段卡死。外层 run_variant 的 300s 总超时保留为兜底——
+# 阶段超时先触发给出精确诊断，总超时最后触发防止整变体死锁。
+STAGE_TIMEOUT: dict[str, float] = {
+    "context": 30.0,
+    "joint_decision": 120.0,
+    "execution": 30.0,
+}
 
 
 class AblationRunner:
@@ -94,10 +104,17 @@ class AblationRunner:
             memory_module=mm,
             current_user=user_id,
         )
-        result, event_id, stages = await workflow.run_with_stages(
-            scenario.user_query,
-            driving_context=deepcopy(scenario.driving_context),
-        )
+        try:
+            result, event_id, stages = await workflow.run_with_stages(
+                scenario.user_query,
+                driving_context=deepcopy(scenario.driving_context),
+                stage_timeout=STAGE_TIMEOUT,
+            )
+        except WorkflowError:
+            logger.exception(
+                "[%s] variant=%s WorkflowError", scenario.id, variant.value
+            )
+            raise
         latency_ms = (time.perf_counter() - t0) * 1000
         return VariantResult(
             scenario_id=scenario.id,
