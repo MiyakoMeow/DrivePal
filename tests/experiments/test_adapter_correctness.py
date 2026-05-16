@@ -105,12 +105,14 @@ class TestMemoryCreatedAt:
 
         original_add = DrivePalMemClient.add
 
-        def capturing_add(self, content, strength=3, **kwargs):
-            captured_created_at.append(kwargs.get("created_at"))
+        def capturing_add(self, content, strength=3, *, created_at=None, **kwargs):
+            captured_created_at.append(created_at)
             if self._store is None:
                 self._store = MagicMock()
                 self._store.write = AsyncMock(return_value="evt_x")
-            return original_add(self, content, strength=strength, **kwargs)
+            return original_add(
+                self, content, strength=strength, created_at=created_at, **kwargs
+            )
 
         with patch.object(DrivePalMemClient, "add", capturing_add):
             vmb_root = pathlib.Path(__file__).resolve().parents[5] / "VehicleMemBench"
@@ -134,14 +136,15 @@ class TestMemoryCreatedAt:
             args.max_workers = 1
             args.memory_url = None
 
-            with patch(
-                "experiments.vehicle_mem_bench.adapter._DEFAULT_DATA_DIR",
-                tmp_path / "output",
-            ):
-                run_add(args)
-
-            if str(vmb_root) in sys.path:
-                sys.path.remove(str(vmb_root))
+            try:
+                with patch(
+                    "experiments.vehicle_mem_bench.adapter._DEFAULT_DATA_DIR",
+                    tmp_path / "output",
+                ):
+                    run_add(args)
+            finally:
+                if str(vmb_root) in sys.path:
+                    sys.path.remove(str(vmb_root))
 
         assert len(captured_created_at) == 1
         assert captured_created_at[0] is not None

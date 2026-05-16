@@ -84,6 +84,9 @@ _EN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
     }
 )
 
+# 合集中英文，供 _resolve_strength 单次遍历
+_ALL_PREFERENCE_KEYWORDS = _CN_PREFERENCE_KEYWORDS | _EN_PREFERENCE_KEYWORDS
+
 # 向后兼容别名——外部模块可能引用旧名，不可删除
 _PREFERENCE_KEYWORDS = _CN_PREFERENCE_KEYWORDS
 
@@ -96,11 +99,7 @@ def _resolve_strength(content: str) -> int:
     不直接影响 Judge 评分，误匹配代价可接受。
     """
     content_lower = content.lower()
-    if any(kw in content_lower for kw in _CN_PREFERENCE_KEYWORDS):
-        return 5
-    if any(kw in content_lower for kw in _EN_PREFERENCE_KEYWORDS):
-        return 5
-    return 3
+    return 5 if any(kw in content_lower for kw in _ALL_PREFERENCE_KEYWORDS) else 3
 
 
 # VehicleMemBench 根目录可覆写（默认与 DrivePal 同级）
