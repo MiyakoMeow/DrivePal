@@ -147,10 +147,19 @@ class DrivePalMemClient:
 
     # ── 公开接口（同步） ──
 
-    def add(self, content: str, strength: int = 3, **kwargs: object) -> str:
+    def add(
+        self,
+        content: str,
+        strength: int = 3,
+        *,
+        created_at: str | None = None,
+        **kwargs: object,
+    ) -> str:
         """写入一条记忆事件."""
         del kwargs
-        return self._run(self._async_add(content, strength=strength))
+        return self._run(
+            self._async_add(content, strength=strength, created_at=created_at)
+        )
 
     def search(self, query: str, **kwargs: object) -> list[Any]:
         """搜索记忆，返回 SearchResult 列表.
@@ -195,13 +204,16 @@ class DrivePalMemClient:
             user_id=self._user_id,
         )
 
-    async def _async_add(self, content: str, strength: int = 3) -> str:
+    async def _async_add(
+        self, content: str, strength: int = 3, *, created_at: str | None = None
+    ) -> str:
         await self._ensure_store()
         assert self._store is not None
+        ts = created_at or datetime.now(UTC).isoformat()
         event = MemoryEvent(
             content=content,
             type="passive_voice",
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=ts,
             memory_strength=strength,
         )
         return await self._store.write(event)
@@ -279,7 +291,8 @@ def run_add(args: object) -> None:
             for bucket in load_hourly_history(history_path):
                 content = "\n".join(bucket.lines)
                 strength = _resolve_strength(content)
-                client.add(content=content, strength=strength)
+                created_at = bucket.dt.isoformat() if bucket.dt else None
+                client.add(content=content, strength=strength, created_at=created_at)
                 message_count += 1
         except Exception as exc:
             return idx, message_count, str(exc)
