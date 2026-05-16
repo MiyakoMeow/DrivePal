@@ -301,7 +301,8 @@ DELETE /api/v1/data                 # 删除当前用户全量数据
 GET    /api/v1/experiments          # 查询实验结果对比
 POST   /api/v1/sessions/{id}/close  # 关闭会话
 GET    /api/v1/voice/status         # 语音流水线状态
-POST   /api/v1/voice/start|stop     # 控制录音
+POST   /api/v1/voice/start            # 开始录音
+POST   /api/v1/voice/stop             # 停止录音
 GET    /api/v1/voice/config         # 语音当前配置
 PUT    /api/v1/voice/config         # 语音热更新配置
 GET    /api/v1/voice/transcriptions # 转录历史（?limit=N）
