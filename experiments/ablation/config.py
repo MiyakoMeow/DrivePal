@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _EXPERIMENTS_TOML_DEFAULTS: dict[str, Any] = {
     "timeouts": {
         "context": 30.0,
-        "joint_decision": 120.0,
+        "joint_decision": 180.0,
         "execution": 30.0,
     },
 }

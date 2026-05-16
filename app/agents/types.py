@@ -119,12 +119,19 @@ class ReminderContent(BaseModel):
         return "无提醒内容"
 
 
-async def call_llm_json(chat_model: object, prompt: str) -> LLMJsonResponse:
+async def call_llm_json(
+    chat_model: object,
+    prompt: str,
+    max_tokens: int | None = None,
+) -> LLMJsonResponse:
     """共享 LLM JSON 调用。chat_model 需有 generate(prompt, json_mode=True) 方法。"""
     if not chat_model:
         raise WorkflowError(code="MODEL_UNAVAILABLE", message="ChatModel not available")
     model = cast("ChatModel", chat_model)
-    result = await model.generate(prompt, json_mode=True)
+    if max_tokens is not None:
+        result = await model.generate(prompt, json_mode=True, max_tokens=max_tokens)
+    else:
+        result = await model.generate(prompt, json_mode=True)
     return LLMJsonResponse.from_llm(result)
 
 

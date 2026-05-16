@@ -147,7 +147,9 @@ class JointDecisionAgent:
             preference_hint=preference_hint or "无特殊偏好。",
         )
         full_prompt = f"{system_prompt}\n\n{prompt_body}"
-        parsed = await call_llm_json(self._memory.chat_model, full_prompt)
+        parsed = await call_llm_json(
+            self._memory.chat_model, full_prompt, max_tokens=2048
+        )
 
         try:
             validated = JointDecisionOutput.model_validate(parsed.data or {})
@@ -196,7 +198,7 @@ class JointDecisionAgent:
         )
         prompt += f"\n触发来源：{trigger_source}"
 
-        parsed = await call_llm_json(self._memory.chat_model, prompt)
+        parsed = await call_llm_json(self._memory.chat_model, prompt, max_tokens=2048)
 
         try:
             validated = JointDecisionOutput.model_validate(parsed.data or {})
