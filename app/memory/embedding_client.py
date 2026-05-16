@@ -46,3 +46,7 @@ class EmbeddingClient:
             msg = f"Embedding dimension mismatch: {dims}. All vectors must have the same dimension."
             raise RuntimeError(msg)
         return results
+
+    async def close(self) -> None:
+        """关闭嵌入模型客户端，释放 HTTP 连接池."""
+        await self._model.aclose()
