@@ -40,7 +40,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--run-integration",
         action="store_true",
         default=False,
-        help="运行集成测试（需要真实 LLM provider）",
+        help="运行集成测试（需要外部服务或跨模块协作）",
     )
     parser.addoption(
         "--test-llm",

@@ -518,7 +518,7 @@ async function loadVoiceDevices() {
       sel.appendChild(opt);
     });
   } catch (e) {
-        document.getElementById('voiceDeviceSelect').innerHTML = '<option value="">无可用设备（麦克风未接入）</option>';
+        document.getElementById('voiceDeviceSelect').innerHTML = '<option value="">设备列表暂不可用</option>';
   }
 }
 

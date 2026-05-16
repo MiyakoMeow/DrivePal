@@ -1,4 +1,4 @@
-"""Scheduler integration tests — full pipeline from context update to trigger."""
+"""调度器集成测试——覆盖从上下文更新到触发的完整流水线。验证位置/场景触发与去抖逻辑。"""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -63,7 +63,7 @@ async def test_location_change_triggers_proactive_run(scheduler, mock_workflow, 
     scheduler.update_context(ctx2)
     await scheduler._tick()
 
-    mock_workflow.proactive_run.assert_awaited()
+    mock_workflow.proactive_run.assert_awaited_once()
     assert mock_workflow.proactive_run.call_args.kwargs["trigger_source"] == "location"
 
 
@@ -83,7 +83,7 @@ async def test_scenario_change_triggers_with_memory_hints(
     scheduler.update_context(ctx2)
     await scheduler._tick()
 
-    mock_workflow.proactive_run.assert_awaited()
+    mock_workflow.proactive_run.assert_awaited_once()
     kwargs = mock_workflow.proactive_run.call_args.kwargs
     assert kwargs["trigger_source"] == "context_change"
     assert kwargs["memory_hints"] == [{"content": "上次停车忘了关窗"}]

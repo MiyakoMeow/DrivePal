@@ -48,7 +48,7 @@ class ExecutionAgent:
                 from app.voice.config import VoiceConfig
 
                 self._tts_enabled = VoiceConfig.load().tts_enabled
-            except Exception:
+            except OSError, ValueError:
                 self._tts_enabled = False
         return self._tts_enabled
 

@@ -3,6 +3,7 @@
 import logging
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel
 
 from app.api.errors import AppError, AppErrorCode
 from app.api.scheduler_registry import (
@@ -15,8 +16,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/start")
-async def start_scheduler(request: Request) -> dict[str, str]:
+class SchedulerStartResponse(BaseModel):
+    """调度器启动响应."""
+
+    status: str
+    user_id: str
+
+
+class SchedulerStopResponse(BaseModel):
+    """调度器停止响应."""
+
+    status: str
+    user_id: str
+
+
+class SchedulerStatusResponse(BaseModel):
+    """调度器状态响应."""
+
+    user_id: str
+    running: bool
+
+
+@router.post("/start", response_model=SchedulerStartResponse)
+async def start_scheduler(request: Request) -> SchedulerStartResponse:
     """启动当前用户的主动调度器."""
     user_id: str = request.state.user_id
     sched = await get_or_create_scheduler(user_id)
@@ -25,19 +47,23 @@ async def start_scheduler(request: Request) -> dict[str, str]:
             code=AppErrorCode.SERVICE_UNAVAILABLE,
             message="Failed to start scheduler",
         )
-    return {"status": "started", "user_id": user_id}
+    return SchedulerStartResponse(status="started", user_id=user_id)
 
 
-@router.post("/stop")
-async def stop_scheduler_route(request: Request) -> dict[str, str]:
+@router.post("/stop", response_model=SchedulerStopResponse)
+async def stop_scheduler_route(request: Request) -> SchedulerStopResponse:
     """停止当前用户的主动调度器."""
     user_id: str = request.state.user_id
     ok = await stop_scheduler(user_id)
-    return {"status": "stopped" if ok else "not_found", "user_id": user_id}
+    return SchedulerStopResponse(
+        status="stopped" if ok else "not_found", user_id=user_id
+    )
 
 
-@router.get("/status")
-async def scheduler_status(request: Request) -> dict[str, str | bool]:
+@router.get("/status", response_model=SchedulerStatusResponse)
+async def scheduler_status(request: Request) -> SchedulerStatusResponse:
     """查询当前用户调度器运行状态."""
     user_id: str = request.state.user_id
-    return {"user_id": user_id, "running": await is_scheduler_running(user_id)}
+    return SchedulerStatusResponse(
+        user_id=user_id, running=await is_scheduler_running(user_id)
+    )

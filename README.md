@@ -158,29 +158,30 @@ flowchart LR
 
 ## 模块依赖关系
 
-```
-app/api/main.py  (生命周期管理)
-  ├── app/agents/workflow.py  (决策核心)
-  │   ├── app/agents/rules.py
-  │   ├── app/agents/pending.py
-  │   ├── app/agents/outputs.py
-  │   ├── app/agents/conversation.py
-  │   └── app/agents/shortcuts.py
-  ├── app/memory/  (记忆存储)
-  ├── app/models/  (LLM + Embedding)
-  ├── app/scheduler/scheduler.py  (主动触发)
-  │   ├── app/scheduler/context_monitor.py
-  │   ├── app/scheduler/memory_scanner.py
-  │   └── app/scheduler/trigger_evaluator.py
-  ├── app/voice/  (语音输入)
-  │   ├── app/voice/pipeline.py
-  │   ├── app/voice/recorder.py
-  │   ├── app/voice/vad.py
-  │   └── app/voice/asr.py
-  └── app/tools/  (工具执行)
-      ├── app/tools/registry.py
-      ├── app/tools/executor.py
-      └── app/tools/tools/
+```mermaid
+graph TD
+    MAIN["app/api/main.py<br/>生命周期管理"]
+    MAIN --> WF["app/agents/workflow.py<br/>决策核心"]
+    WF --> RULES["app/agents/rules.py"]
+    WF --> PENDING["app/agents/pending.py"]
+    WF --> OUTPUTS["app/agents/outputs.py"]
+    WF --> CONV["app/agents/conversation.py"]
+    WF --> SHORTCUTS["app/agents/shortcuts.py"]
+    MAIN --> MEM["app/memory/<br/>记忆存储"]
+    MAIN --> MODELS["app/models/<br/>LLM + Embedding"]
+    MAIN --> SCHED["app/scheduler/scheduler.py<br/>主动触发"]
+    SCHED --> CTX_MON["context_monitor.py"]
+    SCHED --> MEM_SCAN["memory_scanner.py"]
+    SCHED --> TRIG_EVAL["trigger_evaluator.py"]
+    MAIN --> VOICE["app/voice/<br/>语音输入"]
+    VOICE --> PIPELINE["pipeline.py"]
+    VOICE --> RECORDER["recorder.py"]
+    VOICE --> VAD["vad.py"]
+    VOICE --> ASR["asr.py"]
+    MAIN --> TOOLS["app/tools/<br/>工具执行"]
+    TOOLS --> REGISTRY["registry.py"]
+    TOOLS --> EXECUTOR["executor.py"]
+    TOOLS --> TOOLS_DIR["tools/"]
 ```
 
 ---
@@ -193,7 +194,7 @@ app/api/main.py  (生命周期管理)
 | **主动提醒** | 后台调度器轮询 5 种触发源（场景变化/位置接近/定时/状态/周期性） |
 | **工具调用** | 导航/通信/车控/记忆查询等内置工具，JointDecision 决策时触发 |
 | **多格式输出** | visual（屏幕文字）、audio（语音播报）、detailed（详细图文） |
-| **WebSocket 流式** | 实时双向通信，支持流式查询与提醒推送 |
+| **WS 双向通信 + SSE 流式输出** | WebSocket 长连接支持流式查询与提醒推送 |
 | **多轮对话** | session-based 连续对话 |
 | **快捷指令** | 预定义高频场景，跳过 LLM 流水线 |
 | **反馈学习** | accept/ignore 反馈自动调整事件类型偏好权重 |
@@ -260,8 +261,7 @@ experiments/           # 消融实验
 **端点：** `/api/v1` 前缀，详见 [app/api/AGENTS.md](app/api/AGENTS.md)
 
 ### 核心端点
-
-```
+```text
 POST   /api/v1/query       # 处理用户查询
 WS     /api/v1/ws          # WebSocket 长连接（流式查询 + 提醒推送）
 GET    /api/v1/history     # 查询历史记忆事件（?limit=N）
@@ -291,7 +291,7 @@ POST /api/v1/query
 
 ### 其他操作
 
-```
+```text
 GET    /api/v1/presets              # 查询场景预设
 POST   /api/v1/presets              # 保存场景预设
 DELETE /api/v1/presets/{id}         # 删除场景预设

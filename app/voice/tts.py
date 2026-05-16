@@ -40,7 +40,8 @@ class TTSClient:
         if not text.strip():
             return None
 
-        text_hash = hashlib.sha256(text.encode()).hexdigest()
+        key_material = f"{self._voice}:{text}"
+        text_hash = hashlib.sha256(key_material.encode()).hexdigest()
 
         async with self._cache_lock:
             self._prune_cache()
@@ -62,7 +63,12 @@ class TTSClient:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            await proc.communicate()
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=30.0)
+            except TimeoutError:
+                logger.warning("edge-tts timed out after 30s")
+                proc.kill()
+                await proc.wait()
             if proc.returncode != 0:
                 logger.warning("edge-tts exited with code %d", proc.returncode)
                 return None

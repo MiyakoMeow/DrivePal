@@ -29,7 +29,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     await ws_manager.connect(ws, user_id)
     logger.info("WS connected: user=%s", user_id)
 
-    # Lazy-create scheduler for this user (fire-and-forget)
+    # 延迟创建调度器，fire-and-forget 避免阻塞 WS 连接握手
     _ = asyncio.create_task(_lazy_create_scheduler(user_id))
 
     try:

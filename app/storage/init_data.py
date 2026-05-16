@@ -237,13 +237,11 @@ def init_storage(data_dir: Path | None = None) -> None:
     root = data_dir or DATA_DIR
     root.mkdir(parents=True, exist_ok=True)
     flag = root / _MIGRATED_FLAG
-    if flag.exists():
-        logger.debug("Migration already completed, skipping")
-        return
-    _migrate_legacy()
+    if not flag.exists():
+        _migrate_legacy()
+        flag.write_text("1")
     init_user_dir("default")
     _seed_demo_presets("default")
-    flag.write_text("1")
 
 
 if __name__ == "__main__":
