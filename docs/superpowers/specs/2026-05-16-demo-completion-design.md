@@ -37,7 +37,7 @@
 | 😴 疲劳驾驶警告 | highway | fatigue=0.8, workload=high, speed=100 | 安全规则演示 |
 | 🎙️ 语音录入 | parked | workload=low, 北京 | 语音转录演示 |
 
-**约束**：预设为普通数据，可删改。仅在 `presets.toml` 为空时写入。不发重复。
+**约束**：预设为普通数据，可删改。仅在 `presets.toml` 不存在或无有效 preset 时写入。不重复创建。
 
 ### A2. 演示脚本
 
