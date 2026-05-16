@@ -93,10 +93,18 @@ SCENARIO_PROMPT_TEMPLATE = """请生成一个车载AI测试场景，维度条件
     }},
     "scenario": "{scenario}"
   }},
+  "expected_decision": {{
+    "should_remind": true或false（是否需要提醒用户）,
+    "is_emergency": true或false（是否紧急事件）,
+    "allowed_channels": ["audio"] 或 ["audio","visual"]（允许的提醒通道）,
+    "reminder_content": {{"text": "提醒摘要文本", "display_text": "", "detailed": ""}},
+    "timing": "immediate" 或 "at_time"（立即提醒还是定时提醒）
+  }},
   "user_query": "用户说的中文句子，简短自然，如'帮我记一下3点开会'、'导航去最近的加油站'"
 }}
 
 注意：
+- expected_decision 须与 driving_context 的场景条件一致（如 highway/高疲劳应设 should_remind=true、allowed_channels=["audio"]）
 - user_query 倾向于匹配 task_type（meeting→会议提醒, travel→导航/路线, shopping→购物, contact→联系人, other→一般问题）
 - 生成的数据要尽量多样化，经纬度、地址、速度都应当随场景变化"""
 
