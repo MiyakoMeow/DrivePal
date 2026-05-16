@@ -20,27 +20,29 @@ def test_export_restore_feedback_state_roundtrip():
         restore_state,
     )
 
-    _current_delta[("test_user", "meeting")] = 0.25
-    _recent_feedback[("test_user", "meeting")] = [1, -1, 1]
+    try:
+        _current_delta[("test_user", "meeting")] = 0.25
+        _recent_feedback[("test_user", "meeting")] = [1, -1, 1]
 
-    state = export_state()
-    delta_map = {
-        (d["user_id"], d["task_type"]): d["value"] for d in state["_current_delta"]
-    }
-    fb_map = {
-        (d["user_id"], d["task_type"]): d["value"] for d in state["_recent_feedback"]
-    }
-    assert delta_map[("test_user", "meeting")] == 0.25
-    assert fb_map[("test_user", "meeting")] == [1, -1, 1]
+        state = export_state()
+        delta_map = {
+            (d["user_id"], d["task_type"]): d["value"] for d in state["_current_delta"]
+        }
+        fb_map = {
+            (d["user_id"], d["task_type"]): d["value"]
+            for d in state["_recent_feedback"]
+        }
+        assert delta_map[("test_user", "meeting")] == 0.25
+        assert fb_map[("test_user", "meeting")] == [1, -1, 1]
 
-    _current_delta.clear()
-    _recent_feedback.clear()
-    restore_state(state)
-    assert _current_delta[("test_user", "meeting")] == 0.25
-    assert _recent_feedback[("test_user", "meeting")] == [1, -1, 1]
-
-    _current_delta.clear()
-    _recent_feedback.clear()
+        _current_delta.clear()
+        _recent_feedback.clear()
+        restore_state(state)
+        assert _current_delta[("test_user", "meeting")] == 0.25
+        assert _recent_feedback[("test_user", "meeting")] == [1, -1, 1]
+    finally:
+        _current_delta.clear()
+        _recent_feedback.clear()
 
 
 def test_safety_stratum_handles_non_float_fatigue():

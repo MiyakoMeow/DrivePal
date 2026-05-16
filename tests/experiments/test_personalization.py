@@ -113,13 +113,12 @@ def test_decision_divergence_different_decisions_returns_positive():
 
 
 def test_has_visual_content_detects_display_text():
-    """给定 decision 含 display_text，当检测视觉内容，则应返回 True。"""
+    """给定 decision 仅含 display_text，当检测视觉内容，则应返回 True。"""
     from experiments.ablation.feedback_simulator import has_visual_content
 
     decision = {
         "reminder_content": {
             "display_text": "会议 · 15:00",
-            "detailed": "下午3点在公司3楼会议室",
         }
     }
     assert has_visual_content(decision)
