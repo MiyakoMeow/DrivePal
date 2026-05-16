@@ -329,7 +329,10 @@ class ProactiveScheduler:
     async def trigger_immediate_tick(self) -> None:
         """手动触发一次即时 _tick()（演示/调试用）。"""
         logger.info("Manual trigger: immediate tick for user %s", self._user_id)
-        await self._tick()
+        try:
+            await self._tick()
+        except Exception as e:
+            logger.warning("Manual tick failed for %s: %s", self._user_id, e)
 
     async def start(self) -> None:
         """启动调度器（幂等）。"""

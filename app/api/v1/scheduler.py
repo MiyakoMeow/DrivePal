@@ -75,7 +75,7 @@ async def trigger_scheduler_route(request: Request) -> SchedulerTriggerResponse:
     ok = await trigger_scheduler(user_id)
     if not ok:
         raise AppError(
-            code=AppErrorCode.NOT_FOUND,
+            code=AppErrorCode.SERVICE_UNAVAILABLE,
             message="Scheduler not running for user",
         )
     return SchedulerTriggerResponse(status="triggered", user_id=user_id)

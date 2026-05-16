@@ -319,7 +319,9 @@ async function loadMetrics() {
         const res = await api('GET', '/api/v1/metrics');
         const el = document.getElementById('stage-metrics-body');
         if (el) {
-            el.textContent = formatJson(res);
+            // 全零值表示未初始化，展示友好提示
+            const allZero = Object.values(res).every(v => v === 0);
+            el.textContent = allZero ? 'MemoryBank 尚未初始化（系统使用后自动填充）' : formatJson(res);
         }
     } catch (e) {
         const el = document.getElementById('stage-metrics-body');
