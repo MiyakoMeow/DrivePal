@@ -1,6 +1,10 @@
 """LLMJsonResponse 解析测试."""
 
-from app.agents.types import LLMJsonResponse
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from app.agents.types import LLMJsonResponse, call_llm_json
 
 
 class TestLLMJsonResponseFromLlm:
@@ -40,3 +44,25 @@ class TestLLMJsonResponseFromLlm:
         result = LLMJsonResponse.from_llm(text)
         assert result.data is not None
         assert result.data["task"] == "meeting"
+
+
+class TestCallLlmJsonMaxTokens:
+    """call_llm_json max_tokens 透传测试."""
+
+    @pytest.mark.asyncio
+    async def test_max_tokens_passed_to_generate(self):
+        """Given max_tokens=2048, When call_llm_json, then model.generate 收到 max_tokens."""
+        chat_model = MagicMock()
+        chat_model.generate = AsyncMock(return_value='{"ok": true}')
+        await call_llm_json(chat_model, "test prompt", max_tokens=2048)
+        chat_model.generate.assert_awaited_once_with(
+            "test prompt", json_mode=True, max_tokens=2048
+        )
+
+    @pytest.mark.asyncio
+    async def test_max_tokens_none_passed(self):
+        """Given max_tokens=None（默认）, then model.generate 不传 max_tokens."""
+        chat_model = MagicMock()
+        chat_model.generate = AsyncMock(return_value='{"ok": true}')
+        await call_llm_json(chat_model, "test prompt")
+        chat_model.generate.assert_awaited_once_with("test prompt", json_mode=True)
