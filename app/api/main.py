@@ -59,12 +59,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     from app.memory.singleton import close_memory_module
 
-    try:
-        sched = await get_or_create_scheduler("default")
-        logger.info("ProactiveScheduler started for default user")
-    except Exception as e:
-        logger.warning("Failed to start scheduler: %s", e)
-        sched = None
+    sched = await get_or_create_scheduler("default")
+    logger.info("ProactiveScheduler started for default user")
 
     # --- 语音流水线 ---
     voice_service = VoiceService()

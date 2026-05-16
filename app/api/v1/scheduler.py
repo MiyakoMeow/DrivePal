@@ -37,7 +37,7 @@ async def stop_scheduler_route(request: Request) -> dict[str, str]:
 
 
 @router.get("/status")
-async def scheduler_status(request: Request) -> dict[str, str]:
+async def scheduler_status(request: Request) -> dict[str, str | bool]:
     """查询当前用户调度器运行状态."""
     user_id: str = request.state.user_id
-    return {"user_id": user_id, "running": str(is_scheduler_running(user_id))}
+    return {"user_id": user_id, "running": await is_scheduler_running(user_id)}
