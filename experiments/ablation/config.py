@@ -60,16 +60,16 @@ def load_stage_timeouts() -> dict[str, float]:
                 parsed = float(val)
                 if parsed <= 0:
                     logger.warning(
-                        "Invalid %s=%r (non-positive), falling back to config default",
+                        "Invalid %s=%r (non-positive), falling back to TOML value",
                         env_overrides[key],
                         val,
                     )
-                    parsed = default
-                timeouts[key] = parsed
-                continue
+                else:
+                    timeouts[key] = parsed
+                    continue
             except ValueError:
                 logger.warning(
-                    "Invalid %s=%r, falling back to config default",
+                    "Invalid %s=%r, falling back to TOML value",
                     env_overrides[key],
                     val,
                 )
