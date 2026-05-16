@@ -115,11 +115,25 @@ async def run_personalization_group(
                 continue
             scenario = personalization_scenarios[i]
 
+            # 续跑：该轮两变体均已完成时整轮跳过——weight_history 已从 checkpoint
+            # 恢复，不再重复追加（否则下游指标因重复条目失真）。
+            # 但 checkpoint 在变体循环内写入，weight_history.append 在循环后——
+            # 若中断发生在 append 后、下次 checkpoint 前，last_extra 中缺该轮。
+            # 此时需补录：round_done 但 weight_history 无对应条目 → 取快照补上。
+            round_done = all(
+                (scenario.id, v.value) in existing_ids
+                for v in [Variant.FULL, Variant.NO_FEEDBACK]
+            )
+            if round_done:
+                if not any(wh.get("round") == i + 1 for wh in weight_history):
+                    snapshot = await read_weights(runner.base_user_id)
+                    weight_history.append(
+                        {"round": i + 1, "stage": stage_name, "weights": snapshot}
+                    )
+                continue
+
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
-                # 续跑：跳过已完成的变体
                 if (scenario.id, variant.value) in existing_ids:
-                    # 跳过时仍需保证 weight_history 有对应条目
-                    # ——若 checkpoint 中该轮 weight_history 已记录则无需追加
                     continue
                 # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
                 # NO_FEEDBACK 用独立 uid —— MemoryBank 隔离，不受 FULL 写入事件干扰

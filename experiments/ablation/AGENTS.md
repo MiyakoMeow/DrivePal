@@ -66,6 +66,7 @@ NO_RULES 禁用 `apply_rules`（软提示）+ `postprocess_decision`（硬后处
 - 安全组/架构组 checkpoint 路径即 `results.jsonl`；个性化组使用 `.checkpoint.jsonl`（独立存储反馈自适应状态），续跑不停写同一文件
 - 场景/变体范围变更时自动过滤旧 checkpoint 数据
 - 个性化组 checkpoint 额外记录反馈自适应步长状态（`export_state()` + `weight_history`），续跑时自动恢复反馈状态并跳过已完成变体，避免重复应用反馈导致权重偏离。注意：若在 FULL 变体后、NO_FEEDBACK 变体前中断，恢复的反馈状态可能滞后一回合（FULL 变体反馈更新未持久化），该偏差于 32 回合实验中可忽略
+- 续跑时若某轮两变体均已完成（`round_done` 检查），整轮跳过（含 `weight_history` 追加），防止重复条目污染下游指标
 
 ## CLI
 

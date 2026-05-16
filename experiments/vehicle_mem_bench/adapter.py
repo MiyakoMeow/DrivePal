@@ -108,7 +108,6 @@ class DrivePalMemClient:
         self._data_dir = data_dir
         self._user_id = user_id
         self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
         self._store: MemoryBankStore | None = None
 
     # ── 公开接口（同步） ──
@@ -119,7 +118,12 @@ class DrivePalMemClient:
         return self._run(self._async_add(content, strength=strength))
 
     def search(self, query: str, **kwargs: object) -> list[Any]:
-        """搜索记忆，返回 SearchResult 列表."""
+        """搜索记忆，返回 SearchResult 列表.
+
+        VehicleMemBench 调用方传入 user_id 参数，但本客户端在
+        build_test_client 时已按 per-file 绑定 user_id，故运行时
+        忽略该参数。若未来支持单 client 多用户，需改造此处。
+        """
         raw_top_k: object = kwargs.get("top_k", 5)
         top_k = int(raw_top_k) if isinstance(raw_top_k, (int, str)) else 5
         return self._run(self._async_search(query, top_k))
