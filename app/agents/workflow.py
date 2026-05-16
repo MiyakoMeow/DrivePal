@@ -157,6 +157,18 @@ class AgentWorkflow:
                             updates = await node_fn(state)
                     except TimeoutError:
                         elapsed = (time.perf_counter() - t0) * 1000
+                        # 确认 TimeoutError 来自本阶段 asyncio.timeout：若实际耗时
+                        # 远小于阈值则不属此超时，重抛供外层处理（防误捕非此源的
+                        # TimeoutError）。
+                        if elapsed < timeout * 1000 * 0.95:
+                            logger.warning(
+                                "stage=%s TimeoutError at %.1fms (limit=%.1fs) "
+                                "— not from this stage timeout, re-raising",
+                                stage_name,
+                                elapsed,
+                                timeout,
+                            )
+                            raise
                         # 若实际耗时远超阶段超时阈值，可能是外层 variant 超时
                         # (300s) 在此被内层捕获。重抛 TimeoutError 让外层处理。
                         if elapsed > timeout * 1000 * _STAGE_OVERAGE_FACTOR:

@@ -33,12 +33,8 @@ from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
 from app.models.chat import ChatError, get_chat_model
 
-from ._io import (
-    STAGE_TIMEOUT,
-    VARIANT_TIMEOUT_SECONDS,
-    append_checkpoint,
-    load_checkpoint,
-)
+from ._io import VARIANT_TIMEOUT_SECONDS, append_checkpoint, load_checkpoint
+from .config import STAGE_TIMEOUT
 from .types import AblationError, BatchResult, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)

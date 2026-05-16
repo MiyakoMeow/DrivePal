@@ -2,7 +2,7 @@
 
 import json
 
-from experiments.ablation._io import STAGE_TIMEOUT, _load_stage_timeouts
+from experiments.ablation.config import STAGE_TIMEOUT, load_stage_timeouts
 from experiments.ablation.metrics import bootstrap_ci, wilcoxon_test
 from experiments.ablation.scenario_synthesizer import (
     _compute_safety_relevant,
@@ -790,6 +790,6 @@ class TestStageTimeouts:
 
     def test_load_parses_returns_float(self):
         """_load_stage_timeouts 返回 dict 值类型正确."""
-        timeouts = _load_stage_timeouts()
+        timeouts = load_stage_timeouts()
         for key in ("context", "joint_decision", "execution"):
             assert isinstance(timeouts[key], float)
