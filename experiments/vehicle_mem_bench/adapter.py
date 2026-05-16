@@ -9,6 +9,9 @@
     - 每 thread 持独立 asyncio 事件循环 + MemoryBankStore
     - 每 benchmark file → 独立 user_id（drivepal_{n}）
     - EmbeddingModel 按需创建（避免共享 AsyncOpenAI client）
+
+偏好检测：中文关键词（设置/偏好/...）+ 英文关键词（prefer/change/set/...），两套并查。
+记忆时间戳：从 HistoryBucket.dt 提取原始时间注入 created_at，保留 Ebbinghaus 遗忘曲线的时间结构。
 """
 
 from __future__ import annotations
