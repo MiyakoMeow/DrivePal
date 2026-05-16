@@ -1,8 +1,11 @@
 """VehicleMemBench 适配器正确性测试."""
 
 import pathlib
+import sys
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from experiments.vehicle_mem_bench.adapter import _resolve_strength
 
@@ -110,13 +113,11 @@ class TestMemoryCreatedAt:
             return original_add(self, content, strength=strength, **kwargs)
 
         with patch.object(DrivePalMemClient, "add", capturing_add):
-            import sys
-
-            vmb_root = str(
-                pathlib.Path(__file__).resolve().parents[5] / "VehicleMemBench"
-            )
-            if vmb_root not in sys.path:
-                sys.path.insert(0, vmb_root)
+            vmb_root = pathlib.Path(__file__).resolve().parents[5] / "VehicleMemBench"
+            if not vmb_root.is_dir():
+                pytest.skip("VehicleMemBench not found")
+            if str(vmb_root) not in sys.path:
+                sys.path.insert(0, str(vmb_root))
 
             from evaluation.memorysystems.common import HistoryBucket
 
@@ -138,6 +139,9 @@ class TestMemoryCreatedAt:
                 tmp_path / "output",
             ):
                 run_add(args)
+
+            if str(vmb_root) in sys.path:
+                sys.path.remove(str(vmb_root))
 
         assert len(captured_created_at) == 1
         assert captured_created_at[0] is not None
