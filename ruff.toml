@@ -24,6 +24,11 @@ exclude = [".agents/**"]
 "app/api/main.py" = [
     "PLC0415",  # lifespan 内局部导入以避免循环导入
     "BLE001",  # scheduler 启动失败应 log 继续，不终止 lifespan
+    "TC003",  # AsyncIterator 用于 _lifespan 返回注解，运行时必需
+]
+"app/api/scheduler_registry.py" = [
+    "PLC0415",  # get_or_create_scheduler 内局部导入避免循环导入
+    "BLE001",  # scheduler 创建失败应 log 继续，不终止调用方
 ]
 "app/scheduler/scheduler.py" = [
     "PLR0913",  # __init__ 参数多（依赖注入），功能聚合合理
