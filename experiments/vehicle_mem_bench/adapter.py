@@ -50,7 +50,6 @@ _PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
     {
         "设置",
         "改成",
-        "调",
         "偏好",
         "喜欢",
         "换成",
@@ -60,6 +59,8 @@ _PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
         "改为",
         "选择",
         "想要",
+        "调到",
+        "调成",
     }
 )
 
