@@ -45,3 +45,6 @@ dev = [
     "requests>=2.34.2",
 ]
 
+[project.optional-dependencies]
+tts = ["edge-tts>=6.0"]
+

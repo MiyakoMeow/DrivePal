@@ -27,6 +27,8 @@ class VoiceConfig:
             "use_itn": True,
         }
     )
+    tts_enabled: bool = False
+    tts_voice: str = "zh-CN-XiaoxiaoNeural"
 
     @classmethod
     def _toml_defaults(cls) -> dict:
@@ -41,6 +43,10 @@ class VoiceConfig:
                 "min_confidence": cfg.min_confidence,
                 "silence_timeout_ms": cfg.silence_timeout_ms,
                 "asr": cfg.asr,
+                "tts": {
+                    "enabled": cfg.tts_enabled,
+                    "voice": cfg.tts_voice,
+                },
             },
         }
 
@@ -51,6 +57,9 @@ class VoiceConfig:
         raw = ensure_config(path, cls._toml_defaults())
         raw_voice = raw.get("voice")
         voice_data = raw_voice if isinstance(raw_voice, dict) else {}
+        tts_data = voice_data.get("tts")
+        if not isinstance(tts_data, dict):
+            tts_data = {}
         asr_data = voice_data.get("asr")
         if isinstance(asr_data, dict) and not asr_data:
             logger.warning(
@@ -68,4 +77,6 @@ class VoiceConfig:
             # cls.asr 在 dataclass 上返回 Field descriptor（因使用 default_factory）
             # 需用 cls().asr 取实例默认值。同时避免空 dict {} 通过
             asr=asr_data if isinstance(asr_data, dict) and asr_data else cls().asr,
+            tts_enabled=tts_data.get("enabled", cls.tts_enabled),
+            tts_voice=tts_data.get("voice", cls.tts_voice),
         )
