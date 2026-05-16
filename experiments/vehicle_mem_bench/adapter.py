@@ -46,8 +46,7 @@ _T = TypeVar("_T")
 # 每步 async 操作超时（秒），防止 Embedding API / FAISS 挂死线程
 _CORO_TIMEOUT: float = 120.0
 
-# 显式偏好关键词——含词则 memory_strength=5，否则=3
-_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
+_CN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
     {
         "设置",
         "改成",
@@ -64,6 +63,36 @@ _PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
         "调成",
     }
 )
+
+_EN_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "prefer",
+        "change",
+        "set",
+        "switch",
+        "turn on",
+        "turn off",
+        "adjust",
+        "want",
+        "like",
+        "would rather",
+        "choose",
+        "make it",
+    }
+)
+
+_PREFERENCE_KEYWORDS = _CN_PREFERENCE_KEYWORDS
+
+
+def _resolve_strength(content: str) -> int:
+    """判断内容是否含偏好表达，返回 memory_strength。"""
+    content_lower = content.lower()
+    if any(kw in content_lower for kw in _CN_PREFERENCE_KEYWORDS):
+        return 5
+    if any(kw in content_lower for kw in _EN_PREFERENCE_KEYWORDS):
+        return 5
+    return 3
+
 
 # VehicleMemBench 根目录可覆写（默认与 DrivePal 同级）
 # 使用 list 容器避免 PLW0603 global
@@ -243,7 +272,7 @@ def run_add(args: object) -> None:
         try:
             for bucket in load_hourly_history(history_path):
                 content = "\n".join(bucket.lines)
-                strength = 5 if any(kw in content for kw in _PREFERENCE_KEYWORDS) else 3
+                strength = _resolve_strength(content)
                 client.add(content=content, strength=strength)
                 message_count += 1
         except Exception as exc:
