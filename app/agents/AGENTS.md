@@ -31,7 +31,7 @@ flowchart LR
 |------|------|------|
 | stage_start | 阶段开始 | `{stage}` |
 | context_done | Context完成 | `{context}` |
-| decision | JointDecision完成 | `{should_remind, task_type}` |
+| decision | JointDecision完成 | `{should_remind, task_type（取自 task.type）}` |
 | done | Execution完成 | `_build_done_data()` |
 | error | 任一阶段失败 | `{code, message}` |
 
@@ -61,21 +61,21 @@ flowchart LR
 
 ## 关键类/接口
 
-`AgentWorkflow.run_with_stages(user_input, driving_context=None, session_id=None) → tuple[str, str | None, WorkflowStages]` — 三阶段同步返回。
+`AgentWorkflow.run_with_stages(user_input, driving_context=None, session_id=None) → tuple[str, str | None, WorkflowStages]` — 三阶段异步返回。
 
 `AgentWorkflow.run_stream(user_input, driving_context=None, session_id=None) → AsyncGenerator[dict]` — 逐阶段 yield SSE。
 
 `AgentWorkflow.proactive_run(context_override=None, memory_hints=None, trigger_source="scheduler") → tuple[str, str | None, WorkflowStages]` — 无 query 模式。
 
-`ContextAgent.run(state) → AgentState` — Context 阶段：检索记忆 + LLM 推断上下文。从 `types.py` 导入 `ContextOutput`/`call_llm_json`。
+`ContextAgent.run(state) → dict` — Context 阶段：检索记忆 + LLM 推断上下文。从 `types.py` 导入 `ContextOutput`/`call_llm_json`。
 
-`JointDecisionAgent.run(state) → AgentState` — JointDecision 阶段：概率推断 + LLM 决策 + 规则前处理。从 `types.py` 导入 `JointDecisionOutput`/`call_llm_json`。含 `_ablation_disable_feedback` ContextVar（消融实验）。
+`JointDecisionAgent.run(state) → dict` — JointDecision 阶段：概率推断 + LLM 决策 + 规则前处理。从 `types.py` 导入 `JointDecisionOutput`/`call_llm_json`。含 `_ablation_disable_feedback` ContextVar（消融实验）。
 
-`ExecutionAgent.run(state) → tuple[AgentState, WorkflowStages]` — Execution 阶段：规则后处理 + 工具调用 + 频次抑制 + 提醒发送。从 `types.py` 导入 `ReminderContent`/`WorkflowError`/`format_time_for_display`/`map_pending_trigger`。
+`ExecutionAgent.run(state) → dict` — Execution 阶段：规则后处理 + 工具调用 + 频次抑制 + 提醒发送。从 `types.py` 导入 `ReminderContent`/`WorkflowError`/`format_time_for_display`/`map_pending_trigger`。
 
 `WorkflowStages`(dataclass，4字段)：context / task / decision / execution。
 
-`AgentState`(TypedDict，13字段)：含 `rules_result` 规则引擎输出。
+`AgentState`(TypedDict，14字段)：含 `rules_result` 规则引擎输出。
 
 `ShortcutResolver.resolve(query) → dict | None` — 匹配 travel(patterns+参数) / action(patterns) 类型。
 
@@ -132,7 +132,7 @@ flowchart LR
 
 ## 规则引擎
 
-`rules.py`。`apply_rules()` 共4处静态调用。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
+`rules.py`。`apply_rules()` 共4条调用路径：JD.run（joint_decision_agent.py:109）、JD.run_proactive（:185）、Exec._resolve_rules（execution_agent.py:323）、postprocess_decision 内部（rules.py:350）。`postprocess_decision()` 在LLM输出后强制覆盖，不可绕过。
 
 | 规则 | 条件 | 约束 | 优先级 |
 |------|------|------|--------|
@@ -180,12 +180,15 @@ flowchart LR
 | ContextOutput | traffic | traffic_status |
 | ContextOutput | current_datetime | datetime, time |
 | ContextOutput | related_events | events, history |
+| ContextOutput | conversation_history | 无别名 |
+
+`ContextOutput` 还含 `conversation_history: list | None`（无别名，默认 None），由 ContextAgent 注入多轮对话历史。
 
 `decision` 字段为原始 dict，无Pydantic校验。含 `should_remind`/`timing`/`is_emergency`/`reminder_content`/`reason`。`should_remind` 可被 `postprocess_decision()` 强制设 false。
 
 `decision` 还含 `_postprocessed` 布尔标志，标记已被 `postprocess_decision()` 处理过，防止重复执行。
 
-辅助类型（均在 `types.py`）：`LLMJsonResponse`(BaseModel，通用JSON响应)、`ReminderContent`(提醒内容，text/content)。
+辅助类型（均在 `types.py`）：`LLMJsonResponse`(BaseModel，通用JSON响应)、`ReminderContent`(数据容器，text + content 两字段，`from_decision()` 类方法从 decision dict 提取文本)。
 
 ## 提示词
 
@@ -212,7 +215,7 @@ catch 模式：
 
 ## 配置
 
-规则由 7 条 TOML 规则 + `_FALLBACK_RULES` 兜底。加载自 `config/rules.toml`。TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:91-141`，7条硬编码规则：highway_audio_only / fatigue_suppress / overloaded_postpone / parked_all_channels / city_driving_limit / traffic_jam_calm / passenger_present_relax）。
+规则由 7 条 TOML 规则 + `_FALLBACK_RULES` 兜底。加载自 `config/rules.toml`。TOML 加载失败时使用 `_FALLBACK_RULES`（`rules.py:96-146`，7条硬编码规则：highway_audio_only / fatigue_suppress / overloaded_postpone / parked_all_channels / city_driving_limit / traffic_jam_calm / passenger_present_relax）。
 
 快捷指令由 `config/shortcuts.toml` 加载。
 
