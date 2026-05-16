@@ -33,19 +33,15 @@ from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
 from app.models.chat import ChatError, get_chat_model
 
-from ._io import VARIANT_TIMEOUT_SECONDS, append_checkpoint, load_checkpoint
-from .types import BatchResult, Scenario, Variant, VariantResult
+from ._io import (
+    STAGE_TIMEOUT,
+    VARIANT_TIMEOUT_SECONDS,
+    append_checkpoint,
+    load_checkpoint,
+)
+from .types import AblationError, BatchResult, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
-
-
-# 阶段超时：细粒度防单阶段卡死。外层 run_variant 的 300s 总超时保留为兜底——
-# 阶段超时先触发给出精确诊断，总超时最后触发防止整变体死锁。
-STAGE_TIMEOUT: dict[str, float] = {
-    "context": 30.0,
-    "joint_decision": 120.0,
-    "execution": 30.0,
-}
 
 
 class AblationRunner:
@@ -114,7 +110,12 @@ class AblationRunner:
             logger.exception(
                 "[%s] variant=%s WorkflowError", scenario.id, variant.value
             )
-            raise
+            raise AblationError(
+                code="STAGE_TIMEOUT",
+                message=(
+                    f"scenario={scenario.id} variant={variant.value} stage timed out"
+                ),
+            ) from None
         latency_ms = (time.perf_counter() - t0) * 1000
         return VariantResult(
             scenario_id=scenario.id,

@@ -3,6 +3,15 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from app.exceptions import AppError
+
+
+class AblationError(AppError):
+    """消融实验模块基类异常。"""
+
+    def __init__(self, code: str = "ABLATION_ERROR", message: str = "") -> None:
+        super().__init__(code=code, message=message)
+
 
 class Variant(StrEnum):
     """消融变体枚举."""

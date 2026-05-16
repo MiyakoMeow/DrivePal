@@ -153,6 +153,7 @@ async def run_personalization_group(
                         f"({variant.value}) ...",
                         end="",
                         file=sys.stderr,
+                        flush=True,
                     )
                 # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
                 # NO_FEEDBACK 用独立 uid —— MemoryBank 隔离，不受 FULL 写入事件干扰

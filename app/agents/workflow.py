@@ -83,6 +83,15 @@ class AgentWorkflow:
             self._execution_node,
         ]
 
+    @staticmethod
+    def _validate_timeout(stage_name: str, timeout: float) -> None:
+        """校验阶段超时值为正数，无效则抛 WorkflowError。"""
+        if timeout <= 0:
+            raise WorkflowError(
+                code="INVALID_STAGE_TIMEOUT",
+                message=f"Stage {stage_name}: invalid timeout value {timeout}",
+            )
+
     async def _context_node(self, state: AgentState) -> dict:
         return await self._context_agent.run(state)
 
@@ -142,6 +151,7 @@ class AgentWorkflow:
 
                 timeout = stage_timeout.get(stage_name) if stage_timeout else None
                 if timeout is not None:
+                    self._validate_timeout(stage_name, timeout)
                     try:
                         async with asyncio.timeout(timeout):
                             updates = await node_fn(state)

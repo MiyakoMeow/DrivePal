@@ -8,11 +8,13 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import aiofiles
 
 from app.agents.rules import get_fatigue_threshold as _get_fatigue_threshold
+from app.config import ensure_config, get_config_root
 
 from .types import Variant, VariantResult
 
@@ -30,8 +32,62 @@ except ValueError:
     VARIANT_TIMEOUT_SECONDS = 300
 """单变体执行超时（秒）。ablation_runner + personalization_group 共用。"""
 
-JUDGE_TIMEOUT_SECONDS = 120
-"""Judge 单次评分超时（秒）。judge.py 共用。"""
+try:
+    JUDGE_TIMEOUT_SECONDS = int(os.getenv("ABLATION_JUDGE_TIMEOUT_SECONDS", "120"))
+except ValueError:
+    JUDGE_TIMEOUT_SECONDS = 120
+"""Judge 单次评分超时（秒）。环境变量 ABLATION_JUDGE_TIMEOUT_SECONDS 覆盖。judge.py 共用。"""
+
+
+_EXPERIMENTS_TOML_DEFAULTS: dict = {
+    "timeouts": {
+        "context": 30.0,
+        "joint_decision": 120.0,
+        "execution": 30.0,
+    },
+}
+
+
+def _load_experiments_toml() -> dict:
+    """加载 experiments.toml 配置，缺失则从默认值生成。"""
+    path = get_config_root() / "experiments.toml"
+    return ensure_config(path, _EXPERIMENTS_TOML_DEFAULTS)
+
+
+def _load_stage_timeouts() -> dict[str, float]:
+    """从 TOML 读取阶段超时配置，环境变量可逐项覆盖。
+
+    格式：experiments.toml → [timeouts] context/joint_decision/execution
+    环境变量覆盖：ABLATION_TIMEOUT_CONTEXT / ABLATION_TIMEOUT_JOINT_DECISION / ABLATION_TIMEOUT_EXECUTION
+    """
+    toml = _load_experiments_toml()
+    raw = toml.get("timeouts", {})
+    defaults = _EXPERIMENTS_TOML_DEFAULTS["timeouts"]
+    timeouts: dict[str, float] = {}
+    env_overrides = {
+        "context": "ABLATION_TIMEOUT_CONTEXT",
+        "joint_decision": "ABLATION_TIMEOUT_JOINT_DECISION",
+        "execution": "ABLATION_TIMEOUT_EXECUTION",
+    }
+    for key, default in defaults.items():
+        val = os.environ.get(env_overrides[key])
+        if val is not None:
+            try:
+                timeouts[key] = float(val)
+                continue
+            except ValueError:
+                logger.warning(
+                    "Invalid %s=%r, falling back to config default",
+                    env_overrides[key],
+                    val,
+                )
+        raw_val = raw.get(key, default)
+        timeouts[key] = float(raw_val) if isinstance(raw_val, (int, float)) else default
+    return timeouts
+
+
+STAGE_TIMEOUT: dict[str, float] = _load_stage_timeouts()
+"""阶段超时（秒）。源自 experiments.toml [timeouts]，环境变量可逐项覆盖。"""
 
 
 def get_fatigue_threshold() -> float:
