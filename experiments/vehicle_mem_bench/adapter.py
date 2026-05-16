@@ -312,7 +312,7 @@ def _get_event_content(r: object) -> str:
 
 
 def _build_group_parts(
-    groups: dict[str, list], group_order: list[str], start_idx: int
+    groups: dict[str, list[object]], group_order: list[str], start_idx: int
 ) -> tuple[list[str], int]:
     parts: list[str] = []
     idx = start_idx
@@ -322,13 +322,16 @@ def _build_group_parts(
         max_strength = max(_get_memory_strength(r) for r in items)
         combined = "; ".join(t for r in items if (t := _get_event_content(r)))
         if combined:
-            parts.append(f"{idx}. [memory_strength={max_strength}] {combined}")
+            display_date = f" [date={gk}]" if gk and gk != "event" else ""
+            parts.append(
+                f"{idx}. [memory_strength={max_strength}]{display_date} {combined}"
+            )
             idx += 1
     return parts, idx
 
 
 def format_search_results(search_result: object) -> tuple[str, int]:
-    """格式化為分組記憶文本，與 MemoryBankStore.format_search_results 風格對齊。"""
+    """格式化为分组记忆文本，与 MemoryBankStore.format_search_results 风格对齐。"""
     if not isinstance(search_result, list):
         return "", 0
 
@@ -357,7 +360,7 @@ def format_search_results(search_result: object) -> tuple[str, int]:
         if content:
             parts.append(content)
 
-    parts, _ = _build_group_parts(groups, group_order, len(parts) + 1)
+    group_parts, _ = _build_group_parts(groups, group_order, len(parts) + 1)
+    parts.extend(group_parts)
 
-    valid = sum(1 for r in search_result if isinstance(getattr(r, "event", None), dict))
-    return "\n\n".join(parts), valid
+    return "\n\n".join(parts), len(parts)
