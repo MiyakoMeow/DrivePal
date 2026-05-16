@@ -6,7 +6,9 @@
 3. 快捷指令检查 + 对话记录写入
 """
 
+import asyncio
 import logging
+import time
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +23,7 @@ from app.agents.joint_decision_agent import (
 )
 from app.agents.shortcuts import ShortcutResolver
 from app.agents.state import AgentState, WorkflowStages
+from app.agents.types import WorkflowError
 from app.config import user_data_dir
 from app.exceptions import AppError
 from app.memory.memory import MemoryModule
@@ -34,6 +37,9 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+# 阶段超时容忍倍数：实际耗时超过 timeout×此倍数时判定为外层超时误捕
+_STAGE_OVERAGE_FACTOR: float = 1.5
 
 
 class AgentWorkflow:
@@ -77,6 +83,15 @@ class AgentWorkflow:
             self._execution_node,
         ]
 
+    @staticmethod
+    def _validate_timeout(stage_name: str, timeout: float) -> None:
+        """校验阶段超时值为正数，无效则抛 WorkflowError。"""
+        if timeout <= 0:
+            raise WorkflowError(
+                code="INVALID_STAGE_TIMEOUT",
+                message=f"Stage {stage_name}: invalid timeout value {timeout}",
+            )
+
     async def _context_node(self, state: AgentState) -> dict:
         return await self._context_agent.run(state)
 
@@ -91,8 +106,17 @@ class AgentWorkflow:
         user_input: str,
         driving_context: dict | None = None,
         session_id: str | None = None,
+        stage_timeout: dict[str, float] | None = None,
     ) -> tuple[str, str | None, WorkflowStages]:
-        """运行完整工作流并返回结果、事件ID和各阶段输出."""
+        """运行完整工作流并返回结果、事件ID和各阶段输出.
+
+        Args:
+            user_input: 用户输入文本
+            driving_context: 驾驶上下文信息
+            session_id: 会话ID
+            stage_timeout: 各阶段超时（秒），键为阶段名（context/joint_decision/execution）
+
+        """
         stages = WorkflowStages()
         state: AgentState = {
             "original_query": user_input,
@@ -121,7 +145,56 @@ class AgentWorkflow:
                 return result, event_id, stages
 
             for node_fn in self._nodes:
-                updates = await node_fn(state)
+                stage_name = node_fn.__name__.replace("_node", "").lstrip("_")
+                t0 = time.perf_counter()
+                logger.info("stage=%s start", stage_name)
+
+                timeout = stage_timeout.get(stage_name) if stage_timeout else None
+                if timeout is not None:
+                    self._validate_timeout(stage_name, timeout)
+                    try:
+                        async with asyncio.timeout(timeout):
+                            updates = await node_fn(state)
+                    except TimeoutError:
+                        elapsed = (time.perf_counter() - t0) * 1000
+                        # 确认 TimeoutError 来自本阶段 asyncio.timeout：若实际耗时
+                        # 远小于阈值则不属此超时，重抛供外层处理（防误捕非此源的
+                        # TimeoutError）。
+                        if elapsed < timeout * 1000 * 0.95:
+                            logger.warning(
+                                "stage=%s TimeoutError at %.1fms (limit=%.1fs) "
+                                "— not from this stage timeout, re-raising",
+                                stage_name,
+                                elapsed,
+                                timeout,
+                            )
+                            raise
+                        # 若实际耗时远超阶段超时阈值，可能是外层 variant 超时
+                        # (300s) 在此被内层捕获。重抛 TimeoutError 让外层处理。
+                        if elapsed > timeout * 1000 * _STAGE_OVERAGE_FACTOR:
+                            logger.warning(
+                                "stage=%s elapsed=%.1fms exceeds stage timeout by %.1fx, "
+                                "likely outer variant timeout — re-raising",
+                                stage_name,
+                                elapsed,
+                                elapsed / (timeout * 1000),
+                            )
+                            raise
+                        logger.warning(
+                            "stage=%s timeout after %.1fms (limit=%.1fs)",
+                            stage_name,
+                            elapsed,
+                            timeout,
+                        )
+                        raise WorkflowError(
+                            code="STAGE_TIMEOUT",
+                            message=f"Stage {stage_name} timed out after {timeout}s",
+                        ) from None
+                else:
+                    updates = await node_fn(state)
+
+                elapsed = (time.perf_counter() - t0) * 1000
+                logger.info("stage=%s end (%.1fms)", stage_name, elapsed)
                 state.update(updates)
 
             result = state.get("result") or "处理完成"

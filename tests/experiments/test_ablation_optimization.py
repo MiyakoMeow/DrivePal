@@ -2,6 +2,7 @@
 
 import json
 
+from experiments.ablation.config import STAGE_TIMEOUT, load_stage_timeouts
 from experiments.ablation.metrics import bootstrap_ci, wilcoxon_test
 from experiments.ablation.scenario_synthesizer import (
     _compute_safety_relevant,
@@ -775,3 +776,20 @@ class TestJudgeConcentrationDetection:
         ] + [JudgeScores(f"s{i}", Variant.FULL, 5, 5, 5, [], "") for i in range(8, 10)]
         result = detect_judge_degradation(scores)
         assert result["degraded"] is False
+
+
+class TestStageTimeouts:
+    """TOML 配置驱动阶段超时."""
+
+    def test_default_keys_present(self):
+        """模块级 STAGE_TIMEOUT 含三阶段且值均为正 float."""
+        for key in ("context", "joint_decision", "execution"):
+            assert key in STAGE_TIMEOUT, f"缺失阶段超时: {key}"
+            assert isinstance(STAGE_TIMEOUT[key], float), f"{key} 非 float"
+            assert STAGE_TIMEOUT[key] > 0, f"{key} 非正数"
+
+    def test_load_parses_returns_float(self):
+        """_load_stage_timeouts 返回 dict 值类型正确."""
+        timeouts = load_stage_timeouts()
+        for key in ("context", "joint_decision", "execution"):
+            assert isinstance(timeouts[key], float)

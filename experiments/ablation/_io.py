@@ -30,6 +30,12 @@ except ValueError:
     VARIANT_TIMEOUT_SECONDS = 300
 """单变体执行超时（秒）。ablation_runner + personalization_group 共用。"""
 
+try:
+    JUDGE_TIMEOUT_SECONDS = int(os.getenv("ABLATION_JUDGE_TIMEOUT_SECONDS", "120"))
+except ValueError:
+    JUDGE_TIMEOUT_SECONDS = 120
+"""Judge 单次评分超时（秒）。环境变量 ABLATION_JUDGE_TIMEOUT_SECONDS 覆盖。judge.py 共用。"""
+
 
 def get_fatigue_threshold() -> float:
     """安全读取 FATIGUE_THRESHOLD 环境变量，解析失败回退默认 0.7。

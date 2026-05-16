@@ -23,6 +23,7 @@ from app.agents.rules import (
     postprocess_decision,
     set_ablation_disable_rules,
 )
+from app.agents.types import WorkflowError
 from app.agents.workflow import (
     AgentWorkflow,
     get_ablation_disable_feedback,
@@ -33,7 +34,8 @@ from app.memory.singleton import get_memory_module
 from app.models.chat import ChatError, get_chat_model
 
 from ._io import VARIANT_TIMEOUT_SECONDS, append_checkpoint, load_checkpoint
-from .types import BatchResult, Scenario, Variant, VariantResult
+from .config import STAGE_TIMEOUT
+from .types import AblationError, BatchResult, Scenario, Variant, VariantResult
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +96,26 @@ class AblationRunner:
             memory_module=mm,
             current_user=user_id,
         )
-        result, event_id, stages = await workflow.run_with_stages(
-            scenario.user_query,
-            driving_context=deepcopy(scenario.driving_context),
-        )
+        try:
+            result, event_id, stages = await workflow.run_with_stages(
+                scenario.user_query,
+                driving_context=deepcopy(scenario.driving_context),
+                stage_timeout=STAGE_TIMEOUT,
+            )
+        except WorkflowError as wfe:
+            logger.exception(
+                "[%s] variant=%s WorkflowError(code=%s)",
+                scenario.id,
+                variant.value,
+                wfe.code,
+            )
+            raise AblationError(
+                code=wfe.code,
+                message=(
+                    f"scenario={scenario.id} variant={variant.value} "
+                    f"WorkflowError(code={wfe.code}): {wfe.message}"
+                ),
+            ) from None
         latency_ms = (time.perf_counter() - t0) * 1000
         return VariantResult(
             scenario_id=scenario.id,

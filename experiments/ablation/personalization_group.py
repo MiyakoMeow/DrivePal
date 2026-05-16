@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import logging
 import random
+import sys
 from pathlib import Path
 
 from ._io import (
@@ -83,6 +84,9 @@ async def run_personalization_group(
     stages, available = _build_stages(len(scenarios))
     personalization_scenarios = scenarios[:available]
 
+    total = available
+    is_tty = sys.stderr.isatty()
+
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []
     existing_ids: set[tuple[str, str]] = set()
@@ -135,6 +139,22 @@ async def run_personalization_group(
             for variant in [Variant.FULL, Variant.NO_FEEDBACK]:
                 if (scenario.id, variant.value) in existing_ids:
                     continue
+                logger.info(
+                    "PERS round=%d/%d stage=%s variant=%s scenario=%s",
+                    i + 1,
+                    total,
+                    stage_name,
+                    variant.value,
+                    scenario.id,
+                )
+                if is_tty:
+                    print(
+                        f"\r  个性化组进度: [{stage_name}] 轮次 {i + 1}/{total} "
+                        f"({variant.value}) ...",
+                        end="",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                 # FULL 用 base_user_id —— update_feedback_weight 写同一目录，反馈回路正确
                 # NO_FEEDBACK 用独立 uid —— MemoryBank 隔离，不受 FULL 写入事件干扰
                 uid = (
@@ -183,6 +203,20 @@ async def run_personalization_group(
                 else:
                     vr = dataclasses.replace(vr, round_index=i + 1)
                 all_results.append(vr)
+                logger.info(
+                    "PERS round=%d/%d variant=%s done latency=%.1fms error=%s",
+                    i + 1,
+                    total,
+                    variant.value,
+                    vr.latency_ms,
+                    vr.decision.get("error", ""),
+                )
+                if not is_tty:
+                    print(
+                        f"[个性化组] [{stage_name}] 轮次 {i + 1}/{total} "
+                        f"{variant.value} 完成 ({vr.latency_ms:.0f}ms)",
+                        file=sys.stderr,
+                    )
                 await append_checkpoint(
                     output_path.with_suffix(".checkpoint.jsonl"),
                     vr,

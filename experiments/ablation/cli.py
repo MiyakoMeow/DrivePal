@@ -554,43 +554,27 @@ async def main(argv: list[str] | None = None) -> None:
         all_group_results: dict[str, GroupResult] = {}
         failures: list[str] = []
 
-        # personalization 组必须串行：该组依赖 MemoryBank 权重状态的顺序累积，
-        # 并发会导致多任务竞争同一用户状态，产生不可复现的权重交叉污染。
-        concurrent_groups = [g for g in groups_to_run if g != "personalization"]
-        serial_group = "personalization" if "personalization" in groups_to_run else None
+        tasks = [
+            asyncio.create_task(
+                _run_and_summarize(g, group_scenarios[g], args.seed, run_dir)
+            )
+            for g in groups_to_run
+        ]
+        for r in await asyncio.gather(*tasks, return_exceptions=True):
+            if isinstance(r, asyncio.CancelledError):
+                raise r
+            if isinstance(r, Exception):
+                logger.error("Group experiment failed: %s", r)
+                failures.append(str(r))
+            elif isinstance(r, tuple):
+                all_group_results[r[0]] = r[1]
 
-        if concurrent_groups:
-            tasks = [
-                asyncio.create_task(
-                    _run_and_summarize(g, group_scenarios[g], args.seed, run_dir)
-                )
-                for g in concurrent_groups
-            ]
-            for r in await asyncio.gather(*tasks, return_exceptions=True):
-                if isinstance(r, asyncio.CancelledError):
-                    raise r  # 传播取消语义
-                if isinstance(r, Exception):
-                    logger.error("Group experiment failed: %s", r)
-                    failures.append(str(r))
-                elif isinstance(r, tuple):
-                    all_group_results[r[0]] = r[1]
-
-            if failures:
-                logger.error(
-                    "Incomplete results: %d concurrent group(s) failed — %s",
-                    len(failures),
-                    "; ".join(failures),
-                )
-
-        if serial_group:
-            try:
-                grp_name, grp_result = await _run_and_summarize(
-                    serial_group, group_scenarios[serial_group], args.seed, run_dir
-                )
-                all_group_results[grp_name] = grp_result
-            except Exception:
-                logger.exception("Serial group '%s' failed", serial_group)
-                failures.append(f"serial:{serial_group}")
+        if failures:
+            logger.error(
+                "Incomplete results: %d group(s) failed — %s",
+                len(failures),
+                "; ".join(failures),
+            )
 
         await render_report(all_group_results, run_dir)
 
