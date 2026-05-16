@@ -1,13 +1,15 @@
-"""生成论文实验对比图表 → *.png
+"""生成论文实验对比图表。
 
-用法: uv run python scripts/gen_figs.py
-      uv run python scripts/gen_figs.py -o archive/初稿-20260511
+用法:
+    uv run python scripts/gen_figs.py                             # 默认输出至 archive/定稿-20260516/
+    uv run python scripts/gen_figs.py -o archive/初稿-20260511     # 自定义输出目录
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 import matplotlib
 import matplotlib.font_manager
@@ -31,44 +33,107 @@ plt.rcParams["font.sans-serif"] = [_font, "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
 
 # ── 常量 ──────────────────────────────────────────
-LABELS = ["无记忆", "标准答案", "递归摘要", "键值存储", "MemoryBank"]
+LABELS = ["无记忆", "标准答案", "递归摘要", "键值存储", "MemoryBank in DrivePal"]
 COLORS = ["#bdbdbd", "#ffc107", "#66bb6a", "#42a5f5", "#ef5350"]
 REASONING_TYPES = ["偏好冲突", "条件约束", "错误纠正", "共指消解", "状态迁移"]
 
-# 表4-2: 总体
-EXACT_MATCH = [19.40, 86.20, 59.80, 51.60, 62.00]
+# ── 实验数据 ──────────────────────────────────────
+#
+# 数据来源说明：
+#   前 4 组（无记忆 / 标准答案 / 递归摘要 / 键值存储）来自 VehicleMemBench 原始实验
+#   （20260429），使用 deepseek-v4-flash + enable_thinking + reasoning_effort=max，
+#   max_workers=20。键值存储组 reflect_num=20，其余 reflect_num=10。
+#
+#   第 5 组（MemoryBank in DrivePal）来自 DrivePal 本系统评测 (20260516)，
+#   使用 deepseek-v4-flash 无 thinking，max_workers=6，reflect_num=10，
+#   对应 DrivePal 的 MemoryBank（FAISS + Ebbinghaus 遗忘曲线）。
+#
+#   两组实验共用 VehicleMemBench benchmark/qa_data 50 个场景、500 条评测任务。
+#   模型同为 deepseek-v4-flash，但 thinking 与否影响推理特征。
+#
+# 各推理类型含义（n 为任务数）：
+#   - 偏好冲突 (n=149) — 用户新偏好与历史记录矛盾
+#   - 条件约束 (n=102) — 带条件（天气/时间/位置）的约束推理
+#   - 错误纠正 (n=62)  — 用户纠正历史错误信息
+#   - 共指消解 (n=97)  — 代词/省略语与历史实体消解
+#   - 状态迁移 (n=90)  — 连续对话中状态变更
+#
+# 字段说明：
+#   exact_match       — 总体精确匹配率 (%)，表4-2
+#   em_by_type        — 各推理类型精确匹配率 (%)，表4-3，顺序同 REASONING_TYPES
+#   value_f1_by_type  — 各推理类型值级 F1 (%)，表4-4
+#   calls_by_type     — 各推理类型平均工具调用次数，表4-5
 
-# 表4-3: 各推理类型精确匹配率 [类型][策略]
-EM_MATRIX = [
-    [20.13, 93.29, 66.44, 62.42, 61.74],
-    [17.65, 75.49, 53.92, 47.06, 53.92],
-    [22.58, 79.03, 69.35, 66.13, 64.52],
-    [19.59, 89.69, 56.70, 40.21, 67.01],
-    [17.78, 87.78, 52.22, 41.11, 64.44],
-]
 
-# 表4-4: 各推理类型值级F1 [类型][策略]
-VALUE_F1_MATRIX = [
-    [47.17, 96.40, 78.70, 79.34, 76.99],
-    [48.38, 87.90, 74.95, 66.77, 74.72],
-    [51.97, 86.88, 84.55, 79.57, 75.19],
-    [56.77, 95.09, 75.28, 67.82, 79.41],
-    [48.74, 93.59, 74.25, 65.45, 76.30],
-]
+class _ExperimentGroup(TypedDict):
+    exact_match: float
+    em_by_type: list[float]
+    value_f1_by_type: list[float]
+    calls_by_type: list[float]
 
-# 表4-5: 工具调用数 [类型][策略]
-CALLS_MATRIX = [
-    [4.70, 2.35, 3.36, 7.75, 5.76],
-    [4.82, 2.47, 3.86, 9.54, 6.19],
-    [4.39, 2.50, 2.87, 7.98, 4.98],
-    [5.99, 2.60, 3.86, 10.36, 5.62],
-    [5.11, 2.43, 3.89, 10.24, 6.44],
-]
+
+class _SafetyVariant(TypedDict):
+    compliance: float
+    score_mean: float
+    score_dist: list[int]
+    intercept_rate: float
+
+
+class _ArchVariant(TypedDict):
+    overall: float
+    safety: float
+    reasonableness: float
+    latency_p50_ms: int
+
+
+class _PersonStage(TypedDict):
+    match_rate: float
+
+
+EXPERIMENTS: dict[str, _ExperimentGroup] = {
+    "无记忆": {
+        "exact_match": 19.40,
+        "em_by_type": [20.13, 17.65, 22.58, 19.59, 17.78],
+        "value_f1_by_type": [47.17, 48.38, 51.97, 56.77, 48.74],
+        "calls_by_type": [4.70, 4.82, 4.39, 5.99, 5.11],
+        # VMB thinking baseline: 裸 LLM，无记忆注入
+    },
+    "标准答案": {
+        "exact_match": 86.20,
+        "em_by_type": [93.29, 75.49, 79.03, 89.69, 87.78],
+        "value_f1_by_type": [96.40, 87.90, 86.88, 95.09, 93.59],
+        "calls_by_type": [2.35, 2.47, 2.50, 2.60, 2.43],
+        # VMB thinking gold: 注入完美记忆，上界
+    },
+    "递归摘要": {
+        "exact_match": 59.80,
+        "em_by_type": [66.44, 53.92, 69.35, 56.70, 52.22],
+        "value_f1_by_type": [78.70, 74.95, 84.55, 75.28, 74.25],
+        "calls_by_type": [3.36, 3.86, 2.87, 3.86, 3.89],
+        # VMB thinking summary: LLM 逐日递归摘要注入 prompt
+    },
+    "键值存储": {
+        "exact_match": 51.60,
+        "em_by_type": [62.42, 47.06, 66.13, 40.21, 41.11],
+        "value_f1_by_type": [79.34, 66.77, 79.57, 67.82, 65.45],
+        "calls_by_type": [7.75, 9.54, 7.98, 10.36, 10.24],
+        # VMB thinking key_value: LLM 自维护 KV 存储 + 搜索，reflect_num=20
+    },
+    "MemoryBank in DrivePal": {
+        "exact_match": 64.00,
+        "em_by_type": [67.11, 57.84, 58.06, 70.10, 63.33],
+        "value_f1_by_type": [79.88, 72.72, 71.46, 84.61, 76.89],
+        "calls_by_type": [4.60, 4.47, 4.44, 5.01, 5.18],
+        # DrivePal no-thinking: FAISS + Ebbinghaus 遗忘曲线，指令驱动规则引擎
+    },
+}
+
+# cast → dict[str, Any] 避免动态 key 访问 TypedDict 触 ty invalid-key
+_EXP: dict[str, dict[str, Any]] = cast("dict[str, dict[str, Any]]", EXPERIMENTS)
 
 
 def _save(fig, name: str, out_dir: Path) -> None:
     path = out_dir / name
-    fig.tight_layout()
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"  → {path}")
@@ -79,14 +144,14 @@ def _setup_ax(ax) -> None:
         ax.spines[spine].set_visible(False)
 
 
-def _grouped_bars(ax, matrix, x_labels) -> None:
-    """通用分组柱状图：matrix[row][col] → col 为策略分组。"""
+def _grouped_bars(ax, data_key: str, x_labels: list[str]) -> None:
+    """通用分组柱状图：从 _EXP[策略][data_key] 提取各推理类型的值。"""
     n_groups = len(x_labels)
     n_bars = len(LABELS)
     w = 0.8 / n_bars
     x = range(n_groups)
     for i, (label, color) in enumerate(zip(LABELS, COLORS, strict=True)):
-        vals = [matrix[j][i] for j in range(n_groups)]
+        vals = _EXP[label][data_key]
         offset = (i - (n_bars - 1) / 2) * w
         ax.bar([xi + offset for xi in x], vals, w, label=label, color=color)
     ax.set_xticks(x)
@@ -97,8 +162,9 @@ def _grouped_bars(ax, matrix, x_labels) -> None:
 # ── 图4-1: 总体精确匹配率 ─────────────────────────
 def fig_overall_match(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
-    bars = ax.bar(LABELS, EXACT_MATCH, color=COLORS, edgecolor="white", linewidth=0.5)
-    for bar, val in zip(bars, EXACT_MATCH, strict=True):
+    values = [_EXP[label]["exact_match"] for label in LABELS]
+    bars = ax.bar(LABELS, values, color=COLORS, edgecolor="white", linewidth=0.5)
+    for bar, val in zip(bars, values, strict=True):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 1.5,
@@ -117,7 +183,7 @@ def fig_overall_match(out_dir: Path) -> None:
 # ── 图4-2: 各推理类型精确匹配率 ───────────────────
 def fig_reasoning_em(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(11, 5.5))
-    _grouped_bars(ax, EM_MATRIX, REASONING_TYPES)
+    _grouped_bars(ax, "em_by_type", REASONING_TYPES)
     ax.set_ylabel("精确匹配率 (%)", fontsize=12)
     _setup_ax(ax)
     _save(fig, "fig4-2_exact_match_by_type.png", out_dir)
@@ -126,7 +192,7 @@ def fig_reasoning_em(out_dir: Path) -> None:
 # ── 图4-3: 各推理类型值级F1 ───────────────────────
 def fig_reasoning_value_f1(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(11, 5.5))
-    _grouped_bars(ax, VALUE_F1_MATRIX, REASONING_TYPES)
+    _grouped_bars(ax, "value_f1_by_type", REASONING_TYPES)
     ax.set_ylabel("值级F1 (%)", fontsize=12)
     _setup_ax(ax)
     _save(fig, "fig4-3_value_f1_by_type.png", out_dir)
@@ -135,46 +201,82 @@ def fig_reasoning_value_f1(out_dir: Path) -> None:
 # ── 图4-4: 各推理类型工具调用数 ───────────────────
 def fig_reasoning_calls(out_dir: Path) -> None:
     fig, ax = plt.subplots(figsize=(11, 5.5))
-    _grouped_bars(ax, CALLS_MATRIX, REASONING_TYPES)
+    _grouped_bars(ax, "calls_by_type", REASONING_TYPES)
     ax.set_ylabel("平均工具调用次数", fontsize=12)
     _setup_ax(ax)
     _save(fig, "fig4-4_tool_calls_by_type.png", out_dir)
 
 
 # ── 消融实验数据 (§4.7) ──────────────────────────
-# 安全性组数据
-SAFETY_COMPLIANCE = {"Full": 0.66, "NO_PROB": 0.62, "NO_RULES": 0.58}
-SAFETY_SCORES = {"Full": 3.76, "NO_PROB": 3.54, "NO_RULES": 3.52}
-SAFETY_DIST = {
-    "Full": [0, 22, 18, 22, 38],
-    "NO_RULES": [0, 34, 18, 10, 38],
-    "NO_PROB": [4, 24, 18, 22, 32],
+#
+# 安全性消融：比较规则引擎各组件移除的效果
+#   变体说明：
+#     Full     — 完整系统（规则引擎 + 概率推断）
+#     NO_PROB  — 移除概率推断（仅规则引擎）
+#     NO_RULES — 移除规则引擎（仅概率推断）
+SAFETY: dict[str, _SafetyVariant] = {
+    "Full": {
+        "compliance": 0.66,
+        "score_mean": 3.76,
+        "score_dist": [0, 22, 18, 22, 38],
+        "intercept_rate": 0.68,
+    },
+    "NO_PROB": {
+        "compliance": 0.62,
+        "score_mean": 3.54,
+        "score_dist": [4, 24, 18, 22, 32],
+        "intercept_rate": 0.70,
+    },
+    "NO_RULES": {
+        "compliance": 0.58,
+        "score_mean": 3.52,
+        "score_dist": [0, 34, 18, 10, 38],
+        "intercept_rate": 0.0,
+    },
 }
-SAFETY_INTERCEPT = {"Full": 0.68, "NO_PROB": 0.70, "NO_RULES": 0.0}
 
-# 架构组数据
-ARCH_SCORES = {
-    "overall": {"SingleLLM": 4.88, "Full": 2.90},
-    "safety": {"SingleLLM": 5.0, "Full": 2.86},
-    "reasonableness": {"SingleLLM": 4.9, "Full": 3.0},
+# 架构消融：四智能体流水线 vs 单 LLM 直出
+#   SingleLLM — 单次 LLM 调用完成全部决策
+#   Full      — 四智能体流水线（分析→规划→执行→反思）
+ARCH: dict[str, _ArchVariant] = {
+    "SingleLLM": {
+        "overall": 4.88,
+        "safety": 5.0,
+        "reasonableness": 4.9,
+        "latency_p50_ms": 11486,
+    },
+    "Full": {
+        "overall": 2.90,
+        "safety": 2.86,
+        "reasonableness": 3.0,
+        "latency_p50_ms": 12052,
+    },
 }
-ARCH_LATENCY_P50 = {"SingleLLM": 11486, "Full": 12052}
 ARCH_COHENS_D = 2.58
 ARCH_P_VALUE = "2.1e-9"
 
-# 个性化组数据
-PERSON_MATCHING = {"高频提醒": 0.375, "静默": 0.125, "视觉详情": 0.50}
-PERSON_CONVERGENCE = 0.8125
-PERSON_STABILITY = 0.0163
-PERSON_DIVERGENCE = 0.25
+# 个性化消融：反馈机制对偏好收敛的影响
+#   三个阶段均为 FULL 变体下的不同操作：
+#     高频提醒 — FULL 主动推送偏好确认
+#     静默     — FULL 不推送，仅被动记录
+#     视觉详情 — FULL 提供可视化偏好总结
+#   附加聚合指标描述收敛特性
+PERSON: dict[str, _PersonStage] = {
+    "高频提醒": {"match_rate": 0.375},
+    "静默": {"match_rate": 0.125},
+    "视觉详情": {"match_rate": 0.50},
+}
+PERSON_CONVERGENCE = 0.8125  # 权重收敛速度（0=即时，1=未收敛）
+PERSON_STABILITY = 0.0163  # 收敛稳定性（偏好切换后权重标准差）
+PERSON_DIVERGENCE = 0.25  # 决策分歧度（混合阶段 FULL vs NO_FEEDBACK 差异）
 
 
 def fig_ablation_safety(out_dir: Path) -> None:
     """图4-5: 安全性消融——合规率与评分分布."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-    variants = list(SAFETY_COMPLIANCE.keys())
-    comp_vals = [SAFETY_COMPLIANCE[v] * 100 for v in variants]
+    variants = list(SAFETY.keys())
+    comp_vals = [SAFETY[v]["compliance"] * 100 for v in variants]
     colors_s = ["#ef5350", "#42a5f5", "#66bb6a"]
     bars = ax1.bar(
         variants, comp_vals, color=colors_s, edgecolor="white", linewidth=0.5
@@ -197,7 +299,7 @@ def fig_ablation_safety(out_dir: Path) -> None:
     palette = ["#d32f2f", "#f44336", "#ffc107", "#66bb6a", "#1b5e20"]
     bottom = [0.0] * 3
     for i, score in enumerate(scores):
-        vals = [SAFETY_DIST[v][i] / 100 for v in variants]
+        vals = [SAFETY[v]["score_dist"][i] / 100 for v in variants]
         ax2.bar(
             variants,
             vals,
@@ -219,7 +321,7 @@ def fig_ablation_safety(out_dir: Path) -> None:
     ax2_twin = ax2.twiny()
     ax2_twin.set_xlim(ax2.get_xlim())
     ax2_twin.set_xticks(range(3))
-    intercept_labels = [f"拦截率\n{SAFETY_INTERCEPT[v]:.0%}" for v in variants]
+    intercept_labels = [f"拦截率\n{SAFETY[v]['intercept_rate']:.0%}" for v in variants]
     ax2_twin.set_xticklabels(intercept_labels, fontsize=9)
     ax2_twin.spines["top"].set_visible(False)
 
@@ -232,14 +334,14 @@ def fig_ablation_architecture(out_dir: Path) -> None:
 
     metrics = ["综合评分", "安全性", "合理性"]
     single_vals = [
-        ARCH_SCORES["overall"]["SingleLLM"],
-        ARCH_SCORES["safety"]["SingleLLM"],
-        ARCH_SCORES["reasonableness"]["SingleLLM"],
+        ARCH["SingleLLM"]["overall"],
+        ARCH["SingleLLM"]["safety"],
+        ARCH["SingleLLM"]["reasonableness"],
     ]
     full_vals = [
-        ARCH_SCORES["overall"]["Full"],
-        ARCH_SCORES["safety"]["Full"],
-        ARCH_SCORES["reasonableness"]["Full"],
+        ARCH["Full"]["overall"],
+        ARCH["Full"]["safety"],
+        ARCH["Full"]["reasonableness"],
     ]
     x = range(len(metrics))
     w = 0.3
@@ -296,8 +398,8 @@ def fig_ablation_architecture(out_dir: Path) -> None:
 
     latency_labels = ["SingleLLM", "Four-Agent"]
     latency_vals = [
-        ARCH_LATENCY_P50["SingleLLM"] / 1000,
-        ARCH_LATENCY_P50["Full"] / 1000,
+        ARCH["SingleLLM"]["latency_p50_ms"] / 1000,
+        ARCH["Full"]["latency_p50_ms"] / 1000,
     ]
     bars = ax2.bar(
         latency_labels,
@@ -327,8 +429,8 @@ def fig_ablation_personalization(out_dir: Path) -> None:
     """图4-7: 个性化消融——偏好匹配率与收敛."""
     fig, ax = plt.subplots(figsize=(9, 5.5))
 
-    stages = list(PERSON_MATCHING.keys())
-    match_rates = [PERSON_MATCHING[s] * 100 for s in stages]
+    stages = list(PERSON.keys())
+    match_rates = [PERSON[s]["match_rate"] * 100 for s in stages]
 
     bars = ax.bar(
         stages,
