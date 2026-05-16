@@ -1,6 +1,6 @@
-"""工具执行器集成测试 — navigation 确认条件 + 工具结果注入。"""
+"""工具执行器集成测试 — navigation 确认条件 + 工具结果返回。"""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -10,15 +10,6 @@ from app.tools.executor import (
     ToolExecutor,
 )
 from app.tools.registry import ToolRegistry, ToolSpec
-from app.tools.tools import register_builtin_tools
-
-
-@pytest.fixture
-def builtin_executor():
-    """注册内置工具的执行器。"""
-    registry = ToolRegistry()
-    register_builtin_tools(registry)
-    return ToolExecutor(registry)
 
 
 class TestNavigationConfirmationRequired:
@@ -69,8 +60,8 @@ class TestNavigationConfirmationRequired:
         assert "消息已发送给 张三" in result
 
 
-class TestToolResultInjection:
-    """工具执行结果正确返回，可注入 JointDecision 输出。"""
+class TestToolResultReturn:
+    """工具执行结果正确返回。"""
 
     async def test_send_message_result_returned(self, builtin_executor):
         """Given mock send_message handler returns success, When ToolExecutor executes, Then result is returned and injectable into JointDecision output。"""
@@ -164,8 +155,8 @@ class TestConfirmationLogicEdgeCases:
         )
         assert result == "导航已设置：西直门"
 
-    async def test_scenario_unknown_raises_confirmation(self, builtin_executor):
-        """Given scenario=unknown driving state, When execute navigation, Then 非 parked 都应抛确认错误。"""
+    async def test_non_parked_scenario_raises_confirmation(self, builtin_executor):
+        """Given scenario=mountain (非 parked), When execute navigation, Then 抛确认错误。"""
         driving = {"scenario": "mountain"}
 
         with pytest.raises(ToolConfirmationRequiredError):

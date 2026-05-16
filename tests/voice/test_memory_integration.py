@@ -33,7 +33,6 @@ def _make_chat_mock() -> AsyncMock:
     return chat
 
 
-@pytest.mark.asyncio
 async def test_voice_transcription_to_memorybank_retrieval(tmp_path: Path):
     """Given 语音转录文本, When 存入MemoryBank后搜索, Then 搜索结果包含该事件。"""
     memory = MemoryModule(
