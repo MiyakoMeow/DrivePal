@@ -55,7 +55,7 @@ def _compute_alignment(decision: dict, stage: str, stages: dict | None = None) -
             return 1.0
         return 1.0 if decision.get("is_emergency") else 0.0
     if stage == "visual-detail":
-        return 1.0 if has_visual_content(decision, stages=stages) else 0.0
+        return 1.0 if has_visual_content(decision) else 0.0
     return 0.5
 
 
@@ -127,20 +127,14 @@ def simulate_feedback(
     return "accept" if alignment > 0.5 else "ignore"
 
 
-def has_visual_content(decision: dict, *, stages: dict | None = None) -> bool:
+def has_visual_content(decision: dict) -> bool:
     """判断 LLM 是否意图生成视觉内容。
 
-    优先从 stages["decision"]（规则引擎前的 LLM 原始输出）读取，
-    stages 无数据时 fallback 到 decision（可能已被规则引擎修改）。
+    postprocess_decision 仅修改 should_remind/allowed_channels/清空 reminder_content，
+    不修改 reminder_content 子字段（display_text / detailed）。
+    stages 优先逻辑已移除——execution_agent 同步 stages.decision 后两者恒等同。
     """
-    source = decision
-    if stages:
-        stage_decision = stages.get("decision")
-        if isinstance(stage_decision, dict) and isinstance(
-            stage_decision.get("reminder_content"), dict
-        ):
-            source = stage_decision
-    rc = source.get("reminder_content")
+    rc = decision.get("reminder_content")
     if not isinstance(rc, dict):
         return False
     display = rc.get("display_text")
@@ -240,3 +234,35 @@ async def read_weights(user_id: str) -> dict[str, float]:
     store = TOMLStore(user_dir=ud, filename="strategies.toml", default_factory=dict)
     current = await store.read()
     return _safe_read_weights(current)
+
+
+def export_state() -> dict:
+    """导出当前反馈状态以备持久化。
+
+    Returns:
+        {"_current_delta": {...}, "_recent_feedback": {...}}
+        键为 "user_id::task_type" 格式的字符串（dict key 可序列化）。
+    """
+    return {
+        "_current_delta": {
+            f"{uid}::{tt}": v for (uid, tt), v in _current_delta.items()
+        },
+        "_recent_feedback": {
+            f"{uid}::{tt}": list(v)
+            for (uid, tt), v in _recent_feedback.items()
+        },
+    }
+
+
+def restore_state(state: dict) -> None:
+    """从持久化状态恢复反馈状态。幂等——清空后写入。"""
+    _current_delta.clear()
+    _recent_feedback.clear()
+    for key_str, val in state.get("_current_delta", {}).items():
+        if "::" in key_str:
+            uid, tt = key_str.split("::", 1)
+            _current_delta[(uid, tt)] = float(val)
+    for key_str, val in state.get("_recent_feedback", {}).items():
+        if "::" in key_str:
+            uid, tt = key_str.split("::", 1)
+            _recent_feedback[(uid, tt)] = [int(v) for v in val if isinstance(v, (int, float))]
