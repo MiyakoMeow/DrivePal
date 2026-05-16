@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 _PREFERENCE_WEIGHT_HIGH: float = 0.6
 _PREFERENCE_WEIGHT_LOW: float = 0.5
 _INTENT_CONFIDENCE_THRESHOLD: float = 0.3
+# JointDecision JSON 输出通常 <500 tokens，2048 留安全余量且限制最大延迟
+_JOINT_DECISION_MAX_TOKENS: int = 2048
 
 
 class JointDecisionAgent:
@@ -147,7 +149,9 @@ class JointDecisionAgent:
             preference_hint=preference_hint or "无特殊偏好。",
         )
         full_prompt = f"{system_prompt}\n\n{prompt_body}"
-        parsed = await call_llm_json(self._memory.chat_model, full_prompt)
+        parsed = await call_llm_json(
+            self._memory.chat_model, full_prompt, max_tokens=_JOINT_DECISION_MAX_TOKENS
+        )
 
         try:
             validated = JointDecisionOutput.model_validate(parsed.data or {})
@@ -196,7 +200,9 @@ class JointDecisionAgent:
         )
         prompt += f"\n触发来源：{trigger_source}"
 
-        parsed = await call_llm_json(self._memory.chat_model, prompt)
+        parsed = await call_llm_json(
+            self._memory.chat_model, prompt, max_tokens=_JOINT_DECISION_MAX_TOKENS
+        )
 
         try:
             validated = JointDecisionOutput.model_validate(parsed.data or {})

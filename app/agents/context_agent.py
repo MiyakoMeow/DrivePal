@@ -78,7 +78,9 @@ class ContextAgent:
 
 请输出JSON格式的上下文对象. """
 
-            parsed = await call_llm_json(self._memory.chat_model, prompt)
+            parsed = await call_llm_json(
+                self._memory.chat_model, prompt, max_tokens=2048
+            )
             try:
                 validated = ContextOutput.model_validate(parsed.data or {})
                 context = validated.model_dump()

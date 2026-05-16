@@ -11,10 +11,12 @@ from app.config import ensure_config, get_config_root
 
 logger = logging.getLogger(__name__)
 
+# max_tokens=2048 下 joint_decision P99 延迟约 60-90s（DeepSeek-v4-flash json_mode），
+# 180s = P99 × 2 安全余量。VARIANT_TIMEOUT_SECONDS(300s) 为外层兜底。
 _EXPERIMENTS_TOML_DEFAULTS: dict[str, Any] = {
     "timeouts": {
         "context": 30.0,
-        "joint_decision": 120.0,
+        "joint_decision": 180.0,
         "execution": 30.0,
     },
 }
