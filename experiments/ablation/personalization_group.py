@@ -10,12 +10,15 @@ from ._io import (
     VARIANT_TIMEOUT_SECONDS,
     append_checkpoint,
     dump_variant_results_jsonl,
+    load_checkpoint,
     write_json_atomic,
 )
 from .ablation_runner import AblationRunner
 from .feedback_simulator import (
+    export_state,
     extract_task_type,
     read_weights,
+    restore_state,
     simulate_feedback,
     update_feedback_weight,
 )
@@ -53,8 +56,14 @@ def _build_stages(
 
 
 def pers_stratum(s: Scenario) -> str:
-    """个性化组分层键——按任务类型分组，保证各类型有场景覆盖。"""
-    return s.expected_task_type or "unknown"
+    """个性化组分层键——按合成维度任务类型分组，确保确定性。
+    
+    与 safety_stratum / arch_stratum 一致，使用合成维度而非 LLM 输出。
+    """
+    dims = s.synthesis_dims
+    if dims:
+        return dims.get("task_type", "unknown")
+    return "unknown"
 
 
 async def run_personalization_group(
@@ -76,6 +85,13 @@ async def run_personalization_group(
 
     all_results: list[VariantResult] = []
     weight_history: list[dict] = []
+
+    # 续跑：从 checkpoint 恢复反馈状态（自适应步长 + 近期方向）
+    ckpt_path = output_path.with_suffix(".checkpoint.jsonl")
+    if ckpt_path.exists():
+        _, _, last_extra = await load_checkpoint(ckpt_path)
+        if last_extra:
+            restore_state(last_extra)
 
     for stage_name, start, end in stages:
         for i in range(start, end):
@@ -141,6 +157,7 @@ async def run_personalization_group(
                     output_path.with_suffix(".checkpoint.jsonl"),
                     vr,
                     include_modifications=True,
+                    extra=export_state(),
                 )
 
                 if variant == Variant.FULL:
