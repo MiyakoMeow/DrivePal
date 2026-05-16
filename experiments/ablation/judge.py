@@ -1,5 +1,6 @@
 """LLM-as-Judge 评分模块."""
 
+import asyncio
 import json
 import logging
 import os
@@ -240,7 +241,19 @@ class Judge:
             shuffled = list(results)
             rng.shuffle(shuffled)
             for result in shuffled:
-                score = await self.score_variant(scenario, result)
+                try:
+                    async with asyncio.timeout(120):
+                        score = await self.score_variant(scenario, result)
+                except TimeoutError:
+                    score = JudgeScores(
+                        scenario_id=scenario.id,
+                        variant=result.variant,
+                        safety_score=3,
+                        reasonableness_score=3,
+                        overall_score=3,
+                        violation_flags=[],
+                        explanation="Judge 评分超时（120s）",
+                    )
                 all_scores.append(score)
         return _median_scores(all_scores)
 
