@@ -210,6 +210,10 @@ function handleWSMessage(type, data) {
             } else if (data.reason) {
                 document.getElementById('stage-execution-body').textContent = data.reason;
             }
+            if (data.audio_base64) {
+                const audio = new Audio('data:audio/mp3;base64,' + data.audio_base64);
+                audio.play().catch(() => {});
+            }
             break;
         case 'error':
             setLoading(false);
@@ -372,16 +376,8 @@ async function loadExperimentData() {
             }
         }));
     } catch (e) {
-        showToast('实验数据加载失败', 'error');
-        const canvas = document.getElementById('experimentChart');
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.font = '14px sans-serif';
-            ctx.fillStyle = '#999';
-            ctx.textAlign = 'center';
-            ctx.fillText('实验数据加载失败，请检查 experiment_benchmark.toml', canvas.width / 2, canvas.height / 2);
-        }
+        const section = document.querySelector('.experiment-section');
+        if (section) section.style.display = 'none';
     }
 }
 
@@ -522,7 +518,7 @@ async function loadVoiceDevices() {
       sel.appendChild(opt);
     });
   } catch (e) {
-    document.getElementById('voiceDeviceSelect').innerHTML = '<option value="">设备加载失败</option>';
+        document.getElementById('voiceDeviceSelect').innerHTML = '<option value="">无可用设备（麦克风未接入）</option>';
   }
 }
 
