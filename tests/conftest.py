@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 def pytest_configure(config: pytest.Config) -> None:
     """注册自定义标记."""
-    config.addinivalue_line("markers", "integration: 集成测试，需要真实的 LLM provider")
+    config.addinivalue_line("markers", "integration: 需要外部服务或跨模块协作的测试")
     config.addinivalue_line("markers", "llm: 需要 LLM provider 的测试")
     config.addinivalue_line("markers", "embedding: 需要 embedding provider 的测试")
 
@@ -40,7 +40,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--run-integration",
         action="store_true",
         default=False,
-        help="运行集成测试（需要真实 LLM provider）",
+        help="运行集成测试（需要外部服务或跨模块协作）",
     )
     parser.addoption(
         "--test-llm",

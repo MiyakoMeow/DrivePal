@@ -1,7 +1,9 @@
 """Execution Agent：执行阶段——规则后处理、频次检查、工具调用、提醒发送."""
 
+import base64
 import hashlib
 import logging
+import os
 from datetime import UTC, datetime
 
 from app.agents.outputs import OutputRouter
@@ -33,6 +35,36 @@ class ExecutionAgent:
         self._current_user = current_user
         self._pending_manager: PendingReminderManager | None = None
         self._output_router = OutputRouter()
+        self._tts_enabled: bool | None = None
+
+    def _get_tts_enabled(self) -> bool:
+        if self._tts_enabled is not None:
+            return self._tts_enabled
+        env_val = os.environ.get("DRIVEPAL_TTS_ENABLED")
+        if env_val is not None:
+            self._tts_enabled = env_val.lower() in ("1", "true", "yes")
+        else:
+            try:
+                from app.voice.config import VoiceConfig
+
+                self._tts_enabled = VoiceConfig.load().tts_enabled
+            except OSError, ValueError:
+                self._tts_enabled = False
+        return self._tts_enabled
+
+    async def _synthesize_tts(self, text: str) -> str | None:
+        """合成 TTS 音频，返 base64 编码。失败返 None。"""
+        if not text or not self._get_tts_enabled():
+            return None
+        try:
+            from app.voice.tts import get_tts_client
+
+            mp3_bytes = await get_tts_client().synthesize(text)
+            if mp3_bytes:
+                return base64.b64encode(mp3_bytes).decode("ascii")
+        except Exception:
+            logger.warning("TTS synthesis failed", exc_info=True)
+        return None
 
     @property
     def pending_manager(self) -> PendingReminderManager:
@@ -169,6 +201,7 @@ class ExecutionAgent:
         stages: WorkflowStages | None,
     ) -> dict:
         output_content = self._output_router.route(decision, rules_result)
+        audio_base64 = await self._synthesize_tts(output_content.speakable_text)
 
         trigger_type, trigger_target, trigger_text = map_pending_trigger(
             decision, driving_ctx
@@ -228,6 +261,7 @@ class ExecutionAgent:
             "event_id": None,
             "output_content": output_content.model_dump(),
             "pending_reminder_id": pending_ids[0] if pending_ids else None,
+            "audio_base64": audio_base64,
         }
 
     async def _handle_immediate_send(
@@ -243,6 +277,7 @@ class ExecutionAgent:
         original_query = state.get("original_query", "")
 
         output_content = self._output_router.route(decision, rules_result)
+        audio_base64 = await self._synthesize_tts(output_content.speakable_text)
 
         safe_ctx = sanitize_context(driving_ctx) if driving_ctx else None
         if safe_ctx is not None and stages is not None:
@@ -274,6 +309,7 @@ class ExecutionAgent:
             "result": result,
             "event_id": event_id,
             "output_content": output_content.model_dump(),
+            "audio_base64": audio_base64,
         }
 
     async def _check_frequency_guard(

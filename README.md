@@ -158,29 +158,30 @@ flowchart LR
 
 ## 模块依赖关系
 
-```
-app/api/main.py  (生命周期管理)
-  ├── app/agents/workflow.py  (决策核心)
-  │   ├── app/agents/rules.py
-  │   ├── app/agents/pending.py
-  │   ├── app/agents/outputs.py
-  │   ├── app/agents/conversation.py
-  │   └── app/agents/shortcuts.py
-  ├── app/memory/  (记忆存储)
-  ├── app/models/  (LLM + Embedding)
-  ├── app/scheduler/scheduler.py  (主动触发)
-  │   ├── app/scheduler/context_monitor.py
-  │   ├── app/scheduler/memory_scanner.py
-  │   └── app/scheduler/trigger_evaluator.py
-  ├── app/voice/  (语音输入)
-  │   ├── app/voice/pipeline.py
-  │   ├── app/voice/recorder.py
-  │   ├── app/voice/vad.py
-  │   └── app/voice/asr.py
-  └── app/tools/  (工具执行)
-      ├── app/tools/registry.py
-      ├── app/tools/executor.py
-      └── app/tools/tools/
+```mermaid
+graph TD
+    MAIN["app/api/main.py<br/>生命周期管理"]
+    MAIN --> WF["app/agents/workflow.py<br/>决策核心"]
+    WF --> RULES["app/agents/rules.py"]
+    WF --> PENDING["app/agents/pending.py"]
+    WF --> OUTPUTS["app/agents/outputs.py"]
+    WF --> CONV["app/agents/conversation.py"]
+    WF --> SHORTCUTS["app/agents/shortcuts.py"]
+    MAIN --> MEM["app/memory/<br/>记忆存储"]
+    MAIN --> MODELS["app/models/<br/>LLM + Embedding"]
+    MAIN --> SCHED["app/scheduler/scheduler.py<br/>主动触发"]
+    SCHED --> CTX_MON["context_monitor.py"]
+    SCHED --> MEM_SCAN["memory_scanner.py"]
+    SCHED --> TRIG_EVAL["trigger_evaluator.py"]
+    MAIN --> VOICE["app/voice/<br/>语音输入"]
+    VOICE --> PIPELINE["pipeline.py"]
+    VOICE --> RECORDER["recorder.py"]
+    VOICE --> VAD["vad.py"]
+    VOICE --> ASR["asr.py"]
+    MAIN --> TOOLS["app/tools/<br/>工具执行"]
+    TOOLS --> REGISTRY["registry.py"]
+    TOOLS --> EXECUTOR["executor.py"]
+    TOOLS --> TOOLS_DIR["tools/"]
 ```
 
 ---
@@ -193,7 +194,7 @@ app/api/main.py  (生命周期管理)
 | **主动提醒** | 后台调度器轮询 5 种触发源（场景变化/位置接近/定时/状态/周期性） |
 | **工具调用** | 导航/通信/车控/记忆查询等内置工具，JointDecision 决策时触发 |
 | **多格式输出** | visual（屏幕文字）、audio（语音播报）、detailed（详细图文） |
-| **SSE 流式** | 按 Agent 阶段推送进度事件 |
+| **WS 双向通信 + SSE 流式输出** | WebSocket 长连接支持流式查询与提醒推送 |
 | **多轮对话** | session-based 连续对话 |
 | **快捷指令** | 预定义高频场景，跳过 LLM 流水线 |
 | **反馈学习** | accept/ignore 反馈自动调整事件类型偏好权重 |
@@ -230,9 +231,8 @@ app/
 │   ├── executor.py    #   工具执行器
 │   └── tools/         #   内置工具（导航/通信/车控/记忆查询）
 ├── api/               # REST API (FastAPI)
-│   ├── main.py        #   应用入口 + SSE 端点
-│   ├── stream.py      #   流式响应
-│   └── routes/        #   路由定义（query/feedback/presets/data/reminders/sessions）
+│   ├── main.py        #   应用入口 + WebSocket 端点
+│   └── v1/            #   API v1 路由（query/feedback/presets/data/reminders/sessions/voice/ws）
 ├── models/            # LLM/Embedding 封装（多provider fallback）
 ├── memory/            # MemoryBank 记忆系统
 │   ├── memory_bank/   #   FAISS 索引 + 遗忘曲线 + 摘要
@@ -258,23 +258,21 @@ experiments/           # 消融实验
 
 基于 FastAPI 的 REST API。
 
-**端点：** `/api` 前缀，详见 [app/api/AGENTS.md](app/api/AGENTS.md)
+**端点：** `/api/v1` 前缀，详见 [app/api/AGENTS.md](app/api/AGENTS.md)
 
 ### 核心端点
-
-```
-POST /api/query          # 处理用户查询
-POST /api/query/stream   # SSE 流式返回各阶段结果
-POST /api/feedback       # 提交用户反馈
-GET  /api/history        # 查询历史记忆事件
-GET  /api/presets         # 查询场景预设
-POST /api/presets         # 保存场景预设
+```text
+POST   /api/v1/query       # 处理用户查询
+WS     /api/v1/ws          # WebSocket 长连接（流式查询 + 提醒推送）
+GET    /api/v1/history     # 查询历史记忆事件（?limit=N）
+GET    /api/v1/reminders   # 获取待触发提醒列表
+POST   /api/v1/feedback    # 提交反馈（accept/ignore/snooze/modify）
 ```
 
 ### 请求示例
 
 ```json
-POST /api/query/stream
+POST /api/v1/query
 {
   "query": "明天上午9点有个会议",
   "current_user": "default",
@@ -293,12 +291,25 @@ POST /api/query/stream
 
 ### 其他操作
 
-```
-POST   /api/feedback              # 反馈学习（accept/ignore）
-POST   /api/reminders/poll        # 车机端轮询待触发提醒
-POST   /api/presets               # 保存场景预设
-GET    /api/export?current_user=default  # 导出数据
-DELETE /api/data?current_user=default    # 删除数据
+```text
+GET    /api/v1/presets              # 查询场景预设
+POST   /api/v1/presets              # 保存场景预设
+DELETE /api/v1/presets/{id}         # 删除场景预设
+DELETE /api/v1/reminders/{id}       # 取消提醒
+GET    /api/v1/export?export_type=events|settings|all  # 导出数据
+DELETE /api/v1/data                 # 删除当前用户全量数据
+GET    /api/v1/experiments          # 查询实验结果对比
+POST   /api/v1/sessions/{id}/close  # 关闭会话
+GET    /api/v1/voice/status         # 语音流水线状态
+POST   /api/v1/voice/start            # 开始录音
+POST   /api/v1/voice/stop             # 停止录音
+GET    /api/v1/voice/config         # 语音当前配置
+PUT    /api/v1/voice/config         # 语音热更新配置
+GET    /api/v1/voice/transcriptions # 转录历史（?limit=N）
+GET    /api/v1/voice/devices        # 可用麦克风设备
+POST   /api/v1/scheduler/start        # 创建并启动指定用户调度器
+POST   /api/v1/scheduler/stop         # 停止指定用户调度器
+GET    /api/v1/scheduler/status       # 查询调度器运行状态
 ```
 
 ---

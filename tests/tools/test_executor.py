@@ -10,7 +10,6 @@ from app.tools.executor import (
     ToolExecutor,
 )
 from app.tools.registry import ToolRegistry, ToolSpec
-from app.tools.tools import register_builtin_tools
 
 
 @pytest.fixture
@@ -99,14 +98,6 @@ async def test_valid_execution_returns_result(executor):
     """Given 有效参数, When execute, Then 返回 handler 结果。"""
     result = await executor.execute("test_tool", {"name": "valid"})
     assert result == "ok"
-
-
-@pytest.fixture
-def builtin_executor():
-    """注册内置工具（读真实 config/tools.toml）的执行器。"""
-    registry = ToolRegistry()
-    register_builtin_tools(registry)
-    return ToolExecutor(registry)
 
 
 async def test_builtin_navigation_tool_executes(builtin_executor):

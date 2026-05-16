@@ -2,11 +2,20 @@
 
 import logging
 import shutil
+import tomllib
 from pathlib import Path
 
 import tomli_w
 
 from app.config import DATA_DIR, DATA_ROOT, user_data_dir
+from app.schemas.context import (
+    DriverState,
+    DrivingContext,
+    GeoLocation,
+    ScenarioPreset,
+    SpatioTemporalContext,
+    TrafficCondition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,17 +139,109 @@ def init_user_dir(user_id: str) -> Path:
     return u_dir
 
 
+def _seed_demo_presets(user_id: str) -> None:
+    """若场景预设列表为空，写入 5 个演示预设。幂等。"""
+    u_dir = user_data_dir(user_id)
+    sp_fp = u_dir / "scenario_presets.toml"
+
+    # 文件存在且有预设则跳过
+    if sp_fp.exists():
+        try:
+            with sp_fp.open("rb") as f:
+                raw = tomllib.loads(f.read().decode("utf-8"))
+            if raw.get("_list", []):
+                return
+        except OSError, ValueError:
+            logger.warning(
+                "Corrupted scenario_presets.toml for %s, re-seeding", user_id
+            )
+
+    presets = [
+        ScenarioPreset(
+            name="\U0001f17f\ufe0f 停车场准备出发",
+            context=DrivingContext(
+                driver=DriverState(workload="normal", fatigue_level=0.1),
+                spatial=SpatioTemporalContext(
+                    current_location=GeoLocation(
+                        latitude=39.9042, longitude=116.4074, address="北京市东城区"
+                    )
+                ),
+                scenario="parked",
+            ),
+        ),
+        ScenarioPreset(
+            name="\U0001f6e3\ufe0f 高速公路巡航",
+            context=DrivingContext(
+                driver=DriverState(workload="normal"),
+                spatial=SpatioTemporalContext(
+                    current_location=GeoLocation(
+                        latitude=40.0,
+                        longitude=116.3,
+                        address="京藏高速",
+                        speed_kmh=120,
+                    )
+                ),
+                scenario="highway",
+                passengers=["乘客"],
+            ),
+        ),
+        ScenarioPreset(
+            name="\U0001f6a6 城市拥堵通勤",
+            context=DrivingContext(
+                driver=DriverState(fatigue_level=0.4),
+                spatial=SpatioTemporalContext(
+                    current_location=GeoLocation(
+                        latitude=39.92, longitude=116.4, address="北京三环"
+                    )
+                ),
+                traffic=TrafficCondition(
+                    congestion_level="congested", estimated_delay_minutes=15
+                ),
+                scenario="traffic_jam",
+            ),
+        ),
+        ScenarioPreset(
+            name="\U0001f634 疲劳驾驶警告",
+            context=DrivingContext(
+                driver=DriverState(workload="high", fatigue_level=0.8),
+                spatial=SpatioTemporalContext(
+                    current_location=GeoLocation(
+                        latitude=40.05, longitude=116.35, speed_kmh=100
+                    )
+                ),
+                scenario="highway",
+            ),
+        ),
+        ScenarioPreset(
+            name="\U0001f399\ufe0f 语音录入",
+            context=DrivingContext(
+                driver=DriverState(workload="low"),
+                spatial=SpatioTemporalContext(
+                    current_location=GeoLocation(
+                        latitude=39.9042, longitude=116.4074, address="北京"
+                    )
+                ),
+                scenario="parked",
+            ),
+        ),
+    ]
+
+    _write_toml_data(
+        sp_fp, {"_list": [p.model_dump(exclude_none=True) for p in presets]}
+    )
+    logger.info("Seeded %d demo presets for user %s", len(presets), user_id)
+
+
 def init_storage(data_dir: Path | None = None) -> None:
     """初始化数据目录。存在标记时跳过迁移。"""
     root = data_dir or DATA_DIR
     root.mkdir(parents=True, exist_ok=True)
     flag = root / _MIGRATED_FLAG
-    if flag.exists():
-        logger.debug("Migration already completed, skipping")
-        return
-    _migrate_legacy()
+    if not flag.exists():
+        _migrate_legacy()
+        flag.write_text("1")
     init_user_dir("default")
-    flag.write_text("1")
+    _seed_demo_presets("default")
 
 
 if __name__ == "__main__":

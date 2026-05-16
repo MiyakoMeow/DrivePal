@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.agents.workflow import AgentWorkflow
+from app.api.scheduler_registry import get_or_create_scheduler
 from app.api.v1.ws_manager import ws_manager
 from app.config import DATA_DIR
 from app.memory.singleton import get_memory_module
@@ -27,6 +28,9 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     user_id = ws.query_params.get("user_id") or ws.headers.get("x-user-id", "default")
     await ws_manager.connect(ws, user_id)
     logger.info("WS connected: user=%s", user_id)
+
+    # 延迟创建调度器，fire-and-forget 避免阻塞 WS 连接握手
+    _ = asyncio.create_task(_lazy_create_scheduler(user_id))
 
     try:
         while True:
@@ -138,3 +142,10 @@ async def _handle_query(ws: WebSocket, user_id: str, payload: dict) -> None:
                 },
             },
         )
+
+
+async def _lazy_create_scheduler(user_id: str) -> None:
+    try:
+        await get_or_create_scheduler(user_id)
+    except Exception:
+        logger.exception("Lazy scheduler creation failed for %s", user_id)

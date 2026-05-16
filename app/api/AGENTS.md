@@ -16,6 +16,8 @@
 | `v1/reminders.py` | 提醒列表获取与取消 |
 | `v1/sessions.py` | 会话管理（关闭） |
 | `v1/voice.py` | `GET /api/v1/voice/status`、`POST /start|stop`、`GET|PUT /config`、`GET /transcriptions|devices` |
+| `scheduler_registry.py` | `get_or_create_scheduler` / `stop_scheduler` / `stop_all_schedulers` — Per-user scheduler 生命周期管理。模块级 `_SCHEDULERS` dict + asyncio.Lock 并发安全 |
+| `v1/scheduler.py` | scheduler 管理路由：POST start / POST stop / GET status |
 | `schemas.py` | Pydantic 请求/响应模型 |
 | `errors.py` | 异常体系边界、AppErrorCode→HTTP 映射 |
 | `middleware.py` | `UserIdentityMiddleware` |
@@ -46,12 +48,15 @@
 | PUT | `/api/v1/voice/config` | 热更新配置（无效值返 400） |
 | GET | `/api/v1/voice/transcriptions` | 转录历史（`?limit=N`，默认 50，`<1` 返空） |
 | GET | `/api/v1/voice/devices` | 可用麦克风设备列表 |
+| POST | `/api/v1/scheduler/start` | 创建并启动指定用户的调度器 |
+| POST | `/api/v1/scheduler/stop` | 停止并移除指定用户的调度器 |
+| GET | `/api/v1/scheduler/status` | 查询指定用户调度器运行状态 |
 
 Schema 代码见 `app/api/schemas.py` + `app/schemas/query.py` + `app/schemas/context.py`，字段说明见下方"数据模型"节。
 
 ### WebSocket
 
-`WS /api/v1/ws?user_id=xxx`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。
+`WS /api/v1/ws?user_id=xxx`。`ws_manager`（`v1/ws_manager.py`）按 `user_id` 管理连接列表，支持广播。WebSocket 连接建立时自动懒创建对应用户的 scheduler。
 
 消息格式（统一用 `payload` 键）：
 - 客户端→服务端：`{"type": "query", "payload": {"query": "...", "context": {...}, "session_id": "..."}}`
