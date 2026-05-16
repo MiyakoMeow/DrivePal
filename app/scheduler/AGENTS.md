@@ -86,15 +86,13 @@ stop() → cancel task
 
 ## ContextMonitor
 
-```python
-@dataclass
-class ContextDelta:
-    scenario_changed: bool = False
-    location_changed: bool = False        # 变化 > proximity_meters
-    location_proximity: float | None = None  # 距离变化米
-    fatigue_increased: bool = False       # 增长 > 0.1
-    workload_changed: bool = False
-```
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `scenario_changed` | bool | 场景切换 |
+| `location_changed` | bool | 位置变化 > proximity_meters |
+| `location_proximity` | float \| None | 距离变化（米） |
+| `fatigue_increased` | bool | 疲劳增长 > 0.1 |
+| `workload_changed` | bool | 工作负载变化 |
 
 - 首次 `update()` 仅缓存，返回空 delta
 - `_haversine()` 与 `app/agents/pending.py` 均导入 `app.utils.haversine`，共享同一实现

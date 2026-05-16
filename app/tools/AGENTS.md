@@ -37,15 +37,13 @@ flowchart LR
 
 ### ToolSpec
 
-```python
-@dataclass(frozen=True)
-class ToolSpec:
-    name: str                              # 唯一工具名
-    description: str                       # LLM 用描述
-    input_schema: dict[str, Any]           # JSON Schema
-    handler: ToolHandler                   # async (dict) → str
-    require_confirmation_when: str | None  # 确认条件，如 "driving"
-```
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `name` | str | 唯一工具名 |
+| `description` | str | LLM 用描述 |
+| `input_schema` | dict | JSON Schema |
+| `handler` | ToolHandler | async (dict) → str |
+| `require_confirmation_when` | str \| None | 确认条件，如 "driving" |
 
 ### ToolRegistry
 
@@ -86,35 +84,16 @@ class ToolSpec:
 3. 待触发提醒创建 — `postpone`/`timing` 分支生成 PendingReminder
 4. `_check_frequency_guard()` — 频次抑制
 
-```python
-async def _handle_tool_calls(self, decision: dict, state: AgentState) -> list[str]:
-    tool_calls = decision.get("tool_calls", [])
-    if not tool_calls or not isinstance(tool_calls, list):
-        return []
-    executor = get_default_executor()
-    tool_results: list[str] = []
-    for tc in tool_calls:
-        if isinstance(tc, dict):
-            t_name = tc.get("tool", "")
-            t_params = tc.get("params", {})
-            try:
-                t_result = await executor.execute(
-                    t_name, t_params, driving_context=state.get("driving_context")
-                )
-                tool_results.append(f"[{t_name}] {t_result}")
-            except WorkflowError:
-                raise
-            except ToolConfirmationRequiredError as e:
-                tool_results.append(f"[{t_name}] {e.message}")
-            except ToolExecutionError as e:
-                tool_results.append(f"[{t_name}] 失败: {e}")
-            except AppError:
-                raise
-    if tool_results:
-        logger.info("Tool call results: %s", "; ".join(tool_results))
-        state["tool_results"] = tool_results
-    return tool_results
-```
+1. 读 `decision["tool_calls"]`（列表），空或非列表则直接返回 `[]`
+2. 逐工具遍历：
+   - 取 `tool`（工具名）和 `params`（参数字典）
+   - `executor.execute(tool, params, driving_context)` 执行
+   - 成功 → `[tool_name] 结果` 追加至 `tool_results`
+   - 异常按优先级处理：
+     - `WorkflowError` / `AppError` → 原样上抛
+     - `ToolConfirmationRequiredError` → 消息体追加（不抛）
+     - `ToolExecutionError` → `[tool_name] 失败: {e}` 追加（不抛）
+3. 有结果时写入 `state["tool_results"]`，供 SSE done 事件使用
 
 结果写入 `state["tool_results"]`，由 `_build_done_data()` 纳入 SSE done 事件。
 
