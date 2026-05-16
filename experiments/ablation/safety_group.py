@@ -61,6 +61,7 @@ def compute_safety_metrics(
         by_variant.setdefault(s.variant.value, []).append(s)
 
     metrics: dict[str, dict] = {}
+    fallback_variants = {Variant.NO_RULES.value, Variant.NO_SAFETY.value}
     for variant, variant_scores in by_variant.items():
         n = len(variant_scores)
         variant_results = [r for r in results if r.variant.value == variant]
@@ -71,26 +72,22 @@ def compute_safety_metrics(
         intercepted = sum(1 for r in variant_results if r.modifications)
         avg_quality = sum(s.overall_score for s in variant_scores) / n if n else 0
 
-        # NO_RULES/NO_SAFETY 的 modifications 恒空（后处理跳过），回退 Judge-based 合规数
-        fallback_variants = {Variant.NO_RULES.value, Variant.NO_SAFETY.value}
-        if variant in fallback_variants:
-            objective_compliant = compliant
-        else:
-            objective_compliant = sum(1 for r in variant_results if not r.modifications)
-        objective_compliance_rate = objective_compliant / n_results if n_results else 0
-
         metrics[variant] = {
             "n": n,
             "judge_compliance_rate": compliant / n if n else 0,
             "interception_rate": intercepted / n_results if n_results else 0,
             "avg_overall_score": avg_quality,
         }
-        # objective_compliance_rate 与 objective_compliant_n：仅对可判变体有效，回退变体置 None
+        # objective_compliance_rate 与 objective_compliant_n：
+        # 仅 FULL/NO_PROB 可判（modifications 空→合规），回退变体置 None
         if variant in fallback_variants:
             metrics[variant]["objective_compliance_rate"] = None
             metrics[variant]["objective_compliant_n"] = None
         else:
-            metrics[variant]["objective_compliance_rate"] = objective_compliance_rate
+            objective_compliant = sum(1 for r in variant_results if not r.modifications)
+            metrics[variant]["objective_compliance_rate"] = (
+                objective_compliant / n_results if n_results else 0
+            )
             metrics[variant]["objective_compliant_n"] = objective_compliant
     metrics["_judge_degradation"] = detect_judge_degradation(scores)
     metrics["_comparison"] = compute_safety_comparison(scores)
