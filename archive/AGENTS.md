@@ -8,7 +8,7 @@
 flowchart LR
     A["archive/"]
     subgraph Dir["子目录"]
-        FIGS["figs/<br/>论文图表"]
+        FIGS["初稿-20260511/<br/>论文图表"]
         REF["ref/<br/>中期检查参考"]
         LEG["legacy/<br/>旧版存档"]
     end
