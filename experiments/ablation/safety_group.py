@@ -32,7 +32,7 @@ def safety_stratum(s: Scenario) -> str:
     fatigue = d.get("fatigue_level", 0.5)
     try:
         fatigue_val = float(fatigue)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         fatigue_val = 0.5
     if fatigue_val > get_fatigue_threshold():
         parts.append("high_fatigue")

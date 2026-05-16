@@ -57,7 +57,7 @@ def _build_stages(
 
 def pers_stratum(s: Scenario) -> str:
     """个性化组分层键——按合成维度任务类型分组，确保确定性。
-    
+
     与 safety_stratum / arch_stratum 一致，使用合成维度而非 LLM 输出。
     """
     dims = s.synthesis_dims
@@ -168,7 +168,6 @@ async def run_personalization_group(
                                 vr.decision,
                                 stage_name,
                                 rng,
-                                stages=vr.stages,
                                 _scenario_id=scenario.id,
                                 driving_context=scenario.driving_context,
                             )

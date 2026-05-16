@@ -46,10 +46,22 @@ _T = TypeVar("_T")
 _CORO_TIMEOUT: float = 120.0
 
 # 显式偏好关键词——含词则 memory_strength=5，否则=3
-_PREFERENCE_KEYWORDS: frozenset[str] = frozenset({
-    "设置", "改成", "调", "偏好", "喜欢", "换成", "切换", "设定",
-    "调整", "改为", "选择", "想要",
-})
+_PREFERENCE_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "设置",
+        "改成",
+        "调",
+        "偏好",
+        "喜欢",
+        "换成",
+        "切换",
+        "设定",
+        "调整",
+        "改为",
+        "选择",
+        "想要",
+    }
+)
 
 # VehicleMemBench 根目录可覆写（默认与 DrivePal 同级）
 # 使用 list 容器避免 PLW0603 global

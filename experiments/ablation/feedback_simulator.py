@@ -39,7 +39,7 @@ def _get_workload(driving_context: dict | None) -> str:
     return str(wl) if isinstance(wl, str) else "normal"
 
 
-def _compute_alignment(decision: dict, stage: str, stages: dict | None = None) -> float:
+def _compute_alignment(decision: dict, stage: str) -> float:
     """决策与阶段偏好的对齐度 [0,1]。
 
     high-freq/visual-detail: 二值 1.0/0.0
@@ -98,7 +98,6 @@ def simulate_feedback(
     stage: str,
     rng: random.Random,
     *,
-    stages: dict | None = None,
     _scenario_id: str = "",
     driving_context: dict | None = None,
 ) -> Literal["accept", "ignore"] | None:
@@ -108,7 +107,7 @@ def simulate_feedback(
     2. 噪声 (noise): 用户偶发误反馈概率 = 0.1 + fatigue * 0.2, 范围 [0.1, 0.3]
     3. 反馈概率 (fb_prob): 用户实际给出反馈的概率 = 0.8 - penalty(workload, fatigue), 范围 [0.3, 0.8]
     """
-    alignment = _compute_alignment(decision, stage, stages)
+    alignment = _compute_alignment(decision, stage)
     fatigue = _get_fatigue(driving_context)
     workload = _get_workload(driving_context)
 
@@ -242,14 +241,14 @@ def export_state() -> dict:
     Returns:
         {"_current_delta": {...}, "_recent_feedback": {...}}
         键为 "user_id::task_type" 格式的字符串（dict key 可序列化）。
+
     """
     return {
         "_current_delta": {
             f"{uid}::{tt}": v for (uid, tt), v in _current_delta.items()
         },
         "_recent_feedback": {
-            f"{uid}::{tt}": list(v)
-            for (uid, tt), v in _recent_feedback.items()
+            f"{uid}::{tt}": list(v) for (uid, tt), v in _recent_feedback.items()
         },
     }
 
@@ -265,4 +264,6 @@ def restore_state(state: dict) -> None:
     for key_str, val in state.get("_recent_feedback", {}).items():
         if "::" in key_str:
             uid, tt = key_str.split("::", 1)
-            _recent_feedback[(uid, tt)] = [int(v) for v in val if isinstance(v, (int, float))]
+            _recent_feedback[(uid, tt)] = [
+                int(v) for v in val if isinstance(v, (int, float))
+            ]

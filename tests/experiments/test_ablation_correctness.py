@@ -4,7 +4,9 @@
 def test_has_visual_content_no_stages():
     from experiments.ablation.feedback_simulator import has_visual_content
 
-    assert has_visual_content({"reminder_content": {"display_text": "前方拥堵"}}) is True
+    assert (
+        has_visual_content({"reminder_content": {"display_text": "前方拥堵"}}) is True
+    )
     assert has_visual_content({"reminder_content": {"display_text": ""}}) is False
     assert has_visual_content({"reminder_content": {}}) is False
     assert has_visual_content({}) is False

@@ -38,7 +38,7 @@ def classify_complexity(dims: dict) -> bool:
     fatigue = dims.get("fatigue_level", 0)
     try:
         fatigue_val = float(fatigue)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         fatigue_val = 0.0
     return (
         dims.get("scenario") == "highway"
