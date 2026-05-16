@@ -15,6 +15,8 @@ flowchart LR
     VS -->|status/config| API["REST /api/v1/voice/*"]
     VS -->|CLI 输出| CLI["voice-cli"]
     VS -->|回调| Sched["ProactiveScheduler"]
+    AW["ExecutionAgent"] -->|speakable_text| TTS["TTSClient<br/>edge-tts"]
+    TTS -->|MP3 bytes| WUI["WebUI"]
 ```
 
 ## 组件
@@ -30,6 +32,7 @@ flowchart LR
 | `constants.py` | `VADStatus`, 常量 | `VADStatus` 枚举（`SPEECH_START`/`SPEECH`/`SPEECH_END`/`SILENCE`）、`_SAMPLE_RATE=16000`、`_FRAMES_PER_CHUNK=480`。帧大小 `_frame_bytes` 由 `VADEngine` 根据 `sample_rate × 2 × frame_ms / 1000` 自行计算 |
 | `config.py` | `VoiceConfig` | 语音流水线配置加载 + 默认值生成 + TOML 自动创建 |
 | `cli.py` | `main`, `_parse_args` | 命令行入口。`--list-devices` 列设备，`--device INDEX` 选设备。实时转录输出 |
+| `tts.py` | `TTSClient` | edge-tts 文字转语音。`synthesize(text)` 返 MP3 bytes，SHA256 缓存 60s TTL + LRU 50 条。静默降级 |
 | `__main__.py` | — | `python -m app.voice` CLI 入口，调用 `cli.main()` |
 | `server.py` | `app` | 独立 FastAPI 服务。自管 VoiceService 生命周期，挂 /api/v1/voice 路由 + WebUI 静态文件。`python -m app.voice.server` 启动 |
 
@@ -103,6 +106,20 @@ wget -qO- https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/she
   | tar -xj -C data/models/
 mv data/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17 data/models/sense_voice
 ```
+
+### TTS 配置
+
+```toml
+[voice.tts]
+enabled = false                          # 默认关闭
+voice = "zh-CN-XiaoxiaoNeural"           # 微软中文女声
+```
+
+通过环境变量 `DRIVEPAL_TTS_ENABLED=1` 或配置文件启用。
+
+## TTS 客户端
+
+`TTSClient` 封装 edge-tts CLI。异步子进程调用，60s 内同文本缓存命中。edge-tts 未安装或调用失败时静默降级返 None。通过 `get_tts_client()` 模块级单例获取。
 
 ## 静默降级
 
