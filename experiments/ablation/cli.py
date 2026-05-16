@@ -116,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--synthesize-only", action="store_true", help="仅合成场景")
     parser.add_argument("--judge-only", action="store_true", help="仅重新评分")
-    parser.add_argument("--data-dir", default="data/experiments")
+    parser.add_argument("--data-dir", default="data/ablation")
     parser.add_argument("--seed", type=int, default=42, help="ABLATION_SEED")
     parser.add_argument(
         "--run-id",
