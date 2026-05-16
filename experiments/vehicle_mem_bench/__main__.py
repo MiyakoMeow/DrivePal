@@ -1,12 +1,12 @@
 """DrivePal × VehicleMemBench 评估入口.
 
-子命令:
-    run-all     — 全量运行 5 组（none+gold+summary+key_value+drivepal）
+子命令（无子命令时默认等价于 run）:
+    run         — 默认 drivepal 组，--all 全量 5 组
     model       — 单组模型评测（none/gold/summary/key_value）
     memory-add  — 写入历史至 DrivePal MemoryBank
     memory-test — 使用 DrivePal MemoryBank 评测
 
-run-all 结果存储至 data/vehicle_mem_bench/ 下，命名与原项目一致:
+run 结果存储至 data/vehicle_mem_bench/ 下，命名与原项目一致:
     data/vehicle_mem_bench/drivepal_model_eval_{ none|gold|summary|key_value }_{model}_{timestamp}/
     data/vehicle_mem_bench/drivepal_memory_eval_drivepal_{model}_{timestamp}/
 
@@ -109,14 +109,14 @@ def _resolve_api(args: argparse.Namespace) -> dict[str, str]:
 
 
 def _add_vmb_arg(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--vmb-root", "--vmb_root", type=str, default=None)
+    p.add_argument("--vmb-root", type=str, default=None)
 
 
 def _build_cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="DrivePal × VehicleMemBench 评估",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
 
     # ── model ──
     model_p = sub.add_parser(
@@ -131,16 +131,16 @@ def _build_cli() -> argparse.ArgumentParser:
         choices=["none", "gold", "summary", "key_value"],
         help="记忆策略: 无/黄金/递归摘要/键值存储",
     )
-    model_p.add_argument("--benchmark-dir", "--benchmark_dir", type=str, default="")
-    model_p.add_argument("--model-group", "--model_group", type=str, default=None)
-    model_p.add_argument("--api-base", "--api_base", type=str, default=None)
-    model_p.add_argument("--api-key", "--api_key", type=str, default=None)
+    model_p.add_argument("--benchmark-dir", type=str, default="")
+    model_p.add_argument("--model-group", type=str, default=None)
+    model_p.add_argument("--api-base", type=str, default=None)
+    model_p.add_argument("--api-key", type=str, default=None)
     model_p.add_argument("--model", type=str, default=None)
-    model_p.add_argument("--file-range", "--file_range", type=str, default=None)
-    model_p.add_argument("--reflect-num", "--reflect_num", type=int, default=10)
-    model_p.add_argument("--sample-size", "--sample_size", type=int, default=None)
-    model_p.add_argument("--output-dir", "--output_dir", type=str, default=None)
-    model_p.add_argument("--max-workers", "--max_workers", type=int, default=6)
+    model_p.add_argument("--file-range", type=str, default=None)
+    model_p.add_argument("--reflect-num", type=int, default=10)
+    model_p.add_argument("--sample-size", type=int, default=None)
+    model_p.add_argument("--output-dir", type=str, default=None)
+    model_p.add_argument("--max-workers", type=int, default=6)
     model_p.add_argument("--prefix", type=str, default="drivepal_model_eval")
 
     # ── memory add ──
@@ -149,10 +149,10 @@ def _build_cli() -> argparse.ArgumentParser:
         help="写入 history 至 DrivePal MemoryBank",
     )
     _add_vmb_arg(mem_add_p)
-    mem_add_p.add_argument("--memory-url", "--memory_url", type=str, default=None)
-    mem_add_p.add_argument("--history-dir", "--history_dir", type=str, required=True)
-    mem_add_p.add_argument("--file-range", "--file_range", type=str, default=None)
-    mem_add_p.add_argument("--max-workers", "--max_workers", type=int, default=4)
+    mem_add_p.add_argument("--memory-url", type=str, default=None)
+    mem_add_p.add_argument("--history-dir", type=str, required=True)
+    mem_add_p.add_argument("--file-range", type=str, default=None)
+    mem_add_p.add_argument("--max-workers", type=int, default=4)
 
     # ── memory test ──
     mem_test_p = sub.add_parser(
@@ -160,37 +160,40 @@ def _build_cli() -> argparse.ArgumentParser:
         help="使用 DrivePal MemoryBank 运行评测",
     )
     _add_vmb_arg(mem_test_p)
-    mem_test_p.add_argument(
-        "--benchmark-dir", "--benchmark_dir", type=str, required=True
-    )
-    mem_test_p.add_argument("--memory-url", "--memory_url", type=str, default=None)
-    mem_test_p.add_argument("--model-group", "--model_group", type=str, default=None)
-    mem_test_p.add_argument("--api-base", "--api_base", type=str, default=None)
-    mem_test_p.add_argument("--api-key", "--api_key", type=str, default=None)
+    mem_test_p.add_argument("--benchmark-dir", type=str, required=True)
+    mem_test_p.add_argument("--memory-url", type=str, default=None)
+    mem_test_p.add_argument("--model-group", type=str, default=None)
+    mem_test_p.add_argument("--api-base", type=str, default=None)
+    mem_test_p.add_argument("--api-key", type=str, default=None)
     mem_test_p.add_argument("--model", type=str, default=None)
-    mem_test_p.add_argument("--file-range", "--file_range", type=str, default=None)
-    mem_test_p.add_argument("--reflect-num", "--reflect_num", type=int, default=10)
-    mem_test_p.add_argument("--max-workers", "--max_workers", type=int, default=6)
-    mem_test_p.add_argument("--sample-size", "--sample_size", type=int, default=None)
-    mem_test_p.add_argument("--output-dir", "--output_dir", type=str, default=None)
+    mem_test_p.add_argument("--file-range", type=str, default=None)
+    mem_test_p.add_argument("--reflect-num", type=int, default=10)
+    mem_test_p.add_argument("--max-workers", type=int, default=6)
+    mem_test_p.add_argument("--sample-size", type=int, default=None)
+    mem_test_p.add_argument("--output-dir", type=str, default=None)
 
-    # ── run-all ──
-    all_p = sub.add_parser(
-        "run-all",
-        help="全量运行 5 组评测（none/gold/summary/key_value + drivepal）",
+    # ── run ──
+    run_p = sub.add_parser(
+        "run",
+        help="默认仅跑 drivepal 组；--all 全量 5 组",
     )
-    _add_vmb_arg(all_p)
-    all_p.add_argument("--output-dir", "--output_dir", type=str, default=None)
-    all_p.add_argument("--memory-url", "--memory_url", type=str, default=None)
-    all_p.add_argument("--model-group", "--model_group", type=str, default=None)
-    all_p.add_argument("--api-base", "--api_base", type=str, default=None)
-    all_p.add_argument("--api-key", "--api_key", type=str, default=None)
-    all_p.add_argument("--model", type=str, default=None)
-    all_p.add_argument("--file-range", "--file_range", type=str, default=None)
-    all_p.add_argument("--reflect-num", "--reflect_num", type=int, default=10)
-    all_p.add_argument("--max-workers", "--max_workers", type=int, default=6)
-    all_p.add_argument("--sample-size", "--sample_size", type=int, default=None)
-    all_p.add_argument("--benchmark-dir", "--benchmark_dir", type=str, default=None)
+    _add_vmb_arg(run_p)
+    run_p.add_argument(
+        "--all",
+        action="store_true",
+        help="全量运行 5 组（none+gold+summary+key_value+drivepal）",
+    )
+    run_p.add_argument("--output-dir", type=str, default=None)
+    run_p.add_argument("--memory-url", type=str, default=None)
+    run_p.add_argument("--model-group", type=str, default=None)
+    run_p.add_argument("--api-base", type=str, default=None)
+    run_p.add_argument("--api-key", type=str, default=None)
+    run_p.add_argument("--model", type=str, default=None)
+    run_p.add_argument("--file-range", type=str, default=None)
+    run_p.add_argument("--reflect-num", type=int, default=10)
+    run_p.add_argument("--max-workers", type=int, default=6)
+    run_p.add_argument("--sample-size", type=int, default=None)
+    run_p.add_argument("--benchmark-dir", type=str, default=None)
 
     return parser
 
@@ -271,11 +274,11 @@ def _cmd_memory_test(args: argparse.Namespace) -> None:
     )
 
 
-# ── run-all ──
+# ── run ──
 
 
-def _cmd_run_all(args: argparse.Namespace) -> None:
-    """全量运行 5 组评测。"""
+def _cmd_run(args: argparse.Namespace) -> None:
+    """默认仅跑 drivepal 评测；--all 全量 5 组。"""
     vmb_root = _resolve_vmb_root(args)
     _ensure_vmb_on_path(vmb_root)
 
@@ -302,30 +305,31 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
     file_range = args.file_range
     sample_size = args.sample_size
 
-    # ── 1–4: 模型评测 ──
+    # ── 1–4: 模型评测（仅 --all 时运行）──
     # 命名: {prefix}_{model}_{timestamp}/
     # 与原项目 (model_test.sh) 一致: 每 memory_type 独立 prefix
-    from evaluation.model_evaluation import model_evaluation
+    if args.all:
+        from evaluation.model_evaluation import model_evaluation
 
-    for memory_type in ("none", "gold", "summary", "key_value"):
-        prefix = f"drivepal_model_eval_{memory_type}"
-        print(f"\n{'=' * 60}")
-        print(f"[run-all] 模型评测: {memory_type}")
-        print(f"[run-all] prefix={prefix}  →  {base_out}/{prefix}_{model_slug}_*/")
-        print(f"{'=' * 60}\n")
-        model_evaluation(
-            benchmark_dir=benchmark_dir,
-            memory_type=memory_type,
-            sample_size=sample_size,
-            api_base=api["api_base"],
-            api_key=api["api_key"],
-            model=api["model"],
-            reflect_num=reflect_num,
-            prefix=prefix,
-            file_range=file_range,
-            output_dir=str(base_out),
-            max_workers=max_workers,
-        )
+        for memory_type in ("none", "gold", "summary", "key_value"):
+            prefix = f"drivepal_model_eval_{memory_type}"
+            print(f"\n{'=' * 60}")
+            print(f"[run] 模型评测: {memory_type}")
+            print(f"[run] prefix={prefix}  →  {base_out}/{prefix}_{model_slug}_*/")
+            print(f"{'=' * 60}\n")
+            model_evaluation(
+                benchmark_dir=benchmark_dir,
+                memory_type=memory_type,
+                sample_size=sample_size,
+                api_base=api["api_base"],
+                api_key=api["api_key"],
+                model=api["model"],
+                reflect_num=reflect_num,
+                prefix=prefix,
+                file_range=file_range,
+                output_dir=str(base_out),
+                max_workers=max_workers,
+            )
 
     # ── 5: DrivePal MemoryBank 评测 ──
     # phase A: memory-add
@@ -339,7 +343,7 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
         memory_url=args.memory_url,
     )
     print(f"\n{'=' * 60}")
-    print("[run-all] DrivePal MemoryBank: 写入历史")
+    print("[run] DrivePal MemoryBank: 写入历史")
     print(f"{'=' * 60}\n")
     run_add(add_args)
 
@@ -356,9 +360,9 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
 
     mem_prefix = "drivepal_memory_eval"
     print(f"\n{'=' * 60}")
-    print("[run-all] DrivePal MemoryBank: 评测")
+    print("[run] DrivePal MemoryBank: 评测")
     print(
-        f"[run-all] prefix={mem_prefix}  →  {base_out}/{mem_prefix}_drivepal_{model_slug}_*/"
+        f"[run] prefix={mem_prefix}  →  {base_out}/{mem_prefix}_drivepal_{model_slug}_*/"
     )
     print(f"{'=' * 60}\n")
     memorysystem_evaluation(
@@ -376,7 +380,7 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
     )
 
     print(f"\n{'=' * 60}")
-    print("[run-all] 全量运行完成")
+    print("[run] 全量运行完成")
     print(f"结果目录: {base_out}")
     print(f"{'=' * 60}\n")
 
@@ -385,7 +389,7 @@ def _cmd_run_all(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    """CLI 入口。"""
+    """CLI 入口。无子命令时默认跑 run。"""
     parser = _build_cli()
     args = parser.parse_args()
 
@@ -393,12 +397,9 @@ def main() -> None:
         "model": _cmd_model,
         "memory-add": _cmd_memory_add,
         "memory-test": _cmd_memory_test,
-        "run-all": _cmd_run_all,
+        "run": _cmd_run,
     }
-    handler = dispatch.get(args.command)
-    if handler is None:
-        parser.print_help()
-        sys.exit(1)
+    handler = dispatch.get(args.command, _cmd_run)
     handler(args)
 
 

@@ -1,7 +1,7 @@
 """DrivePal × VehicleMemBench 评估适配器.
 
-子命令:
-    run-all     — 全量运行 5 组（none+gold+summary+key_value+drivepal）
+子命令（无子命令时默认等价于 run）:
+    run         — 默认仅跑 drivepal 组；--all 全量 5 组
     model       — 单组模型评测（none/gold/summary/key_value）
     memory-add  — 写入 benchmark 历史至 DrivePal MemoryBank
     memory-test — 使用 DrivePal MemoryBank 运行评测

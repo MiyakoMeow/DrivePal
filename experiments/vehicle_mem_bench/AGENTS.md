@@ -82,7 +82,7 @@ python -m experiments.vehicle_mem_bench model --memory-type summary --model-grou
 
 命名与原项目一致：`{prefix}_{model}_{timestamp}/` 和 `{prefix}_{system}_{model}_{timestamp}/`。
 
-> **注意**：单 `model` 子命令默认 prefix 为 `drivepal_model_eval`（不含记忆类型后缀），结果目录为 `drivepal_model_eval_{model}_{timestamp}/`。`run-all` 自动追加记忆类型后缀（如下示例），使各组目录不冲突。
+> **注意**：单 `model` 子命令默认 prefix 为 `drivepal_model_eval`（不含记忆类型后缀），结果目录为 `drivepal_model_eval_{model}_{timestamp}/`。`run` 自动追加记忆类型后缀（如下示例），使各组目录不冲突。
 
 ```text
 data/vehicle_mem_bench/
@@ -104,27 +104,27 @@ data/vehicle_mem_bench/
 ## 用法
 
 ```bash
-# ── 全量运行（5 组，推荐）──
-python -m experiments.vehicle_mem_bench run-all
+# ── 默认：仅跑 drivepal 组（MemoryBank 评测）──
+python -m experiments.vehicle_mem_bench          # 无子命令 ≡ run
+python -m experiments.vehicle_mem_bench run
 
-# ── 单组模型评测 ──
-python -m experiments.vehicle_mem_bench model --memory-type none
-python -m experiments.vehicle_mem_bench model --memory-type gold
-python -m experiments.vehicle_mem_bench model --memory-type summary
-python -m experiments.vehicle_mem_bench model --memory-type key_value
+# ── 全量运行 5 组（none+gold+summary+key_value+drivepal）──
+python -m experiments.vehicle_mem_bench run --all
+```
 
-# ── DrivePal MemoryBank 评测（两阶段）──
-python -m experiments.vehicle_mem_bench memory-add \
-    --history-dir ../VehicleMemBench/benchmark/history
-python -m experiments.vehicle_mem_bench memory-test \
-    --benchmark-dir ../VehicleMemBench/benchmark/qa_data
+### `python -m experiments.vehicle_mem_bench run --help`
 
-# ── 自定 VehicleMemBench 路径 ──
-python -m experiments.vehicle_mem_bench run-all --vmb-root /path/to/vmb
-export VMB_ROOT=/path/to/vmb && python -m experiments.vehicle_mem_bench run-all
+```
+usage: __main__.py run [-h] [--vmb-root ...] [--all] [--output-dir ...]
+                           [--memory-url ...] [--model-group ...] [--api-base ...]
+                           [--api-key ...] [--model ...] [--file-range ...]
+                           [--reflect-num 10] [--max-workers 6]
+                           [--sample-size ...] [--benchmark-dir ...]
 
-# ── 指定 benchmark 目录 ──
-python -m experiments.vehicle_mem_bench run-all --benchmark-dir /custom/qa_data
+默认仅跑 drivepal 组；--all 全量 5 组。
+
+options:
+  --all  全量运行 5 组（none+gold+summary+key_value+drivepal）
 ```
 
 ## VehicleMemBench 代码来源
@@ -152,6 +152,6 @@ python -m experiments.vehicle_mem_bench model --memory-type none --vmb-root /cus
 | 文件 | 职责 |
 |------|------|
 | `__init__.py` | 包文档 |
-| `__main__.py` | CLI 入口（model / memory-add / memory-test / run-all） |
+| `__main__.py` | CLI 入口（model / memory-add / memory-test / run） |
 | `adapter.py` | DrivePalBank 适配器实现 |
 | `AGENTS.md` | 本文档 |
